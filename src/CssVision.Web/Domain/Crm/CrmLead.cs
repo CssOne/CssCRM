@@ -45,8 +45,13 @@ public class CrmLead : CrmArchivableEntity
     public CrmLead? IndicadoPorLead { get; set; }
     public string? TipoIndicacao { get; set; }
 
-    public Guid EtapaId { get; set; }
-    public CrmLeadStage Etapa { get; set; } = null!;
+    /// <summary>
+    /// Etapa do lead no quadro (kanban). Fica nula de propósito em leads novos — sem etapa marcada
+    /// é como a vendedora enxerga "ninguém pegou ainda"; ela mesma arrasta pra uma etapa real
+    /// (ex: "Em atendimento") quando começa a trabalhar o lead.
+    /// </summary>
+    public Guid? EtapaId { get; set; }
+    public CrmLeadStage? Etapa { get; set; }
 
     public Guid? ResponsavelId { get; set; }
     public ApplicationUser? Responsavel { get; set; }

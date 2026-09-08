@@ -55,11 +55,9 @@ public sealed class MetaLeadIngestionService(
             return;
         }
 
-        var etapaInicialId = await db.CrmLeadStages.Where(s => s.Ativa).OrderBy(s => s.Ordem).Select(s => s.Id).FirstAsync(ct);
-
         var lead = new CrmLead
         {
-            EtapaId = etapaInicialId,
+            // Sem etapa de propósito, igual à criação manual — vendedora vê "ninguém pegou ainda".
             NomeOuRazaoSocial = string.IsNullOrWhiteSpace(nome) ? "Lead Meta Ads (sem nome)" : nome,
             TipoPessoa = TipoPessoa.Fisica,
             Email = email,

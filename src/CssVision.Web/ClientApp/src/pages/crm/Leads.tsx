@@ -202,7 +202,7 @@ export function LeadsPage() {
           >
             <option value="">Todas</option>
             {etapas.map((etapa) => (
-              <option key={etapa.id} value={etapa.id}>
+              <option key={etapa.id ?? ""} value={etapa.id ?? ""}>
                 {etapa.nome}
               </option>
             ))}
@@ -278,8 +278,8 @@ export function LeadsPage() {
                     <td className="px-2 py-3 text-[var(--fg-muted)]">{lead.responsavelNome ?? "—"}</td>
                     <td className="px-2 py-3">
                       <Badge variant="neutral">
-                        <span className="mr-1 inline-block size-2 rounded-full" style={{ backgroundColor: lead.etapaCor ?? "#64748b" }} />
-                        {lead.etapaNome}
+                        <span className="mr-1 inline-block size-2 rounded-full" style={{ backgroundColor: lead.etapaCor ?? "#94a3b8" }} />
+                        {lead.etapaNome ?? "Sem etapa"}
                       </Badge>
                     </td>
                     <td className="px-2 py-3 text-[var(--fg-muted)]">{lead.etapaAtual ?? "—"}</td>
@@ -299,7 +299,7 @@ export function LeadsPage() {
               >
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-[var(--fg)]">{lead.nomeOuRazaoSocial}</span>
-                  <Badge variant="neutral">{lead.etapaNome}</Badge>
+                  <Badge variant="neutral">{lead.etapaNome ?? "Sem etapa"}</Badge>
                 </div>
                 <p className="mt-1 text-xs text-[var(--fg-muted)]">
                   {lead.responsavelNome ?? "Sem responsável"} · {formatarTelefone(lead.telefone)}

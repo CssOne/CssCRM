@@ -93,8 +93,8 @@ export interface LeadListItem {
   estado?: string | null;
   regional?: string | null;
   origem?: string | null;
-  etapaId: string;
-  etapaNome: string;
+  etapaId?: string | null;
+  etapaNome?: string | null;
   etapaCor?: string | null;
   etapaAtual?: string | null;
   responsavelId?: string | null;
@@ -141,8 +141,8 @@ export interface LeadDetail {
   indicadoPorLeadId?: string | null;
   indicadoPorLeadNome?: string | null;
   tipoIndicacao?: string | null;
-  etapaId: string;
-  etapaNome: string;
+  etapaId?: string | null;
+  etapaNome?: string | null;
   etapaCor?: string | null;
   responsavelId?: string | null;
   responsavelNome?: string | null;
@@ -200,7 +200,8 @@ export interface LeadDuplicateWarning {
 // --- Quadro de leads (kanban) ---
 
 export interface LeadStage {
-  id: string;
+  /** Nulo representa a coluna virtual "Sem etapa" (leads novos, ainda não trabalhados). */
+  id: string | null;
   nome: string;
   ordem: number;
   cor?: string | null;
@@ -234,7 +235,8 @@ export interface LeadKanbanBoard {
 }
 
 export interface ChangeLeadStageRequest {
-  novaEtapaId: string;
+  /** Nulo move o lead de volta pra "Sem etapa" (desmarca). */
+  novaEtapaId: string | null;
   rowVersion: number;
 }
 

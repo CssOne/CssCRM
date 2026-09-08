@@ -36,7 +36,7 @@ export function LeadsKanbanPage() {
     return () => controller.abort();
   }, [carregar, recarregar]);
 
-  function moverCartaoLocal(leadId: string, etapaDestinoId: string) {
+  function moverCartaoLocal(leadId: string, etapaDestinoId: string | null) {
     setBoard((atual) => {
       if (!atual) return atual;
       let cartao: LeadKanbanCard | undefined;
@@ -54,7 +54,7 @@ export function LeadsKanbanPage() {
     });
   }
 
-  async function moverPara(cartao: LeadKanbanCard, etapaId: string) {
+  async function moverPara(cartao: LeadKanbanCard, etapaId: string | null) {
     const boardAnterior = boardRef.current;
     moverCartaoLocal(cartao.leadId, etapaId);
     setEnviando(true);
@@ -72,7 +72,7 @@ export function LeadsKanbanPage() {
     }
   }
 
-  function handleDrop(etapaId: string) {
+  function handleDrop(etapaId: string | null) {
     if (!cartaoArrastando) return;
     moverPara(cartaoArrastando, etapaId);
     setCartaoArrastando(null);
@@ -112,7 +112,7 @@ export function LeadsKanbanPage() {
         <div className="flex gap-4 overflow-x-auto pb-2">
           {board.colunas.map((coluna) => (
             <div
-              key={coluna.etapa.id}
+              key={coluna.etapa.id ?? "sem-etapa"}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => handleDrop(coluna.etapa.id)}
               className="flex w-72 shrink-0 flex-col rounded-xl border border-[var(--border)] bg-[var(--surface-hover)]/40"
@@ -177,7 +177,7 @@ export function LeadsKanbanPage() {
               .filter((c) => c.etapa.id !== board.colunas.find((col) => col.cartoes.includes(modalMobile))?.etapa.id)
               .map((c) => (
                 <button
-                  key={c.etapa.id}
+                  key={c.etapa.id ?? "sem-etapa"}
                   disabled={enviando}
                   onClick={() => moverPara(modalMobile, c.etapa.id)}
                   className="focus-ring flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--surface-hover)] disabled:opacity-50"

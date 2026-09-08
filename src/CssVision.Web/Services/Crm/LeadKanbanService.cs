@@ -1,5 +1,6 @@
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
+using CssVision.Web.Domain.Crm;
 using Microsoft.EntityFrameworkCore;
 
 namespace CssVision.Web.Services.Crm;
@@ -30,21 +31,30 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
 
         var leads = await query.ToListAsync(ct);
 
-        var colunas = etapas.Select(etapa =>
+        LeadKanbanCardDto ParaCartao(CrmLead l) => new(
+            l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Email, l.Origem, l.Campanha,
+            l.ResponsavelId, l.Responsavel?.NomeCompleto,
+            l.LeadTags.Select(lt => lt.Tag.Nome).ToList(),
+            l.CriadoEm, l.UltimoContatoEm, l.UltimoContatoEm == null, l.RowVersion);
+
+        // Coluna virtual (sem linha em CrmLeadStage): leads que ainda não foram trabalhados por
+        // ninguém. Fica sempre em primeiro, pra vendedora enxergar de cara quem ainda não pegou.
+        var semEtapa = new LeadKanbanColumnDto(
+            new LeadStageDto(null, "Sem etapa", -1, "#94a3b8", false, true),
+            leads.Where(l => l.EtapaId is null).OrderByDescending(l => l.CriadoEm).Select(ParaCartao).ToList());
+
+        var colunas = new List<LeadKanbanColumnDto> { semEtapa };
+        colunas.AddRange(etapas.Select(etapa =>
         {
             var cartoes = leads
                 .Where(l => l.EtapaId == etapa.Id)
                 .OrderByDescending(l => l.CriadoEm)
-                .Select(l => new LeadKanbanCardDto(
-                    l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Email, l.Origem, l.Campanha,
-                    l.ResponsavelId, l.Responsavel?.NomeCompleto,
-                    l.LeadTags.Select(lt => lt.Tag.Nome).ToList(),
-                    l.CriadoEm, l.UltimoContatoEm, l.UltimoContatoEm == null, l.RowVersion))
+                .Select(ParaCartao)
                 .ToList();
 
             var etapaDto = new LeadStageDto(etapa.Id, etapa.Nome, etapa.Ordem, etapa.Cor, etapa.Fechada, etapa.Ativa);
             return new LeadKanbanColumnDto(etapaDto, cartoes);
-        }).ToList();
+        }));
 
         return new LeadKanbanBoardDto(colunas);
     }

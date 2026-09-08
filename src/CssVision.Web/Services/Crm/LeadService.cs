@@ -38,8 +38,8 @@ public sealed class LeadService(
                 l.Regional,
                 l.Origem,
                 l.EtapaId,
-                l.Etapa.Nome,
-                l.Etapa.Cor,
+                l.Etapa != null ? l.Etapa.Nome : null,
+                l.Etapa != null ? l.Etapa.Cor : null,
                 l.Oportunidades
                     .Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Aberta)
                     .OrderByDescending(o => o.EtapaDesde)
@@ -182,11 +182,11 @@ public sealed class LeadService(
             throw new CrmForbiddenException("Você não pode atribuir leads para este vendedor.");
         }
 
-        var etapaId = request.EtapaId ?? await ObterEtapaInicialIdAsync(ct);
-
         var lead = new CrmLead
         {
-            EtapaId = etapaId,
+            // Fica nula de propósito: lead novo sem etapa marcada é como a vendedora enxerga
+            // "ninguém pegou ainda" — ela mesma arrasta pra uma etapa quando começa a trabalhar.
+            EtapaId = request.EtapaId,
             NomeOuRazaoSocial = request.NomeOuRazaoSocial.Trim(),
             TipoPessoa = request.TipoPessoa,
             DocumentoNormalizado = documentoNormalizado,
@@ -343,10 +343,16 @@ public sealed class LeadService(
         var lead = await CarregarComEscopoAsync(id, ct);
         db.Entry(lead).Property(l => l.RowVersion).OriginalValue = request.RowVersion;
 
-        var novaEtapa = await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Id == request.NovaEtapaId, ct)
-            ?? throw new CrmNotFoundException("Etapa de lead", request.NovaEtapaId);
-
-        lead.EtapaId = novaEtapa.Id;
+        if (request.NovaEtapaId.HasValue)
+        {
+            var novaEtapa = await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Id == request.NovaEtapaId, ct)
+                ?? throw new CrmNotFoundException("Etapa de lead", request.NovaEtapaId.Value);
+            lead.EtapaId = novaEtapa.Id;
+        }
+        else
+        {
+            lead.EtapaId = null;
+        }
 
         try
         {
@@ -357,7 +363,7 @@ public sealed class LeadService(
             throw new CrmConcurrencyException();
         }
 
-        await audit.RegistrarAsync("LeadMudouEtapa", nameof(CrmLead), lead.Id, new { EtapaNova = novaEtapa.Id }, ct);
+        await audit.RegistrarAsync("LeadMudouEtapa", nameof(CrmLead), lead.Id, new { EtapaNova = request.NovaEtapaId }, ct);
 
         return await ObterPorIdAsync(lead.Id, ct);
     }
@@ -431,7 +437,6 @@ public sealed class LeadService(
 
         var usuariosPorEmail = await db.Users.AsNoTracking()
             .ToDictionaryAsync(u => u.Email!.ToLowerInvariant(), u => u.Id, ct);
-        var etapaInicialId = await ObterEtapaInicialIdAsync(ct);
 
         foreach (var linha in linhas)
         {
@@ -484,7 +489,6 @@ public sealed class LeadService(
 
                 db.CrmLeads.Add(new CrmLead
                 {
-                    EtapaId = etapaInicialId,
                     NomeOuRazaoSocial = nome,
                     TipoPessoa = tipoPessoa,
                     DocumentoNormalizado = documentoNormalizado,
@@ -530,7 +534,7 @@ public sealed class LeadService(
                 l.Estado,
                 l.Regional,
                 l.Origem,
-                EtapaNome = l.Etapa.Nome,
+                EtapaNome = l.Etapa != null ? l.Etapa.Nome : "Sem etapa",
                 Responsavel = l.Responsavel != null ? l.Responsavel.NomeCompleto : null,
                 l.CriadoEm
             })
@@ -567,11 +571,6 @@ public sealed class LeadService(
     }
 
     // --- Métodos auxiliares privados ---
-
-    /// <summary>Etapa atribuída a um lead novo quando nenhuma é informada explicitamente: a primeira etapa ativa do quadro, por ordem.</summary>
-    private async Task<Guid> ObterEtapaInicialIdAsync(CancellationToken ct) =>
-        (await db.CrmLeadStages.Where(s => s.Ativa).OrderBy(s => s.Ordem).Select(s => (Guid?)s.Id).FirstOrDefaultAsync(ct))
-        ?? throw new CrmBusinessException("Nenhuma etapa de lead ativa configurada.", "sem_etapa_lead");
 
     private async Task<IQueryable<CrmLead>> QueryEscopadaAsync(bool incluirArquivados, CancellationToken ct)
     {
@@ -647,7 +646,7 @@ public sealed class LeadService(
         Expression<Func<CrmLead, object?>> chave = ordenarPor?.ToLowerInvariant() switch
         {
             "nome" => l => l.NomeOuRazaoSocial,
-            "etapa" => l => l.Etapa.Nome,
+            "etapa" => l => l.Etapa != null ? l.Etapa.Nome : null,
             "ultimocontato" => l => l.UltimoContatoEm,
             "proximocontato" => l => l.ProximoContatoEm,
             _ => l => l.CriadoEm
@@ -746,8 +745,8 @@ public sealed class LeadService(
         lead.IndicadoPorLead?.NomeOuRazaoSocial,
         lead.TipoIndicacao,
         lead.EtapaId,
-        lead.Etapa.Nome,
-        lead.Etapa.Cor,
+        lead.Etapa?.Nome,
+        lead.Etapa?.Cor,
         lead.ResponsavelId,
         lead.Responsavel?.NomeCompleto,
         lead.Observacoes,

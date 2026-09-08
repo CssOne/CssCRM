@@ -1,6 +1,7 @@
 namespace CssVision.Web.Api.Contracts.Crm;
 
-public record LeadStageDto(Guid Id, string Nome, int Ordem, string? Cor, bool Fechada, bool Ativa);
+/// <summary>Id nulo representa a coluna virtual "Sem etapa" (leads novos, ainda não trabalhados) — não existe como linha em CrmLeadStage.</summary>
+public record LeadStageDto(Guid? Id, string Nome, int Ordem, string? Cor, bool Fechada, bool Ativa);
 
 public record LeadKanbanCardDto(
     Guid LeadId,
@@ -28,6 +29,7 @@ public record LeadKanbanFilterRequest
     public string? Regional { get; init; }
 }
 
-public record ChangeLeadStageRequest(Guid NovaEtapaId, uint RowVersion);
+/// <summary>NovaEtapaId nulo move o lead de volta pra "Sem etapa" (desmarca).</summary>
+public record ChangeLeadStageRequest(Guid? NovaEtapaId, uint RowVersion);
 
 public record CreateLeadStageRequest(string Nome, int Ordem, string? Cor, bool Fechada);
