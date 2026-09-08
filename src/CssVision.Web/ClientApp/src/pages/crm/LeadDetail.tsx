@@ -31,6 +31,16 @@ function paraFormValues(lead: LeadDetail): LeadFormValues {
     origem: lead.origem ?? "",
     campanha: lead.campanha ?? "",
     produtoInteresse: lead.produtoInteresse ?? "",
+    gclid: lead.gclid ?? "",
+    utmMedium: lead.utmMedium ?? "",
+    utmSource: lead.utmSource ?? "",
+    utmTerm: lead.utmTerm ?? "",
+    metaClickId: lead.metaClickId ?? "",
+    metaFormId: lead.metaFormId ?? "",
+    metaLeadId: lead.metaLeadId ?? "",
+    indicadoPorLeadId: lead.indicadoPorLeadId ?? "",
+    indicadoPorLeadNome: lead.indicadoPorLeadNome ?? "",
+    tipoIndicacao: lead.tipoIndicacao ?? "",
     tags: lead.tags.join(", "),
     observacoes: lead.observacoes ?? "",
     consentimentoContato: lead.consentimentoContato,
@@ -98,6 +108,15 @@ export function LeadDetailPage() {
         origem: valores.origem || null,
         campanha: valores.campanha || null,
         produtoInteresse: valores.produtoInteresse || null,
+        gclid: valores.gclid || null,
+        utmMedium: valores.utmMedium || null,
+        utmSource: valores.utmSource || null,
+        utmTerm: valores.utmTerm || null,
+        metaClickId: valores.metaClickId || null,
+        metaFormId: valores.metaFormId || null,
+        metaLeadId: valores.metaLeadId || null,
+        indicadoPorLeadId: valores.indicadoPorLeadId || null,
+        tipoIndicacao: valores.tipoIndicacao || null,
         tags: valores.tags ? valores.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
         observacoes: valores.observacoes || null,
         consentimentoContato: valores.consentimentoContato,
@@ -124,6 +143,7 @@ export function LeadDetailPage() {
     if (!lead) return;
     setSalvando(true);
     try {
+      const temVeiculo = [valores.veiculoDescricao, valores.veiculoPlaca, valores.veiculoFipe, valores.veiculoRastreador, valores.veiculoVistoriadorId].some(Boolean);
       const request: OpportunityCreateRequest = {
         leadId: lead.id,
         titulo: valores.titulo,
@@ -134,6 +154,23 @@ export function LeadDetailPage() {
         dataPrevistaFechamento: valores.dataPrevistaFechamento || null,
         concorrente: valores.concorrente || null,
         observacoes: valores.observacoes || null,
+        dataAdesao: valores.dataAdesao || null,
+        mensalidade: valores.mensalidade ? Number(valores.mensalidade) : null,
+        mensalidadeComDesconto: valores.mensalidadeComDesconto ? Number(valores.mensalidadeComDesconto) : null,
+        pagamentoAdesao: valores.pagamentoAdesao ? Number(valores.pagamentoAdesao) : null,
+        porcentagem: valores.porcentagem ? Number(valores.porcentagem) : null,
+        termoAdesaoAceito: valores.termoAdesaoAceito,
+        migracao: valores.migracao,
+        veiculo: temVeiculo
+          ? {
+              descricao: valores.veiculoDescricao || null,
+              placa: valores.veiculoPlaca || null,
+              fipe: valores.veiculoFipe ? Number(valores.veiculoFipe) : null,
+              rastreador: valores.veiculoRastreador || null,
+              vistoriadorId: valores.veiculoVistoriadorId || null,
+              dataChegada: null,
+            }
+          : null,
       };
       await api.post("/crm/opportunities", request);
       setModalOportunidade(false);

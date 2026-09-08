@@ -1,5 +1,7 @@
-import { useState, type FormEvent } from "react";
-import { Button, Input, Label, Textarea } from "../ui";
+import { useEffect, useState, type FormEvent } from "react";
+import { api } from "../../lib/api";
+import type { VendedorResumo } from "../../lib/types";
+import { Button, Checkbox, Input, Label, Select, Textarea } from "../ui";
 
 export interface OpportunityFormValues {
   titulo: string;
@@ -9,6 +11,18 @@ export interface OpportunityFormValues {
   dataPrevistaFechamento: string;
   concorrente: string;
   observacoes: string;
+  dataAdesao: string;
+  mensalidade: string;
+  mensalidadeComDesconto: string;
+  pagamentoAdesao: string;
+  porcentagem: string;
+  termoAdesaoAceito: boolean;
+  migracao: boolean;
+  veiculoDescricao: string;
+  veiculoPlaca: string;
+  veiculoFipe: string;
+  veiculoRastreador: string;
+  veiculoVistoriadorId: string;
 }
 
 export const opportunityFormVazio: OpportunityFormValues = {
@@ -19,6 +33,18 @@ export const opportunityFormVazio: OpportunityFormValues = {
   dataPrevistaFechamento: "",
   concorrente: "",
   observacoes: "",
+  dataAdesao: "",
+  mensalidade: "",
+  mensalidadeComDesconto: "",
+  pagamentoAdesao: "",
+  porcentagem: "",
+  termoAdesaoAceito: false,
+  migracao: false,
+  veiculoDescricao: "",
+  veiculoPlaca: "",
+  veiculoFipe: "",
+  veiculoRastreador: "",
+  veiculoVistoriadorId: "",
 };
 
 export function OpportunityForm({
@@ -31,6 +57,11 @@ export function OpportunityForm({
   onCancel: () => void;
 }) {
   const [valores, setValores] = useState<OpportunityFormValues>(opportunityFormVazio);
+  const [vendedores, setVendedores] = useState<VendedorResumo[]>([]);
+
+  useEffect(() => {
+    api.get<VendedorResumo[]>("/crm/management/vendedores").then(setVendedores).catch(() => setVendedores([]));
+  }, []);
 
   function set<K extends keyof OpportunityFormValues>(campo: K, valor: OpportunityFormValues[K]) {
     setValores((v) => ({ ...v, [campo]: valor }));
@@ -86,6 +117,70 @@ export function OpportunityForm({
           <Textarea id="opp-obs" value={valores.observacoes} onChange={(e) => set("observacoes", e.target.value)} />
         </div>
       </div>
+
+      <div className="border-t border-[var(--border)] pt-4">
+        <h3 className="mb-3 text-sm font-semibold text-[var(--fg)]">Adesão e cobrança</h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label htmlFor="opp-data-adesao">Data de adesão</Label>
+            <Input id="opp-data-adesao" type="date" value={valores.dataAdesao} onChange={(e) => set("dataAdesao", e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="opp-porcentagem">Comissão/desconto (%)</Label>
+            <Input id="opp-porcentagem" type="number" min={0} max={100} step="0.01" value={valores.porcentagem} onChange={(e) => set("porcentagem", e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="opp-mensalidade">Mensalidade (R$)</Label>
+            <Input id="opp-mensalidade" type="number" min={0} step="0.01" value={valores.mensalidade} onChange={(e) => set("mensalidade", e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="opp-mensalidade-desconto">Mensalidade com desconto (R$)</Label>
+            <Input id="opp-mensalidade-desconto" type="number" min={0} step="0.01" value={valores.mensalidadeComDesconto} onChange={(e) => set("mensalidadeComDesconto", e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="opp-pagamento-adesao">Pagamento de adesão (R$)</Label>
+            <Input id="opp-pagamento-adesao" type="number" min={0} step="0.01" value={valores.pagamentoAdesao} onChange={(e) => set("pagamentoAdesao", e.target.value)} />
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-4">
+          <Checkbox label="Termo de adesão aceito" checked={valores.termoAdesaoAceito} onChange={(e) => set("termoAdesaoAceito", e.target.checked)} />
+          <Checkbox label="É uma migração" checked={valores.migracao} onChange={(e) => set("migracao", e.target.checked)} />
+        </div>
+      </div>
+
+      <div className="border-t border-[var(--border)] pt-4">
+        <h3 className="mb-3 text-sm font-semibold text-[var(--fg)]">Veículo</h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Label htmlFor="opp-veiculo-descricao">Veículo (marca/modelo)</Label>
+            <Input id="opp-veiculo-descricao" value={valores.veiculoDescricao} onChange={(e) => set("veiculoDescricao", e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="opp-veiculo-placa">Placa</Label>
+            <Input id="opp-veiculo-placa" value={valores.veiculoPlaca} onChange={(e) => set("veiculoPlaca", e.target.value.toUpperCase())} />
+          </div>
+          <div>
+            <Label htmlFor="opp-veiculo-fipe">Valor FIPE (R$)</Label>
+            <Input id="opp-veiculo-fipe" type="number" min={0} step="0.01" value={valores.veiculoFipe} onChange={(e) => set("veiculoFipe", e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="opp-veiculo-rastreador">Rastreador</Label>
+            <Input id="opp-veiculo-rastreador" value={valores.veiculoRastreador} onChange={(e) => set("veiculoRastreador", e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="opp-veiculo-vistoriador">Vistoriador</Label>
+            <Select id="opp-veiculo-vistoriador" value={valores.veiculoVistoriadorId} onChange={(e) => set("veiculoVistoriadorId", e.target.value)}>
+              <option value="">Nenhum</option>
+              {vendedores.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.nome}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+      </div>
+
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={salvando}>
           Cancelar

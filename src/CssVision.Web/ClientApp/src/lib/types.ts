@@ -137,6 +137,16 @@ export interface LeadDetail {
   origem?: string | null;
   campanha?: string | null;
   produtoInteresse?: string | null;
+  gclid?: string | null;
+  utmMedium?: string | null;
+  utmSource?: string | null;
+  utmTerm?: string | null;
+  metaClickId?: string | null;
+  metaFormId?: string | null;
+  metaLeadId?: string | null;
+  indicadoPorLeadId?: string | null;
+  indicadoPorLeadNome?: string | null;
+  tipoIndicacao?: string | null;
   status: StatusLead;
   responsavelId?: string | null;
   responsavelNome?: string | null;
@@ -166,6 +176,15 @@ export interface LeadCreateRequest {
   origem?: string | null;
   campanha?: string | null;
   produtoInteresse?: string | null;
+  gclid?: string | null;
+  utmMedium?: string | null;
+  utmSource?: string | null;
+  utmTerm?: string | null;
+  metaClickId?: string | null;
+  metaFormId?: string | null;
+  metaLeadId?: string | null;
+  indicadoPorLeadId?: string | null;
+  tipoIndicacao?: string | null;
   responsavelId?: string | null;
   tags?: string[];
   observacoes?: string | null;
@@ -221,10 +240,39 @@ export interface Opportunity {
   motivoPerdaDescricao?: string | null;
   concorrente?: string | null;
   observacoes?: string | null;
+  dataAdesao?: string | null;
+  ativoEm?: string | null;
+  mensalidade?: number | null;
+  mensalidadeComDesconto?: number | null;
+  pagamentoAdesao?: number | null;
+  porcentagem?: number | null;
+  termoAdesaoAceito: boolean;
+  migracao: boolean;
+  veiculo?: Veiculo | null;
   criadoEm: string;
   atualizadoEm?: string | null;
   rowVersion: number;
   atrasada: boolean;
+}
+
+export interface Veiculo {
+  id: string;
+  descricao?: string | null;
+  placa?: string | null;
+  fipe?: number | null;
+  rastreador?: string | null;
+  vistoriadorId?: string | null;
+  vistoriadorNome?: string | null;
+  dataChegada?: string | null;
+}
+
+export interface VeiculoUpsertRequest {
+  descricao?: string | null;
+  placa?: string | null;
+  fipe?: number | null;
+  rastreador?: string | null;
+  vistoriadorId?: string | null;
+  dataChegada?: string | null;
 }
 
 export interface OpportunityCreateRequest {
@@ -238,6 +286,14 @@ export interface OpportunityCreateRequest {
   dataPrevistaFechamento?: string | null;
   concorrente?: string | null;
   observacoes?: string | null;
+  dataAdesao?: string | null;
+  mensalidade?: number | null;
+  mensalidadeComDesconto?: number | null;
+  pagamentoAdesao?: number | null;
+  porcentagem?: number | null;
+  termoAdesaoAceito: boolean;
+  migracao: boolean;
+  veiculo?: VeiculoUpsertRequest | null;
 }
 
 export interface ChangeStageRequest {

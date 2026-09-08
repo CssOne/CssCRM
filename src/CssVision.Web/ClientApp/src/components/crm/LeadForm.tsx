@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
-import { TipoPessoa } from "../../lib/types";
+import { TipoPessoa, type LeadListItem } from "../../lib/types";
 import { Button, Checkbox, FieldError, Input, Label, Select, Textarea } from "../ui";
+import { LeadPicker } from "./LeadPicker";
 
 export interface LeadFormValues {
   nomeOuRazaoSocial: string;
@@ -15,6 +16,16 @@ export interface LeadFormValues {
   origem: string;
   campanha: string;
   produtoInteresse: string;
+  gclid: string;
+  utmMedium: string;
+  utmSource: string;
+  utmTerm: string;
+  metaClickId: string;
+  metaFormId: string;
+  metaLeadId: string;
+  indicadoPorLeadId: string;
+  indicadoPorLeadNome: string;
+  tipoIndicacao: string;
   tags: string;
   observacoes: string;
   consentimentoContato: boolean;
@@ -33,6 +44,16 @@ export const leadFormVazio: LeadFormValues = {
   origem: "",
   campanha: "",
   produtoInteresse: "",
+  gclid: "",
+  utmMedium: "",
+  utmSource: "",
+  utmTerm: "",
+  metaClickId: "",
+  metaFormId: "",
+  metaLeadId: "",
+  indicadoPorLeadId: "",
+  indicadoPorLeadNome: "",
+  tipoIndicacao: "",
   tags: "",
   observacoes: "",
   consentimentoContato: false,
@@ -161,14 +182,75 @@ export function LeadForm({
           <Label htmlFor={`${idPrefix}-obs`}>Observações</Label>
           <Textarea id={`${idPrefix}-obs`} value={valores.observacoes} onChange={(e) => set("observacoes", e.target.value)} />
         </div>
+      </div>
 
-        <div className="sm:col-span-2">
-          <Checkbox
-            label="O lead consentiu em ser contatado (LGPD)"
-            checked={valores.consentimentoContato}
-            onChange={(e) => set("consentimentoContato", e.target.checked)}
-          />
+      <div className="border-t border-[var(--border)] pt-4">
+        <h3 className="mb-3 text-sm font-semibold text-[var(--fg)]">Indicação</h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Label>Indicado por</Label>
+            {!valores.indicadoPorLeadId ? (
+              <LeadPicker onSelecionar={(lead: LeadListItem) => { set("indicadoPorLeadId", lead.id); set("indicadoPorLeadNome", lead.nomeOuRazaoSocial); }} />
+            ) : (
+              <div className="flex items-center justify-between rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm">
+                <span className="text-[var(--fg)]">{valores.indicadoPorLeadNome}</span>
+                <button
+                  type="button"
+                  className="focus-ring text-xs text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                  onClick={() => { set("indicadoPorLeadId", ""); set("indicadoPorLeadNome", ""); }}
+                >
+                  Remover
+                </button>
+              </div>
+            )}
+          </div>
+          <div>
+            <Label htmlFor={`${idPrefix}-tipo-indicacao`}>Tipo de indicação</Label>
+            <Input id={`${idPrefix}-tipo-indicacao`} value={valores.tipoIndicacao} onChange={(e) => set("tipoIndicacao", e.target.value)} />
+          </div>
         </div>
+      </div>
+
+      <div className="border-t border-[var(--border)] pt-4">
+        <h3 className="mb-3 text-sm font-semibold text-[var(--fg)]">Marketing e rastreamento</h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label htmlFor={`${idPrefix}-gclid`}>GCLID (Google Ads)</Label>
+            <Input id={`${idPrefix}-gclid`} value={valores.gclid} onChange={(e) => set("gclid", e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor={`${idPrefix}-utm-source`}>UTM Source</Label>
+            <Input id={`${idPrefix}-utm-source`} value={valores.utmSource} onChange={(e) => set("utmSource", e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor={`${idPrefix}-utm-medium`}>UTM Medium</Label>
+            <Input id={`${idPrefix}-utm-medium`} value={valores.utmMedium} onChange={(e) => set("utmMedium", e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor={`${idPrefix}-utm-term`}>UTM Term</Label>
+            <Input id={`${idPrefix}-utm-term`} value={valores.utmTerm} onChange={(e) => set("utmTerm", e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor={`${idPrefix}-meta-click`}>Meta Click ID</Label>
+            <Input id={`${idPrefix}-meta-click`} value={valores.metaClickId} onChange={(e) => set("metaClickId", e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor={`${idPrefix}-meta-form`}>Meta Form ID</Label>
+            <Input id={`${idPrefix}-meta-form`} value={valores.metaFormId} onChange={(e) => set("metaFormId", e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor={`${idPrefix}-meta-lead`}>Meta Lead ID</Label>
+            <Input id={`${idPrefix}-meta-lead`} value={valores.metaLeadId} onChange={(e) => set("metaLeadId", e.target.value)} />
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-[var(--border)] pt-4">
+        <Checkbox
+          label="O lead consentiu em ser contatado (LGPD)"
+          checked={valores.consentimentoContato}
+          onChange={(e) => set("consentimentoContato", e.target.checked)}
+        />
       </div>
 
       <div className="flex justify-end gap-2 pt-2">
