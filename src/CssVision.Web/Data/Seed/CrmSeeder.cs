@@ -11,13 +11,13 @@ public static class CrmSeeder
         if (!await db.CrmLeadStages.AnyAsync())
         {
             db.CrmLeadStages.AddRange(
-                new CrmLeadStage { Nome = "Pré-cadastro", Ordem = 1, Cor = "#64748b" },
-                new CrmLeadStage { Nome = "Em atendimento", Ordem = 2, Cor = "#3b82f6" },
-                new CrmLeadStage { Nome = "Cotação", Ordem = 3, Cor = "#f59e0b" },
-                new CrmLeadStage { Nome = "Não responde", Ordem = 4, Cor = "#f97316" },
-                new CrmLeadStage { Nome = "Venda concluída", Ordem = 5, Cor = "#22c55e", Fechada = true },
-                new CrmLeadStage { Nome = "Não fazemos", Ordem = 6, Cor = "#6b7280", Fechada = true },
-                new CrmLeadStage { Nome = "Perdido", Ordem = 7, Cor = "#ef4444", Fechada = true },
+                new CrmLeadStage { Nome = "Em atendimento", Ordem = 1, Cor = "#3b82f6" },
+                new CrmLeadStage { Nome = "Cotação", Ordem = 2, Cor = "#f59e0b" },
+                new CrmLeadStage { Nome = "Pré-cadastro", Ordem = 3, Cor = "#64748b" },
+                new CrmLeadStage { Nome = "Venda concluída", Ordem = 4, Cor = "#22c55e", Fechada = true },
+                new CrmLeadStage { Nome = "Perdido", Ordem = 5, Cor = "#ef4444", Fechada = true },
+                new CrmLeadStage { Nome = "Não responde", Ordem = 6, Cor = "#f97316" },
+                new CrmLeadStage { Nome = "Não fazemos", Ordem = 7, Cor = "#6b7280", Fechada = true },
                 new CrmLeadStage { Nome = "Recusa/Inativa", Ordem = 8, Cor = "#b91c1c", Fechada = true }
             );
         }

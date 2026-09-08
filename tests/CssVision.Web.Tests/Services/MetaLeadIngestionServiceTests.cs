@@ -36,7 +36,7 @@ public class MetaLeadIngestionServiceTests
         graph.Setup(g => g.FetchLeadAsync("leadgen-1", It.IsAny<CancellationToken>()))
             .ReturnsAsync(LeadDaGraphApi("leadgen-1", formId));
 
-        var service = new MetaLeadIngestionService(db, graph.Object, NullLogger<MetaLeadIngestionService>.Instance);
+        var service = new MetaLeadIngestionService(db, graph.Object, new NoOpLeadAssignmentService(), NullLogger<MetaLeadIngestionService>.Instance);
         await service.ProcessLeadEventAsync("leadgen-1", formId, CancellationToken.None);
 
         var lead = await db.CrmLeads.Include(l => l.LeadTags).ThenInclude(lt => lt.Tag).SingleAsync();
@@ -60,7 +60,7 @@ public class MetaLeadIngestionServiceTests
         graph.Setup(g => g.FetchLeadAsync("leadgen-2", It.IsAny<CancellationToken>()))
             .ReturnsAsync(LeadDaGraphApi("leadgen-2", "form-desconhecido"));
 
-        var service = new MetaLeadIngestionService(db, graph.Object, NullLogger<MetaLeadIngestionService>.Instance);
+        var service = new MetaLeadIngestionService(db, graph.Object, new NoOpLeadAssignmentService(), NullLogger<MetaLeadIngestionService>.Instance);
         await service.ProcessLeadEventAsync("leadgen-2", "form-desconhecido", CancellationToken.None);
 
         var lead = await db.CrmLeads.Include(l => l.LeadTags).ThenInclude(lt => lt.Tag).SingleAsync();
@@ -80,7 +80,7 @@ public class MetaLeadIngestionServiceTests
         await db.SaveChangesAsync();
 
         var graph = new Mock<IMetaGraphClient>();
-        var service = new MetaLeadIngestionService(db, graph.Object, NullLogger<MetaLeadIngestionService>.Instance);
+        var service = new MetaLeadIngestionService(db, graph.Object, new NoOpLeadAssignmentService(), NullLogger<MetaLeadIngestionService>.Instance);
 
         await service.ProcessLeadEventAsync("leadgen-3", null, CancellationToken.None);
 
@@ -109,7 +109,7 @@ public class MetaLeadIngestionServiceTests
         graph.Setup(g => g.FetchLeadAsync("leadgen-4", It.IsAny<CancellationToken>()))
             .ReturnsAsync(LeadDaGraphApi("leadgen-4", "1050561764291664", email: "joao@teste.com"));
 
-        var service = new MetaLeadIngestionService(db, graph.Object, NullLogger<MetaLeadIngestionService>.Instance);
+        var service = new MetaLeadIngestionService(db, graph.Object, new NoOpLeadAssignmentService(), NullLogger<MetaLeadIngestionService>.Instance);
         await service.ProcessLeadEventAsync("leadgen-4", "1050561764291664", CancellationToken.None);
 
         Assert.Equal(1, await db.CrmLeads.CountAsync());

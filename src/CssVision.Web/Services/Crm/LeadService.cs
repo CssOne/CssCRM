@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using ClosedXML.Excel;
 using CssVision.Web.Api.Contracts.Common;
+using CssVision.Web.Authorization;
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
@@ -13,6 +14,7 @@ public sealed class LeadService(
     ApplicationDbContext db,
     ICurrentUserService currentUser,
     IEquipeComercialService equipe,
+    ILeadAssignmentService assignment,
     IAuditSink audit) : ILeadService
 {
     public async Task<PagedResult<LeadListItemDto>> ListarAsync(LeadFilterRequest filtro, CancellationToken ct)
@@ -176,10 +178,28 @@ public sealed class LeadService(
         var duplicidade = await DetectarDuplicidadeAsync(documentoNormalizado, emailNormalizado, telefoneNormalizado, request.IgnorarDuplicidade, ct);
         if (duplicidade is not null) return new CriarLeadResultado(null, duplicidade);
 
-        var responsavelId = request.ResponsavelId ?? currentUser.UserId;
-        if (!await equipe.PodeAcessarVendedorAsync(responsavelId, ct))
+        // Responsável explícito respeita o escopo de quem está criando. Sem escolha explícita:
+        // uma vendedora cadastrando um contato dela mesma continua caindo pra ela (comportamento
+        // intuitivo, "é meu"); só quando não há um dono natural (admin/gestor cadastrando sem
+        // escolher alguém, ou nenhum usuário logado) a distribuição automática decide — round-robin
+        // por quem tem menos leads no mês, respeitando o limite mensal de cada vendedor. Pode ficar
+        // sem responsável se ninguém estiver elegível, do mesmo jeito que o lead pode ficar sem etapa.
+        Guid? responsavelId;
+        if (request.ResponsavelId.HasValue)
         {
-            throw new CrmForbiddenException("Você não pode atribuir leads para este vendedor.");
+            if (!await equipe.PodeAcessarVendedorAsync(request.ResponsavelId.Value, ct))
+            {
+                throw new CrmForbiddenException("Você não pode atribuir leads para este vendedor.");
+            }
+            responsavelId = request.ResponsavelId.Value;
+        }
+        else if (currentUser.IsInRole(Roles.Comercial))
+        {
+            responsavelId = currentUser.UserId;
+        }
+        else
+        {
+            responsavelId = await assignment.ProximoResponsavelAsync(ct);
         }
 
         var lead = new CrmLead
@@ -485,7 +505,7 @@ public sealed class LeadService(
                 {
                     if (await equipe.PodeAcessarVendedorAsync(uid, ct)) responsavelId = uid;
                 }
-                responsavelId ??= currentUser.UserId;
+                responsavelId ??= await assignment.ProximoResponsavelAsync(ct);
 
                 db.CrmLeads.Add(new CrmLead
                 {

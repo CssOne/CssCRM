@@ -14,6 +14,7 @@ namespace CssVision.Web.Services.Marketing;
 public sealed class MetaLeadIngestionService(
     ApplicationDbContext db,
     IMetaGraphClient graph,
+    ILeadAssignmentService assignment,
     ILogger<MetaLeadIngestionService> logger)
 {
     public async Task ProcessLeadEventAsync(string leadgenId, string? formId, CancellationToken ct)
@@ -55,6 +56,8 @@ public sealed class MetaLeadIngestionService(
             return;
         }
 
+        var responsavelId = await assignment.ProximoResponsavelAsync(ct);
+
         var lead = new CrmLead
         {
             // Sem etapa de propósito, igual à criação manual — vendedora vê "ninguém pegou ainda".
@@ -71,6 +74,7 @@ public sealed class MetaLeadIngestionService(
             Origem = "Meta ads",
             Campanha = campanha,
             ProdutoInteresse = produtoInteresse,
+            ResponsavelId = responsavelId,
         };
 
         await AplicarTagsAsync(lead, tags, ct);

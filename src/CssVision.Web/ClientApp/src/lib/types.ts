@@ -507,6 +507,9 @@ export interface VendedorResumo {
   nome: string;
   leadsAtivos: number;
   oportunidadesAbertas: number;
+  /** Teto de leads que a distribuição automática atribui por mês corrente. Nulo = sem limite. */
+  limiteMensalLeads?: number | null;
+  leadsRecebidosNoMes: number;
 }
 
 export interface RankingComercial {

@@ -3,7 +3,49 @@ import { Link } from "react-router-dom";
 import { api, isAbortError } from "../../lib/api";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { GestaoComercialResumo, RedistribuicaoHistorico, VendedorResumo } from "../../lib/types";
-import { Badge, Card, ErrorState, Skeleton } from "../../components/ui";
+import { Badge, Card, ErrorState, Input, Skeleton, useToast } from "../../components/ui";
+
+function LimiteMensalInput({ vendedor, onSalvo }: { vendedor: VendedorResumo; onSalvo: () => void }) {
+  const { notificar } = useToast();
+  const [valor, setValor] = useState(vendedor.limiteMensalLeads?.toString() ?? "");
+  const [salvando, setSalvando] = useState(false);
+
+  async function salvar() {
+    const limite = valor.trim() === "" ? null : Number(valor);
+    if (limite !== null && (Number.isNaN(limite) || limite < 0)) {
+      notificar("error", "Limite inválido.");
+      setValor(vendedor.limiteMensalLeads?.toString() ?? "");
+      return;
+    }
+    if (limite === (vendedor.limiteMensalLeads ?? null)) return;
+
+    setSalvando(true);
+    try {
+      await api.put(`/crm/management/vendedores/${vendedor.id}/limite`, { limite });
+      notificar("success", "Limite mensal atualizado.");
+      onSalvo();
+    } catch {
+      notificar("error", "Não foi possível atualizar o limite.");
+      setValor(vendedor.limiteMensalLeads?.toString() ?? "");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="mt-1 flex items-center gap-1 text-xs text-[var(--fg-muted)]">
+      <span>{vendedor.leadsRecebidosNoMes} recebido(s) no mês · limite:</span>
+      <Input
+        className="h-6 w-16 px-1 py-0 text-xs"
+        placeholder="—"
+        value={valor}
+        disabled={salvando}
+        onChange={(e) => setValor(e.target.value.replace(/[^0-9]/g, ""))}
+        onBlur={salvar}
+      />
+    </div>
+  );
+}
 
 export function ManagementPage() {
   const [resumo, setResumo] = useState<GestaoComercialResumo | null>(null);
@@ -71,6 +113,7 @@ export function ManagementPage() {
               <div key={v.id} className="rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm">
                 <p className="font-medium text-[var(--fg)]">{v.nome}</p>
                 <p className="text-xs text-[var(--fg-muted)]">{v.leadsAtivos} leads · {v.oportunidadesAbertas} oportunidades</p>
+                <LimiteMensalInput vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
               </div>
             ))}
           </div>

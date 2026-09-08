@@ -16,5 +16,8 @@ public class ApplicationUser : IdentityUser<Guid>
 
     public bool Ativo { get; set; } = true;
 
+    /// <summary>Teto de leads que a distribuição automática atribui a este vendedor por mês corrente. Nulo = sem limite.</summary>
+    public int? LimiteMensalLeads { get; set; }
+
     public DateTimeOffset CriadoEm { get; set; } = DateTimeOffset.UtcNow;
 }
