@@ -32,8 +32,7 @@ public static class ConsultorSeeder
         ("Thayane", "micelle123@hotmail.com", "31 9434-2460", "/uploads/consultores/thayane.jpeg"),
         ("Laura Diniz", "lauradiniz09az@gmail.com", "31 7594-8003", "/uploads/consultores/laura-diniz.png"),
         ("Lucas Benevenuto", "benevenuto.uagv@outlook.com", "31 99207-6873", "/uploads/consultores/lucas-benevenuto.jpeg"),
-        // Foto ainda não recebida como arquivo — só a imagem colada no chat, sem bytes acessíveis pra salvar.
-        ("Luelle Souza", "gsccvendas07@gmail.com", "31 7335-3345", null),
+        ("Luelle Souza", "gsccvendas07@gmail.com", "31 7335-3345", "/uploads/consultores/luelle-souza.jpeg"),
 
         // "Dionathan"/"Jhonatan" fica de fora por decisão do Henrique — sem e-mail na planilha
         // e o Identity exige e-mail único por conta.
