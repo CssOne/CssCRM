@@ -2,6 +2,7 @@ using CssVision.Web.Api.Contracts.Common;
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
+using CssVision.Web.Services.Marketing;
 using Microsoft.EntityFrameworkCore;
 
 namespace CssVision.Web.Services.Crm;
@@ -10,6 +11,7 @@ public sealed class OpportunityService(
     ApplicationDbContext db,
     ICurrentUserService currentUser,
     IEquipeComercialService equipe,
+    IMetaConversionService conversion,
     IAuditSink audit) : IOpportunityService
 {
     public async Task<PagedResult<OpportunityDto>> ListarAsync(OpportunityFilterRequest filtro, CancellationToken ct)
@@ -245,6 +247,18 @@ public sealed class OpportunityService(
 
         await audit.RegistrarAsync("OportunidadeMudouEtapa", nameof(CrmOpportunity), opportunity.Id,
             new { EtapaAnterior = etapaAnteriorId, EtapaNova = novaEtapa.Id }, ct);
+
+        // Retorno de conversão offline (CAPI): só depois que a venda ganha já está persistida —
+        // uma falha aqui nunca deve desfazer nem bloquear o registro da venda no CRM.
+        if (novaEtapa.Tipo == TipoEtapaPipeline.Ganho)
+        {
+            var enviado = await conversion.EnviarConversaoVendaAsync(opportunity.Lead, opportunity, ct);
+            if (enviado)
+            {
+                opportunity.ConversaoOfflineEnviadaEm = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
+        }
 
         return await ObterPorIdAsync(opportunity.Id, ct);
     }

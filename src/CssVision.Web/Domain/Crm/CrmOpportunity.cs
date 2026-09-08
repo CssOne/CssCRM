@@ -57,6 +57,9 @@ public class CrmOpportunity : CrmArchivableEntity
 
     public CrmVeiculo? Veiculo { get; set; }
 
+    /// <summary>Quando o evento de conversão offline (CAPI) foi enviado ao Facebook por esta oportunidade ter sido ganha. Nulo = ainda não enviado.</summary>
+    public DateTimeOffset? ConversaoOfflineEnviadaEm { get; set; }
+
     public ICollection<CrmStageHistory> HistoricoEtapas { get; set; } = new List<CrmStageHistory>();
     public ICollection<CrmActivity> Atividades { get; set; } = new List<CrmActivity>();
 }

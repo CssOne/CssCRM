@@ -96,6 +96,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IMetaGraphClient, MetaGraphClient>();
         services.AddScoped<MetaLeadIngestionService>();
 
+        services.Configure<MetaCapiOptions>(configuration.GetSection(MetaCapiOptions.SectionName));
+        services.AddHttpClient<IMetaConversionService, MetaConversionService>();
+
         return services;
     }
 }

@@ -37,7 +37,7 @@ public class OpportunityServiceTests
 
         var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
         var equipe = new EquipeComercialService(db, currentUser.Object);
-        var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpAuditSink());
+        var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpMetaConversionService(), new NoOpAuditSink());
 
         var oportunidade = await service.CriarAsync(
             new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null, null, null, null, null, null, false, false, null),
@@ -57,7 +57,7 @@ public class OpportunityServiceTests
 
         var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
         var equipe = new EquipeComercialService(db, currentUser.Object);
-        var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpAuditSink());
+        var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpMetaConversionService(), new NoOpAuditSink());
 
         var oportunidade = await service.CriarAsync(
             new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null, null, null, null, null, null, false, false, null),
@@ -77,7 +77,7 @@ public class OpportunityServiceTests
 
         var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
         var equipe = new EquipeComercialService(db, currentUser.Object);
-        var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpAuditSink());
+        var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpMetaConversionService(), new NoOpAuditSink());
 
         var oportunidade = await service.CriarAsync(
             new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null, null, null, null, null, null, false, false, null),
@@ -107,7 +107,7 @@ public class OpportunityServiceTests
 
         var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
         var equipe = new EquipeComercialService(db, currentUser.Object);
-        var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpAuditSink());
+        var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpMetaConversionService(), new NoOpAuditSink());
 
         var oportunidade = await service.CriarAsync(
             new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null, null, null, null, null, null, false, false, null),
