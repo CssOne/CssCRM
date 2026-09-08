@@ -2,6 +2,7 @@ using CssVision.Web.Authorization;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Identity;
 using CssVision.Web.Services.Crm;
+using CssVision.Web.Services.Marketing;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -59,6 +60,14 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    public static IServiceCollection AddPublicLeadIntakeCors(this IServiceCollection services)
+    {
+        services.AddCors(options => options.AddPolicy(CorsPolicies.PublicLeadIntake, policy =>
+            policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+
+        return services;
+    }
+
     public static IServiceCollection AddCrmAuthorizationPolicies(this IServiceCollection services)
     {
         services.AddAuthorizationBuilder()
@@ -76,6 +85,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEquipeComercialService, EquipeComercialService>();
         services.AddScoped<IAuditSink, CrmAuditLogSink>();
         services.AddScoped<ILeadService, LeadService>();
+        services.AddScoped<ILeadKanbanService, LeadKanbanService>();
+        services.AddScoped<ILeadAssignmentService, LeadAssignmentService>();
         services.AddScoped<IOpportunityService, OpportunityService>();
         services.AddScoped<IPipelineService, PipelineService>();
         services.AddScoped<IActivityService, ActivityService>();
@@ -83,6 +94,19 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IGoalService, GoalService>();
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IManagementService, ManagementService>();
+        services.AddScoped<IPublicLeadIntakeService, PublicLeadIntakeService>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddMetaLeadAdsIntegration(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<MetaLeadAdsOptions>(configuration.GetSection(MetaLeadAdsOptions.SectionName));
+        services.AddHttpClient<IMetaGraphClient, MetaGraphClient>();
+        services.AddScoped<MetaLeadIngestionService>();
+
+        services.Configure<MetaCapiOptions>(configuration.GetSection(MetaCapiOptions.SectionName));
+        services.AddHttpClient<IMetaConversionService, MetaConversionService>();
 
         return services;
     }

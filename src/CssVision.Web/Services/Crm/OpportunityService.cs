@@ -2,6 +2,7 @@ using CssVision.Web.Api.Contracts.Common;
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
+using CssVision.Web.Services.Marketing;
 using Microsoft.EntityFrameworkCore;
 
 namespace CssVision.Web.Services.Crm;
@@ -10,6 +11,7 @@ public sealed class OpportunityService(
     ApplicationDbContext db,
     ICurrentUserService currentUser,
     IEquipeComercialService equipe,
+    IMetaConversionService conversion,
     IAuditSink audit) : IOpportunityService
 {
     public async Task<PagedResult<OpportunityDto>> ListarAsync(OpportunityFilterRequest filtro, CancellationToken ct)
@@ -41,6 +43,7 @@ public sealed class OpportunityService(
             .Include(o => o.Etapa)
             .Include(o => o.Responsavel)
             .Include(o => o.MotivoPerda)
+            .Include(o => o.Veiculo).ThenInclude(v => v!.Vistoriador)
             .OrderByDescending(o => o.CriadoEm)
             .Skip((filtro.Pagina - 1) * filtro.TamanhoPagina)
             .Take(filtro.TamanhoPagina)
@@ -100,8 +103,20 @@ public sealed class OpportunityService(
             ProbabilidadeFechamento = request.ProbabilidadeFechamento,
             DataPrevistaFechamento = request.DataPrevistaFechamento,
             Concorrente = request.Concorrente,
-            Observacoes = request.Observacoes
+            Observacoes = request.Observacoes,
+            DataAdesao = request.DataAdesao,
+            Mensalidade = request.Mensalidade,
+            MensalidadeComDesconto = request.MensalidadeComDesconto,
+            PagamentoAdesao = request.PagamentoAdesao,
+            Porcentagem = request.Porcentagem,
+            TermoAdesaoAceito = request.TermoAdesaoAceito,
+            Migracao = request.Migracao
         };
+
+        if (request.Veiculo is not null)
+        {
+            opportunity.Veiculo = CriarOuAtualizarVeiculo(null, request.Veiculo);
+        }
 
         db.CrmOpportunities.Add(opportunity);
 
@@ -112,8 +127,6 @@ public sealed class OpportunityService(
             EtapaNovaId = etapaInicial.Id,
             UsuarioId = currentUser.UserId
         });
-
-        if (lead.Status == StatusLead.Novo) lead.Status = StatusLead.EmAtendimento;
 
         await db.SaveChangesAsync(ct);
         await audit.RegistrarAsync("OportunidadeCriada", nameof(CrmOpportunity), opportunity.Id, new { opportunity.Titulo }, ct);
@@ -144,6 +157,19 @@ public sealed class OpportunityService(
         opportunity.DataPrevistaFechamento = request.DataPrevistaFechamento;
         opportunity.Concorrente = request.Concorrente;
         opportunity.Observacoes = request.Observacoes;
+        opportunity.DataAdesao = request.DataAdesao;
+        opportunity.AtivoEm = request.AtivoEm;
+        opportunity.Mensalidade = request.Mensalidade;
+        opportunity.MensalidadeComDesconto = request.MensalidadeComDesconto;
+        opportunity.PagamentoAdesao = request.PagamentoAdesao;
+        opportunity.Porcentagem = request.Porcentagem;
+        opportunity.TermoAdesaoAceito = request.TermoAdesaoAceito;
+        opportunity.Migracao = request.Migracao;
+
+        if (request.Veiculo is not null)
+        {
+            opportunity.Veiculo = CriarOuAtualizarVeiculo(opportunity.Veiculo, request.Veiculo);
+        }
 
         try
         {
@@ -195,7 +221,6 @@ public sealed class OpportunityService(
 
             opportunity.ValorFinal = request.ValorFinal;
             opportunity.DataEfetivaFechamento = request.DataEfetivaFechamento.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-            opportunity.Lead.Status = StatusLead.Convertido;
         }
 
         var etapaAnteriorId = opportunity.EtapaId;
@@ -223,6 +248,18 @@ public sealed class OpportunityService(
         await audit.RegistrarAsync("OportunidadeMudouEtapa", nameof(CrmOpportunity), opportunity.Id,
             new { EtapaAnterior = etapaAnteriorId, EtapaNova = novaEtapa.Id }, ct);
 
+        // Retorno de conversão offline (CAPI): só depois que a venda ganha já está persistida —
+        // uma falha aqui nunca deve desfazer nem bloquear o registro da venda no CRM.
+        if (novaEtapa.Tipo == TipoEtapaPipeline.Ganho)
+        {
+            var enviado = await conversion.EnviarConversaoVendaAsync(opportunity.Lead, opportunity, ct);
+            if (enviado)
+            {
+                opportunity.ConversaoOfflineEnviadaEm = DateTimeOffset.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
+        }
+
         return await ObterPorIdAsync(opportunity.Id, ct);
     }
 
@@ -243,6 +280,7 @@ public sealed class OpportunityService(
             .Include(o => o.Etapa)
             .Include(o => o.Responsavel)
             .Include(o => o.MotivoPerda)
+            .Include(o => o.Veiculo).ThenInclude(v => v!.Vistoriador)
             .FirstOrDefaultAsync(o => o.Id == id, ct)
             ?? throw new CrmNotFoundException("Oportunidade", id);
 
@@ -253,6 +291,22 @@ public sealed class OpportunityService(
 
         return opportunity;
     }
+
+    private static CrmVeiculo CriarOuAtualizarVeiculo(CrmVeiculo? existente, VeiculoUpsertRequest request)
+    {
+        var veiculo = existente ?? new CrmVeiculo();
+        veiculo.Descricao = request.Descricao;
+        veiculo.Placa = request.Placa?.Trim().ToUpperInvariant();
+        veiculo.Fipe = request.Fipe;
+        veiculo.Rastreador = request.Rastreador;
+        veiculo.VistoriadorId = request.VistoriadorId;
+        veiculo.DataChegada = request.DataChegada;
+        return veiculo;
+    }
+
+    private static VeiculoDto? ParaVeiculoDto(CrmVeiculo? v) => v is null
+        ? null
+        : new VeiculoDto(v.Id, v.Descricao, v.Placa, v.Fipe, v.Rastreador, v.VistoriadorId, v.Vistoriador?.NomeCompleto, v.DataChegada);
 
     private static OpportunityDto ParaDto(CrmOpportunity o, DateOnly hoje) => new(
         o.Id,
@@ -274,6 +328,15 @@ public sealed class OpportunityService(
         o.MotivoPerda != null ? o.MotivoPerda.Descricao : null,
         o.Concorrente,
         o.Observacoes,
+        o.DataAdesao,
+        o.AtivoEm,
+        o.Mensalidade,
+        o.MensalidadeComDesconto,
+        o.PagamentoAdesao,
+        o.Porcentagem,
+        o.TermoAdesaoAceito,
+        o.Migracao,
+        ParaVeiculoDto(o.Veiculo),
         o.CriadoEm,
         o.AtualizadoEm,
         o.RowVersion,

@@ -63,6 +63,7 @@ public class AccountController(SignInManager<ApplicationUser> signInManager, Use
 
         menu.Add(new MenuItemDto("crm-overview", "Visão geral", "gauge", "/app/crm"));
         menu.Add(new MenuItemDto("crm-leads", "Leads", "users", "/app/crm/leads"));
+        menu.Add(new MenuItemDto("crm-leads-kanban", "Quadro de leads", "layout-grid", "/app/crm/leads/kanban"));
         menu.Add(new MenuItemDto("crm-pipeline", "Pipeline", "kanban-square", "/app/crm/pipeline"));
         menu.Add(new MenuItemDto("crm-activities", "Atividades", "check-square", "/app/crm/activities"));
         menu.Add(new MenuItemDto("crm-agenda", "Agenda", "calendar-days", "/app/crm/agenda"));

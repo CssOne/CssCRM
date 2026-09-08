@@ -5,13 +5,14 @@ using Microsoft.AspNetCore.Identity;
 namespace CssVision.Web.Data.Seed;
 
 /// <summary>
-/// Cria os papéis do sistema e um usuário administrador inicial para ambiente de
-/// desenvolvimento. Em produção, a criação de usuários deve ocorrer pelos fluxos normais
-/// de administração (compartilhados com a AplicacaoDashboard quando os projetos forem integrados).
+/// SeedRolesAsync roda em qualquer ambiente (papéis são pré-requisito de qualquer usuário,
+/// inclusive os consultores reais do ConsultorSeeder). SeedDemoUsersAsync só deve rodar em
+/// desenvolvimento — cria contas fictícias com senha conhecida, nunca deve existir em produção.
 /// </summary>
 public static class IdentitySeeder
 {
-    public static async Task SeedAsync(IServiceProvider services)
+    /// <summary>Papéis do sistema — precisa existir em qualquer ambiente antes de qualquer usuário poder ser criado.</summary>
+    public static async Task SeedRolesAsync(IServiceProvider services)
     {
         var roleManager = services.GetRequiredService<RoleManager<ApplicationRole>>();
         foreach (var role in Roles.All)
@@ -21,7 +22,11 @@ public static class IdentitySeeder
                 await roleManager.CreateAsync(new ApplicationRole(role));
             }
         }
+    }
 
+    /// <summary>Usuários fictícios de demonstração — nunca deve rodar em produção.</summary>
+    public static async Task SeedDemoUsersAsync(IServiceProvider services)
+    {
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
 
         var admin = await CriarUsuarioSeNaoExistirAsync(userManager, "admin@cssvision.local", "Administrador Geral", Roles.Admin);

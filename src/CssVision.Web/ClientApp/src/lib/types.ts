@@ -5,14 +5,6 @@ export enum TipoPessoa {
   Juridica = 2,
 }
 
-export enum StatusLead {
-  Novo = 1,
-  EmAtendimento = 2,
-  Qualificado = 3,
-  Convertido = 4,
-  Descartado = 5,
-}
-
 export enum TipoEtapaPipeline {
   Aberta = 1,
   Ganho = 2,
@@ -101,7 +93,9 @@ export interface LeadListItem {
   estado?: string | null;
   regional?: string | null;
   origem?: string | null;
-  status: StatusLead;
+  etapaId?: string | null;
+  etapaNome?: string | null;
+  etapaCor?: string | null;
   etapaAtual?: string | null;
   responsavelId?: string | null;
   responsavelNome?: string | null;
@@ -137,7 +131,19 @@ export interface LeadDetail {
   origem?: string | null;
   campanha?: string | null;
   produtoInteresse?: string | null;
-  status: StatusLead;
+  gclid?: string | null;
+  utmMedium?: string | null;
+  utmSource?: string | null;
+  utmTerm?: string | null;
+  metaClickId?: string | null;
+  metaFormId?: string | null;
+  metaLeadId?: string | null;
+  indicadoPorLeadId?: string | null;
+  indicadoPorLeadNome?: string | null;
+  tipoIndicacao?: string | null;
+  etapaId?: string | null;
+  etapaNome?: string | null;
+  etapaCor?: string | null;
   responsavelId?: string | null;
   responsavelNome?: string | null;
   observacoes?: string | null;
@@ -166,6 +172,15 @@ export interface LeadCreateRequest {
   origem?: string | null;
   campanha?: string | null;
   produtoInteresse?: string | null;
+  gclid?: string | null;
+  utmMedium?: string | null;
+  utmSource?: string | null;
+  utmTerm?: string | null;
+  metaClickId?: string | null;
+  metaFormId?: string | null;
+  metaLeadId?: string | null;
+  indicadoPorLeadId?: string | null;
+  tipoIndicacao?: string | null;
   responsavelId?: string | null;
   tags?: string[];
   observacoes?: string | null;
@@ -180,6 +195,49 @@ export interface LeadDuplicateWarning {
   leadExistenteId: string;
   nomeExistente: string;
   campoDuplicado: string;
+}
+
+// --- Quadro de leads (kanban) ---
+
+export interface LeadStage {
+  /** Nulo representa a coluna virtual "Sem etapa" (leads novos, ainda não trabalhados). */
+  id: string | null;
+  nome: string;
+  ordem: number;
+  cor?: string | null;
+  fechada: boolean;
+  ativa: boolean;
+}
+
+export interface LeadKanbanCard {
+  leadId: string;
+  nomeOuRazaoSocial: string;
+  telefone?: string | null;
+  email?: string | null;
+  origem?: string | null;
+  campanha?: string | null;
+  responsavelId?: string | null;
+  responsavelNome?: string | null;
+  tags: string[];
+  criadoEm: string;
+  ultimoContatoEm?: string | null;
+  semContato: boolean;
+  rowVersion: number;
+}
+
+export interface LeadKanbanColumn {
+  etapa: LeadStage;
+  cartoes: LeadKanbanCard[];
+}
+
+export interface LeadKanbanBoard {
+  colunas: LeadKanbanColumn[];
+}
+
+export interface ChangeLeadStageRequest {
+  /** Nulo move o lead de volta pra "Sem etapa" (desmarca). */
+  novaEtapaId: string | null;
+  rowVersion: number;
 }
 
 export interface LeadImportResult {
@@ -221,10 +279,39 @@ export interface Opportunity {
   motivoPerdaDescricao?: string | null;
   concorrente?: string | null;
   observacoes?: string | null;
+  dataAdesao?: string | null;
+  ativoEm?: string | null;
+  mensalidade?: number | null;
+  mensalidadeComDesconto?: number | null;
+  pagamentoAdesao?: number | null;
+  porcentagem?: number | null;
+  termoAdesaoAceito: boolean;
+  migracao: boolean;
+  veiculo?: Veiculo | null;
   criadoEm: string;
   atualizadoEm?: string | null;
   rowVersion: number;
   atrasada: boolean;
+}
+
+export interface Veiculo {
+  id: string;
+  descricao?: string | null;
+  placa?: string | null;
+  fipe?: number | null;
+  rastreador?: string | null;
+  vistoriadorId?: string | null;
+  vistoriadorNome?: string | null;
+  dataChegada?: string | null;
+}
+
+export interface VeiculoUpsertRequest {
+  descricao?: string | null;
+  placa?: string | null;
+  fipe?: number | null;
+  rastreador?: string | null;
+  vistoriadorId?: string | null;
+  dataChegada?: string | null;
 }
 
 export interface OpportunityCreateRequest {
@@ -238,6 +325,14 @@ export interface OpportunityCreateRequest {
   dataPrevistaFechamento?: string | null;
   concorrente?: string | null;
   observacoes?: string | null;
+  dataAdesao?: string | null;
+  mensalidade?: number | null;
+  mensalidadeComDesconto?: number | null;
+  pagamentoAdesao?: number | null;
+  porcentagem?: number | null;
+  termoAdesaoAceito: boolean;
+  migracao: boolean;
+  veiculo?: VeiculoUpsertRequest | null;
 }
 
 export interface ChangeStageRequest {
@@ -412,6 +507,9 @@ export interface VendedorResumo {
   nome: string;
   leadsAtivos: number;
   oportunidadesAbertas: number;
+  /** Teto de leads que a distribuição automática atribui por mês corrente. Nulo = sem limite. */
+  limiteMensalLeads?: number | null;
+  leadsRecebidosNoMes: number;
 }
 
 export interface RankingComercial {

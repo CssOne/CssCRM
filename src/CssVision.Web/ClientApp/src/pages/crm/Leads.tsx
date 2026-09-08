@@ -1,9 +1,9 @@
-import { Download, Plus, Upload, X } from "lucide-react";
+import { Download, LayoutGrid, Plus, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiRequestError, downloadUrl, isAbortError, toQueryString } from "../../lib/api";
 import { formatarData, formatarTelefone } from "../../lib/format";
-import { StatusLead, type LeadCreateRequest, type LeadDuplicateWarning, type LeadListItem, type PagedResult } from "../../lib/types";
+import { type LeadCreateRequest, type LeadDuplicateWarning, type LeadListItem, type LeadStage, type PagedResult } from "../../lib/types";
 import { useAuth } from "../../context/AuthContext";
 import {
   Badge,
@@ -22,14 +22,6 @@ import { LeadForm, leadFormVazio, type LeadFormValues } from "../../components/c
 import { ImportModal } from "../../components/crm/ImportModal";
 import { AssignModal } from "../../components/crm/AssignModal";
 
-const statusLabel: Record<StatusLead, string> = {
-  [StatusLead.Novo]: "Novo",
-  [StatusLead.EmAtendimento]: "Em atendimento",
-  [StatusLead.Qualificado]: "Qualificado",
-  [StatusLead.Convertido]: "Convertido",
-  [StatusLead.Descartado]: "Descartado",
-};
-
 function paraRequest(v: LeadFormValues): LeadCreateRequest {
   return {
     nomeOuRazaoSocial: v.nomeOuRazaoSocial,
@@ -44,6 +36,15 @@ function paraRequest(v: LeadFormValues): LeadCreateRequest {
     origem: v.origem || null,
     campanha: v.campanha || null,
     produtoInteresse: v.produtoInteresse || null,
+    gclid: v.gclid || null,
+    utmMedium: v.utmMedium || null,
+    utmSource: v.utmSource || null,
+    utmTerm: v.utmTerm || null,
+    metaClickId: v.metaClickId || null,
+    metaFormId: v.metaFormId || null,
+    metaLeadId: v.metaLeadId || null,
+    indicadoPorLeadId: v.indicadoPorLeadId || null,
+    tipoIndicacao: v.tipoIndicacao || null,
     tags: v.tags ? v.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
     observacoes: v.observacoes || null,
     consentimentoContato: v.consentimentoContato,
@@ -56,9 +57,10 @@ export function LeadsPage() {
   const { notificar } = useToast();
 
   const [busca, setBusca] = useState("");
-  const [status, setStatus] = useState("");
+  const [leadEtapaId, setLeadEtapaId] = useState("");
   const [origem, setOrigem] = useState("");
   const [pagina, setPagina] = useState(1);
+  const [etapas, setEtapas] = useState<LeadStage[]>([]);
 
   const [dados, setDados] = useState<PagedResult<LeadListItem> | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -73,9 +75,13 @@ export function LeadsPage() {
   const [recarregar, setRecarregar] = useState(0);
 
   const filtro = useMemo(
-    () => ({ busca: busca || undefined, status: status || undefined, origem: origem || undefined, pagina, tamanhoPagina: 20 }),
-    [busca, status, origem, pagina]
+    () => ({ busca: busca || undefined, leadEtapaId: leadEtapaId || undefined, origem: origem || undefined, pagina, tamanhoPagina: 20 }),
+    [busca, leadEtapaId, origem, pagina]
   );
+
+  useEffect(() => {
+    api.get<LeadStage[]>("/crm/settings/lead-stages").then(setEtapas).catch(() => setEtapas([]));
+  }, []);
 
   const carregar = useCallback(
     (signal?: AbortSignal) => {
@@ -101,7 +107,7 @@ export function LeadsPage() {
 
   function limparFiltros() {
     setBusca("");
-    setStatus("");
+    setLeadEtapaId("");
     setOrigem("");
     setPagina(1);
   }
@@ -152,6 +158,11 @@ export function LeadsPage() {
           <p className="text-sm text-[var(--fg-muted)]">{dados?.totalRegistros ?? 0} lead(s) na sua carteira.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link to="/app/crm/leads/kanban">
+            <Button variant="secondary" type="button">
+              <LayoutGrid className="size-4" /> Quadro
+            </Button>
+          </Link>
           {podeGerir && (
             <Button variant="secondary" onClick={() => setModalImportar(true)}>
               <Upload className="size-4" /> Importar
@@ -181,18 +192,18 @@ export function LeadsPage() {
           />
         </div>
         <div className="w-44">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Status</label>
+          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Etapa</label>
           <Select
-            value={status}
+            value={leadEtapaId}
             onChange={(e) => {
-              setStatus(e.target.value);
+              setLeadEtapaId(e.target.value);
               setPagina(1);
             }}
           >
-            <option value="">Todos</option>
-            {Object.entries(statusLabel).map(([valor, rotulo]) => (
-              <option key={valor} value={valor}>
-                {rotulo}
+            <option value="">Todas</option>
+            {etapas.map((etapa) => (
+              <option key={etapa.id ?? ""} value={etapa.id ?? ""}>
+                {etapa.nome}
               </option>
             ))}
           </Select>
@@ -201,7 +212,7 @@ export function LeadsPage() {
           <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Origem</label>
           <Input value={origem} onChange={(e) => { setOrigem(e.target.value); setPagina(1); }} />
         </div>
-        {(busca || status || origem) && (
+        {(busca || leadEtapaId || origem) && (
           <Button variant="ghost" size="sm" onClick={limparFiltros}>
             <X className="size-4" /> Limpar filtros
           </Button>
@@ -237,8 +248,8 @@ export function LeadsPage() {
                   <th className="px-2 py-3 font-medium">Nome</th>
                   <th className="px-2 py-3 font-medium">Contato</th>
                   <th className="px-2 py-3 font-medium">Responsável</th>
-                  <th className="px-2 py-3 font-medium">Status</th>
                   <th className="px-2 py-3 font-medium">Etapa</th>
+                  <th className="px-2 py-3 font-medium">Oportunidade</th>
                   <th className="px-2 py-3 font-medium">Criado em</th>
                 </tr>
               </thead>
@@ -266,8 +277,9 @@ export function LeadsPage() {
                     </td>
                     <td className="px-2 py-3 text-[var(--fg-muted)]">{lead.responsavelNome ?? "—"}</td>
                     <td className="px-2 py-3">
-                      <Badge variant={lead.status === StatusLead.Convertido ? "success" : lead.status === StatusLead.Descartado ? "danger" : "neutral"}>
-                        {statusLabel[lead.status]}
+                      <Badge variant="neutral">
+                        <span className="mr-1 inline-block size-2 rounded-full" style={{ backgroundColor: lead.etapaCor ?? "#94a3b8" }} />
+                        {lead.etapaNome ?? "Sem etapa"}
                       </Badge>
                     </td>
                     <td className="px-2 py-3 text-[var(--fg-muted)]">{lead.etapaAtual ?? "—"}</td>
@@ -287,7 +299,7 @@ export function LeadsPage() {
               >
                 <div className="flex items-center justify-between">
                   <span className="font-medium text-[var(--fg)]">{lead.nomeOuRazaoSocial}</span>
-                  <Badge variant={lead.status === StatusLead.Convertido ? "success" : "neutral"}>{statusLabel[lead.status]}</Badge>
+                  <Badge variant="neutral">{lead.etapaNome ?? "Sem etapa"}</Badge>
                 </div>
                 <p className="mt-1 text-xs text-[var(--fg-muted)]">
                   {lead.responsavelNome ?? "Sem responsável"} · {formatarTelefone(lead.telefone)}

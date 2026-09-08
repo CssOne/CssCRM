@@ -60,6 +60,36 @@ public sealed class LookupService(ApplicationDbContext db, ICurrentUserService c
         return new LossReasonDto(motivo.Id, motivo.Descricao, motivo.Ativo);
     }
 
+    public async Task<IReadOnlyList<LeadStageDto>> ObterEtapasLeadAsync(CancellationToken ct) =>
+        await db.CrmLeadStages.AsNoTracking()
+            .Where(s => s.Ativa)
+            .OrderBy(s => s.Ordem)
+            .Select(s => new LeadStageDto(s.Id, s.Nome, s.Ordem, s.Cor, s.Fechada, s.Ativa))
+            .ToListAsync(ct);
+
+    public async Task<LeadStageDto> CriarEtapaLeadAsync(CreateLeadStageRequest request, CancellationToken ct)
+    {
+        ExigirGestaoComercial();
+
+        if (await db.CrmLeadStages.AnyAsync(s => s.Nome == request.Nome, ct))
+        {
+            throw new CrmBusinessException("Já existe uma etapa de lead com este nome.", "etapa_duplicada");
+        }
+
+        var etapa = new CrmLeadStage
+        {
+            Nome = request.Nome.Trim(),
+            Ordem = request.Ordem,
+            Cor = request.Cor,
+            Fechada = request.Fechada
+        };
+
+        db.CrmLeadStages.Add(etapa);
+        await db.SaveChangesAsync(ct);
+
+        return new LeadStageDto(etapa.Id, etapa.Nome, etapa.Ordem, etapa.Cor, etapa.Fechada, etapa.Ativa);
+    }
+
     private void ExigirGestaoComercial()
     {
         if (!currentUser.PodeGerirComercial)

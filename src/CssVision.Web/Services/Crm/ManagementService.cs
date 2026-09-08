@@ -1,3 +1,4 @@
+using CssVision.Web.Api.Contracts.Common;
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
@@ -46,14 +47,16 @@ public sealed class ManagementService(ApplicationDbContext db, ICurrentUserServi
         var query = db.Users.AsNoTracking().Where(u => u.Ativo);
         if (visiveis is not null) query = query.Where(u => visiveis.Contains(u.Id));
 
-        var vendedores = await query.Select(u => new { u.Id, u.NomeCompleto }).ToListAsync(ct);
+        var vendedores = await query.Select(u => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads }).ToListAsync(ct);
         var resultado = new List<VendedorResumoDto>();
+        var inicioMes = new DateTimeOffset(new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1), TimeSpan.Zero);
 
         foreach (var v in vendedores)
         {
             var leadsAtivos = await db.CrmLeads.CountAsync(l => l.ResponsavelId == v.Id && !l.Arquivado, ct);
             var abertas = await db.CrmOpportunities.CountAsync(o => o.ResponsavelId == v.Id && !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Aberta, ct);
-            resultado.Add(new VendedorResumoDto(v.Id, v.NomeCompleto, leadsAtivos, abertas));
+            var recebidosNoMes = await db.CrmLeads.CountAsync(l => l.ResponsavelId == v.Id && l.CriadoEm >= inicioMes, ct);
+            resultado.Add(new VendedorResumoDto(v.Id, v.NomeCompleto, leadsAtivos, abertas, v.LimiteMensalLeads, recebidosNoMes));
         }
 
         return resultado;
@@ -78,6 +81,27 @@ public sealed class ManagementService(ApplicationDbContext db, ICurrentUserServi
         return historico.Select(h => new RedistribuicaoHistoricoDto(
             h.LeadId, h.Lead.NomeOuRazaoSocial, h.ResponsavelAnterior?.NomeCompleto, h.ResponsavelNovo.NomeCompleto,
             h.AlteradoPor.NomeCompleto, h.Motivo, h.AlteradoEm)).ToList();
+    }
+
+    public async Task AtualizarLimiteMensalAsync(Guid vendedorId, AtualizarLimiteMensalRequest request, CancellationToken ct)
+    {
+        ExigirGestaoComercial();
+
+        if (!await equipe.PodeAcessarVendedorAsync(vendedorId, ct))
+        {
+            throw new CrmForbiddenException("Você não pode alterar o limite deste vendedor.");
+        }
+
+        if (request.Limite is < 0)
+        {
+            throw new CrmBusinessException("O limite mensal não pode ser negativo.", "limite_invalido");
+        }
+
+        var vendedor = await db.Users.FirstOrDefaultAsync(u => u.Id == vendedorId, ct)
+            ?? throw new CrmNotFoundException("Vendedor", vendedorId);
+
+        vendedor.LimiteMensalLeads = request.Limite;
+        await db.SaveChangesAsync(ct);
     }
 
     // --- auxiliares ---

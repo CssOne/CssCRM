@@ -1,6 +1,14 @@
 namespace CssVision.Web.Api.Contracts.Crm;
 
-public record VendedorResumoDto(Guid Id, string Nome, int LeadsAtivos, int OportunidadesAbertas);
+public record VendedorResumoDto(
+    Guid Id,
+    string Nome,
+    int LeadsAtivos,
+    int OportunidadesAbertas,
+    int? LimiteMensalLeads,
+    int LeadsRecebidosNoMes);
+
+public record AtualizarLimiteMensalRequest(int? Limite);
 
 public record RankingComercialDto(
     Guid VendedorId,

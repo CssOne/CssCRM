@@ -4,6 +4,7 @@ import {
   Gauge,
   KanbanSquare,
   LayoutDashboard,
+  LayoutGrid,
   LogOut,
   Menu as MenuIcon,
   Moon,
@@ -28,6 +29,7 @@ const iconesPorChave: Record<string, typeof Gauge> = {
   target: Target,
   "users-round": UsersRound,
   "layout-dashboard": LayoutDashboard,
+  "layout-grid": LayoutGrid,
 };
 
 export function Shell({ children }: { children: ReactNode }) {

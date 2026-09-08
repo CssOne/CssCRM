@@ -29,7 +29,29 @@ public class CrmLead : CrmArchivableEntity
     public string? Campanha { get; set; }
     public string? ProdutoInteresse { get; set; }
 
-    public StatusLead Status { get; set; } = StatusLead.Novo;
+    /// <summary>Google Click ID — associa o lead ao clique que originou a conversão (Google Ads).</summary>
+    public string? Gclid { get; set; }
+    public string? UtmMedium { get; set; }
+    public string? UtmSource { get; set; }
+    public string? UtmTerm { get; set; }
+
+    /// <summary>Identificadores do lead ad (Meta/Facebook Lead Ads) que originou este cadastro.</summary>
+    public string? MetaClickId { get; set; }
+    public string? MetaFormId { get; set; }
+    public string? MetaLeadId { get; set; }
+
+    /// <summary>Lead que indicou este cadastro (programa de indicação), quando aplicável.</summary>
+    public Guid? IndicadoPorLeadId { get; set; }
+    public CrmLead? IndicadoPorLead { get; set; }
+    public string? TipoIndicacao { get; set; }
+
+    /// <summary>
+    /// Etapa do lead no quadro (kanban). Fica nula de propósito em leads novos — sem etapa marcada
+    /// é como a vendedora enxerga "ninguém pegou ainda"; ela mesma arrasta pra uma etapa real
+    /// (ex: "Em atendimento") quando começa a trabalhar o lead.
+    /// </summary>
+    public Guid? EtapaId { get; set; }
+    public CrmLeadStage? Etapa { get; set; }
 
     public Guid? ResponsavelId { get; set; }
     public ApplicationUser? Responsavel { get; set; }

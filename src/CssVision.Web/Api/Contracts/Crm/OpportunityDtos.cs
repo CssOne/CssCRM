@@ -23,10 +23,37 @@ public record OpportunityDto(
     string? MotivoPerdaDescricao,
     string? Concorrente,
     string? Observacoes,
+    DateOnly? DataAdesao,
+    DateTimeOffset? AtivoEm,
+    decimal? Mensalidade,
+    decimal? MensalidadeComDesconto,
+    decimal? PagamentoAdesao,
+    decimal? Porcentagem,
+    bool TermoAdesaoAceito,
+    bool Migracao,
+    VeiculoDto? Veiculo,
     DateTimeOffset CriadoEm,
     DateTimeOffset? AtualizadoEm,
     uint RowVersion,
     bool Atrasada);
+
+public record VeiculoDto(
+    Guid Id,
+    string? Descricao,
+    string? Placa,
+    decimal? Fipe,
+    string? Rastreador,
+    Guid? VistoriadorId,
+    string? VistoriadorNome,
+    DateTimeOffset? DataChegada);
+
+public record VeiculoUpsertRequest(
+    string? Descricao,
+    string? Placa,
+    decimal? Fipe,
+    string? Rastreador,
+    Guid? VistoriadorId,
+    DateTimeOffset? DataChegada);
 
 public record OpportunityFilterRequest : PagedRequest
 {
@@ -50,7 +77,15 @@ public record OpportunityCreateRequest(
     int? ProbabilidadeFechamento,
     DateOnly? DataPrevistaFechamento,
     string? Concorrente,
-    string? Observacoes);
+    string? Observacoes,
+    DateOnly? DataAdesao,
+    decimal? Mensalidade,
+    decimal? MensalidadeComDesconto,
+    decimal? PagamentoAdesao,
+    decimal? Porcentagem,
+    bool TermoAdesaoAceito,
+    bool Migracao,
+    VeiculoUpsertRequest? Veiculo);
 
 public record OpportunityUpdateRequest(
     string Titulo,
@@ -61,6 +96,15 @@ public record OpportunityUpdateRequest(
     DateOnly? DataPrevistaFechamento,
     string? Concorrente,
     string? Observacoes,
+    DateOnly? DataAdesao,
+    DateTimeOffset? AtivoEm,
+    decimal? Mensalidade,
+    decimal? MensalidadeComDesconto,
+    decimal? PagamentoAdesao,
+    decimal? Porcentagem,
+    bool TermoAdesaoAceito,
+    bool Migracao,
+    VeiculoUpsertRequest? Veiculo,
     uint RowVersion);
 
 public record ChangeStageRequest(

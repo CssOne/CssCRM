@@ -165,7 +165,7 @@ public sealed class DashboardService(
 
         var parados = await leadsQuery
             .Include(l => l.Responsavel)
-            .Where(l => l.Status != StatusLead.Convertido && l.Status != StatusLead.Descartado)
+            .Where(l => l.Etapa == null || !l.Etapa.Fechada)
             .Where(l => l.UltimoContatoEm == null ? l.CriadoEm < limite : l.UltimoContatoEm < limite)
             .OrderBy(l => l.UltimoContatoEm ?? l.CriadoEm)
             .Take(15)

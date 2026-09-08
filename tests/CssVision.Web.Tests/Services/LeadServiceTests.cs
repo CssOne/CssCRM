@@ -25,7 +25,17 @@ public class LeadServiceTests
             Origem: "Site",
             Campanha: null,
             ProdutoInteresse: null,
+            Gclid: null,
+            UtmMedium: null,
+            UtmSource: null,
+            UtmTerm: null,
+            MetaClickId: null,
+            MetaFormId: null,
+            MetaLeadId: null,
+            IndicadoPorLeadId: null,
+            TipoIndicacao: null,
             ResponsavelId: null,
+            EtapaId: null,
             Tags: null,
             Observacoes: null,
             ConsentimentoContato: true,
@@ -40,7 +50,7 @@ public class LeadServiceTests
 
         var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
         var equipe = new EquipeComercialService(db, currentUser.Object);
-        var service = new LeadService(db, currentUser.Object, equipe, new NoOpAuditSink());
+        var service = new LeadService(db, currentUser.Object, equipe, new NoOpLeadAssignmentService(), new NoOpMetaConversionService(), new NoOpAuditSink());
 
         var resultado = await service.CriarAsync(NovoLeadRequest(), CancellationToken.None);
 
@@ -57,7 +67,7 @@ public class LeadServiceTests
         await using var db = factory.CreateContext();
         var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
         var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
-        var service = new LeadService(db, currentUser.Object, new EquipeComercialService(db, currentUser.Object), new NoOpAuditSink());
+        var service = new LeadService(db, currentUser.Object, new EquipeComercialService(db, currentUser.Object), new NoOpLeadAssignmentService(), new NoOpMetaConversionService(), new NoOpAuditSink());
 
         var request = NovoLeadRequest(documento: "11111111111");
 
@@ -71,7 +81,7 @@ public class LeadServiceTests
         await using var db = factory.CreateContext();
         var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
         var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
-        var service = new LeadService(db, currentUser.Object, new EquipeComercialService(db, currentUser.Object), new NoOpAuditSink());
+        var service = new LeadService(db, currentUser.Object, new EquipeComercialService(db, currentUser.Object), new NoOpLeadAssignmentService(), new NoOpMetaConversionService(), new NoOpAuditSink());
 
         await service.CriarAsync(NovoLeadRequest("Primeiro Cliente"), CancellationToken.None);
         var segundo = await service.CriarAsync(NovoLeadRequest("Segundo Cliente", email: "outro@teste.com"), CancellationToken.None);
@@ -88,7 +98,7 @@ public class LeadServiceTests
         await using var db = factory.CreateContext();
         var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
         var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
-        var service = new LeadService(db, currentUser.Object, new EquipeComercialService(db, currentUser.Object), new NoOpAuditSink());
+        var service = new LeadService(db, currentUser.Object, new EquipeComercialService(db, currentUser.Object), new NoOpLeadAssignmentService(), new NoOpMetaConversionService(), new NoOpAuditSink());
 
         await service.CriarAsync(NovoLeadRequest("Primeiro Cliente", documento: null), CancellationToken.None);
         var segundo = await service.CriarAsync(NovoLeadRequest("Segundo Cliente", documento: null), CancellationToken.None);
@@ -106,11 +116,11 @@ public class LeadServiceTests
         var vendedor2 = await factory.CriarUsuarioAsync(db, "Vendedor2");
 
         var currentUser1 = TestDbContextFactory.MockCurrentUser(vendedor1.Id);
-        var service1 = new LeadService(db, currentUser1.Object, new EquipeComercialService(db, currentUser1.Object), new NoOpAuditSink());
+        var service1 = new LeadService(db, currentUser1.Object, new EquipeComercialService(db, currentUser1.Object), new NoOpLeadAssignmentService(), new NoOpMetaConversionService(), new NoOpAuditSink());
         var criado = await service1.CriarAsync(NovoLeadRequest(), CancellationToken.None);
 
         var currentUser2 = TestDbContextFactory.MockCurrentUser(vendedor2.Id);
-        var service2 = new LeadService(db, currentUser2.Object, new EquipeComercialService(db, currentUser2.Object), new NoOpAuditSink());
+        var service2 = new LeadService(db, currentUser2.Object, new EquipeComercialService(db, currentUser2.Object), new NoOpLeadAssignmentService(), new NoOpMetaConversionService(), new NoOpAuditSink());
 
         await Assert.ThrowsAsync<CrmForbiddenException>(() => service2.ObterPorIdAsync(criado.Lead!.Id, CancellationToken.None));
     }
@@ -124,11 +134,11 @@ public class LeadServiceTests
         var vendedor2 = await factory.CriarUsuarioAsync(db, "Vendedor2");
 
         var currentUser1 = TestDbContextFactory.MockCurrentUser(vendedor1.Id);
-        var service1 = new LeadService(db, currentUser1.Object, new EquipeComercialService(db, currentUser1.Object), new NoOpAuditSink());
+        var service1 = new LeadService(db, currentUser1.Object, new EquipeComercialService(db, currentUser1.Object), new NoOpLeadAssignmentService(), new NoOpMetaConversionService(), new NoOpAuditSink());
         await service1.CriarAsync(NovoLeadRequest(), CancellationToken.None);
 
         var currentUser2 = TestDbContextFactory.MockCurrentUser(vendedor2.Id);
-        var service2 = new LeadService(db, currentUser2.Object, new EquipeComercialService(db, currentUser2.Object), new NoOpAuditSink());
+        var service2 = new LeadService(db, currentUser2.Object, new EquipeComercialService(db, currentUser2.Object), new NoOpLeadAssignmentService(), new NoOpMetaConversionService(), new NoOpAuditSink());
         var listaVendedor2 = await service2.ListarAsync(new LeadFilterRequest(), CancellationToken.None);
 
         Assert.Empty(listaVendedor2.Itens);
@@ -143,11 +153,11 @@ public class LeadServiceTests
         var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1", gestorId: gestor.Id);
 
         var currentUserVendedor = TestDbContextFactory.MockCurrentUser(vendedor.Id);
-        var serviceVendedor = new LeadService(db, currentUserVendedor.Object, new EquipeComercialService(db, currentUserVendedor.Object), new NoOpAuditSink());
+        var serviceVendedor = new LeadService(db, currentUserVendedor.Object, new EquipeComercialService(db, currentUserVendedor.Object), new NoOpLeadAssignmentService(), new NoOpMetaConversionService(), new NoOpAuditSink());
         await serviceVendedor.CriarAsync(NovoLeadRequest(), CancellationToken.None);
 
         var currentUserGestor = TestDbContextFactory.MockCurrentUser(gestor.Id, gestorComercial: true);
-        var serviceGestor = new LeadService(db, currentUserGestor.Object, new EquipeComercialService(db, currentUserGestor.Object), new NoOpAuditSink());
+        var serviceGestor = new LeadService(db, currentUserGestor.Object, new EquipeComercialService(db, currentUserGestor.Object), new NoOpLeadAssignmentService(), new NoOpMetaConversionService(), new NoOpAuditSink());
         var listaGestor = await serviceGestor.ListarAsync(new LeadFilterRequest(), CancellationToken.None);
 
         Assert.Single(listaGestor.Itens);
@@ -162,16 +172,16 @@ public class LeadServiceTests
         var vendedor2 = await factory.CriarUsuarioAsync(db, "Vendedor2");
 
         var currentUser1 = TestDbContextFactory.MockCurrentUser(vendedor1.Id);
-        await new LeadService(db, currentUser1.Object, new EquipeComercialService(db, currentUser1.Object), new NoOpAuditSink())
+        await new LeadService(db, currentUser1.Object, new EquipeComercialService(db, currentUser1.Object), new NoOpLeadAssignmentService(), new NoOpMetaConversionService(), new NoOpAuditSink())
             .CriarAsync(NovoLeadRequest("Cliente A", documento: "52998224725", email: "a@teste.com", telefone: "11988880001"), CancellationToken.None);
 
         var currentUser2 = TestDbContextFactory.MockCurrentUser(vendedor2.Id);
-        await new LeadService(db, currentUser2.Object, new EquipeComercialService(db, currentUser2.Object), new NoOpAuditSink())
+        await new LeadService(db, currentUser2.Object, new EquipeComercialService(db, currentUser2.Object), new NoOpLeadAssignmentService(), new NoOpMetaConversionService(), new NoOpAuditSink())
             .CriarAsync(NovoLeadRequest("Cliente B", documento: "11144477735", email: "b@teste.com", telefone: "11988880002"), CancellationToken.None);
 
         var admin = await factory.CriarUsuarioAsync(db, "AdminUser");
         var currentUserAdmin = TestDbContextFactory.MockCurrentUser(admin.Id, visaoTotal: true);
-        var serviceAdmin = new LeadService(db, currentUserAdmin.Object, new EquipeComercialService(db, currentUserAdmin.Object), new NoOpAuditSink());
+        var serviceAdmin = new LeadService(db, currentUserAdmin.Object, new EquipeComercialService(db, currentUserAdmin.Object), new NoOpLeadAssignmentService(), new NoOpMetaConversionService(), new NoOpAuditSink());
 
         var lista = await serviceAdmin.ListarAsync(new LeadFilterRequest(), CancellationToken.None);
 
