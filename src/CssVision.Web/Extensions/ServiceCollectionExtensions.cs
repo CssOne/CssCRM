@@ -60,6 +60,14 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    public static IServiceCollection AddPublicLeadIntakeCors(this IServiceCollection services)
+    {
+        services.AddCors(options => options.AddPolicy(CorsPolicies.PublicLeadIntake, policy =>
+            policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+
+        return services;
+    }
+
     public static IServiceCollection AddCrmAuthorizationPolicies(this IServiceCollection services)
     {
         services.AddAuthorizationBuilder()
@@ -86,6 +94,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IGoalService, GoalService>();
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IManagementService, ManagementService>();
+        services.AddScoped<IPublicLeadIntakeService, PublicLeadIntakeService>();
 
         return services;
     }

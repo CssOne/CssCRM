@@ -19,6 +19,7 @@ builder.Services.AddCrmIdentity();
 builder.Services.AddCrmAuthorizationPolicies();
 builder.Services.AddCrmServices();
 builder.Services.AddMetaLeadAdsIntegration(builder.Configuration);
+builder.Services.AddPublicLeadIntakeCors();
 
 builder.Services.AddControllers();
 builder.Services.AddExceptionHandler<CrmExceptionHandler>();
@@ -60,6 +61,8 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseRouting();
+
+app.UseCors();
 
 app.UseAuthentication();
 app.UseAuthorization();
