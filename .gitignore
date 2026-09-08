@@ -1,0 +1,21 @@
+# .NET
+bin/
+obj/
+*.user
+
+# Node / Vite
+node_modules/
+ClientApp/dist/
+ClientApp/.vite/
+
+# IDE
+.vs/
+.idea/
+*.swp
+
+# Logs
+*.log
+
+# Segredos locais
+appsettings.*.local.json
+.env
