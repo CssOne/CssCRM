@@ -41,6 +41,7 @@ if (app.Environment.IsDevelopment())
     await db.Database.MigrateAsync();
     await IdentitySeeder.SeedAsync(scope.ServiceProvider);
     await CrmSeeder.SeedAsync(db);
+    await ConsultorSeeder.SeedAsync(scope.ServiceProvider);
 }
 else
 {
