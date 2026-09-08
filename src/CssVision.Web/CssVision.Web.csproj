@@ -34,4 +34,23 @@
     <None Remove="ClientApp\**" />
   </ItemGroup>
 
+  <!--
+    O ItemGroup acima exclui ClientApp inteiro do projeto (fonte do React não é código C#) — mas
+    isso também excluía ClientApp/dist do publish, deixando o SPA fora do servidor em produção
+    (UseSpaStaticFiles só roda fora de Development e precisa desses arquivos existirem ali).
+    Builda o frontend e inclui o resultado no publish.
+  -->
+  <Target Name="PublishClientApp" AfterTargets="ComputeFilesToPublish">
+    <Exec WorkingDirectory="$(SpaRoot)" Command="npm install" Condition="!Exists('$(SpaRoot)node_modules')" />
+    <Exec WorkingDirectory="$(SpaRoot)" Command="npm run build" />
+
+    <ItemGroup>
+      <DistFiles Include="$(SpaRoot)dist\**" />
+      <ResolvedFileToPublish Include="@(DistFiles->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>ClientApp\dist\%(RecursiveDir)%(FileName)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
 </Project>

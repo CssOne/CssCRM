@@ -32,17 +32,25 @@ builder.Services.AddSpaStaticFiles(configuration => { configuration.RootPath = "
 
 var app = builder.Build();
 
+// Migrations e seeds essenciais (papéis, etapas do funil, contas reais dos consultores) rodam em
+// qualquer ambiente — sem isso o banco sobe vazio em produção e ninguém consegue logar. São
+// idempotentes, seguros de rodar toda inicialização.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await db.Database.MigrateAsync();
+    await IdentitySeeder.SeedRolesAsync(scope.ServiceProvider);
+    await CrmSeeder.SeedAsync(db);
+    await ConsultorSeeder.SeedAsync(scope.ServiceProvider);
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 
     using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    await db.Database.MigrateAsync();
-    await IdentitySeeder.SeedAsync(scope.ServiceProvider);
-    await CrmSeeder.SeedAsync(db);
-    await ConsultorSeeder.SeedAsync(scope.ServiceProvider);
+    await IdentitySeeder.SeedDemoUsersAsync(scope.ServiceProvider);
 }
 else
 {
