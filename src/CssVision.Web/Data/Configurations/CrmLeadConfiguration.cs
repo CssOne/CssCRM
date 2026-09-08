@@ -41,6 +41,12 @@ public class CrmLeadConfiguration : IEntityTypeConfiguration<CrmLead>
             .IsUnique();
 
         builder.HasIndex(e => e.TelefoneNormalizado);
+
+        // Idempotência do webhook de Lead Ads: um mesmo leadgen_id nunca deve virar 2 leads.
+        builder.HasIndex(e => e.MetaLeadId)
+            .HasFilter("\"MetaLeadId\" IS NOT NULL")
+            .IsUnique();
+
         builder.HasIndex(e => e.ResponsavelId);
         builder.HasIndex(e => e.Status);
         builder.HasIndex(e => e.Regional);

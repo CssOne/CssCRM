@@ -2,6 +2,7 @@ using CssVision.Web.Authorization;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Identity;
 using CssVision.Web.Services.Crm;
+using CssVision.Web.Services.Marketing;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -83,6 +84,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IGoalService, GoalService>();
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IManagementService, ManagementService>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddMetaLeadAdsIntegration(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<MetaLeadAdsOptions>(configuration.GetSection(MetaLeadAdsOptions.SectionName));
+        services.AddHttpClient<IMetaGraphClient, MetaGraphClient>();
+        services.AddScoped<MetaLeadIngestionService>();
 
         return services;
     }

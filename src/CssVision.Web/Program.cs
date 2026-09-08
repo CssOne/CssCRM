@@ -18,6 +18,7 @@ builder.Services.AddCrmDataAccess(builder.Configuration);
 builder.Services.AddCrmIdentity();
 builder.Services.AddCrmAuthorizationPolicies();
 builder.Services.AddCrmServices();
+builder.Services.AddMetaLeadAdsIntegration(builder.Configuration);
 
 builder.Services.AddControllers();
 builder.Services.AddExceptionHandler<CrmExceptionHandler>();
