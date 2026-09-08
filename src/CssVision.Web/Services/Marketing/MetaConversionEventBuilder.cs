@@ -5,10 +5,12 @@ using CssVision.Web.Domain.Crm;
 namespace CssVision.Web.Services.Marketing;
 
 /// <summary>
-/// Monta o payload da Conversions API para uma oportunidade ganha — lógica pura, sem HTTP, fácil
-/// de testar. Manda dois eventos em paralelo: o customizado (sempre funciona, mesmo sem valor) e
-/// o padrão "Purchase" (exige valor+moeda, mas é melhor pra otimização de campanha) — assim nada
-/// quebra enquanto o Purchase acumula volume suficiente pra virar a otimização principal.
+/// Monta payloads da Conversions API — lógica pura, sem HTTP, fácil de testar. Dois casos:
+/// (1) oportunidade ganha: evento customizado + "Purchase" padrão em paralelo (Purchase exige
+/// valor+moeda, mas é melhor pra otimização; o customizado sempre funciona, mesmo sem valor);
+/// (2) mudança de etapa do lead no quadro: um evento customizado nomeado com a própria etapa,
+/// enviado pra toda mudança — a escolha de qual etapa vira otimização de campanha é feita no
+/// Gerenciador de Anúncios, não aqui.
 /// </summary>
 public static class MetaConversionEventBuilder
 {
@@ -38,6 +40,26 @@ public static class MetaConversionEventBuilder
             new MetaCapiCustomData(options.EventSourceLabel, options.EventSourceLabel, opportunity.ValorFinal, DefaultCurrency));
 
         return new MetaCapiPayload([eventoCustomizado, eventoPurchase]);
+    }
+
+    /// <summary>
+    /// Monta um evento customizado único pra qualquer mudança de etapa do lead no quadro — o
+    /// nome do evento é o próprio nome da etapa (ex: "Cotação", "Venda concluída"). Manda pra
+    /// todas as etapas de propósito: qual delas efetivamente vira otimização de campanha é
+    /// escolhido no Gerenciador de Anúncios (Conversões Personalizadas), não aqui no código.
+    /// </summary>
+    public static MetaCapiPayload BuildEtapaEventPayload(CrmLead lead, Guid etapaId, string etapaNome, MetaCapiOptions options)
+    {
+        var userData = BuildUserData(lead);
+        var evento = new MetaCapiEvent(
+            etapaNome,
+            ToUnixTime(DateTimeOffset.UtcNow),
+            ActionSource,
+            $"etapa_{lead.Id}_{etapaId}",
+            userData,
+            new MetaCapiCustomData(options.EventSourceLabel, options.EventSourceLabel, null, null));
+
+        return new MetaCapiPayload([evento]);
     }
 
     private static MetaCapiUserData BuildUserData(CrmLead lead)

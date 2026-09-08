@@ -93,4 +93,35 @@ public class MetaConversionEventBuilderTests
         Assert.Null(payload.Data[0].UserData.LeadId);
         Assert.Null(payload.Data[0].UserData.Ph);
     }
+
+    [Fact]
+    public void BuildEtapaEventPayload_DeveNomearEventoComANomeDaEtapa()
+    {
+        var lead = new CrmLead { Id = Guid.NewGuid(), NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, EmailNormalizado = "cliente@teste.com" };
+        var etapaId = Guid.NewGuid();
+        var options = new MetaCapiOptions { PixelId = "123", AccessToken = "token" };
+
+        var payload = MetaConversionEventBuilder.BuildEtapaEventPayload(lead, etapaId, "Cotação", options);
+
+        var evento = Assert.Single(payload.Data);
+        Assert.Equal("Cotação", evento.EventName);
+        Assert.Equal($"etapa_{lead.Id}_{etapaId}", evento.EventId);
+        Assert.Equal("system_generated", evento.ActionSource);
+        Assert.Null(evento.CustomData.Value);
+        Assert.Null(evento.CustomData.Currency);
+        Assert.Equal(Sha256("cliente@teste.com"), Assert.Single(evento.UserData.Em!));
+    }
+
+    [Fact]
+    public void BuildEtapaEventPayload_DeveGerarEventIdEstavel_ParaMesmaEtapaEMesmoLead()
+    {
+        var lead = new CrmLead { Id = Guid.NewGuid(), NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica };
+        var etapaId = Guid.NewGuid();
+        var options = new MetaCapiOptions { PixelId = "123", AccessToken = "token" };
+
+        var payload1 = MetaConversionEventBuilder.BuildEtapaEventPayload(lead, etapaId, "Venda concluída", options);
+        var payload2 = MetaConversionEventBuilder.BuildEtapaEventPayload(lead, etapaId, "Venda concluída", options);
+
+        Assert.Equal(payload1.Data[0].EventId, payload2.Data[0].EventId);
+    }
 }

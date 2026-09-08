@@ -6,6 +6,7 @@ using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
 using CssVision.Web.Domain.Identity;
+using CssVision.Web.Services.Marketing;
 using Microsoft.EntityFrameworkCore;
 
 namespace CssVision.Web.Services.Crm;
@@ -15,6 +16,7 @@ public sealed class LeadService(
     ICurrentUserService currentUser,
     IEquipeComercialService equipe,
     ILeadAssignmentService assignment,
+    IMetaConversionService conversion,
     IAuditSink audit) : ILeadService
 {
     public async Task<PagedResult<LeadListItemDto>> ListarAsync(LeadFilterRequest filtro, CancellationToken ct)
@@ -363,9 +365,10 @@ public sealed class LeadService(
         var lead = await CarregarComEscopoAsync(id, ct);
         db.Entry(lead).Property(l => l.RowVersion).OriginalValue = request.RowVersion;
 
+        CrmLeadStage? novaEtapa = null;
         if (request.NovaEtapaId.HasValue)
         {
-            var novaEtapa = await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Id == request.NovaEtapaId, ct)
+            novaEtapa = await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Id == request.NovaEtapaId, ct)
                 ?? throw new CrmNotFoundException("Etapa de lead", request.NovaEtapaId.Value);
             lead.EtapaId = novaEtapa.Id;
         }
@@ -384,6 +387,14 @@ public sealed class LeadService(
         }
 
         await audit.RegistrarAsync("LeadMudouEtapa", nameof(CrmLead), lead.Id, new { EtapaNova = request.NovaEtapaId }, ct);
+
+        // Retorno de conversão offline (CAPI): manda um evento pra toda mudança de etapa (nomeado
+        // com a própria etapa) — qual delas vira otimização de campanha é escolhido no
+        // Gerenciador de Anúncios, não aqui. Nunca deve bloquear a resposta desse endpoint.
+        if (novaEtapa is not null)
+        {
+            await conversion.EnviarEventoEtapaAsync(lead, novaEtapa.Id, novaEtapa.Nome, ct);
+        }
 
         return await ObterPorIdAsync(lead.Id, ct);
     }

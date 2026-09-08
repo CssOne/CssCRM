@@ -7,4 +7,6 @@ namespace CssVision.Web.Tests.Infrastructure;
 public sealed class NoOpMetaConversionService : IMetaConversionService
 {
     public Task<bool> EnviarConversaoVendaAsync(CrmLead lead, CrmOpportunity opportunity, CancellationToken ct) => Task.FromResult(false);
+
+    public Task<bool> EnviarEventoEtapaAsync(CrmLead lead, Guid etapaId, string etapaNome, CancellationToken ct) => Task.FromResult(false);
 }
