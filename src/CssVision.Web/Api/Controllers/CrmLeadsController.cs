@@ -10,11 +10,15 @@ namespace CssVision.Web.Api.Controllers;
 [ApiController]
 [Route("api/crm/leads")]
 [Authorize(Policy = PolicyNames.AreaComercial)]
-public class CrmLeadsController(ILeadService leadService) : ControllerBase
+public class CrmLeadsController(ILeadService leadService, ILeadKanbanService kanbanService) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult> Listar([FromQuery] LeadFilterRequest filtro, CancellationToken ct) =>
         Ok(await leadService.ListarAsync(filtro, ct));
+
+    [HttpGet("kanban")]
+    public async Task<ActionResult<LeadKanbanBoardDto>> ObterKanban([FromQuery] LeadKanbanFilterRequest filtro, CancellationToken ct) =>
+        Ok(await kanbanService.ObterBoardAsync(filtro, ct));
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<LeadDetailDto>> ObterPorId(Guid id, CancellationToken ct) =>
@@ -39,6 +43,10 @@ public class CrmLeadsController(ILeadService leadService) : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<LeadDetailDto>> Atualizar(Guid id, LeadUpdateRequest request, CancellationToken ct) =>
         Ok(await leadService.AtualizarAsync(id, request, ct));
+
+    [HttpPost("{id:guid}/stage")]
+    public async Task<ActionResult<LeadDetailDto>> MudarEtapa(Guid id, ChangeLeadStageRequest request, CancellationToken ct) =>
+        Ok(await leadService.MudarEtapaAsync(id, request, ct));
 
     [HttpPost("{id:guid}/assign")]
     [Authorize(Policy = PolicyNames.GestaoComercial)]

@@ -5,14 +5,6 @@ export enum TipoPessoa {
   Juridica = 2,
 }
 
-export enum StatusLead {
-  Novo = 1,
-  EmAtendimento = 2,
-  Qualificado = 3,
-  Convertido = 4,
-  Descartado = 5,
-}
-
 export enum TipoEtapaPipeline {
   Aberta = 1,
   Ganho = 2,
@@ -101,7 +93,9 @@ export interface LeadListItem {
   estado?: string | null;
   regional?: string | null;
   origem?: string | null;
-  status: StatusLead;
+  etapaId: string;
+  etapaNome: string;
+  etapaCor?: string | null;
   etapaAtual?: string | null;
   responsavelId?: string | null;
   responsavelNome?: string | null;
@@ -147,7 +141,9 @@ export interface LeadDetail {
   indicadoPorLeadId?: string | null;
   indicadoPorLeadNome?: string | null;
   tipoIndicacao?: string | null;
-  status: StatusLead;
+  etapaId: string;
+  etapaNome: string;
+  etapaCor?: string | null;
   responsavelId?: string | null;
   responsavelNome?: string | null;
   observacoes?: string | null;
@@ -199,6 +195,47 @@ export interface LeadDuplicateWarning {
   leadExistenteId: string;
   nomeExistente: string;
   campoDuplicado: string;
+}
+
+// --- Quadro de leads (kanban) ---
+
+export interface LeadStage {
+  id: string;
+  nome: string;
+  ordem: number;
+  cor?: string | null;
+  fechada: boolean;
+  ativa: boolean;
+}
+
+export interface LeadKanbanCard {
+  leadId: string;
+  nomeOuRazaoSocial: string;
+  telefone?: string | null;
+  email?: string | null;
+  origem?: string | null;
+  campanha?: string | null;
+  responsavelId?: string | null;
+  responsavelNome?: string | null;
+  tags: string[];
+  criadoEm: string;
+  ultimoContatoEm?: string | null;
+  semContato: boolean;
+  rowVersion: number;
+}
+
+export interface LeadKanbanColumn {
+  etapa: LeadStage;
+  cartoes: LeadKanbanCard[];
+}
+
+export interface LeadKanbanBoard {
+  colunas: LeadKanbanColumn[];
+}
+
+export interface ChangeLeadStageRequest {
+  novaEtapaId: string;
+  rowVersion: number;
 }
 
 export interface LeadImportResult {

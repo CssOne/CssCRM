@@ -8,4 +8,6 @@ public interface ILookupService
     Task<PipelineStageDto> CriarEtapaAsync(CreateStageRequest request, CancellationToken ct);
     Task<IReadOnlyList<LossReasonDto>> ObterMotivosPerdaAsync(CancellationToken ct);
     Task<LossReasonDto> CriarMotivoPerdaAsync(CreateLossReasonRequest request, CancellationToken ct);
+    Task<IReadOnlyList<LeadStageDto>> ObterEtapasLeadAsync(CancellationToken ct);
+    Task<LeadStageDto> CriarEtapaLeadAsync(CreateLeadStageRequest request, CancellationToken ct);
 }

@@ -15,7 +15,8 @@ public class ActivityServiceTests
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
         var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
-        var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
+        var etapaLead = await factory.ObterOuCriarEtapaLeadAsync(db);
+        var lead = new CrmLead { EtapaId = etapaLead.Id, NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
         db.CrmLeads.Add(lead);
         await db.SaveChangesAsync();
 
@@ -42,7 +43,8 @@ public class ActivityServiceTests
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
         var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
-        var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
+        var etapaLead = await factory.ObterOuCriarEtapaLeadAsync(db);
+        var lead = new CrmLead { EtapaId = etapaLead.Id, NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
         db.CrmLeads.Add(lead);
         await db.SaveChangesAsync();
 
@@ -67,7 +69,8 @@ public class ActivityServiceTests
         await using var db = factory.CreateContext();
         var vendedor1 = await factory.CriarUsuarioAsync(db, "Vendedor1");
         var vendedor2 = await factory.CriarUsuarioAsync(db, "Vendedor2");
-        var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor1.Id };
+        var etapaLead = await factory.ObterOuCriarEtapaLeadAsync(db);
+        var lead = new CrmLead { EtapaId = etapaLead.Id, NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor1.Id };
         db.CrmLeads.Add(lead);
         await db.SaveChangesAsync();
 

@@ -35,6 +35,7 @@ public class LeadServiceTests
             IndicadoPorLeadId: null,
             TipoIndicacao: null,
             ResponsavelId: null,
+            EtapaId: null,
             Tags: null,
             Observacoes: null,
             ConsentimentoContato: true,

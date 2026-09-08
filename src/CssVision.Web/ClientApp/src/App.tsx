@@ -6,6 +6,7 @@ import { LoginPage } from "./pages/Login";
 import { AdminPlaceholderPage } from "./pages/AdminPlaceholder";
 import { OverviewPage } from "./pages/crm/Overview";
 import { LeadsPage } from "./pages/crm/Leads";
+import { LeadsKanbanPage } from "./pages/crm/LeadsKanban";
 import { LeadDetailPage } from "./pages/crm/LeadDetail";
 import { PipelinePage } from "./pages/crm/Pipeline";
 import { ActivitiesPage } from "./pages/crm/Activities";
@@ -47,6 +48,7 @@ export default function App() {
 
       <Route path="/app/crm" element={<RotaProtegida><OverviewPage /></RotaProtegida>} />
       <Route path="/app/crm/leads" element={<RotaProtegida><LeadsPage /></RotaProtegida>} />
+      <Route path="/app/crm/leads/kanban" element={<RotaProtegida><LeadsKanbanPage /></RotaProtegida>} />
       <Route path="/app/crm/leads/:id" element={<RotaProtegida><LeadDetailPage /></RotaProtegida>} />
       <Route path="/app/crm/pipeline" element={<RotaProtegida><PipelinePage /></RotaProtegida>} />
       <Route path="/app/crm/activities" element={<RotaProtegida><ActivitiesPage /></RotaProtegida>} />

@@ -48,7 +48,7 @@ public class CrmLeadConfiguration : IEntityTypeConfiguration<CrmLead>
             .IsUnique();
 
         builder.HasIndex(e => e.ResponsavelId);
-        builder.HasIndex(e => e.Status);
+        builder.HasIndex(e => e.EtapaId);
         builder.HasIndex(e => e.Regional);
         builder.HasIndex(e => e.Origem);
         builder.HasIndex(e => e.CriadoEm);
@@ -63,6 +63,11 @@ public class CrmLeadConfiguration : IEntityTypeConfiguration<CrmLead>
         builder.HasOne(e => e.IndicadoPorLead)
             .WithMany()
             .HasForeignKey(e => e.IndicadoPorLeadId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.Etapa)
+            .WithMany(s => s.Leads)
+            .HasForeignKey(e => e.EtapaId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

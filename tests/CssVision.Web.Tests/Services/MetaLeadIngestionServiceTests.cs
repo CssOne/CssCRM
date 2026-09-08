@@ -29,6 +29,7 @@ public class MetaLeadIngestionServiceTests
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
+        await factory.ObterOuCriarEtapaLeadAsync(db);
 
         var formId = "1544241000014231"; // mapeado em MetaFormConfig: Campanha "UGC", Tags Meta ads+UGC
         var graph = new Mock<IMetaGraphClient>();
@@ -45,7 +46,6 @@ public class MetaLeadIngestionServiceTests
         Assert.Equal("UGC", lead.Campanha);
         Assert.Equal("AGV", lead.ProdutoInteresse);
         Assert.Equal("Meta ads", lead.Origem);
-        Assert.Equal(StatusLead.Novo, lead.Status);
         Assert.Equal(["Meta ads", "UGC"], lead.LeadTags.Select(lt => lt.Tag.Nome).OrderBy(n => n));
     }
 
@@ -54,6 +54,7 @@ public class MetaLeadIngestionServiceTests
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
+        await factory.ObterOuCriarEtapaLeadAsync(db);
 
         var graph = new Mock<IMetaGraphClient>();
         graph.Setup(g => g.FetchLeadAsync("leadgen-2", It.IsAny<CancellationToken>()))
@@ -73,8 +74,9 @@ public class MetaLeadIngestionServiceTests
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
+        var etapaLead = await factory.ObterOuCriarEtapaLeadAsync(db);
 
-        db.CrmLeads.Add(new CrmLead { NomeOuRazaoSocial = "Já existe", TipoPessoa = TipoPessoa.Fisica, MetaLeadId = "leadgen-3" });
+        db.CrmLeads.Add(new CrmLead { EtapaId = etapaLead.Id, NomeOuRazaoSocial = "Já existe", TipoPessoa = TipoPessoa.Fisica, MetaLeadId = "leadgen-3" });
         await db.SaveChangesAsync();
 
         var graph = new Mock<IMetaGraphClient>();
@@ -91,9 +93,11 @@ public class MetaLeadIngestionServiceTests
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
+        var etapaLead = await factory.ObterOuCriarEtapaLeadAsync(db);
 
         db.CrmLeads.Add(new CrmLead
         {
+            EtapaId = etapaLead.Id,
             NomeOuRazaoSocial = "Cliente Antigo",
             TipoPessoa = TipoPessoa.Fisica,
             EmailNormalizado = "joao@teste.com",

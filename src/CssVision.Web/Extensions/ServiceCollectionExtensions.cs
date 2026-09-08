@@ -77,6 +77,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEquipeComercialService, EquipeComercialService>();
         services.AddScoped<IAuditSink, CrmAuditLogSink>();
         services.AddScoped<ILeadService, LeadService>();
+        services.AddScoped<ILeadKanbanService, LeadKanbanService>();
         services.AddScoped<IOpportunityService, OpportunityService>();
         services.AddScoped<IPipelineService, PipelineService>();
         services.AddScoped<IActivityService, ActivityService>();

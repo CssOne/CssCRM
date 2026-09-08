@@ -55,8 +55,11 @@ public sealed class MetaLeadIngestionService(
             return;
         }
 
+        var etapaInicialId = await db.CrmLeadStages.Where(s => s.Ativa).OrderBy(s => s.Ordem).Select(s => s.Id).FirstAsync(ct);
+
         var lead = new CrmLead
         {
+            EtapaId = etapaInicialId,
             NomeOuRazaoSocial = string.IsNullOrWhiteSpace(nome) ? "Lead Meta Ads (sem nome)" : nome,
             TipoPessoa = TipoPessoa.Fisica,
             Email = email,
@@ -70,7 +73,6 @@ public sealed class MetaLeadIngestionService(
             Origem = "Meta ads",
             Campanha = campanha,
             ProdutoInteresse = produtoInteresse,
-            Status = StatusLead.Novo,
         };
 
         await AplicarTagsAsync(lead, tags, ct);

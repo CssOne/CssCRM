@@ -18,8 +18,9 @@ public class OpportunityServiceTests
         var perdido = await factory.CriarEtapaAsync(db, "Perdido", 3, TipoEtapaPipeline.Perdido);
         var motivo = new CrmLossReason { Descricao = "Preço" };
         db.CrmLossReasons.Add(motivo);
+        var etapaLead = await factory.ObterOuCriarEtapaLeadAsync(db);
 
-        var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedorId };
+        var lead = new CrmLead { EtapaId = etapaLead.Id, NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedorId };
         db.CrmLeads.Add(lead);
         await db.SaveChangesAsync();
 

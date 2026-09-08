@@ -15,6 +15,7 @@ public class ApplicationDbContext(
     public DbSet<CrmLead> CrmLeads => Set<CrmLead>();
     public DbSet<CrmOpportunity> CrmOpportunities => Set<CrmOpportunity>();
     public DbSet<CrmPipelineStage> CrmPipelineStages => Set<CrmPipelineStage>();
+    public DbSet<CrmLeadStage> CrmLeadStages => Set<CrmLeadStage>();
     public DbSet<CrmStageHistory> CrmStageHistories => Set<CrmStageHistory>();
     public DbSet<CrmActivity> CrmActivities => Set<CrmActivity>();
     public DbSet<CrmNote> CrmNotes => Set<CrmNote>();

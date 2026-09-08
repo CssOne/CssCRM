@@ -28,6 +28,11 @@ public sealed class TestDbContextFactory : IDisposable
 
         using var context = CreateContext();
         context.Database.EnsureCreated();
+
+        // Toda criação de lead exige uma CrmLeadStage (FK obrigatória) — semeia uma padrão aqui
+        // pra não obrigar cada teste que só cria leads incidentalmente a se preocupar com isso.
+        context.CrmLeadStages.Add(new CrmLeadStage { Nome = "Pré-cadastro", Ordem = 1 });
+        context.SaveChanges();
     }
 
     public ApplicationDbContext CreateContext(ICurrentUserService? currentUser = null)
@@ -72,6 +77,18 @@ public sealed class TestDbContextFactory : IDisposable
     {
         var etapa = new CrmPipelineStage { Nome = nome, Ordem = ordem, Tipo = tipo };
         db.CrmPipelineStages.Add(etapa);
+        await db.SaveChangesAsync();
+        return etapa;
+    }
+
+    /// <summary>Cria (e reaproveita, se já existir) a etapa de lead padrão usada pelos testes que não se importam com qual etapa é.</summary>
+    public async Task<CrmLeadStage> ObterOuCriarEtapaLeadAsync(ApplicationDbContext db, string nome = "Pré-cadastro", int ordem = 1)
+    {
+        var existente = await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Nome == nome);
+        if (existente is not null) return existente;
+
+        var etapa = new CrmLeadStage { Nome = nome, Ordem = ordem };
+        db.CrmLeadStages.Add(etapa);
         await db.SaveChangesAsync();
         return etapa;
     }

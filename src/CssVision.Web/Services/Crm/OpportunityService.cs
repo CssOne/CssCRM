@@ -126,8 +126,6 @@ public sealed class OpportunityService(
             UsuarioId = currentUser.UserId
         });
 
-        if (lead.Status == StatusLead.Novo) lead.Status = StatusLead.EmAtendimento;
-
         await db.SaveChangesAsync(ct);
         await audit.RegistrarAsync("OportunidadeCriada", nameof(CrmOpportunity), opportunity.Id, new { opportunity.Titulo }, ct);
 
@@ -221,7 +219,6 @@ public sealed class OpportunityService(
 
             opportunity.ValorFinal = request.ValorFinal;
             opportunity.DataEfetivaFechamento = request.DataEfetivaFechamento.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-            opportunity.Lead.Status = StatusLead.Convertido;
         }
 
         var etapaAnteriorId = opportunity.EtapaId;

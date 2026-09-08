@@ -14,7 +14,9 @@ public record LeadListItemDto(
     string? Estado,
     string? Regional,
     string? Origem,
-    StatusLead Status,
+    Guid EtapaId,
+    string EtapaNome,
+    string? EtapaCor,
     string? EtapaAtual,
     Guid? ResponsavelId,
     string? ResponsavelNome,
@@ -31,7 +33,8 @@ public record LeadFilterRequest : PagedRequest
     public Guid? ResponsavelId { get; init; }
     public string? Regional { get; init; }
     public string? Origem { get; init; }
-    public StatusLead? Status { get; init; }
+    /// <summary>Etapa do lead no quadro de leads (CrmLeadStage) — distinta de EtapaId, que filtra pela etapa da oportunidade aberta.</summary>
+    public Guid? LeadEtapaId { get; init; }
     public Guid? EtapaId { get; init; }
     public DateOnly? DataInicio { get; init; }
     public DateOnly? DataFim { get; init; }
@@ -66,7 +69,9 @@ public record LeadDetailDto(
     Guid? IndicadoPorLeadId,
     string? IndicadoPorLeadNome,
     string? TipoIndicacao,
-    StatusLead Status,
+    Guid EtapaId,
+    string EtapaNome,
+    string? EtapaCor,
     Guid? ResponsavelId,
     string? ResponsavelNome,
     string? Observacoes,
@@ -112,6 +117,7 @@ public record LeadCreateRequest(
     Guid? IndicadoPorLeadId,
     string? TipoIndicacao,
     Guid? ResponsavelId,
+    Guid? EtapaId,
     List<string>? Tags,
     string? Observacoes,
     bool ConsentimentoContato,

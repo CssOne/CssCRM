@@ -18,9 +18,10 @@ public class DashboardServiceTests
         var aberta = await factory.CriarEtapaAsync(db, "Novo lead", 1);
         var ganho = await factory.CriarEtapaAsync(db, "Ganho", 2, TipoEtapaPipeline.Ganho);
         var perdido = await factory.CriarEtapaAsync(db, "Perdido", 3, TipoEtapaPipeline.Perdido);
+        var etapaLead = await factory.ObterOuCriarEtapaLeadAsync(db);
 
-        var lead1 = new CrmLead { NomeOuRazaoSocial = "Cliente 1", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
-        var lead2 = new CrmLead { NomeOuRazaoSocial = "Cliente 2", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
+        var lead1 = new CrmLead { EtapaId = etapaLead.Id, NomeOuRazaoSocial = "Cliente 1", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
+        var lead2 = new CrmLead { EtapaId = etapaLead.Id, NomeOuRazaoSocial = "Cliente 2", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
         db.CrmLeads.AddRange(lead1, lead2);
         await db.SaveChangesAsync();
 

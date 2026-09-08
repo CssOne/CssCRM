@@ -20,6 +20,15 @@ public class CrmSettingsController(ILookupService lookupService) : ControllerBas
     public async Task<ActionResult<PipelineStageDto>> CriarEtapa(CreateStageRequest request, CancellationToken ct) =>
         Ok(await lookupService.CriarEtapaAsync(request, ct));
 
+    [HttpGet("lead-stages")]
+    public async Task<ActionResult<IReadOnlyList<LeadStageDto>>> ObterEtapasLead(CancellationToken ct) =>
+        Ok(await lookupService.ObterEtapasLeadAsync(ct));
+
+    [HttpPost("lead-stages")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
+    public async Task<ActionResult<LeadStageDto>> CriarEtapaLead(CreateLeadStageRequest request, CancellationToken ct) =>
+        Ok(await lookupService.CriarEtapaLeadAsync(request, ct));
+
     [HttpGet("loss-reasons")]
     public async Task<ActionResult<IReadOnlyList<LossReasonDto>>> ObterMotivosPerda(CancellationToken ct) =>
         Ok(await lookupService.ObterMotivosPerdaAsync(ct));

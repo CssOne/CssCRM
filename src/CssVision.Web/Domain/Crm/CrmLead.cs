@@ -45,7 +45,8 @@ public class CrmLead : CrmArchivableEntity
     public CrmLead? IndicadoPorLead { get; set; }
     public string? TipoIndicacao { get; set; }
 
-    public StatusLead Status { get; set; } = StatusLead.Novo;
+    public Guid EtapaId { get; set; }
+    public CrmLeadStage Etapa { get; set; } = null!;
 
     public Guid? ResponsavelId { get; set; }
     public ApplicationUser? Responsavel { get; set; }
