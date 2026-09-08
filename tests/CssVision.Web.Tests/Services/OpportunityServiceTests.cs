@@ -39,7 +39,7 @@ public class OpportunityServiceTests
         var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpAuditSink());
 
         var oportunidade = await service.CriarAsync(
-            new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null),
+            new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null, null, null, null, null, null, false, false, null),
             CancellationToken.None);
 
         await Assert.ThrowsAsync<CrmBusinessException>(() =>
@@ -59,7 +59,7 @@ public class OpportunityServiceTests
         var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpAuditSink());
 
         var oportunidade = await service.CriarAsync(
-            new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null),
+            new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null, null, null, null, null, null, false, false, null),
             CancellationToken.None);
 
         await Assert.ThrowsAsync<CrmBusinessException>(() =>
@@ -79,7 +79,7 @@ public class OpportunityServiceTests
         var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpAuditSink());
 
         var oportunidade = await service.CriarAsync(
-            new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null),
+            new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null, null, null, null, null, null, false, false, null),
             CancellationToken.None);
 
         var atualizada = await service.MudarEtapaAsync(
@@ -109,7 +109,7 @@ public class OpportunityServiceTests
         var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpAuditSink());
 
         var oportunidade = await service.CriarAsync(
-            new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null),
+            new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null, null, null, null, null, null, false, false, null),
             CancellationToken.None);
 
         var ganha = await service.MudarEtapaAsync(

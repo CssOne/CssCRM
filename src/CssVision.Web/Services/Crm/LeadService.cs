@@ -197,6 +197,15 @@ public sealed class LeadService(
             Origem = request.Origem,
             Campanha = request.Campanha,
             ProdutoInteresse = request.ProdutoInteresse,
+            Gclid = request.Gclid,
+            UtmMedium = request.UtmMedium,
+            UtmSource = request.UtmSource,
+            UtmTerm = request.UtmTerm,
+            MetaClickId = request.MetaClickId,
+            MetaFormId = request.MetaFormId,
+            MetaLeadId = request.MetaLeadId,
+            IndicadoPorLeadId = request.IndicadoPorLeadId,
+            TipoIndicacao = request.TipoIndicacao,
             ResponsavelId = responsavelId,
             Observacoes = request.Observacoes,
             ConsentimentoContato = request.ConsentimentoContato,
@@ -261,6 +270,15 @@ public sealed class LeadService(
         lead.Origem = request.Origem;
         lead.Campanha = request.Campanha;
         lead.ProdutoInteresse = request.ProdutoInteresse;
+        lead.Gclid = request.Gclid;
+        lead.UtmMedium = request.UtmMedium;
+        lead.UtmSource = request.UtmSource;
+        lead.UtmTerm = request.UtmTerm;
+        lead.MetaClickId = request.MetaClickId;
+        lead.MetaFormId = request.MetaFormId;
+        lead.MetaLeadId = request.MetaLeadId;
+        lead.IndicadoPorLeadId = request.IndicadoPorLeadId;
+        lead.TipoIndicacao = request.TipoIndicacao;
         lead.Observacoes = request.Observacoes;
         lead.ConsentimentoContato = request.ConsentimentoContato;
         lead.ConsentimentoOrigem = request.ConsentimentoOrigem;
@@ -538,6 +556,7 @@ public sealed class LeadService(
         var lead = await db.CrmLeads
             .Include(l => l.LeadTags).ThenInclude(lt => lt.Tag)
             .Include(l => l.Responsavel)
+            .Include(l => l.IndicadoPorLead)
             .Include(l => l.Oportunidades).ThenInclude(o => o.Etapa)
             .FirstOrDefaultAsync(l => l.Id == id, ct)
             ?? throw new CrmNotFoundException("Lead", id);
@@ -679,6 +698,16 @@ public sealed class LeadService(
         lead.Origem,
         lead.Campanha,
         lead.ProdutoInteresse,
+        lead.Gclid,
+        lead.UtmMedium,
+        lead.UtmSource,
+        lead.UtmTerm,
+        lead.MetaClickId,
+        lead.MetaFormId,
+        lead.MetaLeadId,
+        lead.IndicadoPorLeadId,
+        lead.IndicadoPorLead?.NomeOuRazaoSocial,
+        lead.TipoIndicacao,
         lead.Status,
         lead.ResponsavelId,
         lead.Responsavel?.NomeCompleto,

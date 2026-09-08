@@ -24,6 +24,7 @@ public class ApplicationDbContext(
     public DbSet<CrmLossReason> CrmLossReasons => Set<CrmLossReason>();
     public DbSet<CrmSalesGoal> CrmSalesGoals => Set<CrmSalesGoal>();
     public DbSet<CrmAttachment> CrmAttachments => Set<CrmAttachment>();
+    public DbSet<CrmVeiculo> CrmVeiculos => Set<CrmVeiculo>();
     public DbSet<CrmAuditLog> CrmAuditLogs => Set<CrmAuditLog>();
 
     protected override void OnModelCreating(ModelBuilder builder)

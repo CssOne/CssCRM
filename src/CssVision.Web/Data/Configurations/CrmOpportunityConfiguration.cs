@@ -16,6 +16,10 @@ public class CrmOpportunityConfiguration : IEntityTypeConfiguration<CrmOpportuni
         builder.Property(e => e.Concorrente).HasMaxLength(120);
         builder.Property(e => e.ValorEstimado).HasColumnType("numeric(14,2)");
         builder.Property(e => e.ValorFinal).HasColumnType("numeric(14,2)");
+        builder.Property(e => e.Mensalidade).HasColumnType("numeric(14,2)");
+        builder.Property(e => e.MensalidadeComDesconto).HasColumnType("numeric(14,2)");
+        builder.Property(e => e.PagamentoAdesao).HasColumnType("numeric(14,2)");
+        builder.Property(e => e.Porcentagem).HasColumnType("numeric(5,2)");
 
         builder.HasIndex(e => e.ResponsavelId);
         builder.HasIndex(e => e.EtapaId);
