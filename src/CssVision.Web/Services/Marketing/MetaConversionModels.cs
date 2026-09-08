@@ -15,7 +15,9 @@ public record MetaCapiEvent(
 public record MetaCapiUserData(
     [property: JsonPropertyName("em")] List<string>? Em,
     [property: JsonPropertyName("ph")] List<string>? Ph,
-    [property: JsonPropertyName("lead_id")] long? LeadId);
+    [property: JsonPropertyName("lead_id")] long? LeadId,
+    [property: JsonPropertyName("fn")] List<string>? Fn,
+    [property: JsonPropertyName("ln")] List<string>? Ln);
 
 public record MetaCapiCustomData(
     [property: JsonPropertyName("event_source")] string EventSource,

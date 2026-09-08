@@ -67,11 +67,25 @@ public static class MetaConversionEventBuilder
         var email = HashEmail(lead.EmailNormalizado ?? lead.Email);
         var telefone = HashPhone(lead.WhatsApp ?? lead.Telefone);
         long? leadId = long.TryParse(lead.MetaLeadId, out var parsed) ? parsed : null;
+        var (nome, sobrenome) = SplitNome(lead.NomeOuRazaoSocial);
 
         return new MetaCapiUserData(
             email is null ? null : [email],
             telefone is null ? null : [telefone],
-            leadId);
+            leadId,
+            nome is null ? null : [nome],
+            sobrenome is null ? null : [sobrenome]);
+    }
+
+    /// <summary>SHA256 em hex minúsculo de nome/sobrenome — mesma exigência de normalização do Meta usada pra e-mail (minúsculo, sem espaço nas pontas).</summary>
+    private static (string? Nome, string? Sobrenome) SplitNome(string nomeCompleto)
+    {
+        var partes = nomeCompleto.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (partes.Length == 0) return (null, null);
+
+        var nome = Sha256Hex(partes[0].ToLowerInvariant());
+        var sobrenome = partes.Length > 1 ? Sha256Hex(string.Join(' ', partes[1..]).ToLowerInvariant()) : null;
+        return (nome, sobrenome);
     }
 
     /// <summary>SHA256 em hex minúsculo do e-mail normalizado (minúsculo, sem espaços) — exigência de privacidade do Meta.</summary>
