@@ -2,7 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace NotionMigration;
+namespace CssVision.Web.Services.Notion;
 
 /// <summary>Cliente mínimo para consultar data sources do Notion (API 2025-09-03, bases multi-fonte).</summary>
 public sealed class NotionClient(string token)
@@ -45,7 +45,11 @@ public sealed class NotionClient(string token)
         return QueryAsync(dataSourceId, filtro, ct);
     }
 
-    private async IAsyncEnumerable<JsonElement> QueryAsync(string dataSourceId, object? filter, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    /// <summary>Todas as linhas editadas após o instante informado — base da sincronização incremental periódica.</summary>
+    public IAsyncEnumerable<JsonElement> QueryEditadasDesdeAsync(string dataSourceId, DateTimeOffset desde, CancellationToken ct = default) =>
+        QueryAsync(dataSourceId, new { timestamp = "last_edited_time", last_edited_time = new { after = desde.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffZ") } }, ct);
+
+    public async IAsyncEnumerable<JsonElement> QueryAsync(string dataSourceId, object? filter, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
         string? cursor = null;
         do

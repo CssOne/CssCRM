@@ -44,6 +44,15 @@ resource "aws_instance" "app" {
   }
 
   tags = { Name = "${var.project_name}-app" }
+
+  # O user_data só referencia o *nome* dos secrets (aws_secretsmanager_secret.app/.db), não o
+  # valor — isso não cria dependência implícita nas *_version, que são quem de fato grava a senha.
+  # Sem isso, a instância pode subir e tentar ler o secret antes do valor existir (corrida),
+  # abortando o deploy.sh logo no boot.
+  depends_on = [
+    aws_secretsmanager_secret_version.app,
+    aws_secretsmanager_secret_version.db,
+  ]
 }
 
 # Se elastic_ip_allocation_id vier vazio, aloca um IP novo (você atualiza o DuckDNS depois do

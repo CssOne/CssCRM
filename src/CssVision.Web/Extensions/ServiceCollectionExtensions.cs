@@ -5,6 +5,7 @@ using CssVision.Web.Domain.Identity;
 using CssVision.Web.Services.Crm;
 using CssVision.Web.Services.Email;
 using CssVision.Web.Services.Marketing;
+using CssVision.Web.Services.Notion;
 using CssVision.Web.Services.Storage;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
@@ -145,6 +146,25 @@ public static class ServiceCollectionExtensions
 
         services.Configure<MetaCapiOptions>(configuration.GetSection(MetaCapiOptions.SectionName));
         services.AddHttpClient<IMetaConversionService, MetaConversionService>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Sincronização periódica com o Notion — só liga o serviço em segundo plano se um token
+    /// estiver configurado (NotionSync:Token, normalmente via Secrets Manager em produção).
+    /// </summary>
+    public static IServiceCollection AddNotionSync(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<NotionSyncOptions>(configuration.GetSection("NotionSync"));
+        services.AddScoped<NotionSyncService>();
+
+        var enabled = !string.IsNullOrWhiteSpace(configuration["NotionSync:Token"]);
+        services.PostConfigure<NotionSyncOptions>(o => o.Enabled = enabled);
+        if (enabled)
+        {
+            services.AddHostedService<NotionSyncBackgroundService>();
+        }
 
         return services;
     }

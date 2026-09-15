@@ -31,6 +31,7 @@ public class ApplicationDbContext(
     public DbSet<CrmGrupo> CrmGrupos => Set<CrmGrupo>();
     public DbSet<CrmAnnouncement> CrmAnnouncements => Set<CrmAnnouncement>();
     public DbSet<CrmAuditLog> CrmAuditLogs => Set<CrmAuditLog>();
+    public DbSet<CrmNotionSyncCheckpoint> CrmNotionSyncCheckpoints => Set<CrmNotionSyncCheckpoint>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

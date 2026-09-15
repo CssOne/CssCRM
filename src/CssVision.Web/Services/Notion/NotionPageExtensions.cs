@@ -2,9 +2,9 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace NotionMigration;
+namespace CssVision.Web.Services.Notion;
 
-/// <summary>Leitura defensiva de propriedades de uma página do Notion — nomes variam levemente entre as 4 bases.</summary>
+/// <summary>Leitura defensiva de propriedades de uma página do Notion — nomes variam levemente entre as bases.</summary>
 public static partial class NotionPageExtensions
 {
     [GeneratedRegex(@"[^\d,.\-]")]
@@ -19,6 +19,11 @@ public static partial class NotionPageExtensions
         }
         return null;
     }
+
+    public static string PageId(this JsonElement page) => page.GetProperty("id").GetString()!;
+
+    public static DateTimeOffset LastEditedTime(this JsonElement page) =>
+        DateTimeOffset.Parse(page.GetProperty("last_edited_time").GetString()!, CultureInfo.InvariantCulture);
 
     public static string? Text(this JsonElement page, params string[] nomes)
     {

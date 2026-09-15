@@ -26,6 +26,7 @@ services:
       MetaLeadAds__PageAccessToken: ${META_PAGE_ACCESS_TOKEN}
       MetaCapi__PixelId: ${META_PIXEL_ID}
       MetaCapi__AccessToken: ${META_CAPI_ACCESS_TOKEN}
+      NotionSync__Token: ${NOTION_TOKEN}
     expose:
       - "8080"
     healthcheck:

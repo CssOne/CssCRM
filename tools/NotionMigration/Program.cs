@@ -4,6 +4,7 @@ using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
 using CssVision.Web.Domain.Identity;
 using CssVision.Web.Services.Crm;
+using CssVision.Web.Services.Notion;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -57,6 +58,7 @@ if (Environment.GetEnvironmentVariable("MIGRATION_MODE") == "fixorigin")
 }
 
 var ganhoStage = await db.CrmPipelineStages.FirstAsync(s => s.Tipo == TipoEtapaPipeline.Ganho);
+var vendaConcluidaLeadStageId = (await db.CrmLeadStages.FirstAsync(s => s.Nome == "Venda concluída")).Id;
 
 var documentosExistentes = (await db.CrmLeads.AsNoTracking().Where(l => l.DocumentoNormalizado != null && !l.Arquivado)
     .Select(l => l.DocumentoNormalizado!).ToListAsync()).ToHashSet();
@@ -160,6 +162,8 @@ foreach (var spec in specs)
                 Campanha = page.Select("Campanha", "CAMPANHA"),
                 ProdutoInteresse = page.Select("O que"),
                 ResponsavelId = vendedorId,
+                EtapaId = vendaConcluidaLeadStageId,
+                TipoIndicacao = NotionLeadClassifier.Classificar(page.Select("O que")),
                 ConsentimentoContato = true,
                 ConsentimentoOrigem = "Migração da base histórica (Notion)",
                 Arquivado = false,
@@ -725,7 +729,7 @@ async Task ImportarNovosLeadsAsync()
                 EtapaId = etapaId,
                 ResponsavelId = vendedorPlaceholderId,
                 CriadoManualmente = string.IsNullOrWhiteSpace(oQue),
-                TipoIndicacao = page.Select("Tipo de indicação"),
+                TipoIndicacao = NotionLeadClassifier.Classificar(oQue),
                 ConsentimentoContato = true,
                 ConsentimentoOrigem = "Migração da base histórica (Notion)",
                 Arquivado = false,

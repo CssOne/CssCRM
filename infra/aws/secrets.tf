@@ -20,6 +20,7 @@ resource "aws_secretsmanager_secret_version" "app" {
     META_PAGE_ACCESS_TOKEN = ""
     META_PIXEL_ID          = ""
     META_CAPI_ACCESS_TOKEN = ""
+    NOTION_TOKEN           = ""
   })
 
   lifecycle {

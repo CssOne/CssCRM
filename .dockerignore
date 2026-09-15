@@ -9,5 +9,13 @@ src/CssVision.Web/wwwroot/uploads/
 .idea/
 tests/
 tools/
+!tools/AdminSeeder/
+!tools/AdminSeeder/**
+tools/AdminSeeder/bin/
+tools/AdminSeeder/obj/
+!tools/NotionMigration/
+!tools/NotionMigration/**
+tools/NotionMigration/bin/
+tools/NotionMigration/obj/
 infra/
 *.md
