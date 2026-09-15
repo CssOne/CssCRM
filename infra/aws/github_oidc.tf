@@ -29,15 +29,15 @@ data "aws_iam_policy_document" "github_assume_role" {
       variable = "token.actions.githubusercontent.com:aud"
       values   = ["sts.amazonaws.com"]
     }
-    # A AWS exige que uma condição em "sub" ou "job_workflow_ref" esteja presente (não aceita
-    # confiar só no claim "repository") — mantém o "sub" (necessário pra validação da AWS) e
-    # adiciona "repository" como reforço, já que o "sub" sozinho não bastou (ver comentário no
-    # commit): workflows disparados por workflow_run têm formato de "sub" que pode não bater com
-    # o wildcard "repo:owner/repo:*" da forma esperada.
+    # A AWS exige uma condição em "sub" ou "job_workflow_ref" (não aceita confiar só no claim
+    # "repository"). Usa "job_workflow_ref" em vez de "sub" porque este repositório tem um "sub"
+    # no formato "repo:CssOne@<id-org>/CssCRM@<id-repo>:ref:..." (IDs numéricos internos do GitHub
+    # inseridos no meio da string — visto via debug do token), que nunca bateria com o wildcard
+    # "repo:owner/repo:*" esperado. "job_workflow_ref" não tem esse problema.
     condition {
       test     = "StringLike"
-      variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:*"]
+      variable = "token.actions.githubusercontent.com:job_workflow_ref"
+      values   = ["${var.github_repository}/.github/workflows/deploy.yml@*"]
     }
     condition {
       test     = "StringEquals"
