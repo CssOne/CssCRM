@@ -45,7 +45,7 @@ public class MetaConversionEventBuilderTests
     {
         var lead = new CrmLead
         {
-            NomeOuRazaoSocial = "Cliente",
+            NomeOuRazaoSocial = "Cliente Teste Sobrenome",
             TipoPessoa = TipoPessoa.Fisica,
             EmailNormalizado = "cliente@teste.com",
             WhatsApp = "11988887777",
@@ -74,6 +74,8 @@ public class MetaConversionEventBuilderTests
         Assert.Equal(2141279250136854L, customizado.UserData.LeadId);
         Assert.Equal(Sha256("cliente@teste.com"), Assert.Single(customizado.UserData.Em!));
         Assert.Equal(Sha256("5511988887777"), Assert.Single(customizado.UserData.Ph!));
+        Assert.Equal(Sha256("cliente"), Assert.Single(customizado.UserData.Fn!));
+        Assert.Equal(Sha256("teste sobrenome"), Assert.Single(customizado.UserData.Ln!));
 
         var purchase = payload.Data[1];
         Assert.Equal("Purchase", purchase.EventName);
@@ -92,6 +94,8 @@ public class MetaConversionEventBuilderTests
 
         Assert.Null(payload.Data[0].UserData.LeadId);
         Assert.Null(payload.Data[0].UserData.Ph);
+        Assert.Equal(Sha256("cliente"), Assert.Single(payload.Data[0].UserData.Fn!));
+        Assert.Null(payload.Data[0].UserData.Ln);
     }
 
     [Fact]
