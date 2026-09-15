@@ -21,12 +21,48 @@ public record OpportunityDto(
     decimal? ValorFinal,
     DateTimeOffset? DataEfetivaFechamento,
     string? MotivoPerdaDescricao,
+    string? MotivoPerdaObservacao,
     string? Concorrente,
     string? Observacoes,
+    DateOnly? DataAdesao,
+    DateTimeOffset? AtivoEm,
+    decimal? Mensalidade,
+    decimal? MensalidadeComDesconto,
+    decimal? PagamentoAdesao,
+    decimal? Porcentagem,
+    bool TermoAdesaoAceito,
+    bool Migracao,
+    VeiculoDto? Veiculo,
     DateTimeOffset CriadoEm,
     DateTimeOffset? AtualizadoEm,
     uint RowVersion,
-    bool Atrasada);
+    bool Atrasada,
+    string? Cpf,
+    string? Estado,
+    bool? Indicacao,
+    string? TipoIndicacao,
+    decimal? ValorIndicacao,
+    decimal? Total,
+    string? TermoAdesaoArquivoUrl,
+    string? PagamentoAdesaoArquivoUrl);
+
+public record VeiculoDto(
+    Guid Id,
+    string? Descricao,
+    string? Placa,
+    decimal? Fipe,
+    string? Rastreador,
+    Guid? VistoriadorId,
+    string? VistoriadorNome,
+    DateTimeOffset? DataChegada);
+
+public record VeiculoUpsertRequest(
+    string? Descricao,
+    string? Placa,
+    decimal? Fipe,
+    string? Rastreador,
+    Guid? VistoriadorId,
+    DateTimeOffset? DataChegada);
 
 public record OpportunityFilterRequest : PagedRequest
 {
@@ -50,7 +86,15 @@ public record OpportunityCreateRequest(
     int? ProbabilidadeFechamento,
     DateOnly? DataPrevistaFechamento,
     string? Concorrente,
-    string? Observacoes);
+    string? Observacoes,
+    DateOnly? DataAdesao,
+    decimal? Mensalidade,
+    decimal? MensalidadeComDesconto,
+    decimal? PagamentoAdesao,
+    decimal? Porcentagem,
+    bool TermoAdesaoAceito,
+    bool Migracao,
+    VeiculoUpsertRequest? Veiculo);
 
 public record OpportunityUpdateRequest(
     string Titulo,
@@ -61,11 +105,34 @@ public record OpportunityUpdateRequest(
     DateOnly? DataPrevistaFechamento,
     string? Concorrente,
     string? Observacoes,
+    DateOnly? DataAdesao,
+    DateTimeOffset? AtivoEm,
+    decimal? Mensalidade,
+    decimal? MensalidadeComDesconto,
+    decimal? PagamentoAdesao,
+    decimal? Porcentagem,
+    bool TermoAdesaoAceito,
+    bool Migracao,
+    VeiculoUpsertRequest? Veiculo,
     uint RowVersion);
 
 public record ChangeStageRequest(
     Guid NovaEtapaId,
     uint RowVersion,
     Guid? MotivoPerdaId,
+    string? MotivoPerdaObservacao,
     decimal? ValorFinal,
-    DateOnly? DataEfetivaFechamento);
+    DateOnly? DataEfetivaFechamento,
+    string? Cpf = null,
+    string? Estado = null,
+    bool? Indicacao = null,
+    string? TipoIndicacao = null,
+    decimal? ValorIndicacao = null,
+    decimal? Total = null,
+    DateTimeOffset? AtivoEm = null,
+    decimal? Mensalidade = null,
+    decimal? MensalidadeComDesconto = null,
+    decimal? PagamentoAdesao = null,
+    decimal? Porcentagem = null,
+    bool Migracao = false,
+    VeiculoUpsertRequest? Veiculo = null);

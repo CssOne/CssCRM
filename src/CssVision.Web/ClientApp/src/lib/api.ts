@@ -32,14 +32,25 @@ export function isAbortError(erro: unknown): boolean {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api${path}`, {
-    credentials: "include",
-    headers: {
-      ...(typeof init?.body === "string" ? { "Content-Type": "application/json" } : {}),
-      ...init?.headers,
-    },
-    ...init,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, {
+      credentials: "include",
+      headers: {
+        ...(typeof init?.body === "string" ? { "Content-Type": "application/json" } : {}),
+        ...init?.headers,
+      },
+      ...init,
+    });
+  } catch (erro) {
+    // Alguns navegadores degradam um fetch cancelado (AbortController) para um TypeError genérico
+    // "Failed to fetch" em vez do DOMException "AbortError" padrão — normaliza aqui para que
+    // isAbortError() reconheça de forma confiável em todas as páginas que usam esse padrão.
+    if (init?.signal?.aborted) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+    throw erro;
+  }
 
   if (response.status === 204) {
     return undefined as T;

@@ -1,12 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, isAbortError, isUnauthorized } from "../lib/api";
-import type { Session } from "../lib/types";
+import type { LoginResult, Session } from "../lib/types";
 
 interface AuthContextValue {
   sessao: Session | null;
   carregando: boolean;
-  login: (email: string, senha: string) => Promise<Session>;
+  login: (email: string, senha: string, manterConectado?: boolean) => Promise<LoginResult>;
+  loginDoisFatores: (codigo: string, manterConectado?: boolean, codigoRecuperacao?: boolean) => Promise<Session>;
   logout: () => Promise<void>;
+  refetchSessao: () => Promise<void>;
   temPapel: (...papeis: string[]) => boolean;
 }
 
@@ -32,8 +34,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => controller.abort();
   }, []);
 
-  const login = useCallback(async (email: string, senha: string) => {
-    const resultado = await api.post<Session>("/account/login", { email, senha });
+  const login = useCallback(async (email: string, senha: string, manterConectado = true) => {
+    const resultado = await api.post<LoginResult>("/account/login", { email, senha, manterConectado });
+    if (resultado.sessao) setSessao(resultado.sessao);
+    return resultado;
+  }, []);
+
+  const loginDoisFatores = useCallback(async (codigo: string, manterConectado = true, codigoRecuperacao = false) => {
+    const resultado = await api.post<Session>("/account/login/2fa", { codigo, manterConectado, codigoRecuperacao });
     setSessao(resultado);
     return resultado;
   }, []);
@@ -43,9 +51,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSessao(null);
   }, []);
 
+  const refetchSessao = useCallback(async () => {
+    setSessao(await api.get<Session>("/account/session"));
+  }, []);
+
   const temPapel = useCallback((...papeis: string[]) => !!sessao && papeis.some((p) => sessao.papeis.includes(p)), [sessao]);
 
-  return <AuthContext.Provider value={{ sessao, carregando, login, logout, temPapel }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ sessao, carregando, login, loginDoisFatores, logout, refetchSessao, temPapel }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth(): AuthContextValue {

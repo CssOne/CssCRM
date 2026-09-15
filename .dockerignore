@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/node_modules/
+src/CssVision.Web/ClientApp/dist/
+src/CssVision.Web/ClientApp/.vite/
+src/CssVision.Web/wwwroot/uploads/
+.git/
+.vs/
+.idea/
+tests/
+tools/
+infra/
+*.md

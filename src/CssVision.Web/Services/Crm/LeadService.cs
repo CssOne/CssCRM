@@ -1,10 +1,12 @@
 using System.Linq.Expressions;
 using ClosedXML.Excel;
 using CssVision.Web.Api.Contracts.Common;
+using CssVision.Web.Authorization;
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
 using CssVision.Web.Domain.Identity;
+using CssVision.Web.Services.Marketing;
 using Microsoft.EntityFrameworkCore;
 
 namespace CssVision.Web.Services.Crm;
@@ -13,8 +15,17 @@ public sealed class LeadService(
     ApplicationDbContext db,
     ICurrentUserService currentUser,
     IEquipeComercialService equipe,
+    ILeadAssignmentService assignment,
+    IMetaConversionService conversion,
     IAuditSink audit) : ILeadService
 {
+    /// <summary>Nome da etapa terminal "perdida" do quadro de leads — ver CrmSeeder.cs. CrmLeadStage
+    /// não tem um enum de tipo como CrmPipelineStage, então a identidade da etapa é pelo nome mesmo.</summary>
+    private const string EtapaLeadPerdido = "Perdido";
+
+    /// <summary>Nome da etapa "veículo fora do que a CSS Brasil atende" do quadro de leads — ver CrmSeeder.cs.</summary>
+    private const string EtapaLeadNaoFazemos = "Não fazemos";
+
     public async Task<PagedResult<LeadListItemDto>> ListarAsync(LeadFilterRequest filtro, CancellationToken ct)
     {
         var query = await QueryEscopadaAsync(filtro.IncluirArquivados, ct);
@@ -37,7 +48,12 @@ public sealed class LeadService(
                 l.Estado,
                 l.Regional,
                 l.Origem,
-                l.Status,
+                l.Placa,
+                l.TemSeguro,
+                l.UtilidadeVeiculo,
+                l.EtapaId,
+                l.Etapa != null ? l.Etapa.Nome : null,
+                l.Etapa != null ? l.Etapa.Cor : null,
                 l.Oportunidades
                     .Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Aberta)
                     .OrderByDescending(o => o.EtapaDesde)
@@ -174,14 +190,38 @@ public sealed class LeadService(
         var duplicidade = await DetectarDuplicidadeAsync(documentoNormalizado, emailNormalizado, telefoneNormalizado, request.IgnorarDuplicidade, ct);
         if (duplicidade is not null) return new CriarLeadResultado(null, duplicidade);
 
-        var responsavelId = request.ResponsavelId ?? currentUser.UserId;
-        if (!await equipe.PodeAcessarVendedorAsync(responsavelId, ct))
+        // Responsável explícito respeita o escopo de quem está criando. Sem escolha explícita:
+        // uma vendedora cadastrando um contato dela mesma continua caindo pra ela (comportamento
+        // intuitivo, "é meu"); só quando não há um dono natural (admin/gestor cadastrando sem
+        // escolher alguém, ou nenhum usuário logado) a distribuição automática decide — round-robin
+        // por quem tem menos leads no mês, respeitando o limite mensal de cada vendedor. Pode ficar
+        // sem responsável se ninguém estiver elegível, do mesmo jeito que o lead pode ficar sem etapa.
+        Guid? responsavelId;
+        if (request.ResponsavelId.HasValue)
         {
-            throw new CrmForbiddenException("Você não pode atribuir leads para este vendedor.");
+            if (!await equipe.PodeAcessarVendedorAsync(request.ResponsavelId.Value, ct))
+            {
+                throw new CrmForbiddenException("Você não pode atribuir leads para este vendedor.");
+            }
+            responsavelId = request.ResponsavelId.Value;
         }
+        else if (currentUser.IsInRole(Roles.Comercial))
+        {
+            responsavelId = currentUser.UserId;
+        }
+        else
+        {
+            responsavelId = await assignment.ProximoResponsavelAsync(ct);
+        }
+
+        // Leads automáticos (Meta Ads, site) ficam de propósito sem etapa — "ninguém pegou
+        // ainda" — mas um lead cadastrado manualmente já é trabalhado por quem o cadastrou, então
+        // entra direto na primeira etapa ativa do funil em vez de cair na coluna "Sem etapa".
+        var etapaId = request.EtapaId ?? await ObterEtapaInicialIdAsync(ct);
 
         var lead = new CrmLead
         {
+            EtapaId = etapaId,
             NomeOuRazaoSocial = request.NomeOuRazaoSocial.Trim(),
             TipoPessoa = request.TipoPessoa,
             DocumentoNormalizado = documentoNormalizado,
@@ -197,6 +237,18 @@ public sealed class LeadService(
             Origem = request.Origem,
             Campanha = request.Campanha,
             ProdutoInteresse = request.ProdutoInteresse,
+            Placa = request.Placa?.Trim().ToUpperInvariant() is { Length: > 0 and <= 10 } placaValida ? placaValida : null,
+            TemSeguro = request.TemSeguro,
+            UtilidadeVeiculo = request.UtilidadeVeiculo,
+            Gclid = request.Gclid,
+            UtmMedium = request.UtmMedium,
+            UtmSource = request.UtmSource,
+            UtmTerm = request.UtmTerm,
+            MetaClickId = request.MetaClickId,
+            MetaFormId = request.MetaFormId,
+            MetaLeadId = request.MetaLeadId,
+            IndicadoPorLeadId = request.IndicadoPorLeadId,
+            TipoIndicacao = request.TipoIndicacao,
             ResponsavelId = responsavelId,
             Observacoes = request.Observacoes,
             ConsentimentoContato = request.ConsentimentoContato,
@@ -213,6 +265,13 @@ public sealed class LeadService(
 
         return new CriarLeadResultado(await ObterPorIdAsync(lead.Id, ct), null);
     }
+
+    private async Task<Guid?> ObterEtapaInicialIdAsync(CancellationToken ct) =>
+        await db.CrmLeadStages.AsNoTracking()
+            .Where(s => s.Ativa)
+            .OrderBy(s => s.Ordem)
+            .Select(s => (Guid?)s.Id)
+            .FirstOrDefaultAsync(ct);
 
     public async Task<LeadDetailDto> AtualizarAsync(Guid id, LeadUpdateRequest request, CancellationToken ct)
     {
@@ -261,6 +320,18 @@ public sealed class LeadService(
         lead.Origem = request.Origem;
         lead.Campanha = request.Campanha;
         lead.ProdutoInteresse = request.ProdutoInteresse;
+        lead.Placa = request.Placa?.Trim().ToUpperInvariant() is { Length: > 0 and <= 10 } placaValida ? placaValida : null;
+        lead.TemSeguro = request.TemSeguro;
+        lead.UtilidadeVeiculo = request.UtilidadeVeiculo;
+        lead.Gclid = request.Gclid;
+        lead.UtmMedium = request.UtmMedium;
+        lead.UtmSource = request.UtmSource;
+        lead.UtmTerm = request.UtmTerm;
+        lead.MetaClickId = request.MetaClickId;
+        lead.MetaFormId = request.MetaFormId;
+        lead.MetaLeadId = request.MetaLeadId;
+        lead.IndicadoPorLeadId = request.IndicadoPorLeadId;
+        lead.TipoIndicacao = request.TipoIndicacao;
         lead.Observacoes = request.Observacoes;
         lead.ConsentimentoContato = request.ConsentimentoContato;
         lead.ConsentimentoOrigem = request.ConsentimentoOrigem;
@@ -313,6 +384,79 @@ public sealed class LeadService(
 
         await db.SaveChangesAsync(ct);
         await audit.RegistrarAsync("LeadAtribuido", nameof(CrmLead), lead.Id, new { request.ResponsavelId }, ct);
+    }
+
+    public async Task<LeadDetailDto> MudarEtapaAsync(Guid id, ChangeLeadStageRequest request, CancellationToken ct)
+    {
+        var lead = await CarregarComEscopoAsync(id, ct);
+        db.Entry(lead).Property(l => l.RowVersion).OriginalValue = request.RowVersion;
+
+        CrmLeadStage? novaEtapa = null;
+        if (request.NovaEtapaId.HasValue)
+        {
+            novaEtapa = await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Id == request.NovaEtapaId, ct)
+                ?? throw new CrmNotFoundException("Etapa de lead", request.NovaEtapaId.Value);
+            lead.EtapaId = novaEtapa.Id;
+
+            if (novaEtapa.Nome == EtapaLeadPerdido)
+            {
+                if (request.MotivoPerdaId is null)
+                {
+                    throw new CrmBusinessException("Informe o motivo da perda ao mover para 'Perdido'.", "motivo_perda_obrigatorio");
+                }
+
+                var motivo = await db.CrmLossReasons.FirstOrDefaultAsync(m => m.Id == request.MotivoPerdaId, ct)
+                    ?? throw new CrmNotFoundException("Motivo de perda", request.MotivoPerdaId.Value);
+                lead.MotivoPerdaId = motivo.Id;
+                lead.MotivoPerdaObservacao = string.IsNullOrWhiteSpace(request.MotivoPerdaObservacao) ? null : request.MotivoPerdaObservacao.Trim();
+                lead.VeiculoNaoAtendido = null;
+            }
+            else if (novaEtapa.Nome == EtapaLeadNaoFazemos)
+            {
+                if (string.IsNullOrWhiteSpace(request.VeiculoNaoAtendido))
+                {
+                    throw new CrmBusinessException("Informe o modelo do veículo ao mover para 'Não fazemos'.", "veiculo_nao_atendido_obrigatorio");
+                }
+
+                lead.VeiculoNaoAtendido = request.VeiculoNaoAtendido.Trim();
+                lead.MotivoPerdaId = null;
+                lead.MotivoPerdaObservacao = null;
+            }
+            else
+            {
+                lead.MotivoPerdaId = null;
+                lead.MotivoPerdaObservacao = null;
+                lead.VeiculoNaoAtendido = null;
+            }
+        }
+        else
+        {
+            lead.EtapaId = null;
+            lead.MotivoPerdaId = null;
+            lead.MotivoPerdaObservacao = null;
+            lead.VeiculoNaoAtendido = null;
+        }
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new CrmConcurrencyException();
+        }
+
+        await audit.RegistrarAsync("LeadMudouEtapa", nameof(CrmLead), lead.Id, new { EtapaNova = request.NovaEtapaId }, ct);
+
+        // Retorno de conversão offline (CAPI): manda um evento pra toda mudança de etapa (nomeado
+        // com a própria etapa) — qual delas vira otimização de campanha é escolhido no
+        // Gerenciador de Anúncios, não aqui. Nunca deve bloquear a resposta desse endpoint.
+        if (novaEtapa is not null)
+        {
+            await conversion.EnviarEventoEtapaAsync(lead, novaEtapa.Id, novaEtapa.Nome, ct);
+        }
+
+        return await ObterPorIdAsync(lead.Id, ct);
     }
 
     public async Task<int> AtribuirEmLoteAsync(LeadBulkAssignRequest request, CancellationToken ct)
@@ -384,6 +528,7 @@ public sealed class LeadService(
 
         var usuariosPorEmail = await db.Users.AsNoTracking()
             .ToDictionaryAsync(u => u.Email!.ToLowerInvariant(), u => u.Id, ct);
+        var etapaInicialId = await ObterEtapaInicialIdAsync(ct);
 
         foreach (var linha in linhas)
         {
@@ -432,10 +577,11 @@ public sealed class LeadService(
                 {
                     if (await equipe.PodeAcessarVendedorAsync(uid, ct)) responsavelId = uid;
                 }
-                responsavelId ??= currentUser.UserId;
+                responsavelId ??= await assignment.ProximoResponsavelAsync(ct);
 
                 db.CrmLeads.Add(new CrmLead
                 {
+                    EtapaId = etapaInicialId,
                     NomeOuRazaoSocial = nome,
                     TipoPessoa = tipoPessoa,
                     DocumentoNormalizado = documentoNormalizado,
@@ -481,7 +627,7 @@ public sealed class LeadService(
                 l.Estado,
                 l.Regional,
                 l.Origem,
-                l.Status,
+                EtapaNome = l.Etapa != null ? l.Etapa.Nome : "Sem etapa",
                 Responsavel = l.Responsavel != null ? l.Responsavel.NomeCompleto : null,
                 l.CriadoEm
             })
@@ -489,7 +635,7 @@ public sealed class LeadService(
 
         using var workbook = new XLWorkbook();
         var sheet = workbook.Worksheets.Add("Leads");
-        string[] cabecalho = ["Nome/Razão Social", "Tipo", "CPF/CNPJ", "Telefone", "E-mail", "Cidade", "UF", "Regional", "Origem", "Status", "Responsável", "Criado em"];
+        string[] cabecalho = ["Nome/Razão Social", "Tipo", "CPF/CNPJ", "Telefone", "E-mail", "Cidade", "UF", "Regional", "Origem", "Etapa", "Responsável", "Criado em"];
         for (var i = 0; i < cabecalho.Length; i++) sheet.Cell(1, i + 1).Value = cabecalho[i];
 
         var linha = 2;
@@ -504,7 +650,7 @@ public sealed class LeadService(
             sheet.Cell(linha, 7).Value = l.Estado;
             sheet.Cell(linha, 8).Value = l.Regional;
             sheet.Cell(linha, 9).Value = l.Origem;
-            sheet.Cell(linha, 10).Value = l.Status.ToString();
+            sheet.Cell(linha, 10).Value = l.EtapaNome;
             sheet.Cell(linha, 11).Value = l.Responsavel;
             sheet.Cell(linha, 12).Value = l.CriadoEm.ToString("dd/MM/yyyy HH:mm");
             linha++;
@@ -538,6 +684,9 @@ public sealed class LeadService(
         var lead = await db.CrmLeads
             .Include(l => l.LeadTags).ThenInclude(lt => lt.Tag)
             .Include(l => l.Responsavel)
+            .Include(l => l.IndicadoPorLead)
+            .Include(l => l.Etapa)
+            .Include(l => l.MotivoPerda)
             .Include(l => l.Oportunidades).ThenInclude(o => o.Etapa)
             .FirstOrDefaultAsync(l => l.Id == id, ct)
             ?? throw new CrmNotFoundException("Lead", id);
@@ -566,7 +715,7 @@ public sealed class LeadService(
         if (filtro.ResponsavelId.HasValue) query = query.Where(l => l.ResponsavelId == filtro.ResponsavelId);
         if (!string.IsNullOrWhiteSpace(filtro.Regional)) query = query.Where(l => l.Regional == filtro.Regional);
         if (!string.IsNullOrWhiteSpace(filtro.Origem)) query = query.Where(l => l.Origem == filtro.Origem);
-        if (filtro.Status.HasValue) query = query.Where(l => l.Status == filtro.Status);
+        if (filtro.LeadEtapaId.HasValue) query = query.Where(l => l.EtapaId == filtro.LeadEtapaId);
         if (filtro.EtapaId.HasValue) query = query.Where(l => l.Oportunidades.Any(o => o.EtapaId == filtro.EtapaId && !o.Arquivado));
         if (filtro.DataInicio.HasValue)
         {
@@ -591,7 +740,7 @@ public sealed class LeadService(
         Expression<Func<CrmLead, object?>> chave = ordenarPor?.ToLowerInvariant() switch
         {
             "nome" => l => l.NomeOuRazaoSocial,
-            "status" => l => l.Status,
+            "etapa" => l => l.Etapa != null ? l.Etapa.Nome : null,
             "ultimocontato" => l => l.UltimoContatoEm,
             "proximocontato" => l => l.ProximoContatoEm,
             _ => l => l.CriadoEm
@@ -679,7 +828,26 @@ public sealed class LeadService(
         lead.Origem,
         lead.Campanha,
         lead.ProdutoInteresse,
-        lead.Status,
+        lead.Placa,
+        lead.TemSeguro,
+        lead.UtilidadeVeiculo,
+        lead.Gclid,
+        lead.UtmMedium,
+        lead.UtmSource,
+        lead.UtmTerm,
+        lead.MetaClickId,
+        lead.MetaFormId,
+        lead.MetaLeadId,
+        lead.IndicadoPorLeadId,
+        lead.IndicadoPorLead?.NomeOuRazaoSocial,
+        lead.TipoIndicacao,
+        lead.EtapaId,
+        lead.Etapa?.Nome,
+        lead.Etapa?.Cor,
+        lead.MotivoPerdaId,
+        lead.MotivoPerda?.Descricao,
+        lead.MotivoPerdaObservacao,
+        lead.VeiculoNaoAtendido,
         lead.ResponsavelId,
         lead.Responsavel?.NomeCompleto,
         lead.Observacoes,

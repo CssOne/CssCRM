@@ -18,9 +18,10 @@ public class DashboardServiceTests
         var aberta = await factory.CriarEtapaAsync(db, "Novo lead", 1);
         var ganho = await factory.CriarEtapaAsync(db, "Ganho", 2, TipoEtapaPipeline.Ganho);
         var perdido = await factory.CriarEtapaAsync(db, "Perdido", 3, TipoEtapaPipeline.Perdido);
+        var etapaLead = await factory.ObterOuCriarEtapaLeadAsync(db);
 
-        var lead1 = new CrmLead { NomeOuRazaoSocial = "Cliente 1", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
-        var lead2 = new CrmLead { NomeOuRazaoSocial = "Cliente 2", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
+        var lead1 = new CrmLead { EtapaId = etapaLead.Id, NomeOuRazaoSocial = "Cliente 1", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
+        var lead2 = new CrmLead { EtapaId = etapaLead.Id, NomeOuRazaoSocial = "Cliente 2", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
         db.CrmLeads.AddRange(lead1, lead2);
         await db.SaveChangesAsync();
 
@@ -35,7 +36,7 @@ public class DashboardServiceTests
         var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
         var equipe = new EquipeComercialService(db, currentUser.Object);
         var activityService = new ActivityService(db, currentUser.Object, equipe, new NoOpAuditSink());
-        var service = new DashboardService(db, equipe, activityService);
+        var service = new DashboardService(db, equipe, activityService, currentUser.Object);
 
         var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
         var resultado = await service.ObterAsync(new DashboardFilterRequest(new DateOnly(hoje.Year, hoje.Month, 1), hoje, null), CancellationToken.None);
@@ -46,5 +47,32 @@ public class DashboardServiceTests
         Assert.Equal(1000m, resultado.Indicadores.VendasGanhasValor);
         Assert.Equal(1000m, resultado.Indicadores.TicketMedio);
         Assert.Equal(50m, resultado.Indicadores.TaxaConversao); // 1 ganha / (1 ganha + 1 perdida)
+    }
+
+    [Fact]
+    public async Task ObterAsync_DeveSomarMetaGeralDaRegionalDoUsuario_NaMetaDoMes()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+
+        var regional = await factory.CriarRegionalAsync(db, "Grande BH");
+        var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
+        vendedor.RegionalId = regional.Id;
+        await db.SaveChangesAsync();
+
+        var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
+        var mesReferencia = new DateOnly(hoje.Year, hoje.Month, 1);
+        db.CrmRegionalGoals.Add(new CrmRegionalGoal { RegionalId = regional.Id, MesReferencia = mesReferencia, MetaQuantidadeVendas = 30, MetaValor = null });
+        db.CrmSalesGoals.Add(new CrmSalesGoal { VendedorId = vendedor.Id, MesReferencia = mesReferencia, MetaQuantidadeVendas = 10, MetaValor = null });
+        await db.SaveChangesAsync();
+
+        var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
+        var equipe = new EquipeComercialService(db, currentUser.Object);
+        var activityService = new ActivityService(db, currentUser.Object, equipe, new NoOpAuditSink());
+        var service = new DashboardService(db, equipe, activityService, currentUser.Object);
+
+        var resultado = await service.ObterAsync(new DashboardFilterRequest(new DateOnly(hoje.Year, hoje.Month, 1), hoje, null), CancellationToken.None);
+
+        Assert.Equal(40, resultado.Meta.MetaQuantidade); // 10 do consultor + 30 da regional
     }
 }

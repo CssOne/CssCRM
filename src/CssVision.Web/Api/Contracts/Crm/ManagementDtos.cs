@@ -1,6 +1,34 @@
 namespace CssVision.Web.Api.Contracts.Crm;
 
-public record VendedorResumoDto(Guid Id, string Nome, int LeadsAtivos, int OportunidadesAbertas);
+public record VendedorResumoDto(
+    Guid Id,
+    string Nome,
+    int LeadsAtivos,
+    int OportunidadesAbertas,
+    int? LimiteMensalLeads,
+    int LeadsRecebidosNoMes);
+
+public record AtualizarLimiteMensalRequest(int? Limite);
+
+/// <summary>Ficha de desempenho de um consultor (papel Comercial) para a tela de gestão de consultores.</summary>
+public record ConsultorDesempenhoDto(
+    Guid Id,
+    string Nome,
+    string Email,
+    string? Telefone,
+    string? RegionalNome,
+    bool Ativo,
+    int LeadsAtivos,
+    int OportunidadesAbertas,
+    decimal ValorPipeline,
+    int VendasGanhas,
+    decimal ValorGanho,
+    decimal TaxaConversao,
+    int? LimiteMensalLeads,
+    int LeadsRecebidosNoMes,
+    decimal MetaValor,
+    decimal RealizadoValor,
+    decimal PercentualMeta);
 
 public record RankingComercialDto(
     Guid VendedorId,

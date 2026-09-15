@@ -3,9 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
 import { formatarMoeda, diasRelativos } from "../../lib/format";
-import { TipoEtapaPipeline, type PipelineBoard, type PipelineCard } from "../../lib/types";
+import { TipoEtapaPipeline, type ChangeStageRequest, type PipelineBoard, type PipelineCard } from "../../lib/types";
 import { Badge, EmptyState, ErrorState, Modal, Skeleton, useToast } from "../../components/ui";
-import { StageChangeDialog, type DadosFechamento } from "../../components/crm/StageChangeDialog";
+import { StageChangeDialog } from "../../components/crm/StageChangeDialog";
+import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog";
 
 export function PipelinePage() {
   const { notificar } = useToast();
@@ -22,14 +23,14 @@ export function PipelinePage() {
   const boardRef = useRef<PipelineBoard | null>(null);
   boardRef.current = board;
 
-  const carregar = useCallback((signal?: AbortSignal) => {
-    setCarregando(true);
+  const carregar = useCallback((signal?: AbortSignal, silencioso = false) => {
+    if (!silencioso) setCarregando(true);
     setErro(null);
     api
       .get<PipelineBoard>(`/crm/pipeline${toQueryString({})}`, signal)
       .then(setBoard)
       .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar o pipeline."); })
-      .finally(() => setCarregando(false));
+      .finally(() => { if (!signal?.aborted) setCarregando(false); });
   }, []);
 
   useEffect(() => {
@@ -56,7 +57,7 @@ export function PipelinePage() {
     });
   }
 
-  async function executarMudancaEtapa(cartao: PipelineCard, etapaId: string, dados?: DadosFechamento) {
+  async function executarMudancaEtapa(cartao: PipelineCard, etapaId: string, dados?: Partial<ChangeStageRequest>) {
     const boardAnterior = boardRef.current;
     moverCartaoLocal(cartao.opportunityId, etapaId);
     setEnviando(true);
@@ -64,14 +65,12 @@ export function PipelinePage() {
       await api.post(`/crm/opportunities/${cartao.opportunityId}/change-stage`, {
         novaEtapaId: etapaId,
         rowVersion: cartao.rowVersion,
-        motivoPerdaId: dados?.motivoPerdaId ?? null,
-        valorFinal: dados?.valorFinal ?? null,
-        dataEfetivaFechamento: dados?.dataEfetivaFechamento ?? null,
+        ...dados,
       });
       notificar("success", "Etapa atualizada.");
       setPendencia(null);
       setModalMobile(null);
-      carregar();
+      carregar(undefined, true);
     } catch (e) {
       setBoard(boardAnterior);
       const mensagem = e instanceof ApiRequestError ? e.message : "Não foi possível mover o cartão. Tente novamente.";
@@ -200,10 +199,21 @@ export function PipelinePage() {
       </Modal>
 
       <StageChangeDialog
-        open={!!pendencia}
-        tipo={pendencia?.tipo ?? null}
+        open={pendencia?.tipo === "perdido"}
+        tipo={pendencia?.tipo === "perdido" ? "perdido" : null}
+        etapaNome={pendencia?.etapaNome ?? ""}
+        enviando={enviando}
+        onCancel={() => setPendencia(null)}
+        onConfirm={(dados) => pendencia && executarMudancaEtapa(pendencia.cartao, pendencia.etapaId, dados)}
+      />
+
+      <VendaConcluidaDialog
+        open={pendencia?.tipo === "ganho"}
+        opportunityId={pendencia?.cartao.opportunityId ?? null}
+        leadId={pendencia?.cartao.leadId ?? null}
         etapaNome={pendencia?.etapaNome ?? ""}
         valorEstimado={pendencia?.cartao.valorEstimado ?? 0}
+        rowVersionInicial={pendencia?.cartao.rowVersion ?? 0}
         enviando={enviando}
         onCancel={() => setPendencia(null)}
         onConfirm={(dados) => pendencia && executarMudancaEtapa(pendencia.cartao, pendencia.etapaId, dados)}

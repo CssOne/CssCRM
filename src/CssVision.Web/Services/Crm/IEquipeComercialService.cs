@@ -5,8 +5,9 @@ namespace CssVision.Web.Services.Crm;
 
 /// <summary>
 /// Resolve quais vendedores o usuário atual pode enxergar: Admin/GestorMaster veem tudo,
-/// GestorComercial vê a própria equipe (vendedores com GestorComercialId apontando para ele),
-/// Comercial vê apenas a si mesmo. Usado por todos os serviços que aplicam escopo de carteira/equipe.
+/// GestorComercial vê a própria equipe (vendedores com GestorComercialId apontando para ele) mais
+/// todo mundo da mesma regional (RegionalId), Comercial vê apenas a si mesmo. Usado por todos os
+/// serviços que aplicam escopo de carteira/equipe.
 /// </summary>
 public interface IEquipeComercialService
 {
@@ -25,11 +26,17 @@ public sealed class EquipeComercialService(ApplicationDbContext db, ICurrentUser
 
         if (currentUser.IsGestorComercial)
         {
+            var regionalId = await db.Users.AsNoTracking()
+                .Where(u => u.Id == currentUser.UserId)
+                .Select(u => u.RegionalId)
+                .FirstOrDefaultAsync(ct);
+
             var equipe = await db.Users.AsNoTracking()
-                .Where(u => u.GestorComercialId == currentUser.UserId)
+                .Where(u => u.GestorComercialId == currentUser.UserId || (regionalId != null && u.RegionalId == regionalId))
                 .Select(u => u.Id)
                 .ToListAsync(ct);
-            equipe.Add(currentUser.UserId);
+
+            if (!equipe.Contains(currentUser.UserId)) equipe.Add(currentUser.UserId);
             return equipe;
         }
 

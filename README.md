@@ -89,6 +89,63 @@ acesse **`http://localhost:5299`** para ter a API e o SPA na mesma origem (cooki
 CORS). O Vite também tem proxy próprio de `/api` para `5299`, então acessar `5173` diretamente
 também funciona.
 
+## Deploy em produção (AWS)
+
+O caminho oficial de deploy é: **Docker (`Dockerfile` na raiz) → EC2 provisionado por Terraform
+(`infra/aws/`) → CI/CD no GitHub Actions (`.github/workflows/`)**. Ver
+[`infra/aws/README.md`](infra/aws/README.md) para o passo a passo completo (inclui por que o
+domínio DuckDNS usa Let's Encrypt via Caddy em vez do certificado ACM).
+
+Resumo do fluxo:
+1. `terraform apply` em `infra/aws/` cria a instância EC2, RDS, bucket S3 (anexos), ECR e os
+   segredos no Secrets Manager.
+2. Push na branch `main` → o workflow **CI** builda e testa; se passar, o workflow **Deploy**
+   builda a imagem Docker, publica no ECR e dispara o redeploy na instância via SSM (sem SSH).
+3. Segredos (SMTP, Meta Lead Ads/CAPI) ficam no Secrets Manager — edite pelo Console/CLI depois
+   do primeiro apply; nunca em `appsettings.json`.
+
+Armazenamento de anexos (termo de adesão, avatares) usa S3 quando `Storage__S3__BucketName`
+está configurado (produção) e cai para disco local automaticamente quando não está (dev) — ver
+`IFileStorageService`.
+
+Health check disponível em `/health` (usado pelo `docker-compose.prod.yml`).
+
+### Alternativa manual (sem Docker/Terraform)
+
+`dotnet publish` builda o frontend (React) automaticamente e inclui `ClientApp/dist` no
+resultado (target `PublishClientApp` no `.csproj`) — não precisa buildar o frontend à parte.
+
+```bash
+dotnet publish src/CssVision.Web -c Release -o ./publish
+```
+
+O binário resultante (`CssVision.Web.dll`, roda com `dotnet CssVision.Web.dll`) espera as
+seguintes variáveis de ambiente:
+
+| Variável | Obrigatória | Descrição |
+|---|---|---|
+| `ASPNETCORE_ENVIRONMENT` | Sim | `Production` — nunca deixar em branco/Development num servidor real |
+| `ASPNETCORE_URLS` | Sim | Endereço/porta que o Kestrel escuta (ex: `http://0.0.0.0:5000`) — TLS deve terminar num load balancer/proxy na frente (ALB, Caddy, nginx), o app não serve HTTPS diretamente |
+| `ConnectionStrings__Default` | Sim | String de conexão do Postgres real (RDS ou instância própria) |
+| `Storage__S3__BucketName` / `__Region` | Não — sem isso, anexos vão pro disco local | Bucket S3 dedicado a anexos (ver `infra/aws/s3.tf`) |
+| `MetaLeadAds__AppSecret` / `__VerifyToken` / `__PageAccessToken` | Só se for usar o webhook nativo de Lead Ads do Meta | Ver painel de Webhooks do Meta for Developers |
+| `MetaCapi__PixelId` / `__AccessToken` | Só se for enviar conversões offline pro Pixel | Gerado no Gerenciador de Eventos do Meta |
+
+Na primeira subida (e em toda subida seguinte — é idempotente), o app **aplica as migrations e
+semeia automaticamente, em qualquer ambiente**:
+- Os 4 papéis do sistema (`Admin`, `GestorMaster`, `GestorComercial`, `Comercial`).
+- As 8 etapas do funil de leads e os motivos de perda padrão.
+- **As contas reais dos consultores comerciais** (`Data/Seed/ConsultorSeeder.cs`), já com papel
+  `Comercial` e elegíveis pra distribuição automática de leads.
+
+> ⚠️ **Segurança**: todas as contas de consultor nascem com a mesma senha inicial
+> (`Senha@123`, definida em `ConsultorSeeder.cs`). Assim que o ambiente estiver no ar, cada
+> consultor precisa trocar a própria senha — essa senha compartilhada não deve ficar valendo em
+> produção por mais tempo que o necessário pro primeiro login de cada um.
+
+As contas fictícias de demonstração (`admin@cssvision.local` etc.) **só são criadas em
+Development** — nunca existem num deploy em produção.
+
 ## Decisões de design registradas
 
 Onde a especificação não detalhava uma regra, a escolha mais simples e segura foi adotada:

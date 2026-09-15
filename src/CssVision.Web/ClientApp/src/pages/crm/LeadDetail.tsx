@@ -1,4 +1,4 @@
-import { Handshake, Mail, MapPin, Pencil, Phone, Plus } from "lucide-react";
+import { Car, Handshake, IdCard, Mail, MapPin, Pencil, Phone, Plus, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiRequestError, isAbortError } from "../../lib/api";
@@ -31,6 +31,19 @@ function paraFormValues(lead: LeadDetail): LeadFormValues {
     origem: lead.origem ?? "",
     campanha: lead.campanha ?? "",
     produtoInteresse: lead.produtoInteresse ?? "",
+    placa: lead.placa ?? "",
+    temSeguro: lead.temSeguro === true ? "sim" : lead.temSeguro === false ? "nao" : "",
+    utilidadeVeiculo: lead.utilidadeVeiculo ?? "",
+    gclid: lead.gclid ?? "",
+    utmMedium: lead.utmMedium ?? "",
+    utmSource: lead.utmSource ?? "",
+    utmTerm: lead.utmTerm ?? "",
+    metaClickId: lead.metaClickId ?? "",
+    metaFormId: lead.metaFormId ?? "",
+    metaLeadId: lead.metaLeadId ?? "",
+    indicadoPorLeadId: lead.indicadoPorLeadId ?? "",
+    indicadoPorLeadNome: lead.indicadoPorLeadNome ?? "",
+    tipoIndicacao: lead.tipoIndicacao ?? "",
     tags: lead.tags.join(", "),
     observacoes: lead.observacoes ?? "",
     consentimentoContato: lead.consentimentoContato,
@@ -69,7 +82,7 @@ export function LeadDetailPage() {
           if (e instanceof ApiRequestError && e.status === 403) setErro("Você não tem permissão para acessar este lead.");
           else setErro("Não foi possível carregar o lead.");
         })
-        .finally(() => setCarregando(false));
+        .finally(() => { if (!signal?.aborted) setCarregando(false); });
     },
     [id]
   );
@@ -98,6 +111,18 @@ export function LeadDetailPage() {
         origem: valores.origem || null,
         campanha: valores.campanha || null,
         produtoInteresse: valores.produtoInteresse || null,
+        placa: valores.placa || null,
+        temSeguro: valores.temSeguro === "sim" ? true : valores.temSeguro === "nao" ? false : null,
+        utilidadeVeiculo: valores.utilidadeVeiculo || null,
+        gclid: valores.gclid || null,
+        utmMedium: valores.utmMedium || null,
+        utmSource: valores.utmSource || null,
+        utmTerm: valores.utmTerm || null,
+        metaClickId: valores.metaClickId || null,
+        metaFormId: valores.metaFormId || null,
+        metaLeadId: valores.metaLeadId || null,
+        indicadoPorLeadId: valores.indicadoPorLeadId || null,
+        tipoIndicacao: valores.tipoIndicacao || null,
         tags: valores.tags ? valores.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
         observacoes: valores.observacoes || null,
         consentimentoContato: valores.consentimentoContato,
@@ -124,6 +149,7 @@ export function LeadDetailPage() {
     if (!lead) return;
     setSalvando(true);
     try {
+      const temVeiculo = [valores.veiculoDescricao, valores.veiculoPlaca, valores.veiculoFipe, valores.veiculoRastreador, valores.veiculoVistoriadorId].some(Boolean);
       const request: OpportunityCreateRequest = {
         leadId: lead.id,
         titulo: valores.titulo,
@@ -134,6 +160,23 @@ export function LeadDetailPage() {
         dataPrevistaFechamento: valores.dataPrevistaFechamento || null,
         concorrente: valores.concorrente || null,
         observacoes: valores.observacoes || null,
+        dataAdesao: valores.dataAdesao || null,
+        mensalidade: valores.mensalidade ? Number(valores.mensalidade) : null,
+        mensalidadeComDesconto: valores.mensalidadeComDesconto ? Number(valores.mensalidadeComDesconto) : null,
+        pagamentoAdesao: valores.pagamentoAdesao ? Number(valores.pagamentoAdesao) : null,
+        porcentagem: valores.porcentagem ? Number(valores.porcentagem) : null,
+        termoAdesaoAceito: valores.termoAdesaoAceito,
+        migracao: valores.migracao,
+        veiculo: temVeiculo
+          ? {
+              descricao: valores.veiculoDescricao || null,
+              placa: valores.veiculoPlaca || null,
+              fipe: valores.veiculoFipe ? Number(valores.veiculoFipe) : null,
+              rastreador: valores.veiculoRastreador || null,
+              vistoriadorId: valores.veiculoVistoriadorId || null,
+              dataChegada: null,
+            }
+          : null,
       };
       await api.post("/crm/opportunities", request);
       setModalOportunidade(false);
@@ -224,6 +267,17 @@ export function LeadDetailPage() {
           <InfoItem icone={Mail} label="E-mail" valor={lead.email || "-"} />
           <InfoItem icone={MapPin} label="Local" valor={[lead.cidade, lead.estado].filter(Boolean).join(" - ") || "-"} />
           <InfoItem icone={Handshake} label="Responsável" valor={lead.responsavelNome ?? "Sem responsável"} />
+          {(lead.placa || lead.temSeguro !== null || lead.utilidadeVeiculo) && (
+            <>
+              <InfoItem icone={IdCard} label="Placa" valor={lead.placa || "-"} />
+              <InfoItem
+                icone={ShieldCheck}
+                label="Tem seguro?"
+                valor={lead.temSeguro === true ? "Sim" : lead.temSeguro === false ? "Não" : "Não informado"}
+              />
+              <InfoItem icone={Car} label="Utilidade do veículo" valor={lead.utilidadeVeiculo || "-"} />
+            </>
+          )}
         </div>
       </Card>
 

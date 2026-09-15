@@ -6,15 +6,6 @@ public enum TipoPessoa
     Juridica = 2
 }
 
-public enum StatusLead
-{
-    Novo = 1,
-    EmAtendimento = 2,
-    Qualificado = 3,
-    Convertido = 4,
-    Descartado = 5
-}
-
 public enum TipoEtapaPipeline
 {
     Aberta = 1,

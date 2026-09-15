@@ -13,6 +13,7 @@ public interface ILeadService
     Task<CriarLeadResultado> CriarAsync(LeadCreateRequest request, CancellationToken ct);
     Task<LeadDetailDto> AtualizarAsync(Guid id, LeadUpdateRequest request, CancellationToken ct);
     Task AtribuirAsync(Guid id, LeadAssignRequest request, CancellationToken ct);
+    Task<LeadDetailDto> MudarEtapaAsync(Guid id, ChangeLeadStageRequest request, CancellationToken ct);
     Task<int> AtribuirEmLoteAsync(LeadBulkAssignRequest request, CancellationToken ct);
     Task<LeadImportResultDto> ImportarAsync(Stream planilha, CancellationToken ct);
     Task<byte[]> ExportarAsync(LeadFilterRequest filtro, CancellationToken ct);

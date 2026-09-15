@@ -26,4 +26,11 @@ public class CrmActivitiesController(IActivityService activityService) : Control
     [HttpPost("{id:guid}/complete")]
     public async Task<ActionResult<ActivityDto>> Concluir(Guid id, ActivityCompleteRequest request, CancellationToken ct) =>
         Ok(await activityService.ConcluirAsync(id, request, ct));
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Excluir(Guid id, CancellationToken ct)
+    {
+        await activityService.ExcluirAsync(id, ct);
+        return NoContent();
+    }
 }

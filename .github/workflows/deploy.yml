@@ -1,0 +1,63 @@
+name: Deploy
+
+# Roda depois que o CI passar na branch principal. Requer os secrets do repositório:
+#   AWS_DEPLOY_ROLE_ARN — saída "github_actions_role_arn" do terraform apply (infra/aws)
+#   AWS_REGION          — mesma região do terraform.tfvars
+#   ECR_REPOSITORY_URL  — saída "ecr_repository_url" do terraform apply
+#   EC2_INSTANCE_ID     — saída "instance_id" do terraform apply
+# Nenhuma credencial de longa duração aqui — autentica via OIDC (ver infra/aws/github_oidc.tf).
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-push:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar credenciais AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login no ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build e push da imagem
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          REPOSITORY: ${{ secrets.ECR_REPOSITORY_URL }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -f Dockerfile -t "$REPOSITORY:$IMAGE_TAG" -t "$REPOSITORY:latest" .
+          docker push "$REPOSITORY:$IMAGE_TAG"
+          docker push "$REPOSITORY:latest"
+
+      - name: Disparar deploy na instância (SSM)
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --parameters 'commands=["cd /opt/cssvision-crm && ./deploy.sh"]' \
+            --query "Command.CommandId" --output text)
+
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" || true
+
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+            --query "{Status:Status,Output:StandardOutputContent,Error:StandardErrorContent}" \
+            --output json

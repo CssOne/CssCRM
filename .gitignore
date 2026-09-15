@@ -19,3 +19,14 @@ ClientApp/.vite/
 # Segredos locais
 appsettings.*.local.json
 .env
+
+# Anexos de usuários em disco local (dev) — dado real, nunca deve ir pro controle de versão.
+# Em produção isso vai pro S3 (ver Storage/S3FileStorageService), não pro disco do container.
+src/CssVision.Web/wwwroot/uploads/
+
+# Terraform
+infra/aws/.terraform/
+infra/aws/*.tfstate
+infra/aws/*.tfstate.*
+infra/aws/terraform.tfvars
+infra/aws/tfplan*

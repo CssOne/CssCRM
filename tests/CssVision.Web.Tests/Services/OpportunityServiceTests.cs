@@ -18,8 +18,9 @@ public class OpportunityServiceTests
         var perdido = await factory.CriarEtapaAsync(db, "Perdido", 3, TipoEtapaPipeline.Perdido);
         var motivo = new CrmLossReason { Descricao = "Preço" };
         db.CrmLossReasons.Add(motivo);
+        var etapaLead = await factory.ObterOuCriarEtapaLeadAsync(db);
 
-        var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedorId };
+        var lead = new CrmLead { EtapaId = etapaLead.Id, NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedorId };
         db.CrmLeads.Add(lead);
         await db.SaveChangesAsync();
 
@@ -36,14 +37,14 @@ public class OpportunityServiceTests
 
         var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
         var equipe = new EquipeComercialService(db, currentUser.Object);
-        var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpAuditSink());
+        var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpMetaConversionService(), new NoOpAuditSink(), new FakeFileStorageService());
 
         var oportunidade = await service.CriarAsync(
-            new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null),
+            new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null, null, null, null, null, null, false, false, null),
             CancellationToken.None);
 
         await Assert.ThrowsAsync<CrmBusinessException>(() =>
-            service.MudarEtapaAsync(oportunidade.Id, new ChangeStageRequest(perdido.Id, oportunidade.RowVersion, null, null, null), CancellationToken.None));
+            service.MudarEtapaAsync(oportunidade.Id, new ChangeStageRequest(perdido.Id, oportunidade.RowVersion, null, null, null, null), CancellationToken.None));
     }
 
     [Fact]
@@ -56,14 +57,14 @@ public class OpportunityServiceTests
 
         var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
         var equipe = new EquipeComercialService(db, currentUser.Object);
-        var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpAuditSink());
+        var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpMetaConversionService(), new NoOpAuditSink(), new FakeFileStorageService());
 
         var oportunidade = await service.CriarAsync(
-            new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null),
+            new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null, null, null, null, null, null, false, false, null),
             CancellationToken.None);
 
         await Assert.ThrowsAsync<CrmBusinessException>(() =>
-            service.MudarEtapaAsync(oportunidade.Id, new ChangeStageRequest(ganho.Id, oportunidade.RowVersion, null, null, null), CancellationToken.None));
+            service.MudarEtapaAsync(oportunidade.Id, new ChangeStageRequest(ganho.Id, oportunidade.RowVersion, null, null, null, null), CancellationToken.None));
     }
 
     [Fact]
@@ -76,15 +77,15 @@ public class OpportunityServiceTests
 
         var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
         var equipe = new EquipeComercialService(db, currentUser.Object);
-        var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpAuditSink());
+        var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpMetaConversionService(), new NoOpAuditSink(), new FakeFileStorageService());
 
         var oportunidade = await service.CriarAsync(
-            new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null),
+            new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null, null, null, null, null, null, false, false, null),
             CancellationToken.None);
 
         var atualizada = await service.MudarEtapaAsync(
             oportunidade.Id,
-            new ChangeStageRequest(ganho.Id, oportunidade.RowVersion, null, 1200m, DateOnly.FromDateTime(DateTime.UtcNow)),
+            new ChangeStageRequest(ganho.Id, oportunidade.RowVersion, null, null, 1200m, DateOnly.FromDateTime(DateTime.UtcNow)),
             CancellationToken.None);
 
         Assert.Equal(ganho.Id, atualizada.EtapaId);
@@ -106,16 +107,16 @@ public class OpportunityServiceTests
 
         var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
         var equipe = new EquipeComercialService(db, currentUser.Object);
-        var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpAuditSink());
+        var service = new OpportunityService(db, currentUser.Object, equipe, new NoOpMetaConversionService(), new NoOpAuditSink(), new FakeFileStorageService());
 
         var oportunidade = await service.CriarAsync(
-            new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null),
+            new OpportunityCreateRequest(lead.Id, "Proposta", vendedor.Id, aberta.Id, null, 1000m, null, null, null, null, null, null, null, null, null, false, false, null),
             CancellationToken.None);
 
         var ganha = await service.MudarEtapaAsync(
-            oportunidade.Id, new ChangeStageRequest(ganho.Id, oportunidade.RowVersion, null, 1000m, DateOnly.FromDateTime(DateTime.UtcNow)), CancellationToken.None);
+            oportunidade.Id, new ChangeStageRequest(ganho.Id, oportunidade.RowVersion, null, null, 1000m, DateOnly.FromDateTime(DateTime.UtcNow)), CancellationToken.None);
 
         await Assert.ThrowsAsync<CrmBusinessException>(() =>
-            service.MudarEtapaAsync(oportunidade.Id, new ChangeStageRequest(perdido.Id, ganha.RowVersion, motivo.Id, null, null), CancellationToken.None));
+            service.MudarEtapaAsync(oportunidade.Id, new ChangeStageRequest(perdido.Id, ganha.RowVersion, motivo.Id, null, null, null), CancellationToken.None));
     }
 }

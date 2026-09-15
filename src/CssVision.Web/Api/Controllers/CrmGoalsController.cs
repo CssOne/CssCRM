@@ -19,4 +19,14 @@ public class CrmGoalsController(IGoalService goalService) : ControllerBase
     [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<ActionResult<SalesGoalDto>> Definir(SalesGoalUpsertRequest request, CancellationToken ct) =>
         Ok(await goalService.DefinirMetaAsync(request, ct));
+
+    [HttpGet("regionais")]
+    [Authorize(Policy = PolicyNames.VisaoTotalComercial)]
+    public async Task<ActionResult<IReadOnlyList<RegionalGoalDto>>> ListarRegionais([FromQuery] DateOnly? mesReferencia, CancellationToken ct) =>
+        Ok(await goalService.ListarRegionaisAsync(mesReferencia, ct));
+
+    [HttpPut("regionais")]
+    [Authorize(Policy = PolicyNames.VisaoTotalComercial)]
+    public async Task<ActionResult<RegionalGoalDto>> DefinirRegional(RegionalGoalUpsertRequest request, CancellationToken ct) =>
+        Ok(await goalService.DefinirMetaRegionalAsync(request, ct));
 }

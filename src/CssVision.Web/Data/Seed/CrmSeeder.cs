@@ -3,11 +3,25 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CssVision.Web.Data.Seed;
 
-/// <summary>Semeia as oito etapas iniciais do funil e alguns motivos de perda comuns.</summary>
+/// <summary>Semeia as oito etapas iniciais do funil de oportunidades, do quadro de leads e alguns motivos de perda comuns.</summary>
 public static class CrmSeeder
 {
     public static async Task SeedAsync(ApplicationDbContext db)
     {
+        if (!await db.CrmLeadStages.AnyAsync())
+        {
+            db.CrmLeadStages.AddRange(
+                new CrmLeadStage { Nome = "Em atendimento", Ordem = 1, Cor = "#3b82f6" },
+                new CrmLeadStage { Nome = "Cotação", Ordem = 2, Cor = "#f59e0b" },
+                new CrmLeadStage { Nome = "Pré-cadastro", Ordem = 3, Cor = "#64748b" },
+                new CrmLeadStage { Nome = "Venda concluída", Ordem = 4, Cor = "#22c55e", Fechada = true },
+                new CrmLeadStage { Nome = "Perdido", Ordem = 5, Cor = "#ef4444", Fechada = true },
+                new CrmLeadStage { Nome = "Não responde", Ordem = 6, Cor = "#f97316" },
+                new CrmLeadStage { Nome = "Não fazemos", Ordem = 7, Cor = "#6b7280", Fechada = true },
+                new CrmLeadStage { Nome = "Recusa/Inativa", Ordem = 8, Cor = "#b91c1c", Fechada = true }
+            );
+        }
+
         if (!await db.CrmPipelineStages.AnyAsync())
         {
             db.CrmPipelineStages.AddRange(
@@ -30,6 +44,30 @@ public static class CrmSeeder
                 new CrmLossReason { Descricao = "Sem orçamento" },
                 new CrmLossReason { Descricao = "Sem resposta do cliente" },
                 new CrmLossReason { Descricao = "Fora do perfil" }
+            );
+        }
+
+        if (!await db.CrmAnnouncements.AnyAsync())
+        {
+            db.CrmAnnouncements.AddRange(
+                new CrmAnnouncement
+                {
+                    Tipo = TipoAnuncio.Flashcard, Ordem = 1, Cor = "blue",
+                    Titulo = "Documento obrigatório",
+                    Descricao = "Envie a documentação pendente o quanto antes."
+                },
+                new CrmAnnouncement
+                {
+                    Tipo = TipoAnuncio.Flashcard, Ordem = 2, Cor = "green",
+                    Titulo = "Campanha da semana",
+                    Descricao = "Confira as condições especiais em vigor."
+                },
+                new CrmAnnouncement
+                {
+                    Tipo = TipoAnuncio.Flashcard, Ordem = 3, Cor = "purple",
+                    Titulo = "Atualização importante",
+                    Descricao = "Leia o comunicado mais recente da equipe."
+                }
             );
         }
 
