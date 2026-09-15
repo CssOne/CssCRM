@@ -9,4 +9,5 @@ public interface IActivityService
     Task<ActivityDto> CriarAsync(ActivityCreateRequest request, CancellationToken ct);
     Task<ActivityDto> AtualizarAsync(Guid id, ActivityUpdateRequest request, CancellationToken ct);
     Task<ActivityDto> ConcluirAsync(Guid id, ActivityCompleteRequest request, CancellationToken ct);
+    Task ExcluirAsync(Guid id, CancellationToken ct);
 }

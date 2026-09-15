@@ -75,6 +75,7 @@ public sealed class MetaLeadIngestionService(
             Campanha = campanha,
             ProdutoInteresse = produtoInteresse,
             ResponsavelId = responsavelId,
+            CriadoManualmente = false,
         };
 
         await AplicarTagsAsync(lead, tags, ct);

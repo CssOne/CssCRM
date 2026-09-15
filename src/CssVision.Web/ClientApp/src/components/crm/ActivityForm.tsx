@@ -28,22 +28,35 @@ function agoraLocalIso(): string {
   return agora.toISOString().slice(0, 16);
 }
 
+/** Converte um ISO vindo do backend (UTC) para o formato que o input datetime-local espera, no fuso local do navegador. */
+export function isoParaDatetimeLocal(iso: string): string {
+  const data = new Date(iso);
+  const local = new Date(data.getTime() - data.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
 export function ActivityForm({
+  valoresIniciais,
+  modoEdicao,
   salvando,
   onSubmit,
   onCancel,
 }: {
+  valoresIniciais?: ActivityFormValues;
+  modoEdicao?: boolean;
   salvando: boolean;
   onSubmit: (valores: ActivityFormValues) => void;
   onCancel: () => void;
 }) {
-  const [valores, setValores] = useState<ActivityFormValues>({
-    tipo: TipoAtividade.Ligacao,
-    assunto: "",
-    descricao: "",
-    dataHoraPrevista: agoraLocalIso(),
-    lembreteMinutosAntes: "",
-  });
+  const [valores, setValores] = useState<ActivityFormValues>(
+    valoresIniciais ?? {
+      tipo: TipoAtividade.Ligacao,
+      assunto: "",
+      descricao: "",
+      dataHoraPrevista: agoraLocalIso(),
+      lembreteMinutosAntes: "",
+    }
+  );
 
   function set<K extends keyof ActivityFormValues>(campo: K, valor: ActivityFormValues[K]) {
     setValores((v) => ({ ...v, [campo]: valor }));
@@ -94,7 +107,7 @@ export function ActivityForm({
           Cancelar
         </Button>
         <Button type="submit" loading={salvando}>
-          Agendar
+          {modoEdicao ? "Salvar" : "Agendar"}
         </Button>
       </div>
     </form>

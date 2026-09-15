@@ -27,6 +27,11 @@ public class CrmManagementController(IManagementService managementService) : Con
         return NoContent();
     }
 
+    [HttpGet("consultores")]
+    public async Task<ActionResult<IReadOnlyList<ConsultorDesempenhoDto>>> ObterDesempenhoConsultores(
+        [FromQuery] DateOnly? mesReferencia, CancellationToken ct) =>
+        Ok(await managementService.ObterDesempenhoConsultoresAsync(mesReferencia, ct));
+
     [HttpGet("redistribuicoes")]
     public async Task<ActionResult<IReadOnlyList<RedistribuicaoHistoricoDto>>> ObterHistorico(CancellationToken ct) =>
         Ok(await managementService.ObterHistoricoRedistribuicoesAsync(ct));

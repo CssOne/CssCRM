@@ -22,7 +22,7 @@ export function OverviewPage() {
       .get<Dashboard>(`/crm/dashboard${toQueryString({})}`, controller.signal)
       .then(setDados)
       .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar o painel."); })
-      .finally(() => setCarregando(false));
+      .finally(() => { if (!controller.signal.aborted) setCarregando(false); });
     return () => controller.abort();
   }, [recarregar]);
 
@@ -70,7 +70,7 @@ export function OverviewPage() {
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-[var(--fg)]">Meta comercial do mês</h2>
           <span className="text-sm text-[var(--fg-muted)]">
-            {formatarMoeda(meta.realizadoValor)} de {formatarMoeda(meta.metaValor)}
+            {meta.realizadoQuantidade} de {meta.metaQuantidade} vendas
           </span>
         </div>
         <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--surface-hover)]">

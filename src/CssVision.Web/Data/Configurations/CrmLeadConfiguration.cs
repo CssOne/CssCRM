@@ -22,6 +22,8 @@ public class CrmLeadConfiguration : IEntityTypeConfiguration<CrmLead>
         builder.Property(e => e.Origem).HasMaxLength(80);
         builder.Property(e => e.Campanha).HasMaxLength(120);
         builder.Property(e => e.ProdutoInteresse).HasMaxLength(120);
+        builder.Property(e => e.Placa).HasMaxLength(10);
+        builder.Property(e => e.UtilidadeVeiculo).HasMaxLength(80);
         builder.Property(e => e.Gclid).HasMaxLength(200);
         builder.Property(e => e.UtmMedium).HasMaxLength(120);
         builder.Property(e => e.UtmSource).HasMaxLength(120);
@@ -30,6 +32,9 @@ public class CrmLeadConfiguration : IEntityTypeConfiguration<CrmLead>
         builder.Property(e => e.MetaFormId).HasMaxLength(120);
         builder.Property(e => e.MetaLeadId).HasMaxLength(120);
         builder.Property(e => e.TipoIndicacao).HasMaxLength(80);
+        builder.Property(e => e.MotivoPerdaObservacao).HasMaxLength(1000);
+        builder.Property(e => e.VeiculoNaoAtendido).HasMaxLength(200);
+        builder.Property(e => e.CriadoManualmente).HasDefaultValue(true);
 
         // Deduplicação: únicos apenas entre leads não arquivados, ignorando nulos.
         builder.HasIndex(e => e.DocumentoNormalizado)
@@ -51,6 +56,7 @@ public class CrmLeadConfiguration : IEntityTypeConfiguration<CrmLead>
         builder.HasIndex(e => e.EtapaId);
         builder.HasIndex(e => e.Regional);
         builder.HasIndex(e => e.Origem);
+        builder.HasIndex(e => e.CriadoManualmente);
         builder.HasIndex(e => e.CriadoEm);
         builder.HasIndex(e => e.ProximoContatoEm);
         builder.HasIndex(e => e.UltimoContatoEm);
@@ -68,6 +74,11 @@ public class CrmLeadConfiguration : IEntityTypeConfiguration<CrmLead>
         builder.HasOne(e => e.Etapa)
             .WithMany(s => s.Leads)
             .HasForeignKey(e => e.EtapaId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.MotivoPerda)
+            .WithMany()
+            .HasForeignKey(e => e.MotivoPerdaId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

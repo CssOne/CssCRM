@@ -1,4 +1,4 @@
-import { Handshake, Mail, MapPin, Pencil, Phone, Plus } from "lucide-react";
+import { Car, Handshake, IdCard, Mail, MapPin, Pencil, Phone, Plus, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiRequestError, isAbortError } from "../../lib/api";
@@ -31,6 +31,9 @@ function paraFormValues(lead: LeadDetail): LeadFormValues {
     origem: lead.origem ?? "",
     campanha: lead.campanha ?? "",
     produtoInteresse: lead.produtoInteresse ?? "",
+    placa: lead.placa ?? "",
+    temSeguro: lead.temSeguro === true ? "sim" : lead.temSeguro === false ? "nao" : "",
+    utilidadeVeiculo: lead.utilidadeVeiculo ?? "",
     gclid: lead.gclid ?? "",
     utmMedium: lead.utmMedium ?? "",
     utmSource: lead.utmSource ?? "",
@@ -79,7 +82,7 @@ export function LeadDetailPage() {
           if (e instanceof ApiRequestError && e.status === 403) setErro("Você não tem permissão para acessar este lead.");
           else setErro("Não foi possível carregar o lead.");
         })
-        .finally(() => setCarregando(false));
+        .finally(() => { if (!signal?.aborted) setCarregando(false); });
     },
     [id]
   );
@@ -108,6 +111,9 @@ export function LeadDetailPage() {
         origem: valores.origem || null,
         campanha: valores.campanha || null,
         produtoInteresse: valores.produtoInteresse || null,
+        placa: valores.placa || null,
+        temSeguro: valores.temSeguro === "sim" ? true : valores.temSeguro === "nao" ? false : null,
+        utilidadeVeiculo: valores.utilidadeVeiculo || null,
         gclid: valores.gclid || null,
         utmMedium: valores.utmMedium || null,
         utmSource: valores.utmSource || null,
@@ -261,6 +267,17 @@ export function LeadDetailPage() {
           <InfoItem icone={Mail} label="E-mail" valor={lead.email || "-"} />
           <InfoItem icone={MapPin} label="Local" valor={[lead.cidade, lead.estado].filter(Boolean).join(" - ") || "-"} />
           <InfoItem icone={Handshake} label="Responsável" valor={lead.responsavelNome ?? "Sem responsável"} />
+          {(lead.placa || lead.temSeguro !== null || lead.utilidadeVeiculo) && (
+            <>
+              <InfoItem icone={IdCard} label="Placa" valor={lead.placa || "-"} />
+              <InfoItem
+                icone={ShieldCheck}
+                label="Tem seguro?"
+                valor={lead.temSeguro === true ? "Sim" : lead.temSeguro === false ? "Não" : "Não informado"}
+              />
+              <InfoItem icone={Car} label="Utilidade do veículo" valor={lead.utilidadeVeiculo || "-"} />
+            </>
+          )}
         </div>
       </Card>
 

@@ -5,6 +5,7 @@ type Tema = "light" | "dark";
 interface ThemeContextValue {
   tema: Tema;
   alternar: () => void;
+  definir: (tema: Tema) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
@@ -32,7 +33,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [tema]);
 
   return (
-    <ThemeContext.Provider value={{ tema, alternar: () => setTema((t) => (t === "dark" ? "light" : "dark")) }}>
+    <ThemeContext.Provider value={{ tema, alternar: () => setTema((t) => (t === "dark" ? "light" : "dark")), definir: setTema }}>
       {children}
     </ThemeContext.Provider>
   );

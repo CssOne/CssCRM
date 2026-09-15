@@ -18,38 +18,9 @@ import {
   Skeleton,
   useToast,
 } from "../../components/ui";
-import { LeadForm, leadFormVazio, type LeadFormValues } from "../../components/crm/LeadForm";
+import { LeadForm, leadFormVazio, paraLeadCreateRequest, type LeadFormValues } from "../../components/crm/LeadForm";
 import { ImportModal } from "../../components/crm/ImportModal";
 import { AssignModal } from "../../components/crm/AssignModal";
-
-function paraRequest(v: LeadFormValues): LeadCreateRequest {
-  return {
-    nomeOuRazaoSocial: v.nomeOuRazaoSocial,
-    tipoPessoa: v.tipoPessoa,
-    documento: v.documento || null,
-    telefone: v.telefone || null,
-    whatsApp: v.whatsApp || null,
-    email: v.email || null,
-    cidade: v.cidade || null,
-    estado: v.estado || null,
-    regional: v.regional || null,
-    origem: v.origem || null,
-    campanha: v.campanha || null,
-    produtoInteresse: v.produtoInteresse || null,
-    gclid: v.gclid || null,
-    utmMedium: v.utmMedium || null,
-    utmSource: v.utmSource || null,
-    utmTerm: v.utmTerm || null,
-    metaClickId: v.metaClickId || null,
-    metaFormId: v.metaFormId || null,
-    metaLeadId: v.metaLeadId || null,
-    indicadoPorLeadId: v.indicadoPorLeadId || null,
-    tipoIndicacao: v.tipoIndicacao || null,
-    tags: v.tags ? v.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
-    observacoes: v.observacoes || null,
-    consentimentoContato: v.consentimentoContato,
-  };
-}
 
 export function LeadsPage() {
   const { temPapel } = useAuth();
@@ -94,7 +65,7 @@ export function LeadsPage() {
           setSelecionados(new Set());
         })
         .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar os leads."); })
-        .finally(() => setCarregando(false));
+        .finally(() => { if (!signal?.aborted) setCarregando(false); });
     },
     [filtro]
   );
@@ -124,7 +95,7 @@ export function LeadsPage() {
     setSalvando(true);
     setDuplicidade(null);
     try {
-      await api.post("/crm/leads", { ...paraRequest(valores), ignorarDuplicidade } satisfies LeadCreateRequest);
+      await api.post("/crm/leads", { ...paraLeadCreateRequest(valores), ignorarDuplicidade } satisfies LeadCreateRequest);
       setModalNovo(false);
       notificar("success", "Lead cadastrado com sucesso.");
       setRecarregar((n) => n + 1);

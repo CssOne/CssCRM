@@ -8,7 +8,8 @@ namespace CssVision.Web.Services.Crm;
 public sealed class DashboardService(
     ApplicationDbContext db,
     IEquipeComercialService equipe,
-    IActivityService activityService) : IDashboardService
+    IActivityService activityService,
+    ICurrentUserService currentUser) : IDashboardService
 {
     /// <summary>Leads sem nenhum contato há mais de N dias entram no alerta de "parados".</summary>
     private const int DiasSemContatoAlerta = 5;
@@ -62,23 +63,45 @@ public sealed class DashboardService(
         var qtdGanhas = await ganhas.CountAsync(ct);
         var qtdPerdidas = await perdidas.CountAsync(ct);
         var valorGanho = await ganhas.SumAsync(o => (decimal?)(o.ValorFinal ?? o.ValorEstimado), ct) ?? 0m;
+        var valorAdesao = await ganhas.SumAsync(o => (decimal?)o.PagamentoAdesao, ct) ?? 0m;
         var taxaConversao = (qtdGanhas + qtdPerdidas) == 0 ? 0m : Math.Round(100m * qtdGanhas / (qtdGanhas + qtdPerdidas), 1);
         var ticketMedio = qtdGanhas == 0 ? 0m : Math.Round(valorGanho / qtdGanhas, 2);
 
         var indicadores = new DashboardIndicadoresDto(
             novosLeads, leadsSemContato, contatosHoje, atividadesAtrasadas,
-            oportunidadesAbertas, valorPipeline, taxaConversao, ticketMedio, valorGanho, qtdGanhas);
+            oportunidadesAbertas, valorPipeline, taxaConversao, ticketMedio, valorGanho, qtdGanhas, valorAdesao);
 
         // Meta comercial do mês corrente para os vendedores visíveis.
         var mesReferencia = new DateOnly(hoje.Year, hoje.Month, 1);
         var metaQuery = db.CrmSalesGoals.AsNoTracking().Where(g => g.MesReferencia == mesReferencia);
         if (visiveis is not null) metaQuery = metaQuery.Where(g => visiveis.Contains(g.VendedorId));
         var metaValor = await metaQuery.SumAsync(g => (decimal?)g.MetaValor, ct) ?? 0m;
-        var realizadoMes = await oportunidadesQuery
-            .Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho &&
-                        o.DataEfetivaFechamento >= mesReferencia.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc))
-            .SumAsync(o => (decimal?)(o.ValorFinal ?? o.ValorEstimado), ct) ?? 0m;
-        var meta = new MetaResultadoDto(metaValor, realizadoMes, metaValor == 0 ? 0m : Math.Round(100m * realizadoMes / metaValor, 1));
+        var metaQuantidade = await metaQuery.SumAsync(g => (int?)g.MetaQuantidadeVendas, ct) ?? 0;
+
+        // Meta geral por regional (definida pelo administrador) soma-se às metas individuais:
+        // visão total considera todas as regionais, os demais só a própria regional.
+        var metaRegionalQuery = db.CrmRegionalGoals.AsNoTracking().Where(g => g.MesReferencia == mesReferencia);
+        if (visiveis is not null)
+        {
+            var minhaRegionalId = await db.Users.AsNoTracking()
+                .Where(u => u.Id == currentUser.UserId)
+                .Select(u => u.RegionalId)
+                .FirstOrDefaultAsync(ct);
+            metaRegionalQuery = minhaRegionalId is null
+                ? metaRegionalQuery.Where(g => false)
+                : metaRegionalQuery.Where(g => g.RegionalId == minhaRegionalId);
+        }
+        metaValor += await metaRegionalQuery.SumAsync(g => (decimal?)g.MetaValor, ct) ?? 0m;
+        metaQuantidade += await metaRegionalQuery.SumAsync(g => (int?)g.MetaQuantidadeVendas, ct) ?? 0;
+
+        var ganhasDoMes = oportunidadesQuery.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho &&
+            o.DataEfetivaFechamento >= mesReferencia.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+        var realizadoMes = await ganhasDoMes.SumAsync(o => (decimal?)(o.ValorFinal ?? o.ValorEstimado), ct) ?? 0m;
+        var realizadoQuantidadeMes = await ganhasDoMes.CountAsync(ct);
+        var meta = new MetaResultadoDto(
+            metaValor, realizadoMes,
+            metaQuantidade == 0 ? 0m : Math.Round(100m * realizadoQuantidadeMes / metaQuantidade, 1),
+            metaQuantidade, realizadoQuantidadeMes);
 
         var funilBruto = await oportunidadesQuery
             .Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Aberta)
@@ -90,13 +113,17 @@ public sealed class DashboardService(
 
         var evolucao = await ObterEvolucaoVendasAsync(oportunidadesQuery, hoje, ct);
 
+        // "Origem dos leads" aqui significa a origem comercial do cadastro — Leads (automático, tráfego
+        // pago/site) vs Indicação (cadastro manual) — e não o campo livre `Origem`, que serve a outros
+        // filtros (ver LeadKanbanFilterRequest.Origem).
         var origemBruto = await leadsQuery
-            .Where(l => l.Origem != null)
-            .GroupBy(l => l.Origem)
-            .Select(g => new { Origem = g.Key!, Quantidade = g.Count() })
-            .OrderByDescending(g => g.Quantidade)
+            .GroupBy(l => l.CriadoManualmente)
+            .Select(g => new { g.Key, Quantidade = g.Count() })
             .ToListAsync(ct);
-        var origens = origemBruto.Select(o => new OrigemLeadDto(o.Origem, o.Quantidade)).ToList();
+        var origens = origemBruto
+            .Select(o => new OrigemLeadDto(o.Key ? "Indicação" : "Leads", o.Quantidade))
+            .OrderByDescending(o => o.Quantidade)
+            .ToList();
 
         var desempenho = await ObterDesempenhoPorVendedorAsync(visiveis, inicioUtc, fimUtc, ct);
 
@@ -149,11 +176,12 @@ public sealed class DashboardService(
                 o.DataEfetivaFechamento >= inicioUtc && o.DataEfetivaFechamento <= fimUtc);
             var ganhas = await fechadasPeriodo.CountAsync(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho, ct);
             var perdidas = await fechadasPeriodo.CountAsync(o => o.Etapa.Tipo == TipoEtapaPipeline.Perdido, ct);
-            var valorGanho = await fechadasPeriodo.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho)
-                .SumAsync(o => (decimal?)(o.ValorFinal ?? o.ValorEstimado), ct) ?? 0m;
+            var ganhasQuery = fechadasPeriodo.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho);
+            var valorGanho = await ganhasQuery.SumAsync(o => (decimal?)(o.ValorFinal ?? o.ValorEstimado), ct) ?? 0m;
+            var valorAdesao = await ganhasQuery.SumAsync(o => (decimal?)o.PagamentoAdesao, ct) ?? 0m;
             var taxa = (ganhas + perdidas) == 0 ? 0m : Math.Round(100m * ganhas / (ganhas + perdidas), 1);
 
-            resultado.Add(new DesempenhoVendedorDto(vendedor.Id, vendedor.NomeCompleto, leads, abertas, valorPipeline, ganhas, valorGanho, taxa));
+            resultado.Add(new DesempenhoVendedorDto(vendedor.Id, vendedor.NomeCompleto, leads, abertas, valorPipeline, ganhas, valorGanho, taxa, valorAdesao));
         }
 
         return resultado.OrderByDescending(d => d.ValorGanho).ToList();

@@ -41,7 +41,7 @@ export function AgendaPage() {
         )
         .then(setDados)
         .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar a agenda."); })
-        .finally(() => setCarregando(false));
+        .finally(() => { if (!signal?.aborted) setCarregando(false); });
     },
     [inicioSemana]
   );

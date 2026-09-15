@@ -75,9 +75,41 @@ export interface Session {
   id: string;
   email: string;
   nomeCompleto: string;
+  fotoUrl?: string | null;
   papeis: string[];
   areaInicial: string;
   menu: MenuItem[];
+}
+
+export interface LoginResult {
+  requerDoisFatores: boolean;
+  sessao: Session | null;
+}
+
+export interface Profile {
+  id: string;
+  nomeCompleto: string;
+  email: string;
+  telefone?: string | null;
+  fotoUrl?: string | null;
+  doisFatoresAtivo: boolean;
+  papeis: string[];
+  podeExcluirPropriaConta: boolean;
+}
+
+export interface UpdateProfileRequest {
+  nomeCompleto: string;
+  email: string;
+  telefone?: string | null;
+}
+
+export interface TwoFactorSetup {
+  chaveManual: string;
+  uriQrCode: string;
+}
+
+export interface TwoFactorEnableResult {
+  codigosRecuperacao: string[];
 }
 
 // --- Leads ---
@@ -93,6 +125,9 @@ export interface LeadListItem {
   estado?: string | null;
   regional?: string | null;
   origem?: string | null;
+  placa?: string | null;
+  temSeguro?: boolean | null;
+  utilidadeVeiculo?: string | null;
   etapaId?: string | null;
   etapaNome?: string | null;
   etapaCor?: string | null;
@@ -131,6 +166,9 @@ export interface LeadDetail {
   origem?: string | null;
   campanha?: string | null;
   produtoInteresse?: string | null;
+  placa?: string | null;
+  temSeguro?: boolean | null;
+  utilidadeVeiculo?: string | null;
   gclid?: string | null;
   utmMedium?: string | null;
   utmSource?: string | null;
@@ -144,6 +182,10 @@ export interface LeadDetail {
   etapaId?: string | null;
   etapaNome?: string | null;
   etapaCor?: string | null;
+  motivoPerdaId?: string | null;
+  motivoPerdaDescricao?: string | null;
+  motivoPerdaObservacao?: string | null;
+  veiculoNaoAtendido?: string | null;
   responsavelId?: string | null;
   responsavelNome?: string | null;
   observacoes?: string | null;
@@ -172,6 +214,9 @@ export interface LeadCreateRequest {
   origem?: string | null;
   campanha?: string | null;
   produtoInteresse?: string | null;
+  placa?: string | null;
+  temSeguro?: boolean | null;
+  utilidadeVeiculo?: string | null;
   gclid?: string | null;
   utmMedium?: string | null;
   utmSource?: string | null;
@@ -214,14 +259,19 @@ export interface LeadKanbanCard {
   nomeOuRazaoSocial: string;
   telefone?: string | null;
   email?: string | null;
+  estado?: string | null;
   origem?: string | null;
   campanha?: string | null;
+  placa?: string | null;
+  temSeguro?: boolean | null;
+  utilidadeVeiculo?: string | null;
   responsavelId?: string | null;
   responsavelNome?: string | null;
   tags: string[];
   criadoEm: string;
   ultimoContatoEm?: string | null;
   semContato: boolean;
+  arquivado: boolean;
   rowVersion: number;
 }
 
@@ -238,6 +288,11 @@ export interface ChangeLeadStageRequest {
   /** Nulo move o lead de volta pra "Sem etapa" (desmarca). */
   novaEtapaId: string | null;
   rowVersion: number;
+  /** Obrigatório quando a nova etapa é "Perdido". */
+  motivoPerdaId?: string;
+  motivoPerdaObservacao?: string;
+  /** Obrigatório quando a nova etapa é "Não fazemos". */
+  veiculoNaoAtendido?: string;
 }
 
 export interface LeadImportResult {
@@ -277,6 +332,7 @@ export interface Opportunity {
   valorFinal?: number | null;
   dataEfetivaFechamento?: string | null;
   motivoPerdaDescricao?: string | null;
+  motivoPerdaObservacao?: string | null;
   concorrente?: string | null;
   observacoes?: string | null;
   dataAdesao?: string | null;
@@ -292,6 +348,14 @@ export interface Opportunity {
   atualizadoEm?: string | null;
   rowVersion: number;
   atrasada: boolean;
+  cpf?: string | null;
+  estado?: string | null;
+  indicacao?: boolean | null;
+  tipoIndicacao?: string | null;
+  valorIndicacao?: number | null;
+  total?: number | null;
+  termoAdesaoArquivoUrl?: string | null;
+  pagamentoAdesaoArquivoUrl?: string | null;
 }
 
 export interface Veiculo {
@@ -339,8 +403,22 @@ export interface ChangeStageRequest {
   novaEtapaId: string;
   rowVersion: number;
   motivoPerdaId?: string | null;
+  motivoPerdaObservacao?: string | null;
   valorFinal?: number | null;
   dataEfetivaFechamento?: string | null;
+  cpf?: string | null;
+  estado?: string | null;
+  indicacao?: boolean | null;
+  tipoIndicacao?: string | null;
+  valorIndicacao?: number | null;
+  total?: number | null;
+  ativoEm?: string | null;
+  mensalidade?: number | null;
+  mensalidadeComDesconto?: number | null;
+  pagamentoAdesao?: number | null;
+  porcentagem?: number | null;
+  migracao?: boolean;
+  veiculo?: VeiculoUpsertRequest | null;
 }
 
 // --- Pipeline ---
@@ -420,6 +498,15 @@ export interface ActivityCreateRequest {
   lembreteMinutosAntes?: number | null;
 }
 
+export interface ActivityUpdateRequest {
+  tipo: TipoAtividade;
+  assunto: string;
+  descricao?: string | null;
+  dataHoraPrevista: string;
+  lembreteMinutosAntes?: number | null;
+  rowVersion: number;
+}
+
 // --- Dashboard ---
 
 export interface DashboardIndicadores {
@@ -433,12 +520,15 @@ export interface DashboardIndicadores {
   ticketMedio: number;
   vendasGanhasValor: number;
   vendasGanhasQuantidade: number;
+  vendasGanhasAdesaoValor: number;
 }
 
 export interface MetaResultado {
   metaValor: number;
   realizadoValor: number;
   percentualAtingido: number;
+  metaQuantidade: number;
+  realizadoQuantidade: number;
 }
 
 export interface FunilEtapa {
@@ -467,6 +557,7 @@ export interface DesempenhoVendedor {
   vendasGanhas: number;
   valorGanho: number;
   taxaConversao: number;
+  valorAdesao: number;
 }
 
 export interface AlertaLeadParado {
@@ -490,12 +581,26 @@ export interface Dashboard {
 // --- Metas ---
 
 export interface SalesGoal {
-  id: string;
+  /** Nulo quando o consultor ainda não tem meta cadastrada para o mês. */
+  id?: string | null;
   vendedorId: string;
   vendedorNome: string;
   mesReferencia: string;
-  metaValor: number;
   metaQuantidadeVendas?: number | null;
+  metaValor?: number | null;
+  realizadoValor: number;
+  realizadoQuantidade: number;
+}
+
+/** Meta geral de uma regional (não de um consultor específico) — definida pelo administrador. */
+export interface RegionalGoal {
+  /** Nulo quando a regional ainda não tem meta geral cadastrada para o mês. */
+  id?: string | null;
+  regionalId: string;
+  regionalNome: string;
+  mesReferencia: string;
+  metaQuantidadeVendas?: number | null;
+  metaValor?: number | null;
   realizadoValor: number;
   realizadoQuantidade: number;
 }
@@ -510,6 +615,26 @@ export interface VendedorResumo {
   /** Teto de leads que a distribuição automática atribui por mês corrente. Nulo = sem limite. */
   limiteMensalLeads?: number | null;
   leadsRecebidosNoMes: number;
+}
+
+export interface ConsultorDesempenho {
+  id: string;
+  nome: string;
+  email: string;
+  telefone?: string | null;
+  regionalNome?: string | null;
+  ativo: boolean;
+  leadsAtivos: number;
+  oportunidadesAbertas: number;
+  valorPipeline: number;
+  vendasGanhas: number;
+  valorGanho: number;
+  taxaConversao: number;
+  limiteMensalLeads?: number | null;
+  leadsRecebidosNoMes: number;
+  metaValor: number;
+  realizadoValor: number;
+  percentualMeta: number;
 }
 
 export interface RankingComercial {
@@ -557,4 +682,116 @@ export interface GestaoComercialResumo {
   oportunidadesSemMovimentacao: OportunidadeParada[];
   ranking: RankingComercial[];
   motivosPerda: MotivoPerdaResumo[];
+}
+
+// --- Regionais e gestão de usuários ---
+
+export interface Regional {
+  id: string;
+  nome: string;
+  ativa: boolean;
+  quantidadeUsuarios: number;
+}
+
+export interface CreateRegionalRequest {
+  nome: string;
+}
+
+export interface UpdateRegionalRequest {
+  nome: string;
+  ativa: boolean;
+}
+
+export interface UserSummary {
+  id: string;
+  nomeCompleto: string;
+  email: string;
+  telefone?: string | null;
+  papeis: string[];
+  regionalId?: string | null;
+  regionalNome?: string | null;
+  gestorComercialId?: string | null;
+  gestorComercialNome?: string | null;
+  grupoId?: string | null;
+  grupoNome?: string | null;
+  ativo: boolean;
+  limiteMensalLeads?: number | null;
+  fotoUrl?: string | null;
+  criadoEm: string;
+}
+
+export interface UserFilterRequest {
+  busca?: string;
+  papel?: string;
+  regionalId?: string;
+  grupoId?: string;
+  ativo?: boolean;
+  pagina?: number;
+  tamanhoPagina?: number;
+}
+
+export interface UserCreateRequest {
+  nomeCompleto: string;
+  email: string;
+  senha: string;
+  telefone?: string | null;
+  papel: string;
+  regionalId?: string | null;
+  gestorComercialId?: string | null;
+  grupoId?: string | null;
+  limiteMensalLeads?: number | null;
+}
+
+export interface UserUpdateRequest {
+  nomeCompleto: string;
+  telefone?: string | null;
+  papel: string;
+  regionalId?: string | null;
+  gestorComercialId?: string | null;
+  grupoId?: string | null;
+  limiteMensalLeads?: number | null;
+  ativo: boolean;
+}
+
+export interface GrupoMembro {
+  id: string;
+  nomeCompleto: string;
+  fotoUrl?: string | null;
+}
+
+export interface Grupo {
+  id: string;
+  regionalId: string;
+  nome: string;
+  ativo: boolean;
+  consultores: GrupoMembro[];
+}
+
+export interface CreateGrupoRequest {
+  regionalId?: string | null;
+  nome: string;
+}
+
+export interface UpdateGrupoRequest {
+  nome: string;
+  ativo: boolean;
+}
+
+export interface UpdateGrupoMembrosRequest {
+  consultorIds: string[];
+}
+
+// --- Portal do consultor ---
+
+export enum TipoAnuncio {
+  Aviso = 1,
+  Flashcard = 2,
+}
+
+export interface Announcement {
+  id: string;
+  tipo: TipoAnuncio;
+  titulo: string;
+  descricao: string;
+  cor?: string | null;
 }

@@ -24,8 +24,12 @@ public class ApplicationDbContext(
     public DbSet<CrmLeadAssignmentHistory> CrmLeadAssignmentHistories => Set<CrmLeadAssignmentHistory>();
     public DbSet<CrmLossReason> CrmLossReasons => Set<CrmLossReason>();
     public DbSet<CrmSalesGoal> CrmSalesGoals => Set<CrmSalesGoal>();
+    public DbSet<CrmRegionalGoal> CrmRegionalGoals => Set<CrmRegionalGoal>();
     public DbSet<CrmAttachment> CrmAttachments => Set<CrmAttachment>();
     public DbSet<CrmVeiculo> CrmVeiculos => Set<CrmVeiculo>();
+    public DbSet<CrmRegional> CrmRegionais => Set<CrmRegional>();
+    public DbSet<CrmGrupo> CrmGrupos => Set<CrmGrupo>();
+    public DbSet<CrmAnnouncement> CrmAnnouncements => Set<CrmAnnouncement>();
     public DbSet<CrmAuditLog> CrmAuditLogs => Set<CrmAuditLog>();
 
     protected override void OnModelCreating(ModelBuilder builder)

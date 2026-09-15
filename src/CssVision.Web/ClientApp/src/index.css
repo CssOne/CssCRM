@@ -7,15 +7,15 @@
 }
 
 :root {
-  --bg: #f6f7f9;
+  --bg: #eef1f8;
   --surface: #ffffff;
-  --surface-hover: #f1f3f5;
-  --border: #e2e5e9;
-  --fg: #14181f;
-  --fg-muted: #5b6472;
-  --brand: #2563eb;
+  --surface-hover: #f1f4fa;
+  --border: #e4e8f2;
+  --fg: #131b3a;
+  --fg-muted: #667085;
+  --brand: #2f6fed;
   --brand-fg: #ffffff;
-  --brand-soft: #eaf0ff;
+  --brand-soft: #eaf1fe;
   --success: #16a34a;
   --success-soft: #eafaf0;
   --warning: #d97706;
@@ -24,6 +24,13 @@
   --danger-soft: #fdecec;
   --info: #0ea5e9;
   --shadow-color: 220 30% 10%;
+
+  /* Barra lateral: navy escuro fixo, igual em tema claro ou escuro (não é redefinido em .dark). */
+  --sidebar-bg: #0b1440;
+  --sidebar-bg-active: #1a2668;
+  --sidebar-border: #1c2559;
+  --sidebar-fg: #e7ebfc;
+  --sidebar-fg-muted: #8e97c7;
 }
 
 .dark {
@@ -71,4 +78,78 @@ body {
 .focus-ring:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
+}
+
+/* Fundo animado do painel de login */
+.login-aurora {
+  background: linear-gradient(-45deg, #0b1440, #142363, #1a2668, #0b1440);
+  background-size: 400% 400%;
+  animation: aurora-shift 16s ease infinite;
+}
+
+.login-aurora::before,
+.login-aurora::after {
+  content: "";
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(60px);
+  opacity: 0.35;
+}
+
+.login-aurora::before {
+  top: -10%;
+  left: -10%;
+  width: 55%;
+  height: 55%;
+  background: #5b8cff;
+  animation: aurora-float-1 14s ease-in-out infinite;
+}
+
+.login-aurora::after {
+  bottom: -15%;
+  right: -10%;
+  width: 60%;
+  height: 60%;
+  background: #2f6fed;
+  animation: aurora-float-2 18s ease-in-out infinite;
+}
+
+@keyframes aurora-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes aurora-float-1 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(6%, 8%) scale(1.15);
+  }
+}
+
+@keyframes aurora-float-2 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-6%, -8%) scale(1.1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-aurora,
+  .login-aurora::before,
+  .login-aurora::after {
+    animation: none;
+  }
 }

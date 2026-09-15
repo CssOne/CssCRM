@@ -17,12 +17,26 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
         var query = db.CrmLeads.AsNoTracking()
             .Include(l => l.Responsavel)
             .Include(l => l.LeadTags).ThenInclude(lt => lt.Tag)
-            .Where(l => !l.Arquivado);
+            .AsQueryable();
+
+        if (!filtro.IncluirArquivados) query = query.Where(l => !l.Arquivado);
+        query = query.Where(l => l.CriadoManualmente == filtro.CriadoManualmente);
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
         if (visiveis is not null)
         {
             query = query.Where(l => l.ResponsavelId != null && visiveis.Contains(l.ResponsavelId.Value));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filtro.Busca))
+        {
+            var busca = filtro.Busca.Trim();
+            var buscaDigitos = DocumentValidation.SomenteDigitos(busca);
+            query = query.Where(l =>
+                EF.Functions.ILike(l.NomeOuRazaoSocial, $"%{busca}%") ||
+                (l.Email != null && EF.Functions.ILike(l.Email, $"%{busca}%")) ||
+                (buscaDigitos != "" && l.DocumentoNormalizado != null && l.DocumentoNormalizado.Contains(buscaDigitos)) ||
+                (buscaDigitos != "" && l.TelefoneNormalizado != null && l.TelefoneNormalizado.Contains(buscaDigitos)));
         }
 
         if (filtro.ResponsavelId.HasValue) query = query.Where(l => l.ResponsavelId == filtro.ResponsavelId);
@@ -32,10 +46,11 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
         var leads = await query.ToListAsync(ct);
 
         LeadKanbanCardDto ParaCartao(CrmLead l) => new(
-            l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Email, l.Origem, l.Campanha,
+            l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Email, l.Estado, l.Origem, l.Campanha,
+            l.Placa, l.TemSeguro, l.UtilidadeVeiculo,
             l.ResponsavelId, l.Responsavel?.NomeCompleto,
             l.LeadTags.Select(lt => lt.Tag.Nome).ToList(),
-            l.CriadoEm, l.UltimoContatoEm, l.UltimoContatoEm == null, l.RowVersion);
+            l.CriadoEm, l.UltimoContatoEm, l.UltimoContatoEm == null, l.Arquivado, l.RowVersion);
 
         // Coluna virtual (sem linha em CrmLeadStage): leads que ainda não foram trabalhados por
         // ninguém. Fica sempre em primeiro, pra vendedora enxergar de cara quem ainda não pegou.

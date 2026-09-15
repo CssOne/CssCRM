@@ -47,6 +47,30 @@ public static class CrmSeeder
             );
         }
 
+        if (!await db.CrmAnnouncements.AnyAsync())
+        {
+            db.CrmAnnouncements.AddRange(
+                new CrmAnnouncement
+                {
+                    Tipo = TipoAnuncio.Flashcard, Ordem = 1, Cor = "blue",
+                    Titulo = "Documento obrigatório",
+                    Descricao = "Envie a documentação pendente o quanto antes."
+                },
+                new CrmAnnouncement
+                {
+                    Tipo = TipoAnuncio.Flashcard, Ordem = 2, Cor = "green",
+                    Titulo = "Campanha da semana",
+                    Descricao = "Confira as condições especiais em vigor."
+                },
+                new CrmAnnouncement
+                {
+                    Tipo = TipoAnuncio.Flashcard, Ordem = 3, Cor = "purple",
+                    Titulo = "Atualização importante",
+                    Descricao = "Leia o comunicado mais recente da equipe."
+                }
+            );
+        }
+
         await db.SaveChangesAsync();
     }
 }

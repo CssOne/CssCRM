@@ -1,0 +1,56 @@
+#!/bin/bash
+set -euxo pipefail
+
+# Amazon Linux 2023: Docker vem nos repos, o plugin "compose" precisa ser instalado à parte.
+dnf install -y docker jq
+systemctl enable --now docker
+
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -SL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+mkdir -p /opt/cssvision-crm
+cd /opt/cssvision-crm
+
+cat > docker-compose.prod.yml <<'COMPOSE_EOF'
+${docker_compose_content}
+COMPOSE_EOF
+
+cat > Caddyfile <<'CADDY_EOF'
+${caddyfile_content}
+CADDY_EOF
+
+# Roda em todo boot e também é chamado remotamente pelo GitHub Actions via "aws ssm send-command"
+# (ver .github/workflows/deploy.yml) — busca os segredos mais recentes, faz login no ECR, sobe a
+# imagem mais nova.
+cat > deploy.sh <<'DEPLOY_EOF'
+#!/bin/bash
+set -euxo pipefail
+cd /opt/cssvision-crm
+
+REGION="${aws_region}"
+aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "${ecr_repository_url}"
+
+APP_SECRET=$(aws secretsmanager get-secret-value --region "$REGION" --secret-id "${app_secret_name}" --query SecretString --output text)
+DB_SECRET=$(aws secretsmanager get-secret-value --region "$REGION" --secret-id "${db_secret_name}" --query SecretString --output text)
+
+{
+  echo "APP_IMAGE=${ecr_repository_url}:latest"
+  echo "AWS_REGION=$REGION"
+  echo "S3_BUCKET_NAME=${s3_bucket_name}"
+  echo "CADDY_DOMAIN=${domain_name}"
+  echo "CONNECTION_STRING=$(echo "$DB_SECRET" | jq -r .CONNECTION_STRING)"
+  for key in SMTP_HOST SMTP_USERNAME SMTP_PASSWORD SMTP_FROM_EMAIL META_APP_SECRET META_VERIFY_TOKEN META_PAGE_ACCESS_TOKEN META_PIXEL_ID META_CAPI_ACCESS_TOKEN; do
+    value=$(echo "$APP_SECRET" | jq -r ".$key")
+    echo "$key=$value"
+  done
+} > .env
+
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+docker image prune -f
+DEPLOY_EOF
+chmod +x deploy.sh
+
+./deploy.sh

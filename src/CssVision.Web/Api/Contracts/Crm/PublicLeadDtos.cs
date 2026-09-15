@@ -10,6 +10,8 @@ public record PublicLeadCreateRequest(
     string? Estado,
     string? Placa,
     string? Veiculo,
+    bool? TemSeguro,
+    string? UtilidadeVeiculo,
     string? Gclid,
     string? ClickId,
     string? MetaEmail,

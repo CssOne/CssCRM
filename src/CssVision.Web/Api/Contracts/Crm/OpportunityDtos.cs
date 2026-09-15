@@ -21,6 +21,7 @@ public record OpportunityDto(
     decimal? ValorFinal,
     DateTimeOffset? DataEfetivaFechamento,
     string? MotivoPerdaDescricao,
+    string? MotivoPerdaObservacao,
     string? Concorrente,
     string? Observacoes,
     DateOnly? DataAdesao,
@@ -35,7 +36,15 @@ public record OpportunityDto(
     DateTimeOffset CriadoEm,
     DateTimeOffset? AtualizadoEm,
     uint RowVersion,
-    bool Atrasada);
+    bool Atrasada,
+    string? Cpf,
+    string? Estado,
+    bool? Indicacao,
+    string? TipoIndicacao,
+    decimal? ValorIndicacao,
+    decimal? Total,
+    string? TermoAdesaoArquivoUrl,
+    string? PagamentoAdesaoArquivoUrl);
 
 public record VeiculoDto(
     Guid Id,
@@ -111,5 +120,19 @@ public record ChangeStageRequest(
     Guid NovaEtapaId,
     uint RowVersion,
     Guid? MotivoPerdaId,
+    string? MotivoPerdaObservacao,
     decimal? ValorFinal,
-    DateOnly? DataEfetivaFechamento);
+    DateOnly? DataEfetivaFechamento,
+    string? Cpf = null,
+    string? Estado = null,
+    bool? Indicacao = null,
+    string? TipoIndicacao = null,
+    decimal? ValorIndicacao = null,
+    decimal? Total = null,
+    DateTimeOffset? AtivoEm = null,
+    decimal? Mensalidade = null,
+    decimal? MensalidadeComDesconto = null,
+    decimal? PagamentoAdesao = null,
+    decimal? Porcentagem = null,
+    bool Migracao = false,
+    VeiculoUpsertRequest? Veiculo = null);

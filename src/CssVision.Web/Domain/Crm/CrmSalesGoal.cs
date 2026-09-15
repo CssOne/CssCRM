@@ -11,6 +11,6 @@ public class CrmSalesGoal : CrmEntityBase
     /// <summary>Primeiro dia do mês de referência (ex: 2026-09-01).</summary>
     public DateOnly MesReferencia { get; set; }
 
-    public decimal MetaValor { get; set; }
-    public int? MetaQuantidadeVendas { get; set; }
+    public decimal? MetaValor { get; set; }
+    public int MetaQuantidadeVendas { get; set; }
 }

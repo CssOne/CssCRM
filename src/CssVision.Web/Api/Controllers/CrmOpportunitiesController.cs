@@ -33,4 +33,9 @@ public class CrmOpportunitiesController(IOpportunityService opportunityService) 
     [HttpPost("{id:guid}/change-stage")]
     public async Task<ActionResult<OpportunityDto>> MudarEtapa(Guid id, ChangeStageRequest request, CancellationToken ct) =>
         Ok(await opportunityService.MudarEtapaAsync(id, request, ct));
+
+    [HttpPost("{id:guid}/attachments/{tipo}")]
+    [RequestSizeLimit(10 * 1024 * 1024)]
+    public async Task<ActionResult<OpportunityDto>> Anexar(Guid id, string tipo, IFormFile arquivo, CancellationToken ct) =>
+        Ok(await opportunityService.AnexarArquivoAsync(id, tipo, arquivo, ct));
 }

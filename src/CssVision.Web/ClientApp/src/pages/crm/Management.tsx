@@ -69,7 +69,7 @@ export function ManagementPage() {
         setHistorico(h);
       })
       .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar a gestão comercial."); })
-      .finally(() => setCarregando(false));
+      .finally(() => { if (!signal?.aborted) setCarregando(false); });
   }, []);
 
   useEffect(() => {

@@ -31,7 +31,6 @@ public sealed class PublicLeadIntakeService(
 
         var observacoes = string.Join(" | ", new[]
             {
-                string.IsNullOrWhiteSpace(request.Placa) ? null : $"Placa: {request.Placa}",
                 string.IsNullOrWhiteSpace(request.Veiculo) ? null : $"Veículo: {request.Veiculo}",
             }.Where(s => s is not null));
 
@@ -49,6 +48,9 @@ public sealed class PublicLeadIntakeService(
             Email = request.Email,
             EmailNormalizado = emailNormalizado,
             Estado = string.IsNullOrWhiteSpace(request.Estado) ? null : request.Estado.ToUpperInvariant(),
+            Placa = request.Placa?.Trim().ToUpperInvariant() is { Length: > 0 and <= 10 } placaValida ? placaValida : null,
+            TemSeguro = request.TemSeguro,
+            UtilidadeVeiculo = request.UtilidadeVeiculo,
             Origem = request.Fonte ?? "Site",
             Campanha = request.Campanha,
             ProdutoInteresse = request.Oque,
@@ -61,6 +63,7 @@ public sealed class PublicLeadIntakeService(
             ConsentimentoDataEm = DateTimeOffset.UtcNow,
             ConsentimentoOrigem = "Formulário do site",
             ResponsavelId = responsavelId,
+            CriadoManualmente = false,
         };
 
         db.CrmLeads.Add(lead);

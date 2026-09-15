@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../../lib/api";
 import type { VendedorResumo } from "../../lib/types";
-import { Button, Checkbox, Input, Label, Select, Textarea } from "../ui";
+import { Button, Checkbox, Input, Label, MoneyInput, Select, Textarea } from "../ui";
 
 export interface OpportunityFormValues {
   titulo: string;
@@ -67,6 +67,10 @@ export function OpportunityForm({
     setValores((v) => ({ ...v, [campo]: valor }));
   }
 
+  function setMoeda(campo: keyof OpportunityFormValues, valor: number | null) {
+    set(campo, (valor != null ? String(valor) : "") as OpportunityFormValues[typeof campo]);
+  }
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!valores.titulo.trim()) return;
@@ -90,13 +94,10 @@ export function OpportunityForm({
           <Label htmlFor="opp-valor" required>
             Valor estimado (R$)
           </Label>
-          <Input
+          <MoneyInput
             id="opp-valor"
-            type="number"
-            min={0}
-            step="0.01"
-            value={valores.valorEstimado}
-            onChange={(e) => set("valorEstimado", e.target.value)}
+            value={valores.valorEstimado ? Number(valores.valorEstimado) : null}
+            onChange={(v) => setMoeda("valorEstimado", v)}
             required
           />
         </div>
@@ -131,15 +132,23 @@ export function OpportunityForm({
           </div>
           <div>
             <Label htmlFor="opp-mensalidade">Mensalidade (R$)</Label>
-            <Input id="opp-mensalidade" type="number" min={0} step="0.01" value={valores.mensalidade} onChange={(e) => set("mensalidade", e.target.value)} />
+            <MoneyInput id="opp-mensalidade" value={valores.mensalidade ? Number(valores.mensalidade) : null} onChange={(v) => setMoeda("mensalidade", v)} />
           </div>
           <div>
             <Label htmlFor="opp-mensalidade-desconto">Mensalidade com desconto (R$)</Label>
-            <Input id="opp-mensalidade-desconto" type="number" min={0} step="0.01" value={valores.mensalidadeComDesconto} onChange={(e) => set("mensalidadeComDesconto", e.target.value)} />
+            <MoneyInput
+              id="opp-mensalidade-desconto"
+              value={valores.mensalidadeComDesconto ? Number(valores.mensalidadeComDesconto) : null}
+              onChange={(v) => setMoeda("mensalidadeComDesconto", v)}
+            />
           </div>
           <div>
             <Label htmlFor="opp-pagamento-adesao">Pagamento de adesão (R$)</Label>
-            <Input id="opp-pagamento-adesao" type="number" min={0} step="0.01" value={valores.pagamentoAdesao} onChange={(e) => set("pagamentoAdesao", e.target.value)} />
+            <MoneyInput
+              id="opp-pagamento-adesao"
+              value={valores.pagamentoAdesao ? Number(valores.pagamentoAdesao) : null}
+              onChange={(v) => setMoeda("pagamentoAdesao", v)}
+            />
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-4">
@@ -161,7 +170,7 @@ export function OpportunityForm({
           </div>
           <div>
             <Label htmlFor="opp-veiculo-fipe">Valor FIPE (R$)</Label>
-            <Input id="opp-veiculo-fipe" type="number" min={0} step="0.01" value={valores.veiculoFipe} onChange={(e) => set("veiculoFipe", e.target.value)} />
+            <MoneyInput id="opp-veiculo-fipe" value={valores.veiculoFipe ? Number(valores.veiculoFipe) : null} onChange={(v) => setMoeda("veiculoFipe", v)} />
           </div>
           <div>
             <Label htmlFor="opp-veiculo-rastreador">Rastreador</Label>

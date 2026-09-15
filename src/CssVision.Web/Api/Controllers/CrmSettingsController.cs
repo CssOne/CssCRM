@@ -37,4 +37,42 @@ public class CrmSettingsController(ILookupService lookupService) : ControllerBas
     [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<ActionResult<LossReasonDto>> CriarMotivoPerda(CreateLossReasonRequest request, CancellationToken ct) =>
         Ok(await lookupService.CriarMotivoPerdaAsync(request, ct));
+
+    [HttpGet("origins")]
+    public async Task<ActionResult<IReadOnlyList<string>>> ObterOrigens(CancellationToken ct) =>
+        Ok(await lookupService.ObterOrigensAsync(ct));
+
+    [HttpGet("regionals")]
+    public async Task<ActionResult<IReadOnlyList<RegionalDto>>> ObterRegionais(CancellationToken ct) =>
+        Ok(await lookupService.ObterRegionaisAsync(ct));
+
+    [HttpPost("regionals")]
+    [Authorize(Policy = PolicyNames.VisaoTotalComercial)]
+    public async Task<ActionResult<RegionalDto>> CriarRegional(CreateRegionalRequest request, CancellationToken ct) =>
+        Ok(await lookupService.CriarRegionalAsync(request, ct));
+
+    [HttpPut("regionals/{id:guid}")]
+    [Authorize(Policy = PolicyNames.VisaoTotalComercial)]
+    public async Task<ActionResult<RegionalDto>> AtualizarRegional(Guid id, UpdateRegionalRequest request, CancellationToken ct) =>
+        Ok(await lookupService.AtualizarRegionalAsync(id, request, ct));
+
+    [HttpGet("groups")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
+    public async Task<ActionResult<IReadOnlyList<GrupoDto>>> ObterGrupos([FromQuery] Guid? regionalId, CancellationToken ct) =>
+        Ok(await lookupService.ObterGruposAsync(regionalId, ct));
+
+    [HttpPost("groups")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
+    public async Task<ActionResult<GrupoDto>> CriarGrupo(CreateGrupoRequest request, CancellationToken ct) =>
+        Ok(await lookupService.CriarGrupoAsync(request, ct));
+
+    [HttpPut("groups/{id:guid}")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
+    public async Task<ActionResult<GrupoDto>> AtualizarGrupo(Guid id, UpdateGrupoRequest request, CancellationToken ct) =>
+        Ok(await lookupService.AtualizarGrupoAsync(id, request, ct));
+
+    [HttpPut("groups/{id:guid}/members")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
+    public async Task<ActionResult<GrupoDto>> AtualizarMembrosGrupo(Guid id, UpdateGrupoMembrosRequest request, CancellationToken ct) =>
+        Ok(await lookupService.AtualizarMembrosGrupoAsync(id, request, ct));
 }

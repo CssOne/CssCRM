@@ -20,7 +20,8 @@ export function LeadPicker({ onSelecionar }: { onSelecionar: (lead: LeadListItem
       api
         .get<PagedResult<LeadListItem>>(`/crm/leads${toQueryString({ busca, tamanhoPagina: 8 })}`, controller.signal)
         .then((res) => setResultados(res.itens))
-        .finally(() => setBuscando(false));
+        .catch(() => {})
+        .finally(() => { if (!controller.signal.aborted) setBuscando(false); });
     }, 300);
     return () => {
       clearTimeout(timeout);

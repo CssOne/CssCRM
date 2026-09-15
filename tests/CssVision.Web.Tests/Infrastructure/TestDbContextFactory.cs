@@ -4,8 +4,10 @@ using CssVision.Web.Domain.Crm;
 using CssVision.Web.Domain.Identity;
 using CssVision.Web.Services.Crm;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace CssVision.Web.Tests.Infrastructure;
@@ -111,6 +113,60 @@ public sealed class TestDbContextFactory : IDisposable
 
         db.UserRoles.Add(new IdentityUserRole<Guid> { UserId = usuario.Id, RoleId = role.Id });
         await db.SaveChangesAsync();
+    }
+
+    /// <summary>UserManager real (não mockado) sobre o SQLite in-memory — necessário para testar
+    /// serviços que criam/editam usuários e papéis de verdade (ex: UserManagementService).
+    /// RequireUniqueEmail=true espelha a configuração de produção (AddCrmIdentity) — sem isso o
+    /// UserManager não faz a checagem de duplicidade antes de gravar, e um e-mail repetido vira
+    /// uma DbUpdateException crua (violação do índice único de UserName) em vez de um
+    /// IdentityResult.Failed tratável.</summary>
+    public static UserManager<ApplicationUser> CreateUserManager(ApplicationDbContext db)
+    {
+        var store = new UserStore<ApplicationUser, ApplicationRole, ApplicationDbContext, Guid>(db);
+        var options = Microsoft.Extensions.Options.Options.Create(new IdentityOptions
+        {
+            User = { RequireUniqueEmail = true }
+        });
+        return new UserManager<ApplicationUser>(
+            store,
+            options,
+            new PasswordHasher<ApplicationUser>(),
+            [new UserValidator<ApplicationUser>()],
+            [new PasswordValidator<ApplicationUser>()],
+            new UpperInvariantLookupNormalizer(),
+            new IdentityErrorDescriber(),
+            services: null!,
+            NullLogger<UserManager<ApplicationUser>>.Instance);
+    }
+
+    /// <summary>Garante que os 4 papéis do sistema existem — pré-requisito para UserManager.AddToRoleAsync.</summary>
+    public async Task SeedRolesAsync(ApplicationDbContext db)
+    {
+        foreach (var papel in Roles.All)
+        {
+            if (!await db.Roles.AnyAsync(r => r.Name == papel))
+            {
+                db.Roles.Add(new ApplicationRole(papel) { NormalizedName = papel.ToUpperInvariant() });
+            }
+        }
+        await db.SaveChangesAsync();
+    }
+
+    public async Task<CrmRegional> CriarRegionalAsync(ApplicationDbContext db, string nome)
+    {
+        var regional = new CrmRegional { Nome = nome };
+        db.CrmRegionais.Add(regional);
+        await db.SaveChangesAsync();
+        return regional;
+    }
+
+    public async Task<CrmGrupo> CriarGrupoAsync(ApplicationDbContext db, Guid regionalId, string nome)
+    {
+        var grupo = new CrmGrupo { RegionalId = regionalId, Nome = nome };
+        db.CrmGrupos.Add(grupo);
+        await db.SaveChangesAsync();
+        return grupo;
     }
 
     public void Dispose() => _connection.Dispose();

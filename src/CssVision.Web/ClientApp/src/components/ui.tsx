@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
   type ButtonHTMLAttributes,
+  type ChangeEvent,
   type InputHTMLAttributes,
   type ReactNode,
   type SelectHTMLAttributes,
@@ -64,11 +65,33 @@ export function IconButton({
   );
 }
 
+// --- Avatar (foto do usuário, com iniciais como fallback) ---
+
+export function Avatar({ nome, fotoUrl, className = "size-9 text-sm" }: { nome: string; fotoUrl?: string | null; className?: string }) {
+  const [erroAoCarregar, setErroAoCarregar] = useState(false);
+  const iniciais = nome
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
+
+  if (fotoUrl && !erroAoCarregar) {
+    return <img src={fotoUrl} alt={nome} onError={() => setErroAoCarregar(true)} className={`shrink-0 rounded-full object-cover ${className}`} />;
+  }
+
+  return (
+    <div className={`flex shrink-0 items-center justify-center rounded-full bg-[var(--brand)] font-semibold text-white ${className}`}>
+      {iniciais || "?"}
+    </div>
+  );
+}
+
 // --- Cartão ---
 
 export function Card({ className = "", children }: { className?: string; children: ReactNode }) {
   return (
-    <div className={`rounded-xl border border-[var(--border)] bg-[var(--surface)] ${className}`}>{children}</div>
+    <div className={`rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm ${className}`}>{children}</div>
   );
 }
 
@@ -115,6 +138,131 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
   <input ref={ref} className={`${fieldBase} ${className}`} {...props} />
 ));
 Input.displayName = "Input";
+
+const formatoMoedaInput = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+export const MoneyInput = forwardRef<
+  HTMLInputElement,
+  Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type"> & {
+    value: number | null | undefined;
+    onChange: (valor: number | null) => void;
+  }
+>(({ value, onChange, className = "", ...props }, ref) => {
+  const [texto, setTexto] = useState(() => (value != null ? formatoMoedaInput.format(value) : ""));
+
+  useEffect(() => {
+    setTexto((atual) => {
+      const digitosAtuais = atual.replace(/\D/g, "");
+      const numeroAtual = digitosAtuais ? Number(digitosAtuais) / 100 : null;
+      if (numeroAtual === (value ?? null)) return atual;
+      return value != null ? formatoMoedaInput.format(value) : "";
+    });
+  }, [value]);
+
+  function handleChange(e: ChangeEvent<HTMLInputElement>) {
+    const digitos = e.target.value.replace(/\D/g, "");
+    if (!digitos) {
+      setTexto("");
+      onChange(null);
+      return;
+    }
+    const numero = Number(digitos) / 100;
+    setTexto(formatoMoedaInput.format(numero));
+    onChange(numero);
+  }
+
+  return (
+    <input
+      ref={ref}
+      inputMode="numeric"
+      className={`${fieldBase} ${className}`}
+      value={texto}
+      onChange={handleChange}
+      {...props}
+    />
+  );
+});
+MoneyInput.displayName = "MoneyInput";
+
+function mascararCpf(digitos: string) {
+  const d = digitos.slice(0, 11);
+  const p1 = d.slice(0, 3);
+  const p2 = d.slice(3, 6);
+  const p3 = d.slice(6, 9);
+  const p4 = d.slice(9, 11);
+  let texto = p1;
+  if (p2) texto += `.${p2}`;
+  if (p3) texto += `.${p3}`;
+  if (p4) texto += `-${p4}`;
+  return texto;
+}
+
+function mascararCnpj(digitos: string) {
+  const d = digitos.slice(0, 14);
+  const p1 = d.slice(0, 2);
+  const p2 = d.slice(2, 5);
+  const p3 = d.slice(5, 8);
+  const p4 = d.slice(8, 12);
+  const p5 = d.slice(12, 14);
+  let texto = p1;
+  if (p2) texto += `.${p2}`;
+  if (p3) texto += `.${p3}`;
+  if (p4) texto += `/${p4}`;
+  if (p5) texto += `-${p5}`;
+  return texto;
+}
+
+/** Máscara de CPF (000.000.000-00), aplicada durante a digitação. Valor mantido como dígitos puros. */
+export const CpfInput = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes<HTMLInputElement>, "type">>(
+  ({ className = "", onChange, value, ...props }, ref) => {
+    function handleChange(e: ChangeEvent<HTMLInputElement>) {
+      const digitos = e.target.value.replace(/\D/g, "").slice(0, 11);
+      e.target.value = digitos;
+      onChange?.(e);
+    }
+
+    return (
+      <input
+        ref={ref}
+        inputMode="numeric"
+        className={`${fieldBase} ${className}`}
+        value={mascararCpf(String(value ?? "").replace(/\D/g, ""))}
+        onChange={handleChange}
+        {...props}
+      />
+    );
+  }
+);
+CpfInput.displayName = "CpfInput";
+
+/**
+ * Máscara de documento (CPF ou CNPJ), aplicada conforme a quantidade de dígitos digitados:
+ * até 11 dígitos usa o padrão de CPF, mais que isso passa a usar o padrão de CNPJ.
+ * Valor mantido como dígitos puros.
+ */
+export const DocumentoInput = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes<HTMLInputElement>, "type">>(
+  ({ className = "", onChange, value, ...props }, ref) => {
+    function handleChange(e: ChangeEvent<HTMLInputElement>) {
+      const digitos = e.target.value.replace(/\D/g, "").slice(0, 14);
+      e.target.value = digitos;
+      onChange?.(e);
+    }
+
+    const digitosAtuais = String(value ?? "").replace(/\D/g, "");
+
+    return (
+      <input
+        ref={ref}
+        inputMode="numeric"
+        className={`${fieldBase} ${className}`}
+        value={digitosAtuais.length > 11 ? mascararCnpj(digitosAtuais) : mascararCpf(digitosAtuais)}
+        onChange={handleChange}
+        {...props}
+      />
+    );
+  }
+);
+DocumentoInput.displayName = "DocumentoInput";
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(
   ({ className = "", ...props }, ref) => (

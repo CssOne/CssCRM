@@ -168,6 +168,19 @@ public sealed class ActivityService(
         return await ObterDtoAsync(atividade.Id, ct);
     }
 
+    public async Task ExcluirAsync(Guid id, CancellationToken ct)
+    {
+        var atividade = await CarregarComEscopoAsync(id, ct);
+
+        atividade.Arquivado = true;
+        atividade.ArquivadoEm = DateTimeOffset.UtcNow;
+        atividade.ArquivadoPorId = currentUser.IsAuthenticated ? currentUser.UserId : null;
+
+        await db.SaveChangesAsync(ct);
+        await RecalcularDatasContatoAsync(atividade.LeadId, ct);
+        await audit.RegistrarAsync("AtividadeExcluida", nameof(CrmActivity), atividade.Id, new { atividade.Assunto }, ct);
+    }
+
     // --- auxiliares ---
 
     private async Task<CrmActivity> CarregarComEscopoAsync(Guid id, CancellationToken ct)

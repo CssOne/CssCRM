@@ -89,7 +89,28 @@ acesse **`http://localhost:5299`** para ter a API e o SPA na mesma origem (cooki
 CORS). O Vite também tem proxy próprio de `/api` para `5299`, então acessar `5173` diretamente
 também funciona.
 
-## Deploy em produção
+## Deploy em produção (AWS)
+
+O caminho oficial de deploy é: **Docker (`Dockerfile` na raiz) → EC2 provisionado por Terraform
+(`infra/aws/`) → CI/CD no GitHub Actions (`.github/workflows/`)**. Ver
+[`infra/aws/README.md`](infra/aws/README.md) para o passo a passo completo (inclui por que o
+domínio DuckDNS usa Let's Encrypt via Caddy em vez do certificado ACM).
+
+Resumo do fluxo:
+1. `terraform apply` em `infra/aws/` cria a instância EC2, RDS, bucket S3 (anexos), ECR e os
+   segredos no Secrets Manager.
+2. Push na branch `main` → o workflow **CI** builda e testa; se passar, o workflow **Deploy**
+   builda a imagem Docker, publica no ECR e dispara o redeploy na instância via SSM (sem SSH).
+3. Segredos (SMTP, Meta Lead Ads/CAPI) ficam no Secrets Manager — edite pelo Console/CLI depois
+   do primeiro apply; nunca em `appsettings.json`.
+
+Armazenamento de anexos (termo de adesão, avatares) usa S3 quando `Storage__S3__BucketName`
+está configurado (produção) e cai para disco local automaticamente quando não está (dev) — ver
+`IFileStorageService`.
+
+Health check disponível em `/health` (usado pelo `docker-compose.prod.yml`).
+
+### Alternativa manual (sem Docker/Terraform)
 
 `dotnet publish` builda o frontend (React) automaticamente e inclui `ClientApp/dist` no
 resultado (target `PublishClientApp` no `.csproj`) — não precisa buildar o frontend à parte.
@@ -104,8 +125,9 @@ seguintes variáveis de ambiente:
 | Variável | Obrigatória | Descrição |
 |---|---|---|
 | `ASPNETCORE_ENVIRONMENT` | Sim | `Production` — nunca deixar em branco/Development num servidor real |
-| `ASPNETCORE_URLS` | Sim | Endereço/porta que o Kestrel escuta (ex: `http://0.0.0.0:5000`) — TLS deve terminar num load balancer/proxy na frente (ALB, nginx), o app não serve HTTPS diretamente |
+| `ASPNETCORE_URLS` | Sim | Endereço/porta que o Kestrel escuta (ex: `http://0.0.0.0:5000`) — TLS deve terminar num load balancer/proxy na frente (ALB, Caddy, nginx), o app não serve HTTPS diretamente |
 | `ConnectionStrings__Default` | Sim | String de conexão do Postgres real (RDS ou instância própria) |
+| `Storage__S3__BucketName` / `__Region` | Não — sem isso, anexos vão pro disco local | Bucket S3 dedicado a anexos (ver `infra/aws/s3.tf`) |
 | `MetaLeadAds__AppSecret` / `__VerifyToken` / `__PageAccessToken` | Só se for usar o webhook nativo de Lead Ads do Meta | Ver painel de Webhooks do Meta for Developers |
 | `MetaCapi__PixelId` / `__AccessToken` | Só se for enviar conversões offline pro Pixel | Gerado no Gerenciador de Eventos do Meta |
 

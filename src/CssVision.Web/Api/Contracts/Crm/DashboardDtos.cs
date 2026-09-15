@@ -12,9 +12,15 @@ public record DashboardIndicadoresDto(
     decimal TaxaConversao,
     decimal TicketMedio,
     decimal VendasGanhasValor,
-    int VendasGanhasQuantidade);
+    int VendasGanhasQuantidade,
+    decimal VendasGanhasAdesaoValor);
 
-public record MetaResultadoDto(decimal MetaValor, decimal RealizadoValor, decimal PercentualAtingido);
+public record MetaResultadoDto(
+    decimal MetaValor,
+    decimal RealizadoValor,
+    decimal PercentualAtingido,
+    int MetaQuantidade,
+    int RealizadoQuantidade);
 
 public record FunilEtapaDto(string Etapa, int Quantidade, decimal ValorTotal);
 
@@ -30,7 +36,8 @@ public record DesempenhoVendedorDto(
     decimal ValorPipeline,
     int VendasGanhas,
     decimal ValorGanho,
-    decimal TaxaConversao);
+    decimal TaxaConversao,
+    decimal ValorAdesao);
 
 public record AlertaLeadParadoDto(Guid LeadId, string LeadNome, string? ResponsavelNome, int DiasSemContato);
 

@@ -1,3 +1,4 @@
+using CssVision.Web.Domain.Crm;
 using Microsoft.AspNetCore.Identity;
 
 namespace CssVision.Web.Domain.Identity;
@@ -15,6 +16,14 @@ public class ApplicationUser : IdentityUser<Guid>
     public ApplicationUser? GestorComercial { get; set; }
 
     public bool Ativo { get; set; } = true;
+
+    /// <summary>Regional à qual este usuário pertence (Comercial/GestorComercial). Nulo para Admin/GestorMaster (visão global).</summary>
+    public Guid? RegionalId { get; set; }
+    public CrmRegional? Regional { get; set; }
+
+    /// <summary>Subgrupo do consultor dentro da regional (ex: "Externos", "Internos"). Apenas organizacional.</summary>
+    public Guid? GrupoId { get; set; }
+    public CrmGrupo? Grupo { get; set; }
 
     /// <summary>Teto de leads que a distribuição automática atribui a este vendedor por mês corrente. Nulo = sem limite.</summary>
     public int? LimiteMensalLeads { get; set; }

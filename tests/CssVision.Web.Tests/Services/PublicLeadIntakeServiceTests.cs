@@ -12,7 +12,7 @@ public class PublicLeadIntakeServiceTests
 {
     private static PublicLeadCreateRequest NovoRequest(
         string nome = "Cliente Site", string? whatsapp = "31988887777", string? email = "cliente@site.com") =>
-        new(nome, whatsapp, email, "MG", "ABC1D23", "Onix 2020", null, null, null, null, "Facebook ADS", "UGC VENDA", "AGV", "agv3");
+        new(nome, whatsapp, email, "MG", "ABC1D23", "Onix 2020", null, null, null, null, null, null, "Facebook ADS", "UGC VENDA", "AGV", "agv3");
 
     [Fact]
     public async Task CriarAsync_DeveAtribuirViaRodizio_QuandoHaVendedorComercial()
@@ -36,7 +36,8 @@ public class PublicLeadIntakeServiceTests
         Assert.Equal(vendedor.Id, lead!.ResponsavelId);
         Assert.Null(lead.EtapaId);
         Assert.Equal("agv3", lead.MetaFormId);
-        Assert.Contains("Placa: ABC1D23", lead.Observacoes);
+        Assert.Equal("ABC1D23", lead.Placa);
+        Assert.Contains("Veículo: Onix 2020", lead.Observacoes);
     }
 
     [Fact]

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
-import { TipoPessoa, type LeadListItem } from "../../lib/types";
-import { Button, Checkbox, FieldError, Input, Label, Select, Textarea } from "../ui";
+import { TipoPessoa, type LeadCreateRequest, type LeadListItem } from "../../lib/types";
+import { Button, Checkbox, DocumentoInput, FieldError, Input, Label, Select, Textarea } from "../ui";
 import { LeadPicker } from "./LeadPicker";
 
 export interface LeadFormValues {
@@ -16,6 +16,9 @@ export interface LeadFormValues {
   origem: string;
   campanha: string;
   produtoInteresse: string;
+  placa: string;
+  temSeguro: string;
+  utilidadeVeiculo: string;
   gclid: string;
   utmMedium: string;
   utmSource: string;
@@ -44,6 +47,9 @@ export const leadFormVazio: LeadFormValues = {
   origem: "",
   campanha: "",
   produtoInteresse: "",
+  placa: "",
+  temSeguro: "",
+  utilidadeVeiculo: "",
   gclid: "",
   utmMedium: "",
   utmSource: "",
@@ -58,6 +64,38 @@ export const leadFormVazio: LeadFormValues = {
   observacoes: "",
   consentimentoContato: false,
 };
+
+export function paraLeadCreateRequest(v: LeadFormValues): LeadCreateRequest {
+  return {
+    nomeOuRazaoSocial: v.nomeOuRazaoSocial,
+    tipoPessoa: v.tipoPessoa,
+    documento: v.documento || null,
+    telefone: v.telefone || null,
+    whatsApp: v.whatsApp || null,
+    email: v.email || null,
+    cidade: v.cidade || null,
+    estado: v.estado || null,
+    regional: v.regional || null,
+    origem: v.origem || null,
+    campanha: v.campanha || null,
+    produtoInteresse: v.produtoInteresse || null,
+    placa: v.placa || null,
+    temSeguro: v.temSeguro === "sim" ? true : v.temSeguro === "nao" ? false : null,
+    utilidadeVeiculo: v.utilidadeVeiculo || null,
+    gclid: v.gclid || null,
+    utmMedium: v.utmMedium || null,
+    utmSource: v.utmSource || null,
+    utmTerm: v.utmTerm || null,
+    metaClickId: v.metaClickId || null,
+    metaFormId: v.metaFormId || null,
+    metaLeadId: v.metaLeadId || null,
+    indicadoPorLeadId: v.indicadoPorLeadId || null,
+    tipoIndicacao: v.tipoIndicacao || null,
+    tags: v.tags ? v.tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+    observacoes: v.observacoes || null,
+    consentimentoContato: v.consentimentoContato,
+  };
+}
 
 export function LeadForm({
   valoresIniciais,
@@ -123,7 +161,7 @@ export function LeadForm({
 
         <div>
           <Label htmlFor={`${idPrefix}-doc`}>{valores.tipoPessoa === TipoPessoa.Fisica ? "CPF" : "CNPJ"}</Label>
-          <Input id={`${idPrefix}-doc`} value={valores.documento} onChange={(e) => set("documento", e.target.value)} />
+          <DocumentoInput id={`${idPrefix}-doc`} value={valores.documento} onChange={(e) => set("documento", e.target.value)} />
         </div>
 
         <div>
@@ -171,6 +209,35 @@ export function LeadForm({
         <div>
           <Label htmlFor={`${idPrefix}-produto`}>Produto/serviço de interesse</Label>
           <Input id={`${idPrefix}-produto`} value={valores.produtoInteresse} onChange={(e) => set("produtoInteresse", e.target.value)} />
+        </div>
+
+        <div>
+          <Label htmlFor={`${idPrefix}-placa`}>Placa do veículo</Label>
+          <Input
+            id={`${idPrefix}-placa`}
+            maxLength={10}
+            value={valores.placa}
+            onChange={(e) => set("placa", e.target.value.toUpperCase())}
+          />
+        </div>
+
+        <div>
+          <Label htmlFor={`${idPrefix}-tem-seguro`}>Tem seguro?</Label>
+          <Select id={`${idPrefix}-tem-seguro`} value={valores.temSeguro} onChange={(e) => set("temSeguro", e.target.value)}>
+            <option value="">Não informado</option>
+            <option value="sim">Sim</option>
+            <option value="nao">Não</option>
+          </Select>
+        </div>
+
+        <div>
+          <Label htmlFor={`${idPrefix}-utilidade`}>Utilidade do veículo</Label>
+          <Input
+            id={`${idPrefix}-utilidade`}
+            value={valores.utilidadeVeiculo}
+            onChange={(e) => set("utilidadeVeiculo", e.target.value)}
+            placeholder="Particular, trabalho, aplicativo..."
+          />
         </div>
 
         <div className="sm:col-span-2">

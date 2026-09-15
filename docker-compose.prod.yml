@@ -1,0 +1,54 @@
+# Roda na instância EC2 (não localmente). Sobe o app do CRM + Caddy na frente cuidando do HTTPS
+# automático via Let's Encrypt para o domínio em CADDY_DOMAIN — ver infra/aws/README.md para o
+# porquê de não usar o certificado ACM aqui (ACM só funciona com ALB/CloudFront, não com uma
+# instância EC2 "crua").
+#
+# Uso na instância (o script infra/aws/user_data.sh já deixa isso configurado como serviço):
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml up -d
+
+services:
+  app:
+    image: ${APP_IMAGE}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Default: ${CONNECTION_STRING}
+      Storage__S3__BucketName: ${S3_BUCKET_NAME}
+      Storage__S3__Region: ${AWS_REGION}
+      Smtp__Host: ${SMTP_HOST}
+      Smtp__UserName: ${SMTP_USERNAME}
+      Smtp__Password: ${SMTP_PASSWORD}
+      Smtp__FromEmail: ${SMTP_FROM_EMAIL}
+      MetaLeadAds__AppSecret: ${META_APP_SECRET}
+      MetaLeadAds__VerifyToken: ${META_VERIFY_TOKEN}
+      MetaLeadAds__PageAccessToken: ${META_PAGE_ACCESS_TOKEN}
+      MetaCapi__PixelId: ${META_PIXEL_ID}
+      MetaCapi__AccessToken: ${META_CAPI_ACCESS_TOKEN}
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CADDY_DOMAIN: ${CADDY_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy_data:
+  caddy_config:

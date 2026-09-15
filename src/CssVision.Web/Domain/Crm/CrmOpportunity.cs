@@ -33,6 +33,9 @@ public class CrmOpportunity : CrmArchivableEntity
     public Guid? MotivoPerdaId { get; set; }
     public CrmLossReason? MotivoPerda { get; set; }
 
+    /// <summary>Explicação livre do consultor sobre a perda, complementar ao motivo pré-cadastrado (MotivoPerda).</summary>
+    public string? MotivoPerdaObservacao { get; set; }
+
     public string? Concorrente { get; set; }
     public string? Observacoes { get; set; }
 
@@ -54,6 +57,26 @@ public class CrmOpportunity : CrmArchivableEntity
 
     /// <summary>Indica se esta oportunidade é uma migração de um plano/contrato anterior.</summary>
     public bool Migracao { get; set; }
+
+    /// <summary>CPF do cliente confirmado no fechamento da venda — snapshot histórico, pode divergir do Lead se corrigido depois.</summary>
+    public string? Cpf { get; set; }
+    public string? Estado { get; set; }
+
+    /// <summary>Indica se esta venda teve origem em indicação de outro cliente.</summary>
+    public bool? Indicacao { get; set; }
+    public string? TipoIndicacao { get; set; }
+
+    /// <summary>Valor pago/devido pela indicação. Precisão: numeric(14,2).</summary>
+    public decimal? ValorIndicacao { get; set; }
+
+    /// <summary>Precisão monetária: numeric(14,2) — ver ApplicationDbContext.</summary>
+    public decimal? Total { get; set; }
+
+    /// <summary>Caminho relativo (/uploads/...) do termo de adesão assinado, enviado ao concluir a venda.</summary>
+    public string? TermoAdesaoArquivoUrl { get; set; }
+
+    /// <summary>Caminho relativo (/uploads/...) do comprovante de pagamento da adesão, enviado ao concluir a venda.</summary>
+    public string? PagamentoAdesaoArquivoUrl { get; set; }
 
     public CrmVeiculo? Veiculo { get; set; }
 

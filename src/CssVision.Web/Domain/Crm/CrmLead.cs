@@ -29,6 +29,24 @@ public class CrmLead : CrmArchivableEntity
     public string? Campanha { get; set; }
     public string? ProdutoInteresse { get; set; }
 
+    /// <summary>Placa do veículo informada logo na chegada do lead (antes de existir uma oportunidade/veículo formal).</summary>
+    public string? Placa { get; set; }
+
+    /// <summary>Se o lead já possui seguro para o veículo — captado na qualificação inicial (formulário/anúncio).</summary>
+    public bool? TemSeguro { get; set; }
+
+    /// <summary>Para que o veículo é usado (ex: particular, trabalho, aplicativo) — captado na qualificação inicial.</summary>
+    public string? UtilidadeVeiculo { get; set; }
+
+    /// <summary>
+    /// True para leads cadastrados por uma pessoa (tela "+ Novo lead", importação de planilha,
+    /// migração de dados antigos) — false para leads que chegaram sozinhos via integração
+    /// automática (webhook do Meta Lead Ads, formulário público do site). Usado para manter os
+    /// dois grupos sempre visíveis separadamente no quadro de leads, ainda que percorram as
+    /// mesmas etapas do funil.
+    /// </summary>
+    public bool CriadoManualmente { get; set; } = true;
+
     /// <summary>Google Click ID — associa o lead ao clique que originou a conversão (Google Ads).</summary>
     public string? Gclid { get; set; }
     public string? UtmMedium { get; set; }
@@ -52,6 +70,16 @@ public class CrmLead : CrmArchivableEntity
     /// </summary>
     public Guid? EtapaId { get; set; }
     public CrmLeadStage? Etapa { get; set; }
+
+    /// <summary>Motivo da perda, obrigatório ao mover o lead para a etapa "Perdido".</summary>
+    public Guid? MotivoPerdaId { get; set; }
+    public CrmLossReason? MotivoPerda { get; set; }
+
+    /// <summary>Explicação livre do consultor sobre a perda, complementar ao motivo pré-cadastrado (MotivoPerda).</summary>
+    public string? MotivoPerdaObservacao { get; set; }
+
+    /// <summary>Modelo do veículo que motivou mover o lead para a etapa "Não fazemos" (veículo fora do que a CSS Brasil atende).</summary>
+    public string? VeiculoNaoAtendido { get; set; }
 
     public Guid? ResponsavelId { get; set; }
     public ApplicationUser? Responsavel { get; set; }

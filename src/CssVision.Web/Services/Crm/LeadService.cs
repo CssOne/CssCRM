@@ -19,6 +19,13 @@ public sealed class LeadService(
     IMetaConversionService conversion,
     IAuditSink audit) : ILeadService
 {
+    /// <summary>Nome da etapa terminal "perdida" do quadro de leads — ver CrmSeeder.cs. CrmLeadStage
+    /// não tem um enum de tipo como CrmPipelineStage, então a identidade da etapa é pelo nome mesmo.</summary>
+    private const string EtapaLeadPerdido = "Perdido";
+
+    /// <summary>Nome da etapa "veículo fora do que a CSS Brasil atende" do quadro de leads — ver CrmSeeder.cs.</summary>
+    private const string EtapaLeadNaoFazemos = "Não fazemos";
+
     public async Task<PagedResult<LeadListItemDto>> ListarAsync(LeadFilterRequest filtro, CancellationToken ct)
     {
         var query = await QueryEscopadaAsync(filtro.IncluirArquivados, ct);
@@ -41,6 +48,9 @@ public sealed class LeadService(
                 l.Estado,
                 l.Regional,
                 l.Origem,
+                l.Placa,
+                l.TemSeguro,
+                l.UtilidadeVeiculo,
                 l.EtapaId,
                 l.Etapa != null ? l.Etapa.Nome : null,
                 l.Etapa != null ? l.Etapa.Cor : null,
@@ -204,11 +214,14 @@ public sealed class LeadService(
             responsavelId = await assignment.ProximoResponsavelAsync(ct);
         }
 
+        // Leads automáticos (Meta Ads, site) ficam de propósito sem etapa — "ninguém pegou
+        // ainda" — mas um lead cadastrado manualmente já é trabalhado por quem o cadastrou, então
+        // entra direto na primeira etapa ativa do funil em vez de cair na coluna "Sem etapa".
+        var etapaId = request.EtapaId ?? await ObterEtapaInicialIdAsync(ct);
+
         var lead = new CrmLead
         {
-            // Fica nula de propósito: lead novo sem etapa marcada é como a vendedora enxerga
-            // "ninguém pegou ainda" — ela mesma arrasta pra uma etapa quando começa a trabalhar.
-            EtapaId = request.EtapaId,
+            EtapaId = etapaId,
             NomeOuRazaoSocial = request.NomeOuRazaoSocial.Trim(),
             TipoPessoa = request.TipoPessoa,
             DocumentoNormalizado = documentoNormalizado,
@@ -224,6 +237,9 @@ public sealed class LeadService(
             Origem = request.Origem,
             Campanha = request.Campanha,
             ProdutoInteresse = request.ProdutoInteresse,
+            Placa = request.Placa?.Trim().ToUpperInvariant() is { Length: > 0 and <= 10 } placaValida ? placaValida : null,
+            TemSeguro = request.TemSeguro,
+            UtilidadeVeiculo = request.UtilidadeVeiculo,
             Gclid = request.Gclid,
             UtmMedium = request.UtmMedium,
             UtmSource = request.UtmSource,
@@ -249,6 +265,13 @@ public sealed class LeadService(
 
         return new CriarLeadResultado(await ObterPorIdAsync(lead.Id, ct), null);
     }
+
+    private async Task<Guid?> ObterEtapaInicialIdAsync(CancellationToken ct) =>
+        await db.CrmLeadStages.AsNoTracking()
+            .Where(s => s.Ativa)
+            .OrderBy(s => s.Ordem)
+            .Select(s => (Guid?)s.Id)
+            .FirstOrDefaultAsync(ct);
 
     public async Task<LeadDetailDto> AtualizarAsync(Guid id, LeadUpdateRequest request, CancellationToken ct)
     {
@@ -297,6 +320,9 @@ public sealed class LeadService(
         lead.Origem = request.Origem;
         lead.Campanha = request.Campanha;
         lead.ProdutoInteresse = request.ProdutoInteresse;
+        lead.Placa = request.Placa?.Trim().ToUpperInvariant() is { Length: > 0 and <= 10 } placaValida ? placaValida : null;
+        lead.TemSeguro = request.TemSeguro;
+        lead.UtilidadeVeiculo = request.UtilidadeVeiculo;
         lead.Gclid = request.Gclid;
         lead.UtmMedium = request.UtmMedium;
         lead.UtmSource = request.UtmSource;
@@ -371,10 +397,44 @@ public sealed class LeadService(
             novaEtapa = await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Id == request.NovaEtapaId, ct)
                 ?? throw new CrmNotFoundException("Etapa de lead", request.NovaEtapaId.Value);
             lead.EtapaId = novaEtapa.Id;
+
+            if (novaEtapa.Nome == EtapaLeadPerdido)
+            {
+                if (request.MotivoPerdaId is null)
+                {
+                    throw new CrmBusinessException("Informe o motivo da perda ao mover para 'Perdido'.", "motivo_perda_obrigatorio");
+                }
+
+                var motivo = await db.CrmLossReasons.FirstOrDefaultAsync(m => m.Id == request.MotivoPerdaId, ct)
+                    ?? throw new CrmNotFoundException("Motivo de perda", request.MotivoPerdaId.Value);
+                lead.MotivoPerdaId = motivo.Id;
+                lead.MotivoPerdaObservacao = string.IsNullOrWhiteSpace(request.MotivoPerdaObservacao) ? null : request.MotivoPerdaObservacao.Trim();
+                lead.VeiculoNaoAtendido = null;
+            }
+            else if (novaEtapa.Nome == EtapaLeadNaoFazemos)
+            {
+                if (string.IsNullOrWhiteSpace(request.VeiculoNaoAtendido))
+                {
+                    throw new CrmBusinessException("Informe o modelo do veículo ao mover para 'Não fazemos'.", "veiculo_nao_atendido_obrigatorio");
+                }
+
+                lead.VeiculoNaoAtendido = request.VeiculoNaoAtendido.Trim();
+                lead.MotivoPerdaId = null;
+                lead.MotivoPerdaObservacao = null;
+            }
+            else
+            {
+                lead.MotivoPerdaId = null;
+                lead.MotivoPerdaObservacao = null;
+                lead.VeiculoNaoAtendido = null;
+            }
         }
         else
         {
             lead.EtapaId = null;
+            lead.MotivoPerdaId = null;
+            lead.MotivoPerdaObservacao = null;
+            lead.VeiculoNaoAtendido = null;
         }
 
         try
@@ -468,6 +528,7 @@ public sealed class LeadService(
 
         var usuariosPorEmail = await db.Users.AsNoTracking()
             .ToDictionaryAsync(u => u.Email!.ToLowerInvariant(), u => u.Id, ct);
+        var etapaInicialId = await ObterEtapaInicialIdAsync(ct);
 
         foreach (var linha in linhas)
         {
@@ -520,6 +581,7 @@ public sealed class LeadService(
 
                 db.CrmLeads.Add(new CrmLead
                 {
+                    EtapaId = etapaInicialId,
                     NomeOuRazaoSocial = nome,
                     TipoPessoa = tipoPessoa,
                     DocumentoNormalizado = documentoNormalizado,
@@ -624,6 +686,7 @@ public sealed class LeadService(
             .Include(l => l.Responsavel)
             .Include(l => l.IndicadoPorLead)
             .Include(l => l.Etapa)
+            .Include(l => l.MotivoPerda)
             .Include(l => l.Oportunidades).ThenInclude(o => o.Etapa)
             .FirstOrDefaultAsync(l => l.Id == id, ct)
             ?? throw new CrmNotFoundException("Lead", id);
@@ -765,6 +828,9 @@ public sealed class LeadService(
         lead.Origem,
         lead.Campanha,
         lead.ProdutoInteresse,
+        lead.Placa,
+        lead.TemSeguro,
+        lead.UtilidadeVeiculo,
         lead.Gclid,
         lead.UtmMedium,
         lead.UtmSource,
@@ -778,6 +844,10 @@ public sealed class LeadService(
         lead.EtapaId,
         lead.Etapa?.Nome,
         lead.Etapa?.Cor,
+        lead.MotivoPerdaId,
+        lead.MotivoPerda?.Descricao,
+        lead.MotivoPerdaObservacao,
+        lead.VeiculoNaoAtendido,
         lead.ResponsavelId,
         lead.Responsavel?.NomeCompleto,
         lead.Observacoes,

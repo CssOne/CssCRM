@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Restore
+        run: dotnet restore CssBrasilCRM.sln
+
+      - name: Build
+        run: dotnet build CssBrasilCRM.sln --no-restore -c Release
+
+      - name: Test
+        run: dotnet test tests/CssVision.Web.Tests/CssVision.Web.Tests.csproj --no-build -c Release
+
+      - name: Frontend typecheck
+        working-directory: src/CssVision.Web/ClientApp
+        run: |
+          npm ci
+          npx tsc -b

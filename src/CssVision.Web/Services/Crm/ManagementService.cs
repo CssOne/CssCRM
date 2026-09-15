@@ -1,12 +1,19 @@
 using CssVision.Web.Api.Contracts.Common;
 using CssVision.Web.Api.Contracts.Crm;
+using CssVision.Web.Authorization;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
+using CssVision.Web.Domain.Identity;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace CssVision.Web.Services.Crm;
 
-public sealed class ManagementService(ApplicationDbContext db, ICurrentUserService currentUser, IEquipeComercialService equipe) : IManagementService
+public sealed class ManagementService(
+    ApplicationDbContext db,
+    ICurrentUserService currentUser,
+    IEquipeComercialService equipe,
+    UserManager<ApplicationUser> userManager) : IManagementService
 {
     /// <summary>Oportunidades abertas sem troca de etapa há mais de N dias entram no alerta de estagnação.</summary>
     private const int DiasSemMovimentacaoAlerta = 10;
@@ -60,6 +67,59 @@ public sealed class ManagementService(ApplicationDbContext db, ICurrentUserServi
         }
 
         return resultado;
+    }
+
+    public async Task<IReadOnlyList<ConsultorDesempenhoDto>> ObterDesempenhoConsultoresAsync(DateOnly? mesReferencia, CancellationToken ct)
+    {
+        ExigirGestaoComercial();
+
+        var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
+        var mes = new DateOnly((mesReferencia ?? hoje).Year, (mesReferencia ?? hoje).Month, 1);
+        var inicioMes = mes.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var fimMes = mes.AddMonths(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+
+        var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
+        var idsComPapelComercial = (await userManager.GetUsersInRoleAsync(Roles.Comercial)).Select(u => u.Id).ToHashSet();
+
+        var query = db.Users.AsNoTracking().Include(u => u.Regional).Where(u => idsComPapelComercial.Contains(u.Id));
+        if (visiveis is not null) query = query.Where(u => visiveis.Contains(u.Id));
+
+        var consultores = await query.ToListAsync(ct);
+
+        var metas = await db.CrmSalesGoals.AsNoTracking()
+            .Where(g => g.MesReferencia == mes)
+            .ToDictionaryAsync(g => g.VendedorId, ct);
+
+        var resultado = new List<ConsultorDesempenhoDto>();
+        foreach (var c in consultores)
+        {
+            var leadsAtivos = await db.CrmLeads.CountAsync(l => l.ResponsavelId == c.Id && !l.Arquivado, ct);
+            var oportunidades = db.CrmOpportunities.AsNoTracking().Where(o => o.ResponsavelId == c.Id && !o.Arquivado);
+
+            var abertas = await oportunidades.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Aberta).CountAsync(ct);
+            var valorPipeline = await oportunidades.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Aberta).SumAsync(o => (decimal?)o.ValorEstimado, ct) ?? 0m;
+
+            var fechadasNoMes = oportunidades.Where(o =>
+                o.Etapa.Tipo != TipoEtapaPipeline.Aberta && o.DataEfetivaFechamento >= inicioMes && o.DataEfetivaFechamento < fimMes);
+            var ganhas = await fechadasNoMes.CountAsync(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho, ct);
+            var perdidas = await fechadasNoMes.CountAsync(o => o.Etapa.Tipo == TipoEtapaPipeline.Perdido, ct);
+            var valorGanho = await fechadasNoMes.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho)
+                .SumAsync(o => (decimal?)(o.ValorFinal ?? o.ValorEstimado), ct) ?? 0m;
+            var taxa = (ganhas + perdidas) == 0 ? 0m : Math.Round(100m * ganhas / (ganhas + perdidas), 1);
+
+            var recebidosNoMes = await db.CrmLeads.CountAsync(l => l.ResponsavelId == c.Id && l.CriadoEm >= inicioMes, ct);
+
+            metas.TryGetValue(c.Id, out var meta);
+            var metaValor = meta?.MetaValor ?? 0m;
+            var percentualMeta = metaValor == 0 ? 0m : Math.Round(100m * valorGanho / metaValor, 1);
+
+            resultado.Add(new ConsultorDesempenhoDto(
+                c.Id, c.NomeCompleto, c.Email!, c.PhoneNumber, c.Regional?.Nome, c.Ativo,
+                leadsAtivos, abertas, valorPipeline, ganhas, valorGanho, taxa,
+                c.LimiteMensalLeads, recebidosNoMes, metaValor, valorGanho, percentualMeta));
+        }
+
+        return resultado.OrderByDescending(r => r.ValorGanho).ToList();
     }
 
     public async Task<IReadOnlyList<RedistribuicaoHistoricoDto>> ObterHistoricoRedistribuicoesAsync(CancellationToken ct)

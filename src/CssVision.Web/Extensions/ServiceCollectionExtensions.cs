@@ -1,8 +1,11 @@
+using Amazon.S3;
 using CssVision.Web.Authorization;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Identity;
 using CssVision.Web.Services.Crm;
+using CssVision.Web.Services.Email;
 using CssVision.Web.Services.Marketing;
+using CssVision.Web.Services.Storage;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -95,6 +98,41 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IManagementService, ManagementService>();
         services.AddScoped<IPublicLeadIntakeService, PublicLeadIntakeService>();
+        services.AddScoped<IUserManagementService, UserManagementService>();
+        services.AddScoped<IAnnouncementService, AnnouncementService>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddCrmEmailSender(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
+        services.AddScoped<IEmailSender, SmtpEmailSender>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Usa S3 quando Storage:S3:BucketName está configurado (produção com IAM role na instância —
+    /// nenhuma credencial em config) — caso contrário, disco local (dev, ou produção simples de
+    /// instância única). Ver LocalFileStorageService / S3FileStorageService.
+    /// </summary>
+    public static IServiceCollection AddCrmFileStorage(this IServiceCollection services, IConfiguration configuration)
+    {
+        var bucketName = configuration[$"{S3StorageOptions.SectionName}:BucketName"];
+        if (string.IsNullOrWhiteSpace(bucketName))
+        {
+            services.AddScoped<IFileStorageService, LocalFileStorageService>();
+            return services;
+        }
+
+        services.Configure<S3StorageOptions>(configuration.GetSection(S3StorageOptions.SectionName));
+        services.AddSingleton<IAmazonS3>(sp =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<S3StorageOptions>>().Value;
+            return new AmazonS3Client(Amazon.RegionEndpoint.GetBySystemName(options.Region));
+        });
+        services.AddScoped<IFileStorageService, S3FileStorageService>();
 
         return services;
     }

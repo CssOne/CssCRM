@@ -1,0 +1,17 @@
+# Copie para terraform.tfvars (que fica de fora do git) e ajuste antes do primeiro apply.
+
+aws_region   = "us-east-1"
+domain_name  = "cssbrasil.duckdns.org"
+
+# Seu IP público atual (ex: "203.0.113.5/32") — nunca 0.0.0.0/0 aqui, é a porta SSH.
+admin_cidr = "SEU_IP_AQUI/32"
+
+# Nome de um Key Pair EC2 já criado na região acima (Console EC2 → Key Pairs), para conseguir
+# entrar por SSH se precisar depurar algo na instância.
+key_pair_name = "NOME_DO_SEU_KEY_PAIR"
+
+# Se 200.164.22.11 já é um Elastic IP alocado na sua conta (Console EC2 → Elastic IPs), cole o
+# Allocation ID dele aqui (algo como "eipalloc-0123456789abcdef0") para reaproveitá-lo — é o que
+# faz o DuckDNS continuar apontando pro IP certo sem precisar atualizar nada.
+# Deixe em branco para a Terraform alocar um Elastic IP novo (você atualiza o DuckDNS depois).
+elastic_ip_allocation_id = ""
