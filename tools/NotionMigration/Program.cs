@@ -171,6 +171,7 @@ foreach (var spec in specs)
                 ResponsavelId = vendedorId,
                 EtapaId = vendaConcluidaLeadStageId,
                 TipoIndicacao = NotionLeadClassifier.Classificar(page.Select("O que")),
+                CriadoManualmente = NotionLeadClassifier.CriadoManualmente(page.Select("O que")),
                 Gclid = page.Text("GCLID"),
                 UtmSource = page.Text("UTM SOURCE"),
                 UtmMedium = page.Text("UTM MEDIUM"),
@@ -583,6 +584,8 @@ async Task CorrigirVendedoresAsync()
             if (lead.MetaFormId is null && page.Text("[META] Form") is { } formId) { lead.MetaFormId = formId; mudou = true; }
             if (lead.MetaLeadId is null && page.Text("[META] Lead ID") is { } leadId) { lead.MetaLeadId = leadId; mudou = true; }
             if (lead.TipoIndicacao is null) { lead.TipoIndicacao = NotionLeadClassifier.Classificar(page.Select("O que")); mudou = true; }
+            var criadoManualmenteCorreto = NotionLeadClassifier.CriadoManualmente(page.Select("O que"));
+            if (lead.CriadoManualmente != criadoManualmenteCorreto) { lead.CriadoManualmente = criadoManualmenteCorreto; mudou = true; }
             return mudou;
         }
         if (PreencheuLead()) camposPreenchidos++;
@@ -905,7 +908,7 @@ async Task ImportarNovosLeadsAsync()
                 Placa = page.Text("Placa") is { Length: <= 10 } placaValida ? placaValida : null,
                 EtapaId = etapaId,
                 ResponsavelId = vendedorPlaceholderId,
-                CriadoManualmente = string.IsNullOrWhiteSpace(oQue),
+                CriadoManualmente = NotionLeadClassifier.CriadoManualmente(oQue),
                 TipoIndicacao = NotionLeadClassifier.Classificar(oQue),
                 Gclid = page.Text("GCLID"),
                 UtmSource = page.Text("UTM SOURCE"),

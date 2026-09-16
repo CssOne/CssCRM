@@ -176,6 +176,7 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
         lead.Campanha = page.Select("Campanha", "CAMPANHA") ?? lead.Campanha;
         lead.ProdutoInteresse = oQue ?? lead.ProdutoInteresse;
         lead.TipoIndicacao = tipoIndicacao;
+        lead.CriadoManualmente = NotionLeadClassifier.CriadoManualmente(oQue);
         lead.Gclid = page.Text("GCLID") ?? lead.Gclid;
         lead.UtmSource = page.Text("UTM SOURCE") ?? lead.UtmSource;
         lead.UtmMedium = page.Text("UTM MEDIUM") ?? lead.UtmMedium;
