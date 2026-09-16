@@ -149,7 +149,7 @@ export function LeadDetailPage() {
     if (!lead) return;
     setSalvando(true);
     try {
-      const temVeiculo = [valores.veiculoDescricao, valores.veiculoPlaca, valores.veiculoFipe, valores.veiculoRastreador, valores.veiculoVistoriadorId].some(Boolean);
+      const temVeiculo = [valores.veiculoDescricao, valores.veiculoPlaca, valores.veiculoFipe, valores.veiculoRastreador, valores.veiculoValorVistoria, valores.veiculoVistoriadorId].some(Boolean);
       const request: OpportunityCreateRequest = {
         leadId: lead.id,
         titulo: valores.titulo,
@@ -163,6 +163,7 @@ export function LeadDetailPage() {
         dataAdesao: valores.dataAdesao || null,
         mensalidade: valores.mensalidade ? Number(valores.mensalidade) : null,
         mensalidadeComDesconto: valores.mensalidadeComDesconto ? Number(valores.mensalidadeComDesconto) : null,
+        mensalidadeComCupom: valores.mensalidadeComCupom ? Number(valores.mensalidadeComCupom) : null,
         pagamentoAdesao: valores.pagamentoAdesao ? Number(valores.pagamentoAdesao) : null,
         porcentagem: valores.porcentagem ? Number(valores.porcentagem) : null,
         termoAdesaoAceito: valores.termoAdesaoAceito,
@@ -172,7 +173,8 @@ export function LeadDetailPage() {
               descricao: valores.veiculoDescricao || null,
               placa: valores.veiculoPlaca || null,
               fipe: valores.veiculoFipe ? Number(valores.veiculoFipe) : null,
-              rastreador: valores.veiculoRastreador || null,
+              rastreador: valores.veiculoRastreador ? Number(valores.veiculoRastreador) : null,
+              valorVistoria: valores.veiculoValorVistoria ? Number(valores.veiculoValorVistoria) : null,
               vistoriadorId: valores.veiculoVistoriadorId || null,
               dataChegada: null,
             }

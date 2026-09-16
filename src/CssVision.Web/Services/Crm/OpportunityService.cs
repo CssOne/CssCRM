@@ -17,7 +17,8 @@ public sealed class OpportunityService(
     IFileStorageService armazenamento) : IOpportunityService
 {
     private static readonly string[] ExtensoesAnexoPermitidas = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
-    private static readonly HashSet<string> TiposAnexoValidos = new(StringComparer.OrdinalIgnoreCase) { "termo-adesao", "pagamento-adesao" };
+    private static readonly HashSet<string> TiposAnexoValidos = new(StringComparer.OrdinalIgnoreCase)
+        { "termo-adesao", "pagamento-adesao", "comprovante-indicacao", "comprovante-vistoria" };
 
     public async Task<PagedResult<OpportunityDto>> ListarAsync(OpportunityFilterRequest filtro, CancellationToken ct)
     {
@@ -112,6 +113,7 @@ public sealed class OpportunityService(
             DataAdesao = request.DataAdesao,
             Mensalidade = request.Mensalidade,
             MensalidadeComDesconto = request.MensalidadeComDesconto,
+            MensalidadeComCupom = request.MensalidadeComCupom,
             PagamentoAdesao = request.PagamentoAdesao,
             Porcentagem = request.Porcentagem,
             TermoAdesaoAceito = request.TermoAdesaoAceito,
@@ -166,6 +168,7 @@ public sealed class OpportunityService(
         opportunity.AtivoEm = request.AtivoEm;
         opportunity.Mensalidade = request.Mensalidade;
         opportunity.MensalidadeComDesconto = request.MensalidadeComDesconto;
+        opportunity.MensalidadeComCupom = request.MensalidadeComCupom;
         opportunity.PagamentoAdesao = request.PagamentoAdesao;
         opportunity.Porcentagem = request.Porcentagem;
         opportunity.TermoAdesaoAceito = request.TermoAdesaoAceito;
@@ -236,6 +239,7 @@ public sealed class OpportunityService(
             opportunity.AtivoEm = request.AtivoEm;
             opportunity.Mensalidade = request.Mensalidade;
             opportunity.MensalidadeComDesconto = request.MensalidadeComDesconto;
+            opportunity.MensalidadeComCupom = request.MensalidadeComCupom;
             opportunity.PagamentoAdesao = request.PagamentoAdesao;
             opportunity.Porcentagem = request.Porcentagem;
             opportunity.Migracao = request.Migracao;
@@ -251,6 +255,7 @@ public sealed class OpportunityService(
                 veiculo.Placa = request.Veiculo.Placa?.Trim().ToUpperInvariant();
                 veiculo.Fipe = request.Veiculo.Fipe;
                 veiculo.Rastreador = request.Veiculo.Rastreador;
+                veiculo.ValorVistoria = request.Veiculo.ValorVistoria;
                 veiculo.DataChegada = request.Veiculo.DataChegada;
                 opportunity.Veiculo = veiculo;
                 // Ver comentário em CriarOuAtualizarVeiculo: sem isto, o EF trata o veículo novo
@@ -336,6 +341,7 @@ public sealed class OpportunityService(
         veiculo.Placa = request.Placa?.Trim().ToUpperInvariant();
         veiculo.Fipe = request.Fipe;
         veiculo.Rastreador = request.Rastreador;
+        veiculo.ValorVistoria = request.ValorVistoria;
         veiculo.VistoriadorId = request.VistoriadorId;
         veiculo.DataChegada = request.DataChegada;
         // Como CrmEntityBase já preenche Id com um Guid não-vazio no construtor, o EF não consegue
@@ -348,7 +354,7 @@ public sealed class OpportunityService(
 
     private static VeiculoDto? ParaVeiculoDto(CrmVeiculo? v) => v is null
         ? null
-        : new VeiculoDto(v.Id, v.Descricao, v.Placa, v.Fipe, v.Rastreador, v.VistoriadorId, v.Vistoriador?.NomeCompleto, v.DataChegada);
+        : new VeiculoDto(v.Id, v.Descricao, v.Placa, v.Fipe, v.Rastreador, v.ValorVistoria, v.VistoriadorId, v.Vistoriador?.NomeCompleto, v.DataChegada);
 
     private static OpportunityDto ParaDto(CrmOpportunity o, DateOnly hoje) => new(
         o.Id,
@@ -375,6 +381,7 @@ public sealed class OpportunityService(
         o.AtivoEm,
         o.Mensalidade,
         o.MensalidadeComDesconto,
+        o.MensalidadeComCupom,
         o.PagamentoAdesao,
         o.Porcentagem,
         o.TermoAdesaoAceito,
@@ -391,7 +398,9 @@ public sealed class OpportunityService(
         o.ValorIndicacao,
         o.Total,
         o.TermoAdesaoArquivoUrl,
-        o.PagamentoAdesaoArquivoUrl);
+        o.PagamentoAdesaoArquivoUrl,
+        o.ComprovanteIndicacaoArquivoUrl,
+        o.ComprovanteVistoriaArquivoUrl);
 
     public async Task<OpportunityDto> AnexarArquivoAsync(Guid id, string tipo, IFormFile arquivo, CancellationToken ct)
     {
@@ -418,21 +427,34 @@ public sealed class OpportunityService(
         }
 
         var tipoNormalizado = tipo.ToLowerInvariant();
-        var urlAtual = tipoNormalizado == "termo-adesao" ? opportunity.TermoAdesaoArquivoUrl : opportunity.PagamentoAdesaoArquivoUrl;
+        var urlAtual = tipoNormalizado switch
+        {
+            "termo-adesao" => opportunity.TermoAdesaoArquivoUrl,
+            "pagamento-adesao" => opportunity.PagamentoAdesaoArquivoUrl,
+            "comprovante-indicacao" => opportunity.ComprovanteIndicacaoArquivoUrl,
+            _ => opportunity.ComprovanteVistoriaArquivoUrl,
+        };
         await armazenamento.ExcluirSeExistirAsync(urlAtual, ct);
 
         var nomeArquivo = $"{tipoNormalizado}{extensao}";
         await using var stream = arquivo.OpenReadStream();
         var novaUrl = await armazenamento.SalvarAsync($"opportunities/{opportunity.Id}", nomeArquivo, stream, arquivo.ContentType, ct);
 
-        if (tipoNormalizado == "termo-adesao")
+        switch (tipoNormalizado)
         {
-            opportunity.TermoAdesaoArquivoUrl = novaUrl;
-            opportunity.TermoAdesaoAceito = true;
-        }
-        else
-        {
-            opportunity.PagamentoAdesaoArquivoUrl = novaUrl;
+            case "termo-adesao":
+                opportunity.TermoAdesaoArquivoUrl = novaUrl;
+                opportunity.TermoAdesaoAceito = true;
+                break;
+            case "pagamento-adesao":
+                opportunity.PagamentoAdesaoArquivoUrl = novaUrl;
+                break;
+            case "comprovante-indicacao":
+                opportunity.ComprovanteIndicacaoArquivoUrl = novaUrl;
+                break;
+            default:
+                opportunity.ComprovanteVistoriaArquivoUrl = novaUrl;
+                break;
         }
 
         await db.SaveChangesAsync(ct);

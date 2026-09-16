@@ -18,6 +18,7 @@ public class CrmOpportunityConfiguration : IEntityTypeConfiguration<CrmOpportuni
         builder.Property(e => e.ValorFinal).HasColumnType("numeric(14,2)");
         builder.Property(e => e.Mensalidade).HasColumnType("numeric(14,2)");
         builder.Property(e => e.MensalidadeComDesconto).HasColumnType("numeric(14,2)");
+        builder.Property(e => e.MensalidadeComCupom).HasColumnType("numeric(14,2)");
         builder.Property(e => e.PagamentoAdesao).HasColumnType("numeric(14,2)");
         builder.Property(e => e.Porcentagem).HasColumnType("numeric(5,2)");
         builder.Property(e => e.ValorIndicacao).HasColumnType("numeric(14,2)");

@@ -59,6 +59,7 @@ if (Environment.GetEnvironmentVariable("MIGRATION_MODE") == "fixorigin")
 
 var ganhoStage = await db.CrmPipelineStages.FirstAsync(s => s.Tipo == TipoEtapaPipeline.Ganho);
 var vendaConcluidaLeadStageId = (await db.CrmLeadStages.FirstAsync(s => s.Nome == "Venda concluída")).Id;
+var motivosPerdaPorNome = await db.CrmLossReasons.ToDictionaryAsync(m => m.Descricao, m => m.Id);
 
 var documentosExistentes = (await db.CrmLeads.AsNoTracking().Where(l => l.DocumentoNormalizado != null && !l.Arquivado)
     .Select(l => l.DocumentoNormalizado!).ToListAsync()).ToHashSet();
@@ -170,6 +171,13 @@ foreach (var spec in specs)
                 ResponsavelId = vendedorId,
                 EtapaId = vendaConcluidaLeadStageId,
                 TipoIndicacao = NotionLeadClassifier.Classificar(page.Select("O que")),
+                Gclid = page.Text("GCLID"),
+                UtmSource = page.Text("UTM SOURCE"),
+                UtmMedium = page.Text("UTM MEDIUM"),
+                UtmTerm = page.Text("UTM TERM"),
+                MetaClickId = page.Text("[META] Click ID"),
+                MetaFormId = page.Text("[META] Form"),
+                MetaLeadId = page.Text("[META] Lead ID"),
                 ConsentimentoContato = true,
                 ConsentimentoOrigem = "Migração da base histórica (Notion)",
                 Arquivado = false,
@@ -182,10 +190,13 @@ foreach (var spec in specs)
 
             var mensalidade = page.Number("Mensalidade") is { } m ? (decimal)m : (decimal?)null;
             var mensalidadeComDesconto = page.FormulaDecimal("Mensalidade com desconto");
+            var mensalidadeComCupom = page.Number("Mensalidade (Cupom)") is { } cupom ? (decimal)cupom : (decimal?)null;
             var adesao = page.Number("Adesão") is { } a ? (decimal)a : (decimal?)null;
             var porcentagem = page.Number("Porcentagem") is { } pc ? (decimal)pc : (decimal?)null;
+            var valorIndicacao = page.Number("Indicação") is { } vi ? (decimal)vi : (decimal?)null;
             var total = page.FormulaDecimal("Total");
             var ativoEmTexto = page.DateStart("Ativo em");
+            var motivoPerdaNome = page.Select("Motivo da perda");
 
             var oportunidade = new CrmOpportunity
             {
@@ -202,8 +213,11 @@ foreach (var spec in specs)
                 AtivoEm = ParseUtc(ativoEmTexto),
                 Mensalidade = mensalidade,
                 MensalidadeComDesconto = mensalidadeComDesconto,
+                MensalidadeComCupom = mensalidadeComCupom,
                 PagamentoAdesao = adesao,
                 Porcentagem = porcentagem,
+                ValorIndicacao = valorIndicacao,
+                MotivoPerdaId = motivoPerdaNome is not null && motivosPerdaPorNome.TryGetValue(motivoPerdaNome, out var motivoId) ? motivoId : null,
                 TermoAdesaoAceito = page.HasFiles("Termo Adesão"),
                 Migracao = page.Select("Migração", "Migração?") is not null,
             };
@@ -214,7 +228,8 @@ foreach (var spec in specs)
                 Descricao = page.Text("Veiculo"),
                 Placa = page.Text("Placa") is { Length: <= 10 } placaValida ? placaValida : null,
                 Fipe = page.Number("FIPE") is { } fipe ? (decimal)fipe : (decimal?)null,
-                Rastreador = page.Number("Rastreador")?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                Rastreador = page.Number("Rastreador") is { } rastreador ? (decimal)rastreador : (decimal?)null,
+                ValorVistoria = page.Number("Vistoriador") is { } vistoriador ? (decimal)vistoriador : (decimal?)null,
                 DataChegada = ParseUtc(criadoEmTexto),
             };
             oportunidade.Veiculo = veiculo;
@@ -857,6 +872,13 @@ async Task ImportarNovosLeadsAsync()
                 ResponsavelId = vendedorPlaceholderId,
                 CriadoManualmente = string.IsNullOrWhiteSpace(oQue),
                 TipoIndicacao = NotionLeadClassifier.Classificar(oQue),
+                Gclid = page.Text("GCLID"),
+                UtmSource = page.Text("UTM SOURCE"),
+                UtmMedium = page.Text("UTM MEDIUM"),
+                UtmTerm = page.Text("UTM TERM"),
+                MetaClickId = page.Text("[META] Click ID"),
+                MetaFormId = page.Text("[META] Form"),
+                MetaLeadId = page.Text("[META] Lead ID"),
                 ConsentimentoContato = true,
                 ConsentimentoOrigem = "Migração da base histórica (Notion)",
                 Arquivado = false,

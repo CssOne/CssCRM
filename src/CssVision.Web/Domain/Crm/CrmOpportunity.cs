@@ -48,6 +48,9 @@ public class CrmOpportunity : CrmArchivableEntity
     /// <summary>Precisão monetária: numeric(14,2) — ver ApplicationDbContext.</summary>
     public decimal? Mensalidade { get; set; }
     public decimal? MensalidadeComDesconto { get; set; }
+
+    /// <summary>Mensalidade com cupom de desconto aplicado — distinta de MensalidadeComDesconto (desconto padrão, sem cupom).</summary>
+    public decimal? MensalidadeComCupom { get; set; }
     public decimal? PagamentoAdesao { get; set; }
 
     /// <summary>Percentual de comissão ou desconto aplicado, conforme o produto. Precisão: numeric(5,2).</summary>
@@ -77,6 +80,12 @@ public class CrmOpportunity : CrmArchivableEntity
 
     /// <summary>Caminho relativo (/uploads/...) do comprovante de pagamento da adesão, enviado ao concluir a venda.</summary>
     public string? PagamentoAdesaoArquivoUrl { get; set; }
+
+    /// <summary>Caminho relativo (/uploads/...) do comprovante de indicação, quando a venda teve origem em indicação.</summary>
+    public string? ComprovanteIndicacaoArquivoUrl { get; set; }
+
+    /// <summary>Caminho relativo (/uploads/...) do comprovante de vistoria do veículo.</summary>
+    public string? ComprovanteVistoriaArquivoUrl { get; set; }
 
     public CrmVeiculo? Veiculo { get; set; }
 

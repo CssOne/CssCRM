@@ -14,6 +14,7 @@ export interface OpportunityFormValues {
   dataAdesao: string;
   mensalidade: string;
   mensalidadeComDesconto: string;
+  mensalidadeComCupom: string;
   pagamentoAdesao: string;
   porcentagem: string;
   termoAdesaoAceito: boolean;
@@ -22,6 +23,7 @@ export interface OpportunityFormValues {
   veiculoPlaca: string;
   veiculoFipe: string;
   veiculoRastreador: string;
+  veiculoValorVistoria: string;
   veiculoVistoriadorId: string;
 }
 
@@ -36,6 +38,7 @@ export const opportunityFormVazio: OpportunityFormValues = {
   dataAdesao: "",
   mensalidade: "",
   mensalidadeComDesconto: "",
+  mensalidadeComCupom: "",
   pagamentoAdesao: "",
   porcentagem: "",
   termoAdesaoAceito: false,
@@ -44,6 +47,7 @@ export const opportunityFormVazio: OpportunityFormValues = {
   veiculoPlaca: "",
   veiculoFipe: "",
   veiculoRastreador: "",
+  veiculoValorVistoria: "",
   veiculoVistoriadorId: "",
 };
 
@@ -143,6 +147,14 @@ export function OpportunityForm({
             />
           </div>
           <div>
+            <Label htmlFor="opp-mensalidade-cupom">Mensalidade com cupom (R$)</Label>
+            <MoneyInput
+              id="opp-mensalidade-cupom"
+              value={valores.mensalidadeComCupom ? Number(valores.mensalidadeComCupom) : null}
+              onChange={(v) => setMoeda("mensalidadeComCupom", v)}
+            />
+          </div>
+          <div>
             <Label htmlFor="opp-pagamento-adesao">Pagamento de adesão (R$)</Label>
             <MoneyInput
               id="opp-pagamento-adesao"
@@ -173,11 +185,23 @@ export function OpportunityForm({
             <MoneyInput id="opp-veiculo-fipe" value={valores.veiculoFipe ? Number(valores.veiculoFipe) : null} onChange={(v) => setMoeda("veiculoFipe", v)} />
           </div>
           <div>
-            <Label htmlFor="opp-veiculo-rastreador">Rastreador</Label>
-            <Input id="opp-veiculo-rastreador" value={valores.veiculoRastreador} onChange={(e) => set("veiculoRastreador", e.target.value)} />
+            <Label htmlFor="opp-veiculo-rastreador">Custo do rastreador (R$)</Label>
+            <MoneyInput
+              id="opp-veiculo-rastreador"
+              value={valores.veiculoRastreador ? Number(valores.veiculoRastreador) : null}
+              onChange={(v) => setMoeda("veiculoRastreador", v)}
+            />
           </div>
           <div>
-            <Label htmlFor="opp-veiculo-vistoriador">Vistoriador</Label>
+            <Label htmlFor="opp-veiculo-valor-vistoria">Custo da vistoria (R$)</Label>
+            <MoneyInput
+              id="opp-veiculo-valor-vistoria"
+              value={valores.veiculoValorVistoria ? Number(valores.veiculoValorVistoria) : null}
+              onChange={(v) => setMoeda("veiculoValorVistoria", v)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="opp-veiculo-vistoriador">Vistoriador (responsável)</Label>
             <Select id="opp-veiculo-vistoriador" value={valores.veiculoVistoriadorId} onChange={(e) => set("veiculoVistoriadorId", e.target.value)}>
               <option value="">Nenhum</option>
               {vendedores.map((v) => (

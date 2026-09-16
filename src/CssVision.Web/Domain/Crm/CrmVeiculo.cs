@@ -17,7 +17,12 @@ public class CrmVeiculo : CrmEntityBase
     /// <summary>Valor de referência FIPE do veículo. Precisão: numeric(14,2).</summary>
     public decimal? Fipe { get; set; }
 
-    public string? Rastreador { get; set; }
+    /// <summary>Custo do rastreador, descontado do valor total da venda. Precisão: numeric(14,2).</summary>
+    public decimal? Rastreador { get; set; }
+
+    /// <summary>Custo da vistoria, descontado do valor total da venda. Precisão: numeric(14,2). Não
+    /// confundir com VistoriadorId abaixo (a pessoa responsável pela vistoria).</summary>
+    public decimal? ValorVistoria { get; set; }
 
     public Guid? VistoriadorId { get; set; }
     public ApplicationUser? Vistoriador { get; set; }

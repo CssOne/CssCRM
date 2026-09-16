@@ -19,10 +19,11 @@ const valoresIniciais: DadosVendaConcluida = {
   ativoEm: "",
   mensalidade: null,
   mensalidadeComDesconto: null,
+  mensalidadeComCupom: null,
   pagamentoAdesao: null,
   porcentagem: null,
   migracao: false,
-  veiculo: { descricao: "", placa: "", fipe: null, rastreador: null, vistoriadorId: null, dataChegada: "" },
+  veiculo: { descricao: "", placa: "", fipe: null, rastreador: null, valorVistoria: null, vistoriadorId: null, dataChegada: "" },
 };
 
 /**
@@ -226,6 +227,10 @@ export function VendaConcluidaDialog({
               <MoneyInput id="venda-mensalidade-desconto" value={valores.mensalidadeComDesconto} onChange={(v) => set("mensalidadeComDesconto", v)} />
             </div>
             <div>
+              <Label htmlFor="venda-mensalidade-cupom">Mensalidade com cupom (R$)</Label>
+              <MoneyInput id="venda-mensalidade-cupom" value={valores.mensalidadeComCupom} onChange={(v) => set("mensalidadeComCupom", v)} />
+            </div>
+            <div>
               <Label htmlFor="venda-adesao">Pagamento de adesão (R$)</Label>
               <MoneyInput id="venda-adesao" value={valores.pagamentoAdesao} onChange={(v) => set("pagamentoAdesao", v)} />
             </div>
@@ -269,8 +274,12 @@ export function VendaConcluidaDialog({
               <MoneyInput id="venda-veiculo-fipe" value={valores.veiculo?.fipe} onChange={(v) => setVeiculo("fipe", v)} />
             </div>
             <div>
-              <Label htmlFor="venda-veiculo-rastreador">Rastreador</Label>
-              <Input id="venda-veiculo-rastreador" value={valores.veiculo?.rastreador ?? ""} onChange={(e) => setVeiculo("rastreador", e.target.value)} />
+              <Label htmlFor="venda-veiculo-rastreador">Custo do rastreador (R$)</Label>
+              <MoneyInput id="venda-veiculo-rastreador" value={valores.veiculo?.rastreador ?? null} onChange={(v) => setVeiculo("rastreador", v)} />
+            </div>
+            <div>
+              <Label htmlFor="venda-veiculo-valor-vistoria">Custo da vistoria (R$)</Label>
+              <MoneyInput id="venda-veiculo-valor-vistoria" value={valores.veiculo?.valorVistoria ?? null} onChange={(v) => setVeiculo("valorVistoria", v)} />
             </div>
             <div>
               <Label htmlFor="venda-veiculo-chegada">Data de chegada</Label>

@@ -28,6 +28,7 @@ public record OpportunityDto(
     DateTimeOffset? AtivoEm,
     decimal? Mensalidade,
     decimal? MensalidadeComDesconto,
+    decimal? MensalidadeComCupom,
     decimal? PagamentoAdesao,
     decimal? Porcentagem,
     bool TermoAdesaoAceito,
@@ -44,14 +45,17 @@ public record OpportunityDto(
     decimal? ValorIndicacao,
     decimal? Total,
     string? TermoAdesaoArquivoUrl,
-    string? PagamentoAdesaoArquivoUrl);
+    string? PagamentoAdesaoArquivoUrl,
+    string? ComprovanteIndicacaoArquivoUrl,
+    string? ComprovanteVistoriaArquivoUrl);
 
 public record VeiculoDto(
     Guid Id,
     string? Descricao,
     string? Placa,
     decimal? Fipe,
-    string? Rastreador,
+    decimal? Rastreador,
+    decimal? ValorVistoria,
     Guid? VistoriadorId,
     string? VistoriadorNome,
     DateTimeOffset? DataChegada);
@@ -60,7 +64,8 @@ public record VeiculoUpsertRequest(
     string? Descricao,
     string? Placa,
     decimal? Fipe,
-    string? Rastreador,
+    decimal? Rastreador,
+    decimal? ValorVistoria,
     Guid? VistoriadorId,
     DateTimeOffset? DataChegada);
 
@@ -90,6 +95,7 @@ public record OpportunityCreateRequest(
     DateOnly? DataAdesao,
     decimal? Mensalidade,
     decimal? MensalidadeComDesconto,
+    decimal? MensalidadeComCupom,
     decimal? PagamentoAdesao,
     decimal? Porcentagem,
     bool TermoAdesaoAceito,
@@ -109,6 +115,7 @@ public record OpportunityUpdateRequest(
     DateTimeOffset? AtivoEm,
     decimal? Mensalidade,
     decimal? MensalidadeComDesconto,
+    decimal? MensalidadeComCupom,
     decimal? PagamentoAdesao,
     decimal? Porcentagem,
     bool TermoAdesaoAceito,
@@ -132,6 +139,7 @@ public record ChangeStageRequest(
     DateTimeOffset? AtivoEm = null,
     decimal? Mensalidade = null,
     decimal? MensalidadeComDesconto = null,
+    decimal? MensalidadeComCupom = null,
     decimal? PagamentoAdesao = null,
     decimal? Porcentagem = null,
     bool Migracao = false,

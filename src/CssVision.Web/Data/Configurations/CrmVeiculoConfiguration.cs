@@ -14,7 +14,8 @@ public class CrmVeiculoConfiguration : IEntityTypeConfiguration<CrmVeiculo>
         builder.Property(e => e.Descricao).HasMaxLength(200);
         builder.Property(e => e.Placa).HasMaxLength(10);
         builder.Property(e => e.Fipe).HasColumnType("numeric(14,2)");
-        builder.Property(e => e.Rastreador).HasMaxLength(120);
+        builder.Property(e => e.Rastreador).HasColumnType("numeric(14,2)");
+        builder.Property(e => e.ValorVistoria).HasColumnType("numeric(14,2)");
 
         builder.HasIndex(e => e.OpportunityId).IsUnique();
         builder.HasIndex(e => e.Placa);

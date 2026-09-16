@@ -176,6 +176,13 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
         lead.Campanha = page.Select("Campanha", "CAMPANHA") ?? lead.Campanha;
         lead.ProdutoInteresse = oQue ?? lead.ProdutoInteresse;
         lead.TipoIndicacao = tipoIndicacao;
+        lead.Gclid = page.Text("GCLID") ?? lead.Gclid;
+        lead.UtmSource = page.Text("UTM SOURCE") ?? lead.UtmSource;
+        lead.UtmMedium = page.Text("UTM MEDIUM") ?? lead.UtmMedium;
+        lead.UtmTerm = page.Text("UTM TERM") ?? lead.UtmTerm;
+        lead.MetaClickId = page.Text("[META] Click ID") ?? lead.MetaClickId;
+        lead.MetaFormId = page.Text("[META] Form") ?? lead.MetaFormId;
+        lead.MetaLeadId = page.Text("[META] Lead ID") ?? lead.MetaLeadId;
         if (vendedorId != placeholderVendedorId) lead.ResponsavelId = vendedorId;
 
         if (isVendaConcluida)
@@ -224,16 +231,26 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
         oportunidade.AtivoEm = ativoEm ?? oportunidade.AtivoEm;
         oportunidade.Mensalidade = mensalidade ?? oportunidade.Mensalidade;
         oportunidade.MensalidadeComDesconto = mensalidadeComDesconto ?? oportunidade.MensalidadeComDesconto;
+        oportunidade.MensalidadeComCupom = page.Number("Mensalidade (Cupom)") is { } cupom ? (decimal)cupom : oportunidade.MensalidadeComCupom;
         oportunidade.PagamentoAdesao = adesao ?? oportunidade.PagamentoAdesao;
         oportunidade.Porcentagem = porcentagem ?? oportunidade.Porcentagem;
+        oportunidade.ValorIndicacao = page.Number("Indicação") is { } valorIndicacao ? (decimal)valorIndicacao : oportunidade.ValorIndicacao;
         oportunidade.TermoAdesaoAceito = page.HasFiles("Termo Adesão") || oportunidade.TermoAdesaoAceito;
         oportunidade.Migracao = page.Select("Migração", "Migração?") is not null || oportunidade.Migracao;
+
+        var motivoPerdaNome = page.Select("Motivo da perda");
+        if (motivoPerdaNome is not null && oportunidade.MotivoPerdaId is null)
+        {
+            var motivo = await db.CrmLossReasons.FirstOrDefaultAsync(m => m.Descricao == motivoPerdaNome, ct);
+            if (motivo is not null) oportunidade.MotivoPerdaId = motivo.Id;
+        }
 
         var veiculo = oportunidade.Veiculo ??= new CrmVeiculo { OpportunityId = oportunidade.Id };
         veiculo.Descricao = page.Text("Veiculo") ?? veiculo.Descricao;
         veiculo.Placa = page.Text("Placa") is { Length: <= 10 } placaValida ? placaValida : veiculo.Placa;
         veiculo.Fipe = page.Number("FIPE") is { } fipe ? (decimal)fipe : veiculo.Fipe;
-        veiculo.Rastreador = page.Number("Rastreador")?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? veiculo.Rastreador;
+        veiculo.Rastreador = page.Number("Rastreador") is { } rastreador ? (decimal)rastreador : veiculo.Rastreador;
+        veiculo.ValorVistoria = page.Number("Vistoriador") is { } vistoriador ? (decimal)vistoriador : veiculo.ValorVistoria;
     }
 
     private readonly Dictionary<string, Guid> _vendedorPorEmailCache = new();

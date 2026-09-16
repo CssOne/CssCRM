@@ -340,6 +340,7 @@ export interface Opportunity {
   ativoEm?: string | null;
   mensalidade?: number | null;
   mensalidadeComDesconto?: number | null;
+  mensalidadeComCupom?: number | null;
   pagamentoAdesao?: number | null;
   porcentagem?: number | null;
   termoAdesaoAceito: boolean;
@@ -357,6 +358,8 @@ export interface Opportunity {
   total?: number | null;
   termoAdesaoArquivoUrl?: string | null;
   pagamentoAdesaoArquivoUrl?: string | null;
+  comprovanteIndicacaoArquivoUrl?: string | null;
+  comprovanteVistoriaArquivoUrl?: string | null;
 }
 
 export interface Veiculo {
@@ -364,7 +367,8 @@ export interface Veiculo {
   descricao?: string | null;
   placa?: string | null;
   fipe?: number | null;
-  rastreador?: string | null;
+  rastreador?: number | null;
+  valorVistoria?: number | null;
   vistoriadorId?: string | null;
   vistoriadorNome?: string | null;
   dataChegada?: string | null;
@@ -374,7 +378,8 @@ export interface VeiculoUpsertRequest {
   descricao?: string | null;
   placa?: string | null;
   fipe?: number | null;
-  rastreador?: string | null;
+  rastreador?: number | null;
+  valorVistoria?: number | null;
   vistoriadorId?: string | null;
   dataChegada?: string | null;
 }
@@ -393,6 +398,7 @@ export interface OpportunityCreateRequest {
   dataAdesao?: string | null;
   mensalidade?: number | null;
   mensalidadeComDesconto?: number | null;
+  mensalidadeComCupom?: number | null;
   pagamentoAdesao?: number | null;
   porcentagem?: number | null;
   termoAdesaoAceito: boolean;
@@ -416,6 +422,7 @@ export interface ChangeStageRequest {
   ativoEm?: string | null;
   mensalidade?: number | null;
   mensalidadeComDesconto?: number | null;
+  mensalidadeComCupom?: number | null;
   pagamentoAdesao?: number | null;
   porcentagem?: number | null;
   migracao?: boolean;
