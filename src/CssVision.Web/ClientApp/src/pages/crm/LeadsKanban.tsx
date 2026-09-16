@@ -360,6 +360,9 @@ export function LeadsKanbanPage() {
                       >
                         {cartao.nomeOuRazaoSocial}
                       </Link>
+                      {cartao.tipoIndicacao && (
+                        <Badge variant={cartao.tipoIndicacao === "Lead" ? "info" : "neutral"}>{cartao.tipoIndicacao}</Badge>
+                      )}
                       {cartao.semContato && <Badge variant="warning">sem contato</Badge>}
                       {cartao.arquivado && <Badge variant="neutral">arquivado</Badge>}
                     </div>

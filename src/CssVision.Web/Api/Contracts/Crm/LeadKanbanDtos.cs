@@ -14,6 +14,7 @@ public record LeadKanbanCardDto(
     string? Placa,
     bool? TemSeguro,
     string? UtilidadeVeiculo,
+    string? TipoIndicacao,
     Guid? ResponsavelId,
     string? ResponsavelNome,
     IReadOnlyList<string> Tags,

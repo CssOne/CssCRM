@@ -47,7 +47,7 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
 
         LeadKanbanCardDto ParaCartao(CrmLead l) => new(
             l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Email, l.Estado, l.Origem, l.Campanha,
-            l.Placa, l.TemSeguro, l.UtilidadeVeiculo,
+            l.Placa, l.TemSeguro, l.UtilidadeVeiculo, l.TipoIndicacao,
             l.ResponsavelId, l.Responsavel?.NomeCompleto,
             l.LeadTags.Select(lt => lt.Tag.Nome).ToList(),
             l.CriadoEm, l.UltimoContatoEm, l.UltimoContatoEm == null, l.Arquivado, l.RowVersion);

@@ -265,6 +265,7 @@ export interface LeadKanbanCard {
   placa?: string | null;
   temSeguro?: boolean | null;
   utilidadeVeiculo?: string | null;
+  tipoIndicacao?: string | null;
   responsavelId?: string | null;
   responsavelNome?: string | null;
   tags: string[];
