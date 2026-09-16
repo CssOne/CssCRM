@@ -84,6 +84,12 @@ if (Environment.GetEnvironmentVariable("MIGRATION_MODE") == "importnovos")
     return;
 }
 
+if (Environment.GetEnvironmentVariable("MIGRATION_MODE") == "fixvendors")
+{
+    await CorrigirVendedoresAsync();
+    return;
+}
+
 foreach (var spec in specs)
 {
     Console.WriteLine($"\n=== {spec.RegionalName} ===");
@@ -491,6 +497,127 @@ async Task CorrigirOrigemEIndicacaoAsync()
     }
 
     Console.WriteLine($"\n=== {corrigidosPorCpf} corrigidos por CPF | {corrigidosPorTelefone} corrigidos por telefone | {semChave} sem nenhuma chave para casar ===");
+}
+
+/// <summary>
+/// Revisita todas as páginas do Notion (as 4 bases) e, pra cada lead/oportunidade já migrado cujo
+/// responsável hoje é o placeholder "Vendedor não identificado", tenta resolver o vendedor de
+/// verdade de novo — útil depois de habilitar "Read user information including email addresses"
+/// na integração do Notion, que antes fazia a API devolver as pessoas sem nome/e-mail.
+/// </summary>
+async Task CorrigirVendedoresAsync()
+{
+    var corrigidosLead = 0;
+    var corrigidosOportunidade = 0;
+    var semCorrespondencia = 0;
+    var aindaSemVendedor = 0;
+
+    async Task<CrmLead?> BuscarLeadAsync(JsonElement page)
+    {
+        var cpfBruto = page.Text("CPF") ?? page.Number("CPF")?.ToString("F0", System.Globalization.CultureInfo.InvariantCulture);
+        var documentoNormalizado = DocumentValidation.NormalizarDocumento(cpfBruto, out _);
+        if (documentoNormalizado is { Length: > 14 }) documentoNormalizado = null;
+        if (documentoNormalizado is not null)
+        {
+            var porDocumento = await db.CrmLeads.FirstOrDefaultAsync(l => l.DocumentoNormalizado == documentoNormalizado);
+            if (porDocumento is not null) return porDocumento;
+        }
+
+        var emailNormalizado = DocumentValidation.NormalizarEmail(page.Text("E-mail", "[META] Email"));
+        if (emailNormalizado is not null)
+        {
+            var porEmail = await db.CrmLeads.FirstOrDefaultAsync(l => l.EmailNormalizado == emailNormalizado);
+            if (porEmail is not null) return porEmail;
+        }
+
+        var telefoneNormalizado = DocumentValidation.NormalizarTelefone(page.Text("WhatsApp") ?? page.Text("[META] Phone Number"));
+        if (telefoneNormalizado is { Length: > 0 and <= 20 })
+        {
+            return await db.CrmLeads.FirstOrDefaultAsync(l => l.TelefoneNormalizado == telefoneNormalizado);
+        }
+
+        return null;
+    }
+
+    async Task ProcessarPaginaAsync(JsonElement page, Guid regionalId, Guid placeholderId)
+    {
+        var vendedorInfo = page.PrimeiroVendedor("Vendedor");
+        var vendedorId = await ResolverVendedorAsync(vendedorInfo, regionalId);
+        if (vendedorId == placeholderId) { aindaSemVendedor++; return; }
+
+        var lead = await BuscarLeadAsync(page);
+        if (lead is null) { semCorrespondencia++; return; }
+
+        if (lead.ResponsavelId is null || lead.ResponsavelId == placeholderId)
+        {
+            lead.ResponsavelId = vendedorId;
+            corrigidosLead++;
+        }
+
+        var oportunidade = await db.CrmOpportunities.FirstOrDefaultAsync(o => o.LeadId == lead.Id && !o.Arquivado);
+        if (oportunidade is not null && oportunidade.ResponsavelId == placeholderId)
+        {
+            oportunidade.ResponsavelId = vendedorId;
+            corrigidosOportunidade++;
+        }
+    }
+
+    foreach (var spec in specs)
+    {
+        Console.WriteLine($"\n=== Corrigindo vendedores (venda concluída): {spec.RegionalName} ===");
+        var regional = await db.CrmRegionais.FirstAsync(r => r.Nome == spec.RegionalName);
+        var placeholderId = await ObterOuCriarVendedorPlaceholderAsync(regional.Id);
+
+        var total = 0;
+        await foreach (var page in notion.QueryVendaConcluidaAsync(spec.DataSourceId))
+        {
+            total++;
+            await ProcessarPaginaAsync(page, regional.Id, placeholderId);
+            if (total % 500 == 0)
+            {
+                await db.SaveChangesAsync();
+                Console.WriteLine($"  ... {total} lidos, {corrigidosLead} leads corrigidos, {corrigidosOportunidade} oportunidades corrigidas");
+            }
+        }
+        await db.SaveChangesAsync();
+        Console.WriteLine($"  Total: {total} lidos");
+    }
+
+    // CSS Growth Sales também tem leads fora da "venda concluída" (fatiado pelo mesmo motivo do
+    // importnovos: teto de ~10 mil resultados por consulta na base maior).
+    var growthSales = specs.First(s => s.RegionalName == "CSS Growth Sales");
+    var growthSalesRegional = await db.CrmRegionais.FirstAsync(r => r.Nome == growthSales.RegionalName);
+    var growthSalesPlaceholderId = await ObterOuCriarVendedorPlaceholderAsync(growthSalesRegional.Id);
+
+    (string? Status, DateOnly? Antes, DateOnly? Apartir)[] fatias =
+    [
+        ("COTAÇÃO", null, null),
+        ("PERDIDO", null, null),
+        ("NÃO FAZEMOS ", null, null),
+        ("RECUSA/INATIVA", null, null),
+        ("EM ATENDIMENTO", new DateOnly(2025, 1, 1), null),
+        ("EM ATENDIMENTO", null, new DateOnly(2025, 1, 1)),
+    ];
+
+    foreach (var (status, antes, apartir) in fatias)
+    {
+        Console.WriteLine($"\n=== Corrigindo vendedores (CSS Growth Sales, não venda concluída): status={status} antes={antes} apartir={apartir} ===");
+        var total = 0;
+        await foreach (var page in notion.QueryNaoVendaConcluidaAsync(growthSales.DataSourceId, status, antes, apartir))
+        {
+            total++;
+            await ProcessarPaginaAsync(page, growthSalesRegional.Id, growthSalesPlaceholderId);
+            if (total % 500 == 0)
+            {
+                await db.SaveChangesAsync();
+                Console.WriteLine($"  ... {total} lidos, {corrigidosLead} leads corrigidos, {corrigidosOportunidade} oportunidades corrigidas");
+            }
+        }
+        await db.SaveChangesAsync();
+        Console.WriteLine($"  Total: {total} lidos");
+    }
+
+    Console.WriteLine($"\n=== {corrigidosLead} leads corrigidos | {corrigidosOportunidade} oportunidades corrigidas | {semCorrespondencia} sem lead correspondente | {aindaSemVendedor} ainda sem vendedor resolvido ===");
 }
 
 /// <summary>
