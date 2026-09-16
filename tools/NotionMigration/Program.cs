@@ -526,6 +526,7 @@ async Task CorrigirVendedoresAsync()
     var corrigidosOportunidade = 0;
     var semCorrespondencia = 0;
     var aindaSemVendedor = 0;
+    var camposPreenchidos = 0;
 
     async Task<CrmLead?> BuscarLeadAsync(JsonElement page)
     {
@@ -558,22 +559,56 @@ async Task CorrigirVendedoresAsync()
     {
         var vendedorInfo = page.PrimeiroVendedor("Vendedor");
         var vendedorId = await ResolverVendedorAsync(vendedorInfo, regionalId);
-        if (vendedorId == placeholderId) { aindaSemVendedor++; return; }
+        if (vendedorId == placeholderId) aindaSemVendedor++;
 
         var lead = await BuscarLeadAsync(page);
         if (lead is null) { semCorrespondencia++; return; }
 
-        if (lead.ResponsavelId is null || lead.ResponsavelId == placeholderId)
+        if (vendedorId != placeholderId && (lead.ResponsavelId is null || lead.ResponsavelId == placeholderId))
         {
             lead.ResponsavelId = vendedorId;
             corrigidosLead++;
         }
 
-        var oportunidade = await db.CrmOpportunities.FirstOrDefaultAsync(o => o.LeadId == lead.Id && !o.Arquivado);
-        if (oportunidade is not null && oportunidade.ResponsavelId == placeholderId)
+        // Só preenche o que ainda está vazio — nunca sobrescreve algo já preenchido (migração
+        // manual, edição de um consultor, ou uma sincronização mais recente).
+        bool PreencheuLead()
+        {
+            var mudou = false;
+            if (lead.Gclid is null && page.Text("GCLID") is { } gclid) { lead.Gclid = gclid; mudou = true; }
+            if (lead.UtmSource is null && page.Text("UTM SOURCE") is { } utmSource) { lead.UtmSource = utmSource; mudou = true; }
+            if (lead.UtmMedium is null && page.Text("UTM MEDIUM") is { } utmMedium) { lead.UtmMedium = utmMedium; mudou = true; }
+            if (lead.UtmTerm is null && page.Text("UTM TERM") is { } utmTerm) { lead.UtmTerm = utmTerm; mudou = true; }
+            if (lead.MetaClickId is null && page.Text("[META] Click ID") is { } clickId) { lead.MetaClickId = clickId; mudou = true; }
+            if (lead.MetaFormId is null && page.Text("[META] Form") is { } formId) { lead.MetaFormId = formId; mudou = true; }
+            if (lead.MetaLeadId is null && page.Text("[META] Lead ID") is { } leadId) { lead.MetaLeadId = leadId; mudou = true; }
+            if (lead.TipoIndicacao is null) { lead.TipoIndicacao = NotionLeadClassifier.Classificar(page.Select("O que")); mudou = true; }
+            return mudou;
+        }
+        if (PreencheuLead()) camposPreenchidos++;
+
+        var oportunidade = await db.CrmOpportunities.Include(o => o.Veiculo).FirstOrDefaultAsync(o => o.LeadId == lead.Id && !o.Arquivado);
+        if (oportunidade is null) return;
+
+        if (vendedorId != placeholderId && oportunidade.ResponsavelId == placeholderId)
         {
             oportunidade.ResponsavelId = vendedorId;
             corrigidosOportunidade++;
+        }
+
+        var mudouOportunidade = false;
+        if (oportunidade.MensalidadeComCupom is null && page.Number("Mensalidade (Cupom)") is { } cupom) { oportunidade.MensalidadeComCupom = (decimal)cupom; mudouOportunidade = true; }
+        if (oportunidade.ValorIndicacao is null && page.Number("Indicação") is { } valorIndicacao) { oportunidade.ValorIndicacao = (decimal)valorIndicacao; mudouOportunidade = true; }
+        if (oportunidade.MotivoPerdaId is null && page.Select("Motivo da perda") is { } motivoNome
+            && motivosPerdaPorNome.TryGetValue(motivoNome, out var motivoId)) { oportunidade.MotivoPerdaId = motivoId; mudouOportunidade = true; }
+        if (mudouOportunidade) camposPreenchidos++;
+
+        if (oportunidade.Veiculo is { } veiculo)
+        {
+            var mudouVeiculo = false;
+            if (veiculo.Rastreador is null && page.Number("Rastreador") is { } rastreador) { veiculo.Rastreador = (decimal)rastreador; mudouVeiculo = true; }
+            if (veiculo.ValorVistoria is null && page.Number("Vistoriador") is { } vistoriador) { veiculo.ValorVistoria = (decimal)vistoriador; mudouVeiculo = true; }
+            if (mudouVeiculo) camposPreenchidos++;
         }
     }
 
@@ -632,7 +667,7 @@ async Task CorrigirVendedoresAsync()
         Console.WriteLine($"  Total: {total} lidos");
     }
 
-    Console.WriteLine($"\n=== {corrigidosLead} leads corrigidos | {corrigidosOportunidade} oportunidades corrigidas | {semCorrespondencia} sem lead correspondente | {aindaSemVendedor} ainda sem vendedor resolvido ===");
+    Console.WriteLine($"\n=== {corrigidosLead} leads corrigidos | {corrigidosOportunidade} oportunidades corrigidas | {camposPreenchidos} registros com campos novos preenchidos | {semCorrespondencia} sem lead correspondente | {aindaSemVendedor} ainda sem vendedor resolvido ===");
 }
 
 /// <summary>
