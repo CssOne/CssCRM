@@ -76,7 +76,10 @@ if (Environment.GetEnvironmentVariable("MIGRATION_MODE") == "fixleadindicacao")
 }
 
 var ganhoStage = await db.CrmPipelineStages.FirstAsync(s => s.Tipo == TipoEtapaPipeline.Ganho);
-var vendaConcluidaLeadStageId = (await db.CrmLeadStages.FirstAsync(s => s.Nome == "Venda concluída")).Id;
+// "Venda concluída" foi dividida em "(Leads)"/"(Indicação)" — usa a coluna de Leads como padrão
+// pra esse import inicial (bases ainda sem a migração aplicada caem na coluna única antiga).
+var vendaConcluidaLeadStageId = (await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Nome == "Venda concluída (Leads)")
+    ?? await db.CrmLeadStages.FirstAsync(s => s.Nome == "Venda concluída")).Id;
 var motivosPerdaPorNome = await db.CrmLossReasons.ToDictionaryAsync(m => m.Descricao, m => m.Id);
 
 var documentosExistentes = (await db.CrmLeads.AsNoTracking().Where(l => l.DocumentoNormalizado != null && !l.Arquivado)

@@ -69,7 +69,6 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
         }
 
         var etapasPorNome = await db.CrmLeadStages.ToDictionaryAsync(s => s.Nome.Trim(), s => s.Id, ct);
-        var vendaConcluidaStageId = etapasPorNome["Venda concluída"];
         var ganhoStageId = (await db.CrmPipelineStages.FirstAsync(s => s.Tipo == TipoEtapaPipeline.Ganho, ct)).Id;
         var placeholderVendedorId = await ObterOuCriarVendedorPlaceholderAsync(regional.Id, regionalNome, ct);
 
@@ -80,7 +79,7 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
             processados++;
             try
             {
-                var resultado = await ProcessarPaginaAsync(page, regional.Id, regionalNome, etapasPorNome, vendaConcluidaStageId, ganhoStageId, placeholderVendedorId, ct);
+                var resultado = await ProcessarPaginaAsync(page, regional.Id, regionalNome, etapasPorNome, ganhoStageId, placeholderVendedorId, ct);
                 if (resultado) criados++; else atualizados++;
             }
             catch (Exception ex)
@@ -106,7 +105,7 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
     /// <returns>true se criou um lead novo, false se atualizou um existente.</returns>
     private async Task<bool> ProcessarPaginaAsync(
         JsonElement page, Guid regionalId, string regionalNome, Dictionary<string, Guid> etapasPorNome,
-        Guid vendaConcluidaStageId, Guid ganhoStageId, Guid placeholderVendedorId, CancellationToken ct)
+        Guid ganhoStageId, Guid placeholderVendedorId, CancellationToken ct)
     {
         var nome = page.Text("Name");
         if (string.IsNullOrWhiteSpace(nome)) throw new InvalidOperationException("Página sem nome (title vazio).");
@@ -204,7 +203,7 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
 
         if (isVendaConcluida)
         {
-            lead.EtapaId = vendaConcluidaStageId;
+            lead.EtapaId = ResolverEtapaVendaConcluida(etapasPorNome, lead.CriadoManualmente, tipoIndicacao);
             await CriarOuAtualizarOportunidadeAsync(page, lead, vendedorId, ganhoStageId, ct);
         }
         else if (criadoAgora && status is not null && StatusParaEtapaLead.TryGetValue(status, out var etapaNome) && etapasPorNome.TryGetValue(etapaNome, out var etapaId))
@@ -214,6 +213,21 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
 
         await db.SaveChangesAsync(ct);
         return criadoAgora;
+    }
+
+    /// <summary>
+    /// "Venda concluída" foi dividida em colunas "(Leads)" e "(Indicação)" com a mesma regra de
+    /// classificação usada no quadro Kanban e na migração que fez a divisão — mantém compatibilidade
+    /// com bases que ainda não tenham essa migração aplicada (usa a coluna única "Venda concluída").
+    /// </summary>
+    private static Guid ResolverEtapaVendaConcluida(Dictionary<string, Guid> etapasPorNome, bool criadoManualmente, string? tipoIndicacao)
+    {
+        var ehIndicacao = !string.Equals(tipoIndicacao, "Lead", StringComparison.OrdinalIgnoreCase)
+            && (criadoManualmente || string.Equals(tipoIndicacao, "Indicação", StringComparison.OrdinalIgnoreCase));
+
+        var chaveEsperada = ehIndicacao ? "Venda concluída (Indicação)" : "Venda concluída (Leads)";
+        if (etapasPorNome.TryGetValue(chaveEsperada, out var id)) return id;
+        return etapasPorNome["Venda concluída"];
     }
 
     private async Task CriarOuAtualizarOportunidadeAsync(JsonElement page, CrmLead lead, Guid vendedorId, Guid ganhoStageId, CancellationToken ct)
