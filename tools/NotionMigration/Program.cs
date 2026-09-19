@@ -743,14 +743,25 @@ async Task CorrigirVendedoresAsync()
         await foreach (var page in notion.QueryVendaConcluidaAsync(spec.DataSourceId))
         {
             total++;
-            await ProcessarPaginaAsync(page, regional.Id, placeholderId);
+            try
+            {
+                await ProcessarPaginaAsync(page, regional.Id, placeholderId);
+                await db.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                // Um registro com conflito (ex: MetaLeadId duplicado entre dois leads) não pode
+                // derrubar o lote inteiro — pula esse registro e segue os demais. Sem o Clear() a
+                // entidade quebrada fica presa no change tracker e todo SaveChangesAsync seguinte
+                // falha também.
+                Console.WriteLine($"  Erro na pagina {page.PageId()}: {ex.Message}");
+                db.ChangeTracker.Clear();
+            }
             if (total % 500 == 0)
             {
-                await db.SaveChangesAsync();
                 Console.WriteLine($"  ... {total} lidos, {corrigidosLead} leads corrigidos, {corrigidosOportunidade} oportunidades corrigidas");
             }
         }
-        await db.SaveChangesAsync();
         Console.WriteLine($"  Total: {total} lidos");
     }
 
@@ -777,14 +788,21 @@ async Task CorrigirVendedoresAsync()
         await foreach (var page in notion.QueryNaoVendaConcluidaAsync(growthSales.DataSourceId, status, antes, apartir))
         {
             total++;
-            await ProcessarPaginaAsync(page, growthSalesRegional.Id, growthSalesPlaceholderId);
+            try
+            {
+                await ProcessarPaginaAsync(page, growthSalesRegional.Id, growthSalesPlaceholderId);
+                await db.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  Erro na pagina {page.PageId()}: {ex.Message}");
+                db.ChangeTracker.Clear();
+            }
             if (total % 500 == 0)
             {
-                await db.SaveChangesAsync();
                 Console.WriteLine($"  ... {total} lidos, {corrigidosLead} leads corrigidos, {corrigidosOportunidade} oportunidades corrigidas");
             }
         }
-        await db.SaveChangesAsync();
         Console.WriteLine($"  Total: {total} lidos");
     }
 
@@ -943,7 +961,8 @@ async Task EnriquecerVendaConcluidaAsync()
 
             if (total % 100 == 0)
             {
-                await db.SaveChangesAsync();
+                try { await db.SaveChangesAsync(); }
+                catch (Exception ex) { relatorio.Add($"  [enrich/{spec.RegionalName}] Erro salvando lote ate a linha {totalBase}: {ex.Message}"); }
                 db.ChangeTracker.Clear();
                 Console.WriteLine($"  ... {total} lidos, {atualizados} atualizados, {comArquivo} anexos, {semCorrespondencia} sem correspondência");
             }
@@ -952,7 +971,8 @@ async Task EnriquecerVendaConcluidaAsync()
         Console.WriteLine($"  Total {spec.RegionalName}: {totalBase} lidos");
     }
 
-    await db.SaveChangesAsync();
+    try { await db.SaveChangesAsync(); }
+    catch (Exception ex) { relatorio.Add($"  [enrich] Erro salvando lote final: {ex.Message}"); }
     Console.WriteLine($"\n=== {atualizados} oportunidades atualizadas | {comArquivo} anexos salvos | {semCorrespondencia} sem correspondência | {estadoInvalido} com Estado inválido ignorado | {porcentagemCorrigida} porcentagens corrigidas (x100) (de {total} lidos) ===");
 }
 
