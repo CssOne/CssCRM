@@ -65,6 +65,13 @@ public class CrmLeadsController(ILeadService leadService, ILeadKanbanService kan
     public async Task<ActionResult> AdicionarNota(Guid id, AddNoteRequest request, CancellationToken ct) =>
         Ok(new { id = await leadService.AdicionarNotaAsync(id, request.Texto, ct) });
 
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Excluir(Guid id, CancellationToken ct)
+    {
+        await leadService.ExcluirAsync(id, ct);
+        return NoContent();
+    }
+
     [HttpPost("import")]
     [Authorize(Policy = PolicyNames.GestaoComercial)]
     [RequestSizeLimit(10 * 1024 * 1024)]

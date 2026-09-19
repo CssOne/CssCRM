@@ -2,7 +2,7 @@ import Chart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
 import { useTheme } from "../../context/ThemeContext";
 import { formatarMoeda } from "../../lib/format";
-import type { EvolucaoVendas, FunilEtapa, OrigemLead } from "../../lib/types";
+import type { EvolucaoVendas, FunilEtapa, MarketingEvolucao, OrigemLead } from "../../lib/types";
 
 const paleta = ["#2563eb", "#0ea5e9", "#8b5cf6", "#22c55e", "#f59e0b", "#f97316", "#ef4444", "#64748b"];
 
@@ -69,6 +69,25 @@ export function OrigemChart({ dados }: { dados: OrigemLead[] }) {
   };
 
   return <Chart type="donut" height={280} options={options} series={dados.map((d) => d.quantidade)} />;
+}
+
+export function LeadsEvolucaoChart({ dados }: { dados: MarketingEvolucao[] }) {
+  const { tema } = useTheme();
+  const modoEscuro = tema === "dark";
+
+  if (dados.length === 0) return <SemDados />;
+
+  const options: ApexOptions = {
+    ...baseOptions(modoEscuro),
+    chart: { ...baseOptions(modoEscuro).chart, type: "bar" },
+    plotOptions: { bar: { borderRadius: 3, columnWidth: "60%" } },
+    dataLabels: { enabled: false },
+    xaxis: { categories: dados.map((d) => d.data) },
+    yaxis: { labels: { formatter: (v) => String(Math.round(v)) } },
+    tooltip: { ...baseOptions(modoEscuro).tooltip, y: { formatter: (v) => `${v} lead(s)` } },
+  };
+
+  return <Chart type="bar" height={260} options={options} series={[{ name: "Leads", data: dados.map((d) => d.quantidade) }]} />;
 }
 
 function SemDados() {

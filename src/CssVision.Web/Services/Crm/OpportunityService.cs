@@ -165,7 +165,7 @@ public sealed class OpportunityService(
         opportunity.Concorrente = request.Concorrente;
         opportunity.Observacoes = request.Observacoes;
         opportunity.DataAdesao = request.DataAdesao;
-        opportunity.AtivoEm = request.AtivoEm;
+        opportunity.AtivoEm = NormalizarParaUtc(request.AtivoEm);
         opportunity.Mensalidade = request.Mensalidade;
         opportunity.MensalidadeComDesconto = request.MensalidadeComDesconto;
         opportunity.MensalidadeComCupom = request.MensalidadeComCupom;
@@ -173,6 +173,16 @@ public sealed class OpportunityService(
         opportunity.Porcentagem = request.Porcentagem;
         opportunity.TermoAdesaoAceito = request.TermoAdesaoAceito;
         opportunity.Migracao = request.Migracao;
+        opportunity.Cpf = string.IsNullOrWhiteSpace(request.Cpf) ? null : request.Cpf.Trim();
+        opportunity.Estado = string.IsNullOrWhiteSpace(request.Estado) ? null : request.Estado.Trim().ToUpperInvariant();
+        opportunity.Indicacao = request.Indicacao;
+        opportunity.TipoIndicacao = string.IsNullOrWhiteSpace(request.TipoIndicacao) ? null : request.TipoIndicacao.Trim();
+        opportunity.ValorIndicacao = request.ValorIndicacao;
+        opportunity.Total = request.Total;
+        if (request.DataEfetivaFechamento is not null)
+        {
+            opportunity.DataEfetivaFechamento = request.DataEfetivaFechamento.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        }
 
         if (request.Veiculo is not null)
         {
@@ -236,7 +246,7 @@ public sealed class OpportunityService(
             opportunity.TipoIndicacao = string.IsNullOrWhiteSpace(request.TipoIndicacao) ? null : request.TipoIndicacao.Trim();
             opportunity.ValorIndicacao = request.ValorIndicacao;
             opportunity.Total = request.Total;
-            opportunity.AtivoEm = request.AtivoEm;
+            opportunity.AtivoEm = NormalizarParaUtc(request.AtivoEm);
             opportunity.Mensalidade = request.Mensalidade;
             opportunity.MensalidadeComDesconto = request.MensalidadeComDesconto;
             opportunity.MensalidadeComCupom = request.MensalidadeComCupom;
@@ -351,6 +361,13 @@ public sealed class OpportunityService(
         if (existente is null) db.CrmVeiculos.Add(veiculo);
         return veiculo;
     }
+
+    // O Postgres só aceita 'timestamp with time zone' em UTC (offset zero). O front-end envia esse
+    // campo como uma data pura (ex.: "2026-09-17"), que o model binding do ASP.NET interpreta como
+    // meia-noite no fuso local do servidor — daí o offset não-zero que o Npgsql rejeita. Aqui
+    // preservamos a data (dia/mês/ano) como o usuário a escolheu e a re-ancoramos em UTC.
+    private static DateTimeOffset? NormalizarParaUtc(DateTimeOffset? valor) =>
+        valor is null ? null : new DateTimeOffset(valor.Value.Date, TimeSpan.Zero);
 
     private static VeiculoDto? ParaVeiculoDto(CrmVeiculo? v) => v is null
         ? null

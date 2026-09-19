@@ -18,4 +18,5 @@ public interface ILeadService
     Task<LeadImportResultDto> ImportarAsync(Stream planilha, CancellationToken ct);
     Task<byte[]> ExportarAsync(LeadFilterRequest filtro, CancellationToken ct);
     Task<Guid> AdicionarNotaAsync(Guid leadId, string texto, CancellationToken ct);
+    Task ExcluirAsync(Guid id, CancellationToken ct);
 }

@@ -13,6 +13,11 @@ public class CrmLead : CrmArchivableEntity
     /// <summary>Telefone normalizado (E.164 simplificado, somente dígitos com DDI/DDD).</summary>
     public string? TelefoneNormalizado { get; set; }
     public string? Telefone { get; set; }
+
+    /// <summary>Segundo telefone — alguns leads migrados do Notion vieram com dois números colados
+    /// no mesmo campo (sem separador); ver NomeTelefoneHeuristica.SepararTelefones.</summary>
+    public string? Telefone2Normalizado { get; set; }
+    public string? Telefone2 { get; set; }
     public string? WhatsApp { get; set; }
 
     /// <summary>E-mail normalizado (minúsculas, sem espaços), usado para deduplicação.</summary>

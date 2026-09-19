@@ -122,8 +122,22 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
         var whatsapp = page.Text("WhatsApp");
         var telefoneMeta = page.Text("[META] Phone Number");
         var telefone = whatsapp ?? telefoneMeta;
+
+        // Alguns registros têm nome e telefone trocados na origem (ver NomeTelefoneHeuristica) — se
+        // for o caso, corrige aqui antes de gravar.
+        if (NomeTelefoneHeuristica.EstaoTrocados(nome, telefone))
+        {
+            (nome, telefone) = (telefone!.Trim(), nome);
+        }
+
+        // Alguns registros têm dois telefones colados no mesmo campo, sem separador — separa aqui.
+        var (telefonePrimeiro, telefoneSegundo) = NomeTelefoneHeuristica.SepararTelefones(telefone);
+        if (telefonePrimeiro is not null) telefone = telefonePrimeiro;
+
         var telefoneNormalizado = DocumentValidation.NormalizarTelefone(telefone);
         if (telefoneNormalizado is { Length: > 20 }) telefoneNormalizado = null;
+        var telefone2Normalizado = DocumentValidation.NormalizarTelefone(telefoneSegundo);
+        if (telefone2Normalizado is { Length: > 20 }) telefone2Normalizado = null;
 
         var estadoTexto = page.Text("ESTADO");
         var estado = page.Select("Estado") ?? (estadoTexto is { Length: 2 } ? estadoTexto : null);
@@ -168,6 +182,8 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
         lead.DocumentoNormalizado = documentoNormalizado ?? lead.DocumentoNormalizado;
         lead.Telefone = telefone ?? lead.Telefone;
         lead.TelefoneNormalizado = telefoneNormalizado ?? lead.TelefoneNormalizado;
+        lead.Telefone2 = telefoneSegundo ?? lead.Telefone2;
+        lead.Telefone2Normalizado = telefone2Normalizado ?? lead.Telefone2Normalizado;
         lead.WhatsApp = whatsapp ?? lead.WhatsApp;
         lead.Email = emailBruto ?? lead.Email;
         lead.EmailNormalizado = emailNormalizado ?? lead.EmailNormalizado;

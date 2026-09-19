@@ -121,7 +121,14 @@ public record OpportunityUpdateRequest(
     bool TermoAdesaoAceito,
     bool Migracao,
     VeiculoUpsertRequest? Veiculo,
-    uint RowVersion);
+    uint RowVersion,
+    string? Cpf = null,
+    string? Estado = null,
+    bool? Indicacao = null,
+    string? TipoIndicacao = null,
+    decimal? ValorIndicacao = null,
+    decimal? Total = null,
+    DateOnly? DataEfetivaFechamento = null);
 
 public record ChangeStageRequest(
     Guid NovaEtapaId,

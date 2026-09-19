@@ -1,21 +1,32 @@
-import { Car, Handshake, IdCard, Mail, MapPin, Pencil, Phone, Plus, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Calendar, Car, Handshake, IdCard, Mail, MapPin, Pencil, Percent, Phone, Plus, ShieldCheck, Trash2, Wallet } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiRequestError, isAbortError } from "../../lib/api";
 import { formatarData, formatarDocumento, formatarMoeda, formatarTelefone } from "../../lib/format";
 import {
+  TipoEtapaPipeline,
   TipoPessoa,
   type ActivityCreateRequest,
   type LeadDetail,
   type LeadDuplicateWarning,
   type LeadTimelineItem,
+  type Opportunity,
   type OpportunityCreateRequest,
 } from "../../lib/types";
 import { Badge, Button, Card, ErrorState, Modal, Skeleton, Textarea, useToast } from "../../components/ui";
 import { LeadForm, type LeadFormValues } from "../../components/crm/LeadForm";
 import { OpportunityForm, type OpportunityFormValues } from "../../components/crm/OpportunityForm";
 import { ActivityForm, type ActivityFormValues } from "../../components/crm/ActivityForm";
+import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog";
 import { Timeline } from "../../components/crm/Timeline";
+
+const ETAPA_VENDA_CONCLUIDA = "Venda concluída";
+
+/** Mesma regra usada na etiqueta do rodapé do cartão no quadro de leads — só esses leads podem
+ * ser excluídos (ver LeadService.ExcluirAsync no back-end). */
+function ehIndicacao(lead: LeadDetail): boolean {
+  return lead.criadoManualmente || lead.tipoIndicacao?.toLowerCase() === "indicação";
+}
 
 function paraFormValues(lead: LeadDetail): LeadFormValues {
   return {
@@ -23,6 +34,7 @@ function paraFormValues(lead: LeadDetail): LeadFormValues {
     tipoPessoa: lead.tipoPessoa,
     documento: lead.documento ?? "",
     telefone: lead.telefone ?? "",
+    telefone2: lead.telefone2 ?? "",
     whatsApp: lead.whatsApp ?? "",
     email: lead.email ?? "",
     cidade: lead.cidade ?? "",
@@ -66,6 +78,10 @@ export function LeadDetailPage() {
   const [salvando, setSalvando] = useState(false);
   const [nota, setNota] = useState("");
   const [duplicidade, setDuplicidade] = useState<LeadDuplicateWarning | null>(null);
+  const [oportunidadeEditando, setOportunidadeEditando] = useState<Opportunity | null>(null);
+  const [carregandoOportunidade, setCarregandoOportunidade] = useState(false);
+  const [modalExcluir, setModalExcluir] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
 
   const carregar = useCallback(
     (signal?: AbortSignal) => {
@@ -103,6 +119,7 @@ export function LeadDetailPage() {
         tipoPessoa: valores.tipoPessoa,
         documento: valores.documento || null,
         telefone: valores.telefone || null,
+        telefone2: valores.telefone2 || null,
         whatsApp: valores.whatsApp || null,
         email: valores.email || null,
         cidade: valores.cidade || null,
@@ -191,6 +208,18 @@ export function LeadDetailPage() {
     }
   }
 
+  async function editarOportunidade(id: string) {
+    setCarregandoOportunidade(true);
+    try {
+      const oportunidade = await api.get<Opportunity>(`/crm/opportunities/${id}`);
+      setOportunidadeEditando(oportunidade);
+    } catch {
+      notificar("error", "Não foi possível carregar os dados da venda.");
+    } finally {
+      setCarregandoOportunidade(false);
+    }
+  }
+
   async function criarAtividade(valores: ActivityFormValues) {
     if (!lead) return;
     setSalvando(true);
@@ -229,6 +258,21 @@ export function LeadDetailPage() {
     }
   }
 
+  async function excluirLead() {
+    if (!lead) return;
+    setExcluindo(true);
+    try {
+      await api.del(`/crm/leads/${lead.id}`);
+      notificar("success", "Lead excluído.");
+      navigate("/app/crm/leads/kanban");
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível excluir o lead.");
+    } finally {
+      setExcluindo(false);
+      setModalExcluir(false);
+    }
+  }
+
   if (carregando) {
     return (
       <div className="space-y-4">
@@ -244,6 +288,10 @@ export function LeadDetailPage() {
 
   return (
     <div className="space-y-4">
+      <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+        <ArrowLeft className="size-4" /> Voltar
+      </Button>
+
       <Card className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -259,13 +307,21 @@ export function LeadDetailPage() {
               ))}
             </div>
           </div>
-          <Button variant="secondary" onClick={() => setModalEditar(true)}>
-            <Pencil className="size-4" /> Editar
-          </Button>
+          <div className="flex shrink-0 gap-2">
+            {ehIndicacao(lead) && (
+              <Button variant="secondary" onClick={() => setModalExcluir(true)}>
+                <Trash2 className="size-4" /> Excluir
+              </Button>
+            )}
+            <Button variant="secondary" onClick={() => setModalEditar(true)}>
+              <Pencil className="size-4" /> Editar
+            </Button>
+          </div>
         </div>
 
         <div className="mt-4 grid gap-3 border-t border-[var(--border)] pt-4 sm:grid-cols-2 lg:grid-cols-4">
           <InfoItem icone={Phone} label="Telefone" valor={formatarTelefone(lead.telefone)} />
+          {lead.telefone2 && <InfoItem icone={Phone} label="Telefone 2" valor={formatarTelefone(lead.telefone2)} />}
           <InfoItem icone={Mail} label="E-mail" valor={lead.email || "-"} />
           <InfoItem icone={MapPin} label="Local" valor={[lead.cidade, lead.estado].filter(Boolean).join(" - ") || "-"} />
           <InfoItem icone={Handshake} label="Responsável" valor={lead.responsavelNome ?? "Sem responsável"} />
@@ -296,17 +352,65 @@ export function LeadDetailPage() {
               <p className="text-sm text-[var(--fg-muted)]">Nenhuma oportunidade registrada.</p>
             ) : (
               <ul className="space-y-2">
-                {lead.oportunidades.map((op) => (
-                  <li key={op.id} className="flex items-center justify-between rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm">
-                    <div>
-                      <p className="font-medium text-[var(--fg)]">{op.titulo}</p>
-                      <p className="text-xs text-[var(--fg-muted)]">
-                        {op.etapaNome} {op.dataPrevistaFechamento && `· previsão ${formatarData(op.dataPrevistaFechamento)}`}
-                      </p>
-                    </div>
-                    <Badge variant={op.ativa ? "brand" : "neutral"}>{formatarMoeda(op.valorEstimado)}</Badge>
-                  </li>
-                ))}
+                {lead.oportunidades.map((op) => {
+                  const temDadosVenda =
+                    op.cpf || op.estado || op.ativoEm || op.porcentagem != null || op.mensalidade != null ||
+                    op.total != null || op.veiculo?.descricao || op.veiculo?.placa;
+                  return (
+                    <li key={op.id} className="rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-[var(--fg)]">{op.titulo}</p>
+                          <p className="text-xs text-[var(--fg-muted)]">
+                            {op.etapaNome} {op.dataPrevistaFechamento && `· previsão ${formatarData(op.dataPrevistaFechamento)}`}
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {op.migracao && <Badge variant="neutral">Migração</Badge>}
+                            {op.indicacao && <Badge variant="brand">Indicação</Badge>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {op.etapaTipo === TipoEtapaPipeline.Ganho && (
+                            <Button size="sm" variant="ghost" loading={carregandoOportunidade} onClick={() => editarOportunidade(op.id)}>
+                              <Pencil className="size-3.5" /> Editar
+                            </Button>
+                          )}
+                          <Badge variant={op.ativa ? "brand" : "neutral"}>{formatarMoeda(op.valorEstimado)}</Badge>
+                        </div>
+                      </div>
+
+                      {temDadosVenda && (
+                        <div className="mt-3 grid gap-3 border-t border-[var(--border)] pt-3 sm:grid-cols-2 lg:grid-cols-3">
+                          {op.cpf && <InfoItem icone={IdCard} label="CPF" valor={formatarDocumento(op.cpf)} />}
+                          {op.estado && <InfoItem icone={MapPin} label="Estado" valor={op.estado} />}
+                          {op.ativoEm && <InfoItem icone={Calendar} label="Ativo em" valor={formatarData(op.ativoEm)} />}
+                          {op.porcentagem != null && <InfoItem icone={Percent} label="Porcentagem" valor={`${op.porcentagem}%`} />}
+                          {op.mensalidade != null && <InfoItem icone={Wallet} label="Mensalidade" valor={formatarMoeda(op.mensalidade)} />}
+                          {op.mensalidadeComDesconto != null && (
+                            <InfoItem icone={Wallet} label="Mensalidade com desconto" valor={formatarMoeda(op.mensalidadeComDesconto)} />
+                          )}
+                          {op.mensalidadeComCupom != null && (
+                            <InfoItem icone={Wallet} label="Mensalidade com cupom" valor={formatarMoeda(op.mensalidadeComCupom)} />
+                          )}
+                          {op.pagamentoAdesao != null && <InfoItem icone={Wallet} label="Pagamento de adesão" valor={formatarMoeda(op.pagamentoAdesao)} />}
+                          {op.total != null && <InfoItem icone={Wallet} label="Total" valor={formatarMoeda(op.total)} />}
+                          {op.indicacao && op.tipoIndicacao && <InfoItem icone={Handshake} label="Tipo de indicação" valor={op.tipoIndicacao} />}
+                          {op.indicacao && op.valorIndicacao != null && (
+                            <InfoItem icone={Wallet} label="Valor da indicação" valor={formatarMoeda(op.valorIndicacao)} />
+                          )}
+                          {op.veiculo?.descricao && <InfoItem icone={Car} label="Veículo" valor={op.veiculo.descricao} />}
+                          {op.veiculo?.placa && <InfoItem icone={Car} label="Placa" valor={op.veiculo.placa} />}
+                          {op.veiculo?.fipe != null && <InfoItem icone={Wallet} label="Valor FIPE" valor={formatarMoeda(op.veiculo.fipe)} />}
+                          {op.veiculo?.rastreador != null && <InfoItem icone={Wallet} label="Custo do rastreador" valor={formatarMoeda(op.veiculo.rastreador)} />}
+                          {op.veiculo?.valorVistoria != null && (
+                            <InfoItem icone={Wallet} label="Custo da vistoria" valor={formatarMoeda(op.veiculo.valorVistoria)} />
+                          )}
+                          {op.veiculo?.dataChegada && <InfoItem icone={Calendar} label="Chegada do veículo" valor={formatarData(op.veiculo.dataChegada)} />}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </Card>
@@ -357,6 +461,37 @@ export function LeadDetailPage() {
 
       <Modal open={modalAtividade} onClose={() => setModalAtividade(false)} title="Agendar atividade">
         <ActivityForm salvando={salvando} onSubmit={criarAtividade} onCancel={() => setModalAtividade(false)} />
+      </Modal>
+
+      <VendaConcluidaDialog
+        open={!!oportunidadeEditando}
+        leadId={lead.id}
+        etapaNome={ETAPA_VENDA_CONCLUIDA}
+        valorEstimado={oportunidadeEditando?.valorEstimado ?? 0}
+        oportunidadeEditar={oportunidadeEditando}
+        onCancel={() => setOportunidadeEditando(null)}
+        onConcluido={() => {
+          setOportunidadeEditando(null);
+          notificar("success", "Venda atualizada com sucesso.");
+          carregar();
+        }}
+      />
+
+      <Modal open={modalExcluir} onClose={() => setModalExcluir(false)} title="Excluir lead" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--fg)]">
+            Tem certeza que deseja excluir <strong>{lead.nomeOuRazaoSocial}</strong>? O lead sai do quadro e não pode ser
+            recuperado por aqui.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setModalExcluir(false)} disabled={excluindo}>
+              Cancelar
+            </Button>
+            <Button variant="danger" loading={excluindo} onClick={excluirLead}>
+              <Trash2 className="size-4" /> Excluir
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

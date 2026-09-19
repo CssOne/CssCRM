@@ -11,7 +11,13 @@ public static class Roles
     public const string GestorComercial = "GestorComercial";
     public const string Comercial = "Comercial";
 
-    public static readonly string[] All = [Admin, GestorMaster, GestorComercial, Comercial];
+    /// <summary>Acompanhamento de tráfego pago (leads, origem, campanhas) — não tem acesso ao resto do CRM.</summary>
+    public const string Marketing = "Marketing";
+
+    public static readonly string[] All = [Admin, GestorMaster, GestorComercial, Comercial, Marketing];
+
+    /// <summary>Perfis com acesso à página de tráfego pago.</summary>
+    public static readonly string[] AreaMarketing = [Admin, Marketing];
 
     /// <summary>Perfis com acesso à área administrativa (dashboards, importações, auditoria etc.).</summary>
     public static readonly string[] Administrativos = [Admin, GestorMaster];

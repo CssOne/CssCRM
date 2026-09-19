@@ -57,6 +57,24 @@ if (Environment.GetEnvironmentVariable("MIGRATION_MODE") == "fixorigin")
     return;
 }
 
+if (Environment.GetEnvironmentVariable("MIGRATION_MODE") == "fixnometelefone")
+{
+    await CorrigirNomeTelefoneTrocadoAsync();
+    return;
+}
+
+if (Environment.GetEnvironmentVariable("MIGRATION_MODE") == "fixtelefoneduplo")
+{
+    await CorrigirTelefoneDuploAsync();
+    return;
+}
+
+if (Environment.GetEnvironmentVariable("MIGRATION_MODE") == "fixleadindicacao")
+{
+    await CorrigirClassificacaoLeadIndicacaoAsync();
+    return;
+}
+
 var ganhoStage = await db.CrmPipelineStages.FirstAsync(s => s.Tipo == TipoEtapaPipeline.Ganho);
 var vendaConcluidaLeadStageId = (await db.CrmLeadStages.FirstAsync(s => s.Nome == "Venda concluída")).Id;
 var motivosPerdaPorNome = await db.CrmLossReasons.ToDictionaryAsync(m => m.Descricao, m => m.Id);
@@ -145,8 +163,21 @@ foreach (var spec in specs)
             var whatsapp = page.Text("WhatsApp");
             var telefoneMeta = page.Text("[META] Phone Number");
             var telefone = whatsapp ?? telefoneMeta;
+
+            // Alguns registros têm nome e telefone trocados na origem (ver NomeTelefoneHeuristica).
+            if (NomeTelefoneHeuristica.EstaoTrocados(nome, telefone))
+            {
+                (nome, telefone) = (telefone!.Trim(), nome);
+            }
+
+            // Alguns registros têm dois telefones colados no mesmo campo, sem separador.
+            var (telefonePrimeiro, telefoneSegundo) = NomeTelefoneHeuristica.SepararTelefones(telefone);
+            if (telefonePrimeiro is not null) telefone = telefonePrimeiro;
+
             var telefoneNormalizado = DocumentValidation.NormalizarTelefone(telefone);
             if (telefoneNormalizado is { Length: > 20 }) telefoneNormalizado = null;
+            var telefone2Normalizado = DocumentValidation.NormalizarTelefone(telefoneSegundo);
+            if (telefone2Normalizado is { Length: > 20 }) telefone2Normalizado = null;
 
             // "ESTADO" é texto livre (às vezes lixo); só aceita se já vier como sigla de 2 letras.
             var estadoTexto = page.Text("ESTADO");
@@ -159,6 +190,8 @@ foreach (var spec in specs)
                 DocumentoNormalizado = documentoNormalizado,
                 Telefone = telefone,
                 TelefoneNormalizado = telefoneNormalizado,
+                Telefone2 = telefoneSegundo,
+                Telefone2Normalizado = telefone2Normalizado,
                 WhatsApp = whatsapp,
                 Email = emailBruto,
                 EmailNormalizado = emailNormalizado,
@@ -193,7 +226,8 @@ foreach (var spec in specs)
             var mensalidadeComDesconto = page.FormulaDecimal("Mensalidade com desconto");
             var mensalidadeComCupom = page.Number("Mensalidade (Cupom)") is { } cupom ? (decimal)cupom : (decimal?)null;
             var adesao = page.Number("Adesão") is { } a ? (decimal)a : (decimal?)null;
-            var porcentagem = page.Number("Porcentagem") is { } pc ? (decimal)pc : (decimal?)null;
+            // "Porcentagem" no Notion é fração (0.35 = 35%) — nosso campo é 0-100.
+            var porcentagem = page.Number("Porcentagem") is { } pc ? (decimal)pc * 100 : (decimal?)null;
             var valorIndicacao = page.Number("Indicação") is { } vi ? (decimal)vi : (decimal?)null;
             var total = page.FormulaDecimal("Total");
             var ativoEmTexto = page.DateStart("Ativo em");
@@ -392,6 +426,87 @@ static DateTimeOffset? ParseUtc(string? texto) =>
 /// do Notion. Casa por CPF (chave já usada na deduplicação) e corrige via SQL bruto, que não passa
 /// pelo SaveChanges/auditoria.
 /// </summary>
+async Task CorrigirNomeTelefoneTrocadoAsync()
+{
+    Console.WriteLine("\n=== Corrigindo leads com nome e telefone trocados na origem ===");
+
+    // Pré-filtro no banco (nome só com dígitos/símbolos) — a decisão final usa a mesma heurística
+    // do NomeTelefoneHeuristica, aplicada em memória, pra garantir que os dois caminhos concordem.
+    var candidatos = await db.CrmLeads
+        .FromSqlRaw("SELECT *, xmin FROM \"CrmLeads\" WHERE \"NomeOuRazaoSocial\" ~ '^\\+?[0-9()\\s-]+$' AND \"Telefone\" IS NOT NULL AND NOT \"Arquivado\"")
+        .ToListAsync();
+
+    var corrigidos = 0;
+    foreach (var lead in candidatos)
+    {
+        if (!NomeTelefoneHeuristica.EstaoTrocados(lead.NomeOuRazaoSocial, lead.Telefone)) continue;
+
+        var nomeReal = lead.Telefone!.Trim();
+        var telefoneReal = lead.NomeOuRazaoSocial;
+        lead.NomeOuRazaoSocial = nomeReal;
+        lead.Telefone = telefoneReal;
+        lead.TelefoneNormalizado = DocumentValidation.NormalizarTelefone(telefoneReal);
+        corrigidos++;
+    }
+
+    await db.SaveChangesAsync();
+    Console.WriteLine($"\n=== {corrigidos} leads corrigidos (de {candidatos.Count} candidatos pré-filtrados) ===");
+}
+
+async Task CorrigirTelefoneDuploAsync()
+{
+    Console.WriteLine("\n=== Separando leads com dois telefones colados no mesmo campo ===");
+
+    // Pré-filtro: só candidatos com "+" que não seja o primeiro caractere.
+    var candidatos = await db.CrmLeads
+        .FromSqlRaw("SELECT *, xmin FROM \"CrmLeads\" WHERE \"Telefone\" ~ '.\\+' AND NOT \"Arquivado\"")
+        .ToListAsync();
+
+    var corrigidos = 0;
+    foreach (var lead in candidatos)
+    {
+        var (primeiro, segundo) = NomeTelefoneHeuristica.SepararTelefones(lead.Telefone);
+        if (primeiro is null) continue;
+
+        lead.Telefone = primeiro;
+        lead.TelefoneNormalizado = DocumentValidation.NormalizarTelefone(primeiro);
+        lead.Telefone2 = segundo;
+        lead.Telefone2Normalizado = DocumentValidation.NormalizarTelefone(segundo);
+        corrigidos++;
+    }
+
+    await db.SaveChangesAsync();
+    Console.WriteLine($"\n=== {corrigidos} leads com telefone separado (de {candidatos.Count} candidatos pré-filtrados) ===");
+}
+
+async Task CorrigirClassificacaoLeadIndicacaoAsync()
+{
+    Console.WriteLine("\n=== Recalculando Lead/Indicação a partir do 'O que' já salvo (ProdutoInteresse) ===");
+
+    // "O que" foi salvo em ProdutoInteresse na migração original (ver NotionSyncService) — não
+    // precisa consultar o Notion de novo, só reaplicar a regra atual do NotionLeadClassifier
+    // (que pode ter ganhado valores novos, como "AGV Elétrico", depois da migração inicial).
+    var candidatos = await db.CrmLeads
+        .Where(l => l.ProdutoInteresse != null && l.ProdutoInteresse != "" && !l.Arquivado)
+        .ToListAsync();
+
+    var corrigidos = 0;
+    foreach (var lead in candidatos)
+    {
+        var tipoCorreto = NotionLeadClassifier.Classificar(lead.ProdutoInteresse);
+        var criadoManualmenteCorreto = NotionLeadClassifier.CriadoManualmente(lead.ProdutoInteresse);
+        if (lead.TipoIndicacao != tipoCorreto || lead.CriadoManualmente != criadoManualmenteCorreto)
+        {
+            lead.TipoIndicacao = tipoCorreto;
+            lead.CriadoManualmente = criadoManualmenteCorreto;
+            corrigidos++;
+        }
+    }
+
+    await db.SaveChangesAsync();
+    Console.WriteLine($"\n=== {corrigidos} leads corrigidos (de {candidatos.Count} candidatos com 'O que' preenchido) ===");
+}
+
 async Task CorrigirDatasCriacaoAsync()
 {
     var corrigidosPorCpf = 0;
@@ -692,6 +807,15 @@ async Task EnriquecerVendaConcluidaAsync()
     var semCorrespondencia = 0;
     var comArquivo = 0;
     var total = 0;
+    var estadoInvalido = 0;
+    var porcentagemCorrigida = 0;
+
+    // A opção "Estado" no Notion às vezes tem valor por extenso em vez da sigla (bug de cadastro na
+    // origem, ex: "Rio de Janeiro" em vez de "RJ") — a coluna só aceita 2 caracteres.
+    var siglaPorNomeEstado = new Dictionary<string, string>
+    {
+        ["Rio de Janeiro"] = "RJ",
+    };
 
     foreach (var spec in specs)
     {
@@ -740,9 +864,24 @@ async Task EnriquecerVendaConcluidaAsync()
                 }
 
                 var estadoTexto = page.Text("ESTADO");
-                var estado = page.Select("Estado") ?? (estadoTexto is { Length: 2 } ? estadoTexto : null);
-                var tipoIndicacao = page.Select("Tpo de Indicação?", "Tpo de Indicação? ", "TIPO INDICAÇAO?", "TIPO INDICAÇAO? ", "Tipo de indicação");
+                var estadoSelecionado = page.Select("Estado");
+                if (estadoSelecionado is { Length: > 2 } && !siglaPorNomeEstado.TryGetValue(estadoSelecionado, out estadoSelecionado)) { estadoInvalido++; estadoSelecionado = null; }
+                var estado = estadoSelecionado ?? (estadoTexto is { Length: 2 } ? estadoTexto : null);
+                // Nome real da propriedade no Notion é "Tipo de indicação" (sem o "Tpo" com erro de
+                // digitação) — os outros nomes ficam como fallback caso alguma base antiga use variação.
+                var tipoIndicacaoBruto = page.Select("Tipo de indicação", "Tpo de Indicação?", "Tpo de Indicação? ", "TIPO INDICAÇAO?", "TIPO INDICAÇAO? ");
+                // No Notion vem "PESSOAL"/"LEAD" (maiúsculo) — o formulário usa "Pessoal"/"Lead".
+                var tipoIndicacao = tipoIndicacaoBruto switch
+                {
+                    "PESSOAL" => "Pessoal",
+                    "LEAD" => "Lead",
+                    var outro => outro,
+                };
                 var indicacaoFlag = page.Select("Indicação?");
+                var migracaoFlag = page.Select("Migração?");
+                // "Porcentagem" no Notion é fração (0.35 = 35%) — nosso campo é 0-100.
+                var porcentagem = page.Number("Porcentagem") is { } pct ? (decimal)pct * 100 : (decimal?)null;
+                var ativoEm = ParseUtc(page.DateStart("Ativo em"));
 
                 oportunidade.Cpf ??= documentoNormalizado;
                 oportunidade.Estado ??= estado;
@@ -750,6 +889,36 @@ async Task EnriquecerVendaConcluidaAsync()
                 oportunidade.Indicacao ??= indicacaoFlag is not null;
                 oportunidade.ValorIndicacao ??= page.Number("Indicação") is { } vi ? (decimal)vi : null;
                 oportunidade.Total ??= page.FormulaDecimal("Total");
+                if (!oportunidade.Migracao) oportunidade.Migracao = migracaoFlag is not null;
+                oportunidade.AtivoEm ??= ativoEm;
+                // Bug histórico da migração original: salvava a fração crua (0.20) em vez de ×100 —
+                // corrige quem já tem valor claramente nesse formato (comissão real é sempre > 1%).
+                if (oportunidade.Porcentagem is { } pctAtual && pctAtual is > 0 and <= 1) { oportunidade.Porcentagem = pctAtual * 100; porcentagemCorrigida++; }
+                oportunidade.Porcentagem ??= porcentagem;
+                oportunidade.Mensalidade ??= page.Number("Mensalidade") is { } m ? (decimal)m : null;
+                oportunidade.MensalidadeComDesconto ??= page.FormulaDecimal("Mensalidade com desconto");
+                oportunidade.PagamentoAdesao ??= page.Number("Adesão") is { } ad ? (decimal)ad : null;
+
+                var veiculoDescricao = page.Text("Veiculo");
+                // Coluna Placa é varchar(10) — alguns registros do Notion têm texto livre mais longo
+                // (digitação errada); trunca por segurança em vez de estourar o SaveChanges.
+                var veiculoPlaca = page.Text("Placa") is { Length: > 10 } placaLonga ? placaLonga[..10] : page.Text("Placa");
+                var veiculoFipe = page.Number("FIPE") is { } fipe ? (decimal)fipe : (decimal?)null;
+                var veiculoRastreador = page.Number("Rastreador") is { } rast ? (decimal)rast : (decimal?)null;
+                var veiculoVistoria = page.Number("Vistoriador") is { } vist ? (decimal)vist : (decimal?)null;
+                if (veiculoDescricao is not null || veiculoPlaca is not null || veiculoFipe is not null || veiculoRastreador is not null || veiculoVistoria is not null)
+                {
+                    if (oportunidade.Veiculo is null)
+                    {
+                        oportunidade.Veiculo = new CrmVeiculo { OpportunityId = oportunidade.Id };
+                        db.CrmVeiculos.Add(oportunidade.Veiculo);
+                    }
+                    oportunidade.Veiculo.Descricao ??= veiculoDescricao;
+                    oportunidade.Veiculo.Placa ??= veiculoPlaca;
+                    oportunidade.Veiculo.Fipe ??= veiculoFipe;
+                    oportunidade.Veiculo.Rastreador ??= veiculoRastreador;
+                    oportunidade.Veiculo.ValorVistoria ??= veiculoVistoria;
+                }
 
                 if (string.IsNullOrEmpty(oportunidade.TermoAdesaoArquivoUrl) && page.PrimeiroArquivo("Termo Adesão") is { } termo)
                 {
@@ -781,7 +950,7 @@ async Task EnriquecerVendaConcluidaAsync()
     }
 
     await db.SaveChangesAsync();
-    Console.WriteLine($"\n=== {atualizados} oportunidades atualizadas | {comArquivo} anexos salvos | {semCorrespondencia} sem correspondência (de {total} lidos) ===");
+    Console.WriteLine($"\n=== {atualizados} oportunidades atualizadas | {comArquivo} anexos salvos | {semCorrespondencia} sem correspondência | {estadoInvalido} com Estado inválido ignorado | {porcentagemCorrigida} porcentagens corrigidas (x100) (de {total} lidos) ===");
 }
 
 async Task<string?> SalvarAnexoAsync(string wwwroot, Guid opportunityId, string tipo, NotionPageExtensions.ArquivoInfo arquivo)
@@ -874,8 +1043,21 @@ async Task ImportarNovosLeadsAsync()
             var whatsapp = page.Text("WhatsApp");
             var telefoneMeta = page.Text("[META] Phone Number");
             var telefone = whatsapp ?? telefoneMeta;
+
+            // Alguns registros têm nome e telefone trocados na origem (ver NomeTelefoneHeuristica).
+            if (NomeTelefoneHeuristica.EstaoTrocados(nome, telefone))
+            {
+                (nome, telefone) = (telefone!.Trim(), nome);
+            }
+
+            // Alguns registros têm dois telefones colados no mesmo campo, sem separador.
+            var (telefonePrimeiro, telefoneSegundo) = NomeTelefoneHeuristica.SepararTelefones(telefone);
+            if (telefonePrimeiro is not null) telefone = telefonePrimeiro;
+
             var telefoneNormalizado = DocumentValidation.NormalizarTelefone(telefone);
             if (telefoneNormalizado is { Length: > 20 }) telefoneNormalizado = null;
+            var telefone2Normalizado = DocumentValidation.NormalizarTelefone(telefoneSegundo);
+            if (telefone2Normalizado is { Length: > 20 }) telefone2Normalizado = null;
 
             if ((documentoNormalizado is not null && documentosExistentesLocal.Contains(documentoNormalizado)) ||
                 (telefoneNormalizado is not null && telefonesExistentes.Contains(telefoneNormalizado)) ||
@@ -897,6 +1079,8 @@ async Task ImportarNovosLeadsAsync()
                 DocumentoNormalizado = documentoNormalizado,
                 Telefone = telefone,
                 TelefoneNormalizado = telefoneNormalizado,
+                Telefone2 = telefoneSegundo,
+                Telefone2Normalizado = telefone2Normalizado,
                 WhatsApp = whatsapp,
                 Email = emailBruto,
                 EmailNormalizado = emailNormalizado,

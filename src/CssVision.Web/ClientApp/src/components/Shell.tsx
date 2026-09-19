@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   LogOut,
+  Megaphone,
   Menu as MenuIcon,
   MessageCircle,
   Moon,
@@ -45,6 +46,7 @@ const iconesPorChave: Record<string, typeof Gauge> = {
   "user-cog": UserCog,
   briefcase: Briefcase,
   "id-card": IdCard,
+  megaphone: Megaphone,
 };
 
 export const PAPEL_LABEL: Record<string, string> = {
@@ -52,6 +54,7 @@ export const PAPEL_LABEL: Record<string, string> = {
   GestorMaster: "Gestor master",
   GestorComercial: "Gestor comercial",
   Comercial: "Consultor",
+  Marketing: "Marketing",
 };
 
 const PORTAL_NAV = [

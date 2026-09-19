@@ -13,4 +13,7 @@ public static class PolicyNames
 
     /// <summary>Visão consolidada / total, sem restrição de carteira ou equipe.</summary>
     public const string VisaoTotalComercial = "VisaoTotalComercial";
+
+    /// <summary>Acompanhamento de tráfego pago (leads, origem, campanhas).</summary>
+    public const string AreaMarketing = "AreaMarketing";
 }

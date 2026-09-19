@@ -20,6 +20,7 @@ import { PortalDashboardPage } from "./pages/portal/Dashboard";
 import { PortalClientesPage } from "./pages/portal/Clientes";
 import { PortalPropostasPage } from "./pages/portal/Propostas";
 import { ConfiguracoesPage } from "./pages/portal/Configuracoes";
+import { TrafegoPagoPage } from "./pages/marketing/TrafegoPago";
 
 function CarregandoTelaCheia() {
   return (
@@ -41,6 +42,7 @@ function RotaProtegida({ papeis, children }: { papeis?: string[]; children: Reac
 
 const PAPEIS_GESTAO = ["Admin", "GestorMaster", "GestorComercial"];
 const PAPEIS_ADMIN = ["Admin", "GestorMaster"];
+const PAPEIS_MARKETING = ["Admin", "Marketing"];
 
 export default function App() {
   const { sessao, carregando } = useAuth();
@@ -91,6 +93,15 @@ export default function App() {
       <Route path="/app/portal/clientes" element={<RotaProtegida><PortalClientesPage /></RotaProtegida>} />
       <Route path="/app/portal/propostas" element={<RotaProtegida><PortalPropostasPage /></RotaProtegida>} />
       <Route path="/app/portal/configuracoes" element={<RotaProtegida><ConfiguracoesPage /></RotaProtegida>} />
+
+      <Route
+        path="/app/marketing"
+        element={
+          <RotaProtegida papeis={PAPEIS_MARKETING}>
+            <TrafegoPagoPage />
+          </RotaProtegida>
+        }
+      />
 
       <Route path="*" element={<Navigate to={sessao ? sessao.areaInicial : "/login"} replace />} />
     </Routes>

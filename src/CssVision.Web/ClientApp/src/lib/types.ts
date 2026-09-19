@@ -120,6 +120,7 @@ export interface LeadListItem {
   tipoPessoa: TipoPessoa;
   documentoMascarado?: string | null;
   telefone?: string | null;
+  telefone2?: string | null;
   email?: string | null;
   cidade?: string | null;
   estado?: string | null;
@@ -146,9 +147,33 @@ export interface LeadOpportunitySummary {
   id: string;
   titulo: string;
   etapaNome: string;
+  etapaTipo: TipoEtapaPipeline;
   valorEstimado: number;
   dataPrevistaFechamento?: string | null;
   ativa: boolean;
+  migracao: boolean;
+  indicacao?: boolean | null;
+  cpf?: string | null;
+  estado?: string | null;
+  ativoEm?: string | null;
+  porcentagem?: number | null;
+  mensalidade?: number | null;
+  mensalidadeComDesconto?: number | null;
+  mensalidadeComCupom?: number | null;
+  pagamentoAdesao?: number | null;
+  total?: number | null;
+  tipoIndicacao?: string | null;
+  valorIndicacao?: number | null;
+  veiculo?: LeadOpportunityVeiculoSummary | null;
+}
+
+export interface LeadOpportunityVeiculoSummary {
+  descricao?: string | null;
+  placa?: string | null;
+  fipe?: number | null;
+  rastreador?: number | null;
+  valorVistoria?: number | null;
+  dataChegada?: string | null;
 }
 
 export interface LeadDetail {
@@ -157,6 +182,7 @@ export interface LeadDetail {
   tipoPessoa: TipoPessoa;
   documento?: string | null;
   telefone?: string | null;
+  telefone2?: string | null;
   whatsApp?: string | null;
   email?: string | null;
   dataNascimento?: string | null;
@@ -179,6 +205,7 @@ export interface LeadDetail {
   indicadoPorLeadId?: string | null;
   indicadoPorLeadNome?: string | null;
   tipoIndicacao?: string | null;
+  criadoManualmente: boolean;
   etapaId?: string | null;
   etapaNome?: string | null;
   etapaCor?: string | null;
@@ -205,6 +232,7 @@ export interface LeadCreateRequest {
   tipoPessoa: TipoPessoa;
   documento?: string | null;
   telefone?: string | null;
+  telefone2?: string | null;
   whatsApp?: string | null;
   email?: string | null;
   dataNascimento?: string | null;
@@ -227,6 +255,7 @@ export interface LeadCreateRequest {
   indicadoPorLeadId?: string | null;
   tipoIndicacao?: string | null;
   responsavelId?: string | null;
+  etapaId?: string | null;
   tags?: string[];
   observacoes?: string | null;
   consentimentoContato: boolean;
@@ -258,6 +287,7 @@ export interface LeadKanbanCard {
   leadId: string;
   nomeOuRazaoSocial: string;
   telefone?: string | null;
+  telefone2?: string | null;
   email?: string | null;
   estado?: string | null;
   origem?: string | null;
@@ -266,6 +296,9 @@ export interface LeadKanbanCard {
   temSeguro?: boolean | null;
   utilidadeVeiculo?: string | null;
   tipoIndicacao?: string | null;
+  migracao?: boolean;
+  indicacao?: boolean | null;
+  criadoManualmente: boolean;
   responsavelId?: string | null;
   responsavelNome?: string | null;
   tags: string[];
@@ -404,6 +437,35 @@ export interface OpportunityCreateRequest {
   termoAdesaoAceito: boolean;
   migracao: boolean;
   veiculo?: VeiculoUpsertRequest | null;
+}
+
+export interface OpportunityUpdateRequest {
+  titulo: string;
+  responsavelId: string;
+  produtoOuServico?: string | null;
+  valorEstimado: number;
+  probabilidadeFechamento?: number | null;
+  dataPrevistaFechamento?: string | null;
+  concorrente?: string | null;
+  observacoes?: string | null;
+  dataAdesao?: string | null;
+  ativoEm?: string | null;
+  mensalidade?: number | null;
+  mensalidadeComDesconto?: number | null;
+  mensalidadeComCupom?: number | null;
+  pagamentoAdesao?: number | null;
+  porcentagem?: number | null;
+  termoAdesaoAceito: boolean;
+  migracao: boolean;
+  veiculo?: VeiculoUpsertRequest | null;
+  rowVersion: number;
+  cpf?: string | null;
+  estado?: string | null;
+  indicacao?: boolean | null;
+  tipoIndicacao?: string | null;
+  valorIndicacao?: number | null;
+  total?: number | null;
+  dataEfetivaFechamento?: string | null;
 }
 
 export interface ChangeStageRequest {
@@ -584,6 +646,60 @@ export interface Dashboard {
   desempenhoPorVendedor: DesempenhoVendedor[];
   atividadesDoDia: Activity[];
   leadsParados: AlertaLeadParado[];
+}
+
+// --- Marketing / tráfego pago ---
+
+export interface MarketingIndicadores {
+  totalLeads: number;
+  leadsSemEtapa: number;
+  leadsGanhos: number;
+  leadsPerdidos: number;
+  taxaConversao: number;
+  leadsSemContato: number;
+}
+
+export interface MarketingOrigem {
+  origem: string;
+  totalLeads: number;
+  ganhos: number;
+  taxaConversao: number;
+}
+
+export interface MarketingCampanha {
+  campanha: string;
+  origem?: string | null;
+  totalLeads: number;
+  ganhos: number;
+  taxaConversao: number;
+  ultimoLeadEm: string;
+}
+
+export interface MarketingEvolucao {
+  data: string;
+  quantidade: number;
+}
+
+export interface MarketingLeadItem {
+  id: string;
+  nomeOuRazaoSocial: string;
+  telefone?: string | null;
+  origem?: string | null;
+  campanha?: string | null;
+  utmSource?: string | null;
+  utmMedium?: string | null;
+  etapaNome?: string | null;
+  responsavelNome?: string | null;
+  criadoEm: string;
+}
+
+export interface MarketingDashboard {
+  indicadores: MarketingIndicadores;
+  porOrigem: MarketingOrigem[];
+  porCampanha: MarketingCampanha[];
+  evolucao: MarketingEvolucao[];
+  origensDisponiveis: string[];
+  leads: MarketingLeadItem[];
 }
 
 // --- Metas ---

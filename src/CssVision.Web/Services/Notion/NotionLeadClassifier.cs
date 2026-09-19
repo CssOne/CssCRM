@@ -5,7 +5,7 @@ public static class NotionLeadClassifier
 {
     private static readonly HashSet<string> ValoresDeLead = new(StringComparer.OrdinalIgnoreCase)
     {
-        "AGV", "AGV TRUCK", "APVS", "APVS TRUCK", "Loovi",
+        "AGV", "AGV TRUCK", "AGV Elétrico", "APVS", "APVS TRUCK", "Loovi",
     };
 
     public static bool EhLead(string? oQue) => oQue is not null && ValoresDeLead.Contains(oQue);

@@ -16,6 +16,7 @@ public class LeadServiceTests
             TipoPessoa: TipoPessoa.Fisica,
             Documento: documento,
             Telefone: telefone,
+            Telefone2: null,
             WhatsApp: null,
             Email: email,
             DataNascimento: null,

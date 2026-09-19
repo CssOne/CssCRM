@@ -2,12 +2,15 @@ import { useState, type FormEvent } from "react";
 import { TipoPessoa, type LeadCreateRequest, type LeadListItem } from "../../lib/types";
 import { Button, Checkbox, DocumentoInput, FieldError, Input, Label, Select, Textarea } from "../ui";
 import { LeadPicker } from "./LeadPicker";
+import { useAuth } from "../../context/AuthContext";
+import { ESTADOS_BRASIL } from "../../lib/estados";
 
 export interface LeadFormValues {
   nomeOuRazaoSocial: string;
   tipoPessoa: TipoPessoa;
   documento: string;
   telefone: string;
+  telefone2: string;
   whatsApp: string;
   email: string;
   cidade: string;
@@ -39,6 +42,7 @@ export const leadFormVazio: LeadFormValues = {
   tipoPessoa: TipoPessoa.Fisica,
   documento: "",
   telefone: "",
+  telefone2: "",
   whatsApp: "",
   email: "",
   cidade: "",
@@ -71,6 +75,7 @@ export function paraLeadCreateRequest(v: LeadFormValues): LeadCreateRequest {
     tipoPessoa: v.tipoPessoa,
     documento: v.documento || null,
     telefone: v.telefone || null,
+    telefone2: v.telefone2 || null,
     whatsApp: v.whatsApp || null,
     email: v.email || null,
     cidade: v.cidade || null,
@@ -112,6 +117,8 @@ export function LeadForm({
 }) {
   const [valores, setValores] = useState<LeadFormValues>(valoresIniciais ?? leadFormVazio);
   const [erros, setErros] = useState<Record<string, string>>({});
+  const { temPapel } = useAuth();
+  const podeVerMarketing = temPapel("Admin", "GestorMaster", "GestorComercial");
 
   function set<K extends keyof LeadFormValues>(campo: K, valor: LeadFormValues[K]) {
     setValores((v) => ({ ...v, [campo]: valor }));
@@ -170,8 +177,8 @@ export function LeadForm({
         </div>
 
         <div>
-          <Label htmlFor={`${idPrefix}-whats`}>WhatsApp</Label>
-          <Input id={`${idPrefix}-whats`} value={valores.whatsApp} onChange={(e) => set("whatsApp", e.target.value)} />
+          <Label htmlFor={`${idPrefix}-tel2`}>Telefone 2</Label>
+          <Input id={`${idPrefix}-tel2`} value={valores.telefone2} onChange={(e) => set("telefone2", e.target.value)} />
         </div>
 
         <div className="sm:col-span-2">
@@ -186,8 +193,15 @@ export function LeadForm({
         </div>
 
         <div>
-          <Label htmlFor={`${idPrefix}-estado`}>Estado (UF)</Label>
-          <Input id={`${idPrefix}-estado`} maxLength={2} value={valores.estado} onChange={(e) => set("estado", e.target.value.toUpperCase())} />
+          <Label htmlFor={`${idPrefix}-estado`}>Estado</Label>
+          <Select id={`${idPrefix}-estado`} value={valores.estado} onChange={(e) => set("estado", e.target.value)}>
+            <option value="">Selecione...</option>
+            {ESTADOS_BRASIL.map((uf) => (
+              <option key={uf.sigla} value={uf.sigla}>
+                {uf.nome}
+              </option>
+            ))}
+          </Select>
           <FieldError>{erros.estado}</FieldError>
         </div>
 
@@ -201,15 +215,12 @@ export function LeadForm({
           <Input id={`${idPrefix}-origem`} value={valores.origem} onChange={(e) => set("origem", e.target.value)} placeholder="Site, indicação..." />
         </div>
 
-        <div>
-          <Label htmlFor={`${idPrefix}-campanha`}>Campanha</Label>
-          <Input id={`${idPrefix}-campanha`} value={valores.campanha} onChange={(e) => set("campanha", e.target.value)} />
-        </div>
-
-        <div>
-          <Label htmlFor={`${idPrefix}-produto`}>Produto/serviço de interesse</Label>
-          <Input id={`${idPrefix}-produto`} value={valores.produtoInteresse} onChange={(e) => set("produtoInteresse", e.target.value)} />
-        </div>
+        {podeVerMarketing && (
+          <div>
+            <Label htmlFor={`${idPrefix}-campanha`}>Campanha</Label>
+            <Input id={`${idPrefix}-campanha`} value={valores.campanha} onChange={(e) => set("campanha", e.target.value)} />
+          </div>
+        )}
 
         <div>
           <Label htmlFor={`${idPrefix}-placa`}>Placa do veículo</Label>
@@ -232,12 +243,14 @@ export function LeadForm({
 
         <div>
           <Label htmlFor={`${idPrefix}-utilidade`}>Utilidade do veículo</Label>
-          <Input
-            id={`${idPrefix}-utilidade`}
-            value={valores.utilidadeVeiculo}
-            onChange={(e) => set("utilidadeVeiculo", e.target.value)}
-            placeholder="Particular, trabalho, aplicativo..."
-          />
+          <Select id={`${idPrefix}-utilidade`} value={valores.utilidadeVeiculo} onChange={(e) => set("utilidadeVeiculo", e.target.value)}>
+            <option value="">Selecione...</option>
+            <option value="Particular">Particular</option>
+            <option value="Trabalho">Trabalho</option>
+            <option value="Aplicativo">Aplicativo (Uber/99)</option>
+            <option value="Comercial">Comercial</option>
+            <option value="Outro">Outro</option>
+          </Select>
         </div>
 
         <div className="sm:col-span-2">
@@ -273,44 +286,50 @@ export function LeadForm({
           </div>
           <div>
             <Label htmlFor={`${idPrefix}-tipo-indicacao`}>Tipo de indicação</Label>
-            <Input id={`${idPrefix}-tipo-indicacao`} value={valores.tipoIndicacao} onChange={(e) => set("tipoIndicacao", e.target.value)} />
+            <Select id={`${idPrefix}-tipo-indicacao`} value={valores.tipoIndicacao} onChange={(e) => set("tipoIndicacao", e.target.value)}>
+              <option value="">Selecione...</option>
+              <option value="Lead">Lead</option>
+              <option value="Pessoal">Pessoal</option>
+            </Select>
           </div>
         </div>
       </div>
 
-      <div className="border-t border-[var(--border)] pt-4">
-        <h3 className="mb-3 text-sm font-semibold text-[var(--fg)]">Marketing e rastreamento</h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label htmlFor={`${idPrefix}-gclid`}>GCLID (Google Ads)</Label>
-            <Input id={`${idPrefix}-gclid`} value={valores.gclid} onChange={(e) => set("gclid", e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor={`${idPrefix}-utm-source`}>UTM Source</Label>
-            <Input id={`${idPrefix}-utm-source`} value={valores.utmSource} onChange={(e) => set("utmSource", e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor={`${idPrefix}-utm-medium`}>UTM Medium</Label>
-            <Input id={`${idPrefix}-utm-medium`} value={valores.utmMedium} onChange={(e) => set("utmMedium", e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor={`${idPrefix}-utm-term`}>UTM Term</Label>
-            <Input id={`${idPrefix}-utm-term`} value={valores.utmTerm} onChange={(e) => set("utmTerm", e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor={`${idPrefix}-meta-click`}>Meta Click ID</Label>
-            <Input id={`${idPrefix}-meta-click`} value={valores.metaClickId} onChange={(e) => set("metaClickId", e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor={`${idPrefix}-meta-form`}>Meta Form ID</Label>
-            <Input id={`${idPrefix}-meta-form`} value={valores.metaFormId} onChange={(e) => set("metaFormId", e.target.value)} />
-          </div>
-          <div>
-            <Label htmlFor={`${idPrefix}-meta-lead`}>Meta Lead ID</Label>
-            <Input id={`${idPrefix}-meta-lead`} value={valores.metaLeadId} onChange={(e) => set("metaLeadId", e.target.value)} />
+      {podeVerMarketing && (
+        <div className="border-t border-[var(--border)] pt-4">
+          <h3 className="mb-3 text-sm font-semibold text-[var(--fg)]">Marketing e rastreamento</h3>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor={`${idPrefix}-gclid`}>GCLID (Google Ads)</Label>
+              <Input id={`${idPrefix}-gclid`} value={valores.gclid} onChange={(e) => set("gclid", e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor={`${idPrefix}-utm-source`}>UTM Source</Label>
+              <Input id={`${idPrefix}-utm-source`} value={valores.utmSource} onChange={(e) => set("utmSource", e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor={`${idPrefix}-utm-medium`}>UTM Medium</Label>
+              <Input id={`${idPrefix}-utm-medium`} value={valores.utmMedium} onChange={(e) => set("utmMedium", e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor={`${idPrefix}-utm-term`}>UTM Term</Label>
+              <Input id={`${idPrefix}-utm-term`} value={valores.utmTerm} onChange={(e) => set("utmTerm", e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor={`${idPrefix}-meta-click`}>Meta Click ID</Label>
+              <Input id={`${idPrefix}-meta-click`} value={valores.metaClickId} onChange={(e) => set("metaClickId", e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor={`${idPrefix}-meta-form`}>Meta Form ID</Label>
+              <Input id={`${idPrefix}-meta-form`} value={valores.metaFormId} onChange={(e) => set("metaFormId", e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor={`${idPrefix}-meta-lead`}>Meta Lead ID</Label>
+              <Input id={`${idPrefix}-meta-lead`} value={valores.metaLeadId} onChange={(e) => set("metaLeadId", e.target.value)} />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="border-t border-[var(--border)] pt-4">
         <Checkbox

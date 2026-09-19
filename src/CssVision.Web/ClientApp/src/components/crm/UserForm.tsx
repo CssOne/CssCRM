@@ -8,6 +8,7 @@ const PAPEL_LABEL: Record<string, string> = {
   GestorMaster: "Gestor master",
   GestorComercial: "Gestor comercial",
   Comercial: "Consultor comercial",
+  Marketing: "Marketing",
 };
 
 export interface UserFormValues {

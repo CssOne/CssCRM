@@ -372,6 +372,16 @@ public class AccountController(
         var areaInicial = "/app/crm";
 
         var menu = new List<MenuItemDto>();
+
+        // Marketing "puro" (sem nenhum outro papel comercial/administrativo) só enxerga a página de
+        // tráfego pago — o resto do CRM (leads, pipeline etc.) não é da área dele.
+        var somenteMarketing = papeis.Contains(Roles.Marketing) && papeis.Count == 1;
+        if (somenteMarketing)
+        {
+            menu.Add(new MenuItemDto("marketing", "Tráfego pago", "megaphone", "/app/marketing"));
+            return new SessionDto(usuario.Id, usuario.Email!, usuario.NomeCompleto, usuario.FotoUrl, papeis.ToList(), "/app/marketing", menu);
+        }
+
         menu.Add(new MenuItemDto("portal", "Portal do Consultor", "briefcase", "/app/portal"));
         menu.Add(new MenuItemDto("crm-overview", "Visão geral", "gauge", "/app/crm"));
         menu.Add(new MenuItemDto("crm-leads", "Leads", "users", "/app/crm/leads"));
@@ -386,6 +396,11 @@ public class AccountController(
             menu.Add(new MenuItemDto("crm-management", "Gestão comercial", "users-round", "/app/crm/gestao"));
             menu.Add(new MenuItemDto("crm-consultores", "Consultores", "id-card", "/app/crm/consultores"));
             menu.Add(new MenuItemDto("crm-users", "Usuários", "user-cog", "/app/crm/usuarios"));
+        }
+
+        if (papeis.Contains(Roles.Admin) || papeis.Contains(Roles.Marketing))
+        {
+            menu.Add(new MenuItemDto("marketing", "Tráfego pago", "megaphone", "/app/marketing"));
         }
 
         return new SessionDto(usuario.Id, usuario.Email!, usuario.NomeCompleto, usuario.FotoUrl, papeis.ToList(), areaInicial, menu);

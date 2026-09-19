@@ -43,6 +43,7 @@ public sealed class LeadService(
                 l.TipoPessoa,
                 l.DocumentoNormalizado,
                 l.Telefone,
+                l.Telefone2,
                 l.Email,
                 l.Cidade,
                 l.Estado,
@@ -65,7 +66,7 @@ public sealed class LeadService(
                 l.CriadoEm,
                 l.UltimoContatoEm,
                 l.ProximoContatoEm,
-                l.UltimoContatoEm == null,
+                string.IsNullOrWhiteSpace(l.Telefone) && string.IsNullOrWhiteSpace(l.Telefone2),
                 l.Arquivado
             ))
             .ToListAsync(ct);
@@ -511,6 +512,29 @@ public sealed class LeadService(
         return nota.Id;
     }
 
+    /// <summary>
+    /// Exclusão lógica (arquivamento) — nunca DELETE físico, ver CrmEntityBase. Só permitida pra
+    /// leads com a etiqueta "Indicação" do quadro de leads (cadastro manual ou TipoIndicacao
+    /// "Indicação" vindo do Notion) — mesma regra usada no rodapé do cartão no front-end.
+    /// </summary>
+    public async Task ExcluirAsync(Guid id, CancellationToken ct)
+    {
+        var lead = await CarregarComEscopoAsync(id, ct);
+
+        var ehIndicacao = lead.CriadoManualmente ||
+            (lead.TipoIndicacao is not null && lead.TipoIndicacao.Equals("Indicação", StringComparison.OrdinalIgnoreCase));
+        if (!ehIndicacao)
+        {
+            throw new CrmBusinessException("Só é possível excluir leads com a etiqueta \"Indicação\".", "exclusao_nao_permitida");
+        }
+
+        lead.Arquivado = true;
+        lead.ArquivadoEm = DateTimeOffset.UtcNow;
+        lead.ArquivadoPorId = currentUser.UserId;
+        await db.SaveChangesAsync(ct);
+        await audit.RegistrarAsync("LeadExcluido", nameof(CrmLead), lead.Id, new { lead.NomeOuRazaoSocial }, ct);
+    }
+
     public async Task<LeadImportResultDto> ImportarAsync(Stream planilha, CancellationToken ct)
     {
         if (!currentUser.PodeGerirComercial)
@@ -622,6 +646,7 @@ public sealed class LeadService(
                 l.TipoPessoa,
                 l.DocumentoNormalizado,
                 l.Telefone,
+                l.Telefone2,
                 l.Email,
                 l.Cidade,
                 l.Estado,
@@ -688,6 +713,7 @@ public sealed class LeadService(
             .Include(l => l.Etapa)
             .Include(l => l.MotivoPerda)
             .Include(l => l.Oportunidades).ThenInclude(o => o.Etapa)
+            .Include(l => l.Oportunidades).ThenInclude(o => o.Veiculo)
             .FirstOrDefaultAsync(l => l.Id == id, ct)
             ?? throw new CrmNotFoundException("Lead", id);
 
@@ -819,6 +845,7 @@ public sealed class LeadService(
         lead.TipoPessoa,
         DocumentValidation.FormatarDocumento(lead.DocumentoNormalizado),
         lead.Telefone,
+        lead.Telefone2,
         lead.WhatsApp,
         lead.Email,
         lead.DataNascimento,
@@ -841,6 +868,7 @@ public sealed class LeadService(
         lead.IndicadoPorLeadId,
         lead.IndicadoPorLead?.NomeOuRazaoSocial,
         lead.TipoIndicacao,
+        lead.CriadoManualmente,
         lead.EtapaId,
         lead.Etapa?.Nome,
         lead.Etapa?.Cor,
@@ -857,7 +885,11 @@ public sealed class LeadService(
         lead.LeadTags.Select(lt => lt.Tag.Nome).ToList(),
         lead.Oportunidades
             .OrderByDescending(o => o.CriadoEm)
-            .Select(o => new LeadOpportunitySummaryDto(o.Id, o.Titulo, o.Etapa.Nome, o.ValorEstimado, o.DataPrevistaFechamento, o.Etapa.Tipo == TipoEtapaPipeline.Aberta))
+            .Select(o => new LeadOpportunitySummaryDto(
+                o.Id, o.Titulo, o.Etapa.Nome, o.Etapa.Tipo, o.ValorEstimado, o.DataPrevistaFechamento, o.Etapa.Tipo == TipoEtapaPipeline.Aberta, o.Migracao, o.Indicacao,
+                o.Cpf, o.Estado, o.AtivoEm, o.Porcentagem, o.Mensalidade, o.MensalidadeComDesconto, o.MensalidadeComCupom, o.PagamentoAdesao, o.Total,
+                o.TipoIndicacao, o.ValorIndicacao,
+                o.Veiculo == null ? null : new LeadOpportunityVeiculoSummaryDto(o.Veiculo.Descricao, o.Veiculo.Placa, o.Veiculo.Fipe, o.Veiculo.Rastreador, o.Veiculo.ValorVistoria, o.Veiculo.DataChegada)))
             .ToList(),
         lead.CriadoEm,
         lead.AtualizadoEm,

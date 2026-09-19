@@ -17,10 +17,11 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
         var query = db.CrmLeads.AsNoTracking()
             .Include(l => l.Responsavel)
             .Include(l => l.LeadTags).ThenInclude(lt => lt.Tag)
+            .Include(l => l.Oportunidades)
             .AsQueryable();
 
         if (!filtro.IncluirArquivados) query = query.Where(l => !l.Arquivado);
-        query = query.Where(l => l.CriadoManualmente == filtro.CriadoManualmente);
+        if (filtro.CriadoManualmente.HasValue) query = query.Where(l => l.CriadoManualmente == filtro.CriadoManualmente.Value);
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
         if (visiveis is not null)
@@ -43,14 +44,55 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
         if (!string.IsNullOrWhiteSpace(filtro.Origem)) query = query.Where(l => l.Origem == filtro.Origem);
         if (!string.IsNullOrWhiteSpace(filtro.Regional)) query = query.Where(l => l.Regional == filtro.Regional);
 
+        // Dados migrados em épocas diferentes gravaram TipoIndicacao com capitalização distinta
+        // (ex.: "LEAD" vs "Lead") — ILike compara sem diferenciar maiúsculas/minúsculas.
+        query = filtro.Categoria switch
+        {
+            "Migração" => query.Where(l => l.Origem == "Migração Notion"),
+            "Indicação" => query.Where(l => l.TipoIndicacao != null && EF.Functions.ILike(l.TipoIndicacao, "Indicação")),
+            "Lead" => query.Where(l => l.TipoIndicacao != null && EF.Functions.ILike(l.TipoIndicacao, "Lead")),
+            _ => query,
+        };
+
+        if (filtro.DataChegadaInicio is { } chegadaInicio)
+        {
+            var inicioUtc = chegadaInicio.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            query = query.Where(l => l.CriadoEm >= inicioUtc);
+        }
+        if (filtro.DataChegadaFim is { } chegadaFim)
+        {
+            var fimUtc = chegadaFim.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+            query = query.Where(l => l.CriadoEm <= fimUtc);
+        }
+        if (filtro.DataVendaInicio is { } vendaInicio)
+        {
+            var inicioUtc = vendaInicio.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            query = query.Where(l => l.Oportunidades.Any(o => o.DataEfetivaFechamento >= inicioUtc));
+        }
+        if (filtro.DataVendaFim is { } vendaFim)
+        {
+            var fimUtc = vendaFim.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+            query = query.Where(l => l.Oportunidades.Any(o => o.DataEfetivaFechamento <= fimUtc));
+        }
+
         var leads = await query.ToListAsync(ct);
 
-        LeadKanbanCardDto ParaCartao(CrmLead l) => new(
-            l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Email, l.Estado, l.Origem, l.Campanha,
-            l.Placa, l.TemSeguro, l.UtilidadeVeiculo, l.TipoIndicacao,
-            l.ResponsavelId, l.Responsavel?.NomeCompleto,
-            l.LeadTags.Select(lt => lt.Tag.Nome).ToList(),
-            l.CriadoEm, l.UltimoContatoEm, l.UltimoContatoEm == null, l.Arquivado, l.RowVersion);
+        LeadKanbanCardDto ParaCartao(CrmLead l)
+        {
+            // A oportunidade mais recente é a fonte dos selos Migração/Indicação — normalmente é a
+            // que fechou a venda (o lead só chega na coluna "Venda concluída" depois disso).
+            var oportunidade = l.Oportunidades.OrderByDescending(o => o.CriadoEm).FirstOrDefault();
+            // "Sem contato" agora reflete se o lead tem ALGUM telefone cadastrado (não mais se já
+            // houve uma atividade registrada) — some sozinho assim que um telefone é preenchido.
+            var semTelefone = string.IsNullOrWhiteSpace(l.Telefone) && string.IsNullOrWhiteSpace(l.Telefone2);
+            return new(
+                l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Telefone2, l.Email, l.Estado, l.Origem, l.Campanha,
+                l.Placa, l.TemSeguro, l.UtilidadeVeiculo, l.TipoIndicacao,
+                oportunidade?.Migracao ?? false, oportunidade?.Indicacao, l.CriadoManualmente,
+                l.ResponsavelId, l.Responsavel?.NomeCompleto,
+                l.LeadTags.Select(lt => lt.Tag.Nome).ToList(),
+                l.CriadoEm, l.UltimoContatoEm, semTelefone, l.Arquivado, l.RowVersion);
+        }
 
         // Coluna virtual (sem linha em CrmLeadStage): leads que ainda não foram trabalhados por
         // ninguém. Fica sempre em primeiro, pra vendedora enxergar de cara quem ainda não pegou.

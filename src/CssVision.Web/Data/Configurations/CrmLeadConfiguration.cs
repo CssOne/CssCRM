@@ -14,6 +14,7 @@ public class CrmLeadConfiguration : IEntityTypeConfiguration<CrmLead>
         builder.Property(e => e.NomeOuRazaoSocial).IsRequired().HasMaxLength(200);
         builder.Property(e => e.DocumentoNormalizado).HasMaxLength(14);
         builder.Property(e => e.TelefoneNormalizado).HasMaxLength(20);
+        builder.Property(e => e.Telefone2Normalizado).HasMaxLength(20);
         builder.Property(e => e.EmailNormalizado).HasMaxLength(256);
         builder.Property(e => e.Email).HasMaxLength(256);
         builder.Property(e => e.Cidade).HasMaxLength(120);

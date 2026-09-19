@@ -7,6 +7,7 @@ public record LeadKanbanCardDto(
     Guid LeadId,
     string NomeOuRazaoSocial,
     string? Telefone,
+    string? Telefone2,
     string? Email,
     string? Estado,
     string? Origem,
@@ -15,6 +16,9 @@ public record LeadKanbanCardDto(
     bool? TemSeguro,
     string? UtilidadeVeiculo,
     string? TipoIndicacao,
+    bool Migracao,
+    bool? Indicacao,
+    bool CriadoManualmente,
     Guid? ResponsavelId,
     string? ResponsavelNome,
     IReadOnlyList<string> Tags,
@@ -37,11 +41,21 @@ public record LeadKanbanFilterRequest
     public bool IncluirArquivados { get; init; }
 
     /// <summary>
-    /// Separa o quadro em dois grupos que nunca aparecem juntos: true (padrão) mostra só leads
-    /// cadastrados por uma pessoa, false mostra só os que chegaram automaticamente (Meta Ads,
-    /// formulário do site).
+    /// Opcional — quando omitido, o quadro mostra leads cadastrados manualmente e automaticamente
+    /// juntos (ver etiquetas "Lead"/"Indicação" no rodapé do cartão). Filtro mantido para uso futuro.
     /// </summary>
-    public bool CriadoManualmente { get; init; } = true;
+    public bool? CriadoManualmente { get; init; }
+
+    /// <summary>"Migração" (Origem = "Migração Notion"), "Indicação" ou "Lead" (TipoIndicacao) —
+    /// ver LeadKanbanService.ObterBoardAsync.</summary>
+    public string? Categoria { get; init; }
+
+    public DateOnly? DataChegadaInicio { get; init; }
+    public DateOnly? DataChegadaFim { get; init; }
+
+    /// <summary>Filtra pela data efetiva de fechamento (venda) de alguma oportunidade do lead.</summary>
+    public DateOnly? DataVendaInicio { get; init; }
+    public DateOnly? DataVendaFim { get; init; }
 }
 
 /// <summary>NovaEtapaId nulo move o lead de volta pra "Sem etapa" (desmarca). MotivoPerdaId é obrigatório
