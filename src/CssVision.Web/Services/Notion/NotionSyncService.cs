@@ -86,6 +86,10 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
             {
                 erros++;
                 logger.LogWarning(ex, "Erro sincronizando pagina {PageId} ({Regional})", page.PageId(), regionalNome);
+                // Uma falha de SaveChangesAsync deixa a entidade inválida presa no change tracker —
+                // sem isso, toda gravação seguinte (mesmo de páginas OK, de outras fontes até) falha
+                // tentando persistir de novo a mesma entidade quebrada.
+                db.ChangeTracker.Clear();
             }
         }
 
@@ -139,7 +143,8 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
         if (telefone2Normalizado is { Length: > 20 }) telefone2Normalizado = null;
 
         var estadoTexto = page.Text("ESTADO");
-        var estado = page.Select("Estado") ?? (estadoTexto is { Length: 2 } ? estadoTexto : null);
+        var estadoSelect = page.Select("Estado");
+        var estado = estadoSelect is { Length: 2 } ? estadoSelect : (estadoTexto is { Length: 2 } ? estadoTexto : null);
         var cidade = page.Text("Cidade");
         var oQue = page.Select("O que");
         var tipoIndicacao = NotionLeadClassifier.Classificar(oQue);
