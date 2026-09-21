@@ -112,6 +112,11 @@ if (Environment.GetEnvironmentVariable("MIGRATION_MODE") == "fixvendors")
     return;
 }
 
+// Opcional — restringe a importação a cards com "Data de chegada" a partir dessa data (ver
+// conversa com o usuário: passou a valer 01/01/2026 pra sincronização periódica em produção;
+// aqui fica disponível pra quem rodar essa importação manual também respeitar o mesmo corte).
+var criadoApartirDeImport = DateOnly.TryParse(Environment.GetEnvironmentVariable("MIGRATION_CREATED_AFTER"), out var apartirImport) ? apartirImport : (DateOnly?)null;
+
 foreach (var spec in specs)
 {
     Console.WriteLine($"\n=== {spec.RegionalName} ===");
@@ -131,7 +136,10 @@ foreach (var spec in specs)
     var comErro = 0;
     var lote = new List<(CrmLead Lead, CrmOpportunity Oportunidade, CrmVeiculo Veiculo)>();
 
-    await foreach (var page in notion.QueryVendaConcluidaAsync(spec.DataSourceId))
+    var paginasVendaConcluida = criadoApartirDeImport.HasValue
+        ? notion.QueryVendaConcluidaAsync(spec.DataSourceId, criadoApartirDeImport.Value)
+        : notion.QueryVendaConcluidaAsync(spec.DataSourceId);
+    await foreach (var page in paginasVendaConcluida)
     {
         if (limitePorBase.HasValue && totalLidos >= limitePorBase.Value) break;
         totalLidos++;

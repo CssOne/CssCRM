@@ -12,6 +12,17 @@ public sealed class NotionClient(string token)
     public IAsyncEnumerable<JsonElement> QueryVendaConcluidaAsync(string dataSourceId, CancellationToken ct = default) =>
         QueryAsync(dataSourceId, new { property = "Status", select = new { equals = "VENDA CONCLUIDA" } }, ct);
 
+    /// <summary>Igual a QueryVendaConcluidaAsync, mas restrita a cards com "Data de chegada" a partir da data informada.</summary>
+    public IAsyncEnumerable<JsonElement> QueryVendaConcluidaAsync(string dataSourceId, DateOnly criadoApartirDe, CancellationToken ct = default) =>
+        QueryAsync(dataSourceId, new
+        {
+            and = new object[]
+            {
+                new { property = "Status", select = new { equals = "VENDA CONCLUIDA" } },
+                new { property = "Data de chegada", created_time = new { on_or_after = criadoApartirDe.ToString("yyyy-MM-dd") } },
+            }
+        }, ct);
+
     /// <summary>Todas as linhas cujo Status não é "VENDA CONCLUIDA" (essas já foram migradas por QueryVendaConcluidaAsync).</summary>
     public IAsyncEnumerable<JsonElement> QueryNaoVendaConcluidaAsync(string dataSourceId, CancellationToken ct = default) =>
         QueryAsync(dataSourceId, new { property = "Status", select = new { does_not_equal = "VENDA CONCLUIDA" } }, ct);
@@ -45,9 +56,27 @@ public sealed class NotionClient(string token)
         return QueryAsync(dataSourceId, filtro, ct);
     }
 
-    /// <summary>Todas as linhas editadas após o instante informado — base da sincronização incremental periódica.</summary>
-    public IAsyncEnumerable<JsonElement> QueryEditadasDesdeAsync(string dataSourceId, DateTimeOffset desde, CancellationToken ct = default) =>
-        QueryAsync(dataSourceId, new { timestamp = "last_edited_time", last_edited_time = new { after = desde.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffZ") } }, ct);
+    /// <summary>
+    /// Todas as linhas editadas após o instante informado — base da sincronização incremental
+    /// periódica. Com <paramref name="criadoApartirDe"/>, restringe também pela "Data de chegada"
+    /// (created_time) do card — usado pra parar de importar cards antigos que alguém ainda edita
+    /// no Notion.
+    /// </summary>
+    public IAsyncEnumerable<JsonElement> QueryEditadasDesdeAsync(string dataSourceId, DateTimeOffset desde, DateOnly? criadoApartirDe = null, CancellationToken ct = default)
+    {
+        var filtroEditadas = new { timestamp = "last_edited_time", last_edited_time = new { after = desde.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffZ") } };
+        if (!criadoApartirDe.HasValue) return QueryAsync(dataSourceId, filtroEditadas, ct);
+
+        object filtro = new
+        {
+            and = new object[]
+            {
+                filtroEditadas,
+                new { property = "Data de chegada", created_time = new { on_or_after = criadoApartirDe.Value.ToString("yyyy-MM-dd") } },
+            }
+        };
+        return QueryAsync(dataSourceId, filtro, ct);
+    }
 
     public async IAsyncEnumerable<JsonElement> QueryAsync(string dataSourceId, object? filter, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {

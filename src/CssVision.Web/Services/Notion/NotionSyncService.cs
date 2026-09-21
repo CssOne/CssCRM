@@ -24,6 +24,11 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
         ("31763799-99a8-81b2-b83b-000bfca82506", "CSS Growth Sales"),
     ];
 
+    /// <summary>A partir desta data (Data de chegada do card no Notion), a sincronização periódica
+    /// passa a importar/atualizar leads — cards mais antigos deixam de entrar no CRM mesmo que
+    /// alguém ainda os edite no Notion.</summary>
+    private static readonly DateOnly DataMinimaImportacao = new(2026, 1, 1);
+
     private static readonly Dictionary<string, string> StatusParaEtapaLead = new()
     {
         ["EM ATENDIMENTO"] = "Em atendimento",
@@ -74,7 +79,7 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
 
         int processados = 0, criados = 0, atualizados = 0, erros = 0;
 
-        await foreach (var page in notion.QueryEditadasDesdeAsync(dataSourceId, desde, ct))
+        await foreach (var page in notion.QueryEditadasDesdeAsync(dataSourceId, desde, DataMinimaImportacao, ct))
         {
             processados++;
             try
