@@ -18,7 +18,8 @@ public sealed class NotionSyncService(
     ApplicationDbContext db,
     UserManager<ApplicationUser> userManager,
     ILogger<NotionSyncService> logger,
-    ICrmEventHub? eventos = null)
+    ICrmEventHub? eventos = null,
+    ILeadAssignmentService? distribuicao = null)
 {
     private static readonly (string DataSourceId, string RegionalName)[] DataSources =
     [
@@ -241,7 +242,11 @@ public sealed class NotionSyncService(
                 TipoPessoa = documentoNormalizado?.Length == 14 ? TipoPessoa.Juridica : TipoPessoa.Fisica,
                 Regional = regionalNome,
                 Origem = "Sincronização Notion",
-                ResponsavelId = vendedorId,
+                // Vendedor do card inativo no CRM (vendedorId nulo): o lead novo vai para a
+                // distribuição automática, que só considera consultores ativos.
+                ResponsavelId = vendedorId
+                    ?? (distribuicao is null ? null : await distribuicao.ProximoResponsavelAsync(ct))
+                    ?? placeholderVendedorId,
                 ConsentimentoContato = true,
                 ConsentimentoOrigem = "Sincronização automática (Notion)",
                 Arquivado = false,
@@ -275,11 +280,12 @@ public sealed class NotionSyncService(
         lead.MetaClickId = page.Text("[META] Click ID") ?? lead.MetaClickId;
         lead.MetaFormId = page.Text("[META] Form") ?? lead.MetaFormId;
         lead.MetaLeadId = page.Text("[META] Lead ID") ?? lead.MetaLeadId;
-        if (vendedorId != placeholderVendedorId) lead.ResponsavelId = vendedorId;
+        // Vendedor inativo: não devolve o lead para ele — mantém o responsável atual.
+        if (vendedorId is { } vendedorAtivo && vendedorAtivo != placeholderVendedorId) lead.ResponsavelId = vendedorAtivo;
 
         if (isVendaConcluida)
         {
-            await CriarOuAtualizarOportunidadeAsync(page, lead, vendedorId, ganhoStageId, ct);
+            await CriarOuAtualizarOportunidadeAsync(page, lead, vendedorId ?? lead.ResponsavelId ?? placeholderVendedorId, ganhoStageId, ct);
         }
 
         var mudouDeColuna = await AplicarStatusDoNotionAsync(lead, status, page.Select("Motivo da perda"), page.Text("Veiculo"), etapasPorNome, ct);
@@ -425,10 +431,14 @@ public sealed class NotionSyncService(
         veiculo.ValorVistoria = page.Number("Vistoriador") is { } vistoriador ? (decimal)vistoriador : veiculo.ValorVistoria;
     }
 
-    private readonly Dictionary<string, Guid> _vendedorPorEmailCache = new();
+    private readonly Dictionary<string, Guid?> _vendedorPorEmailCache = new();
     private readonly Dictionary<Guid, Guid> _placeholderPorRegionalCache = new();
 
-    private async Task<Guid> ResolverVendedorAsync(NotionPageExtensions.VendedorInfo? vendedor, Guid regionalId, string regionalNome, Guid placeholderVendedorId, CancellationToken ct)
+    /// <returns>
+    /// O consultor do campo "Vendedor" do card; o placeholder quando o card não tem vendedor; e
+    /// <c>null</c> quando o vendedor existe no CRM mas está inativo — consultor inativo não recebe lead.
+    /// </returns>
+    private async Task<Guid?> ResolverVendedorAsync(NotionPageExtensions.VendedorInfo? vendedor, Guid regionalId, string regionalNome, Guid placeholderVendedorId, CancellationToken ct)
     {
         if (vendedor is null || string.IsNullOrWhiteSpace(vendedor.Email)) return placeholderVendedorId;
 
@@ -438,8 +448,9 @@ public sealed class NotionSyncService(
         var existente = await userManager.FindByEmailAsync(email);
         if (existente is not null)
         {
-            _vendedorPorEmailCache[email] = existente.Id;
-            return existente.Id;
+            Guid? id = existente.Ativo ? existente.Id : null;
+            _vendedorPorEmailCache[email] = id;
+            return id;
         }
 
         var usuario = new ApplicationUser

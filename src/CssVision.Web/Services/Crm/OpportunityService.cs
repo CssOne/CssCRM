@@ -86,6 +86,7 @@ public sealed class OpportunityService(
         {
             throw new CrmForbiddenException("Você não pode criar oportunidades para este vendedor.");
         }
+        await ResponsavelAtivo.GarantirAsync(db, request.ResponsavelId, ct);
 
         if (request.ValorEstimado < 0)
         {
@@ -149,6 +150,11 @@ public sealed class OpportunityService(
         if (!await equipe.PodeAcessarVendedorAsync(request.ResponsavelId, ct))
         {
             throw new CrmForbiddenException("Você não pode transferir esta oportunidade para este vendedor.");
+        }
+        // Só ao trocar de responsável: um card que já é de alguém que ficou inativo continua editável.
+        if (request.ResponsavelId != opportunity.ResponsavelId)
+        {
+            await ResponsavelAtivo.GarantirAsync(db, request.ResponsavelId, ct);
         }
 
         if (request.ValorEstimado < 0)

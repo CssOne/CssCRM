@@ -205,6 +205,7 @@ public sealed class LeadService(
             {
                 throw new CrmForbiddenException("Você não pode atribuir leads para este vendedor.");
             }
+            await ResponsavelAtivo.GarantirAsync(db, request.ResponsavelId.Value, ct);
             responsavelId = request.ResponsavelId.Value;
         }
         else if (currentUser.IsInRole(Roles.Comercial))
@@ -372,6 +373,7 @@ public sealed class LeadService(
         {
             throw new CrmForbiddenException("Você não pode atribuir leads para este vendedor.");
         }
+        await ResponsavelAtivo.GarantirAsync(db, request.ResponsavelId, ct);
 
         var anteriorId = lead.ResponsavelId;
         lead.ResponsavelId = request.ResponsavelId;
@@ -474,6 +476,7 @@ public sealed class LeadService(
         {
             throw new CrmForbiddenException("Você não pode atribuir leads para este vendedor.");
         }
+        await ResponsavelAtivo.GarantirAsync(db, request.ResponsavelId, ct);
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
         var query = db.CrmLeads.Where(l => request.LeadIds.Contains(l.Id) && !l.Arquivado);
@@ -569,7 +572,9 @@ public sealed class LeadService(
         var importados = 0;
         var duplicados = 0;
 
+        // Só consultores ativos: e-mail de consultor inativo na planilha cai na distribuição automática.
         var usuariosPorEmail = await db.Users.AsNoTracking()
+            .Where(u => u.Ativo && u.Email != null)
             .ToDictionaryAsync(u => u.Email!.ToLowerInvariant(), u => u.Id, ct);
         var etapaInicialId = await ObterEtapaInicialIdAsync(ct);
 
