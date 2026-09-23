@@ -93,6 +93,13 @@ public class CrmLead : CrmArchivableEntity
     /// </summary>
     public string? NotionStatus { get; set; }
 
+    /// <summary>
+    /// Id da página (card) do Notion ligada a este lead. É a primeira chave usada pela sincronização
+    /// para achar o lead — CPF/e-mail/telefone no Notion são digitados à mão e às vezes vêm inválidos
+    /// ou trocados, o que fazia um card atualizar o lead de outro cliente.
+    /// </summary>
+    public string? NotionPageId { get; set; }
+
     public Guid? ResponsavelId { get; set; }
     public ApplicationUser? Responsavel { get; set; }
 

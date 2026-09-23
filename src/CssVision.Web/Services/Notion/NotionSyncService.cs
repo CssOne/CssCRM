@@ -87,11 +87,18 @@ public sealed class NotionSyncService(
         var ganhoStageId = (await db.CrmPipelineStages.FirstAsync(s => s.Tipo == TipoEtapaPipeline.Ganho, ct)).Id;
         var placeholderVendedorId = await ObterOuCriarVendedorPlaceholderAsync(regional.Id, regionalNome, ct);
 
-        int processados = 0, criados = 0, atualizados = 0, erros = 0;
+        int processados = 0, criados = 0, atualizados = 0, erros = 0, semNome = 0;
 
         await foreach (var page in paginas)
         {
             processados++;
+            // Cards sem título no Notion (centenas em algumas bases) não têm como virar lead.
+            if (string.IsNullOrWhiteSpace(page.Text("Name")))
+            {
+                semNome++;
+                continue;
+            }
+
             try
             {
                 var resultado = await ProcessarPaginaAsync(page, regional.Id, regionalNome, etapasPorNome, ganhoStageId, placeholderVendedorId, somenteColuna: realinhar, ct);
@@ -108,6 +115,10 @@ public sealed class NotionSyncService(
             }
         }
 
+        // Recarrega: um erro em qualquer página chama ChangeTracker.Clear(), que descarta a instância
+        // lida no início — sem isto a gravação abaixo não salvava nada e o checkpoint (e o fim do
+        // realinhamento) nunca era registrado, fazendo a base inteira ser relida a cada ciclo.
+        checkpoint = await db.CrmNotionSyncCheckpoints.FindAsync([dataSourceId], ct);
         if (checkpoint is null)
         {
             checkpoint = new CrmNotionSyncCheckpoint { DataSourceId = dataSourceId, RegionalNome = regionalNome };
@@ -123,7 +134,7 @@ public sealed class NotionSyncService(
             _mudancasNoQuadro = 0;
         }
 
-        return $"{regionalNome}: {processados} processados, {criados} criados, {atualizados} atualizados, {erros} erros{(realinhar ? " (realinhamento)" : "")}";
+        return $"{regionalNome}: {processados} processados, {criados} criados, {atualizados} atualizados, {erros} erros, {semNome} sem nome{(realinhar ? " (realinhamento)" : "")}";
     }
 
     /// <param name="somenteColuna">
@@ -141,8 +152,7 @@ public sealed class NotionSyncService(
         if (nome.Length > 200) nome = nome[..200];
 
         var cpfBruto = page.Text("CPF") ?? page.Number("CPF")?.ToString("F0", System.Globalization.CultureInfo.InvariantCulture);
-        var documentoNormalizado = DocumentValidation.NormalizarDocumento(cpfBruto, out _);
-        if (documentoNormalizado is { Length: > 14 }) documentoNormalizado = null;
+        var (documentoNormalizado, documentoSemZero) = NormalizarCpfNotion(cpfBruto);
 
         var emailBruto = page.Text("E-mail", "[META] Email");
         var emailNormalizado = DocumentValidation.NormalizarEmail(emailBruto);
@@ -162,6 +172,13 @@ public sealed class NotionSyncService(
         var (telefonePrimeiro, telefoneSegundo) = NomeTelefoneHeuristica.SepararTelefones(telefone);
         if (telefonePrimeiro is not null) telefone = telefonePrimeiro;
 
+        // O campo "WhatsApp" às vezes traz texto no lugar do número ("WhatsApp", "O< não", o e-mail
+        // da pessoa...) enquanto "[META] Phone Number" tem o telefone certo — prefere o que é telefone.
+        if (!NomeTelefoneHeuristica.PareceTelefone(telefone) && NomeTelefoneHeuristica.PareceTelefone(telefoneMeta))
+        {
+            telefone = telefoneMeta;
+        }
+
         var telefoneNormalizado = DocumentValidation.NormalizarTelefone(telefone);
         if (telefoneNormalizado is { Length: > 20 }) telefoneNormalizado = null;
         var telefone2Normalizado = DocumentValidation.NormalizarTelefone(telefoneSegundo);
@@ -177,24 +194,34 @@ public sealed class NotionSyncService(
         var status = page.Select("Status");
         var isVendaConcluida = string.Equals(status, "VENDA CONCLUIDA", StringComparison.OrdinalIgnoreCase);
 
-        var lead = documentoNormalizado is not null
-            ? await db.CrmLeads.FirstOrDefaultAsync(l => l.DocumentoNormalizado == documentoNormalizado && !l.Arquivado, ct)
-            : null;
-        lead ??= emailNormalizado is not null
-            ? await db.CrmLeads.FirstOrDefaultAsync(l => l.EmailNormalizado == emailNormalizado && !l.Arquivado, ct)
-            : null;
-        lead ??= telefoneNormalizado is not null
-            ? await db.CrmLeads.FirstOrDefaultAsync(l => l.TelefoneNormalizado == telefoneNormalizado && !l.Arquivado, ct)
-            : null;
+        var pageId = page.PageId();
+        var (lead, arquivado) = await EncontrarLeadAsync(
+            new IdentificacaoNotion(pageId, nome.Trim(), regionalNome, documentoNormalizado, documentoSemZero, emailNormalizado, telefoneNormalizado), ct);
+
+        // Card ligado a um lead que alguém arquivou/excluiu no CRM: respeita — não recria nem mexe.
+        if (arquivado) return false;
 
         var placa = NormalizarPlaca(page.Text("Placa"));
 
         if (somenteColuna)
         {
             if (lead is null) return false;
-            // Único campo além da coluna que o realinhamento toca: completa a placa (mostrada no
-            // cartão do quadro) só quando o lead ainda não tem uma — nunca sobrescreve a do CRM.
+            // Além da coluna, o realinhamento só COMPLETA campos vazios — nunca sobrescreve o CRM:
+            // vínculo com o card, placa (mostrada no cartão) e telefone/e-mail (para o cartão não
+            // ficar "sem contato" e para as próximas sincronizações acharem o lead).
+            lead.NotionPageId ??= pageId;
             if (string.IsNullOrWhiteSpace(lead.Placa)) lead.Placa = placa;
+            if (lead.TelefoneNormalizado is null && telefoneNormalizado is not null)
+            {
+                lead.Telefone = telefone;
+                lead.TelefoneNormalizado = telefoneNormalizado;
+            }
+            if (lead.EmailNormalizado is null && emailNormalizado is not null
+                && !await db.CrmLeads.AnyAsync(l => l.EmailNormalizado == emailNormalizado && !l.Arquivado, ct))
+            {
+                lead.Email = emailBruto;
+                lead.EmailNormalizado = emailNormalizado;
+            }
             if (await AplicarStatusDoNotionAsync(lead, status, page.Select("Motivo da perda"), page.Text("Veiculo"), etapasPorNome, ct))
             {
                 _mudancasNoQuadro++;
@@ -223,13 +250,15 @@ public sealed class NotionSyncService(
             db.CrmLeads.Add(lead);
         }
 
+        lead.NotionPageId ??= pageId;
         lead.NomeOuRazaoSocial = nome.Trim();
-        lead.DocumentoNormalizado = documentoNormalizado ?? lead.DocumentoNormalizado;
+        // Só preenche: trocar um documento já gravado poderia colidir com o índice único.
+        lead.DocumentoNormalizado ??= documentoNormalizado;
         lead.Telefone = telefone ?? lead.Telefone;
         lead.TelefoneNormalizado = telefoneNormalizado ?? lead.TelefoneNormalizado;
         lead.Telefone2 = telefoneSegundo ?? lead.Telefone2;
         lead.Telefone2Normalizado = telefone2Normalizado ?? lead.Telefone2Normalizado;
-        lead.WhatsApp = whatsapp ?? lead.WhatsApp;
+        lead.WhatsApp = NomeTelefoneHeuristica.PareceTelefone(whatsapp) ? whatsapp : lead.WhatsApp;
         lead.Email = emailBruto ?? lead.Email;
         lead.EmailNormalizado = emailNormalizado ?? lead.EmailNormalizado;
         lead.Cidade = cidade ?? lead.Cidade;
@@ -455,6 +484,63 @@ public sealed class NotionSyncService(
         await userManager.AddToRoleAsync(usuario, Roles.Comercial);
         _placeholderPorRegionalCache[regionalId] = usuario.Id;
         return usuario.Id;
+    }
+
+    public sealed record IdentificacaoNotion(
+        string PageId, string Nome, string RegionalNome,
+        string? Documento, string? DocumentoSemZero, string? Email, string? Telefone);
+
+    /// <summary>
+    /// Acha o lead de um card do Notion, da chave mais confiável para a menos confiável: o próprio
+    /// card (NotionPageId), CPF/CNPJ válido, e-mail, telefone e, por último, o nome — só para leads
+    /// da sincronização ainda sem vínculo, na mesma regional e quando houver exatamente um.
+    /// </summary>
+    /// <returns>O lead (ou null) e se o card está ligado a um lead arquivado.</returns>
+    public async Task<(CrmLead? Lead, bool Arquivado)> EncontrarLeadAsync(IdentificacaoNotion id, CancellationToken ct)
+    {
+        var vinculado = await db.CrmLeads.FirstOrDefaultAsync(l => l.NotionPageId == id.PageId, ct);
+        if (vinculado is not null) return (vinculado.Arquivado ? null : vinculado, vinculado.Arquivado);
+
+        CrmLead? lead = null;
+        if (id.Documento is not null)
+        {
+            var semZero = id.DocumentoSemZero ?? id.Documento;
+            lead = await db.CrmLeads.FirstOrDefaultAsync(
+                l => (l.DocumentoNormalizado == id.Documento || l.DocumentoNormalizado == semZero) && !l.Arquivado, ct);
+        }
+        lead ??= id.Email is not null
+            ? await db.CrmLeads.FirstOrDefaultAsync(l => l.EmailNormalizado == id.Email && !l.Arquivado, ct)
+            : null;
+        lead ??= id.Telefone is not null
+            ? await db.CrmLeads.FirstOrDefaultAsync(l => l.TelefoneNormalizado == id.Telefone && !l.Arquivado, ct)
+            : null;
+        if (lead is not null) return (lead, false);
+
+        var mesmoNome = await db.CrmLeads
+            .Where(l => l.NomeOuRazaoSocial == id.Nome && l.Regional == id.RegionalNome
+                && l.Origem == "Sincronização Notion" && l.NotionPageId == null && !l.Arquivado)
+            .Take(2)
+            .ToListAsync(ct);
+        return (mesmoNome.Count == 1 ? mesmoNome[0] : null, false);
+    }
+
+    /// <summary>
+    /// CPF/CNPJ do card, só se for válido — um número qualquer ("100.309" vira "100") fazia o card
+    /// casar com o lead de outro cliente. No Notion o CPF é número, então CPFs que começam com 0
+    /// chegam com 10 (ou 9) dígitos: completa com zeros e devolve também a forma sem os zeros, que
+    /// é como parte dos leads antigos foi gravada.
+    /// </summary>
+    public static (string? Documento, string? DocumentoSemZero) NormalizarCpfNotion(string? bruto)
+    {
+        var digitos = DocumentValidation.SomenteDigitos(bruto);
+        if (digitos.Length is 9 or 10)
+        {
+            var completo = digitos.PadLeft(11, '0');
+            return DocumentValidation.ValidarCpf(completo) ? (completo, digitos) : (null, null);
+        }
+
+        var normalizado = DocumentValidation.NormalizarDocumento(digitos, out var valido);
+        return valido ? (normalizado, null) : (null, null);
     }
 
     /// <summary>
