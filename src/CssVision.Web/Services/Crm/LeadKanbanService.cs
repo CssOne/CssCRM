@@ -17,7 +17,7 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
         var query = db.CrmLeads.AsNoTracking()
             .Include(l => l.Responsavel)
             .Include(l => l.LeadTags).ThenInclude(lt => lt.Tag)
-            .Include(l => l.Oportunidades)
+            .Include(l => l.Oportunidades).ThenInclude(o => o.Veiculo)
             .AsQueryable();
 
         if (!filtro.IncluirArquivados) query = query.Where(l => !l.Arquivado);
@@ -87,7 +87,8 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
             var semTelefone = string.IsNullOrWhiteSpace(l.Telefone) && string.IsNullOrWhiteSpace(l.Telefone2);
             return new(
                 l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Telefone2, l.Email, l.Estado, l.Origem, l.Campanha,
-                l.Placa, l.TemSeguro, l.UtilidadeVeiculo, l.TipoIndicacao,
+                // Placa do lead; se ainda não tiver, a do veículo da oportunidade mais recente.
+                l.Placa ?? oportunidade?.Veiculo?.Placa, l.TemSeguro, l.UtilidadeVeiculo, l.TipoIndicacao,
                 oportunidade?.Migracao ?? false, oportunidade?.Indicacao, l.CriadoManualmente,
                 l.ResponsavelId, l.Responsavel?.NomeCompleto,
                 l.LeadTags.Select(lt => lt.Tag.Nome).ToList(),

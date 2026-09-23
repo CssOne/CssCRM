@@ -187,9 +187,14 @@ public sealed class NotionSyncService(
             ? await db.CrmLeads.FirstOrDefaultAsync(l => l.TelefoneNormalizado == telefoneNormalizado && !l.Arquivado, ct)
             : null;
 
+        var placa = NormalizarPlaca(page.Text("Placa"));
+
         if (somenteColuna)
         {
             if (lead is null) return false;
+            // Único campo além da coluna que o realinhamento toca: completa a placa (mostrada no
+            // cartão do quadro) só quando o lead ainda não tem uma — nunca sobrescreve a do CRM.
+            if (string.IsNullOrWhiteSpace(lead.Placa)) lead.Placa = placa;
             if (await AplicarStatusDoNotionAsync(lead, status, page.Select("Motivo da perda"), page.Text("Veiculo"), etapasPorNome, ct))
             {
                 _mudancasNoQuadro++;
@@ -233,6 +238,7 @@ public sealed class NotionSyncService(
         lead.ProdutoInteresse = oQue ?? lead.ProdutoInteresse;
         lead.TipoIndicacao = tipoIndicacao;
         lead.CriadoManualmente = NotionLeadClassifier.CriadoManualmente(oQue);
+        lead.Placa = placa ?? lead.Placa;
         lead.Gclid = page.Text("GCLID") ?? lead.Gclid;
         lead.UtmSource = page.Text("UTM SOURCE") ?? lead.UtmSource;
         lead.UtmMedium = page.Text("UTM MEDIUM") ?? lead.UtmMedium;
@@ -449,6 +455,17 @@ public sealed class NotionSyncService(
         await userManager.AddToRoleAsync(usuario, Roles.Comercial);
         _placeholderPorRegionalCache[regionalId] = usuario.Id;
         return usuario.Id;
+    }
+
+    /// <summary>
+    /// Placa em maiúsculas e até 10 caracteres, como no cadastro de lead (LeadService). Também tira
+    /// espaços e hífen, comuns na digitação do Notion ("abc-1d23"), para o cartão mostrar um formato só.
+    /// </summary>
+    public static string? NormalizarPlaca(string? placa)
+    {
+        if (string.IsNullOrWhiteSpace(placa)) return null;
+        var normalizada = placa.Trim().Replace(" ", "").Replace("-", "").ToUpperInvariant();
+        return normalizada.Length is > 0 and <= 10 ? normalizada : null;
     }
 
     private static DateTimeOffset? ParseUtc(string? texto) =>

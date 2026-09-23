@@ -215,4 +215,16 @@ public class NotionSyncQuadroDeLeadsTests
         Assert.True(reconhecido);
         Assert.Equal(etapas["Venda concluída"], etapaId);
     }
+
+    [Theory]
+    [InlineData("Uqn2a59", "UQN2A59")]
+    [InlineData(" abc-1d23 ", "ABC1D23")]
+    [InlineData("ABC 1234", "ABC1234")]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    [InlineData("placa grande demais", null)]
+    public void NormalizarPlaca_PadronizaAPlacaVindaDoNotion(string? bruta, string? esperada)
+    {
+        Assert.Equal(esperada, NotionSyncService.NormalizarPlaca(bruta));
+    }
 }
