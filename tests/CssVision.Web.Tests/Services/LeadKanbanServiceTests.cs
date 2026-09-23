@@ -77,4 +77,52 @@ public class LeadKanbanServiceTests
         Assert.Equal("ABC1D23", cartoes["Com placa"].Placa);
         Assert.Equal("XYZ9K87", cartoes["Placa no veículo"].Placa);
     }
+
+    [Fact]
+    public async Task ObterBoardAsync_CartaoTrazOOQue_ParaQualquerUsuario()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
+        db.CrmLeads.Add(new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id, ProdutoInteresse = "AGV TRUCK" });
+        await db.SaveChangesAsync();
+
+        var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
+        var service = new LeadKanbanService(db, new EquipeComercialService(db, currentUser.Object));
+
+        var cartao = Assert.Single((await service.ObterBoardAsync(new LeadKanbanFilterRequest(), CancellationToken.None)).Colunas.SelectMany(c => c.Cartoes));
+        Assert.Equal("AGV TRUCK", cartao.OQue);
+    }
+
+    [Fact]
+    public async Task ObterBoardAsync_CategoriaMigracao_UsaOMarcadorDaMigracao_NaoOTextoDaOrigem()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
+        db.CrmLeads.AddRange(
+            // Migrado com tag de campanha: a Origem virou "UGC", mas continua sendo da migração.
+            new CrmLead { NomeOuRazaoSocial = "Migrado", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id,
+                Origem = "UGC", ConsentimentoOrigem = OrigemLead.MarcadorMigracaoNotion },
+            new CrmLead { NomeOuRazaoSocial = "Meta", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id, Origem = "UGC" });
+        await db.SaveChangesAsync();
+
+        var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
+        var service = new LeadKanbanService(db, new EquipeComercialService(db, currentUser.Object));
+
+        var board = await service.ObterBoardAsync(new LeadKanbanFilterRequest { Categoria = "Migração" }, CancellationToken.None);
+
+        Assert.Equal("Migrado", Assert.Single(board.Colunas.SelectMany(c => c.Cartoes)).NomeOuRazaoSocial);
+    }
+
+    [Theory]
+    [InlineData("UGC", "UGC")]
+    [InlineData("Demand gen", "Demand Gen")]
+    [InlineData(" lookalike ", "Lookalike")]
+    [InlineData("Campanha desconhecida", null)]
+    [InlineData(null, null)]
+    public void OrigemLead_TagDaCampanha_PadronizaAsTags(string? campanha, string? esperado)
+    {
+        Assert.Equal(esperado, OrigemLead.TagDaCampanha(campanha));
+    }
 }

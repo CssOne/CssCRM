@@ -4,6 +4,8 @@ import { Button, DocumentoInput, FieldError, Input, Label, Select, Textarea } fr
 import { LeadPicker } from "./LeadPicker";
 import { useAuth } from "../../context/AuthContext";
 import { ESTADOS_BRASIL } from "../../lib/estados";
+import { OPCOES_O_QUE, OPCOES_ORIGEM } from "../../lib/opcoesLead";
+import { TagSelect } from "./TagSelect";
 
 export interface LeadFormValues {
   nomeOuRazaoSocial: string;
@@ -212,10 +214,27 @@ export function LeadForm({
           <Input id={`${idPrefix}-regional`} value={valores.regional} onChange={(e) => set("regional", e.target.value)} />
         </div>
 
+        <div>
+          <Label htmlFor={`${idPrefix}-o-que`}>O que?</Label>
+          <TagSelect
+            id={`${idPrefix}-o-que`}
+            rotulo="O que?"
+            opcoes={OPCOES_O_QUE}
+            valor={valores.produtoInteresse}
+            onChange={(v) => set("produtoInteresse", v)}
+          />
+        </div>
+
         {podeVerOrigem && (
           <div>
             <Label htmlFor={`${idPrefix}-origem`}>Origem</Label>
-            <Input id={`${idPrefix}-origem`} value={valores.origem} onChange={(e) => set("origem", e.target.value)} placeholder="Site, indicação..." />
+            <TagSelect
+              id={`${idPrefix}-origem`}
+              rotulo="Origem"
+              opcoes={OPCOES_ORIGEM}
+              valor={valores.origem}
+              onChange={(v) => set("origem", v)}
+            />
           </div>
         )}
 

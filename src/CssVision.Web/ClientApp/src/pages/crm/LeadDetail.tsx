@@ -300,6 +300,11 @@ export function LeadDetailPage() {
               {lead.tipoPessoa === TipoPessoa.Fisica ? "Pessoa física" : "Pessoa jurídica"} · {formatarDocumento(lead.documento)}
             </p>
             <div className="mt-2 flex flex-wrap gap-1">
+              {lead.produtoInteresse && (
+                <Badge variant="info">
+                  <span title="O que?">{lead.produtoInteresse}</span>
+                </Badge>
+              )}
               {podeVerOrigem && lead.origem && (
                 <Badge variant="neutral">
                   <span title="Origem do lead">Origem: {lead.origem}</span>

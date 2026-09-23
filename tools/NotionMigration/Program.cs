@@ -209,7 +209,8 @@ foreach (var spec in specs)
                 Cidade = page.Text("Cidade"),
                 Estado = estado,
                 Regional = spec.RegionalName,
-                Origem = "Migração Notion",
+                // Origem = tag de campanha do card (Lookalike, UGC...); sem tag, "Migração Notion".
+                Origem = OrigemLead.TagDaCampanha(page.Select("Campanha", "CAMPANHA")) ?? OrigemLead.OrigemMigracaoNotion,
                 Campanha = page.Select("Campanha", "CAMPANHA"),
                 ProdutoInteresse = page.Select("O que"),
                 ResponsavelId = vendedorId,
@@ -547,7 +548,7 @@ async Task CorrigirDatasCriacaoAsync()
             if (documentoNormalizado is not null)
             {
                 var linhas = await db.Database.ExecuteSqlInterpolatedAsync(
-                    $"UPDATE \"CrmLeads\" SET \"CriadoEm\" = {criadoEm.Value} WHERE \"DocumentoNormalizado\" = {documentoNormalizado} AND \"Origem\" = 'Migração Notion'");
+                    $"UPDATE \"CrmLeads\" SET \"CriadoEm\" = {criadoEm.Value} WHERE \"DocumentoNormalizado\" = {documentoNormalizado} AND \"ConsentimentoOrigem\" = 'Migração da base histórica (Notion)'");
                 corrigidosPorCpf += linhas;
             }
             else
@@ -560,7 +561,7 @@ async Task CorrigirDatasCriacaoAsync()
                 if (telefoneNormalizado is { Length: > 0 and <= 20 })
                 {
                     var linhas = await db.Database.ExecuteSqlInterpolatedAsync(
-                        $"UPDATE \"CrmLeads\" SET \"CriadoEm\" = {criadoEm.Value} WHERE \"TelefoneNormalizado\" = {telefoneNormalizado} AND \"DocumentoNormalizado\" IS NULL AND \"Origem\" = 'Migração Notion' AND \"CriadoEm\" > NOW() - INTERVAL '3 days'");
+                        $"UPDATE \"CrmLeads\" SET \"CriadoEm\" = {criadoEm.Value} WHERE \"TelefoneNormalizado\" = {telefoneNormalizado} AND \"DocumentoNormalizado\" IS NULL AND \"ConsentimentoOrigem\" = 'Migração da base histórica (Notion)' AND \"CriadoEm\" > NOW() - INTERVAL '3 days'");
                     corrigidosPorTelefone += linhas;
                 }
                 else
@@ -613,7 +614,7 @@ async Task CorrigirOrigemEIndicacaoAsync()
             if (documentoNormalizado is not null)
             {
                 var linhas = await db.Database.ExecuteSqlInterpolatedAsync(
-                    $"UPDATE \"CrmLeads\" SET \"CriadoManualmente\" = {criadoManualmente}, \"TipoIndicacao\" = {tipoIndicacao} WHERE \"DocumentoNormalizado\" = {documentoNormalizado} AND \"Origem\" = 'Migração Notion'");
+                    $"UPDATE \"CrmLeads\" SET \"CriadoManualmente\" = {criadoManualmente}, \"TipoIndicacao\" = {tipoIndicacao} WHERE \"DocumentoNormalizado\" = {documentoNormalizado} AND \"ConsentimentoOrigem\" = 'Migração da base histórica (Notion)'");
                 corrigidosPorCpf += linhas;
             }
             else
@@ -623,7 +624,7 @@ async Task CorrigirOrigemEIndicacaoAsync()
                 if (telefoneNormalizado is { Length: > 0 and <= 20 })
                 {
                     var linhas = await db.Database.ExecuteSqlInterpolatedAsync(
-                        $"UPDATE \"CrmLeads\" SET \"CriadoManualmente\" = {criadoManualmente}, \"TipoIndicacao\" = {tipoIndicacao} WHERE \"TelefoneNormalizado\" = {telefoneNormalizado} AND \"DocumentoNormalizado\" IS NULL AND \"Origem\" = 'Migração Notion'");
+                        $"UPDATE \"CrmLeads\" SET \"CriadoManualmente\" = {criadoManualmente}, \"TipoIndicacao\" = {tipoIndicacao} WHERE \"TelefoneNormalizado\" = {telefoneNormalizado} AND \"DocumentoNormalizado\" IS NULL AND \"ConsentimentoOrigem\" = 'Migração da base histórica (Notion)'");
                     corrigidosPorTelefone += linhas;
                 }
                 else
@@ -865,7 +866,7 @@ async Task EnriquecerVendaConcluidaAsync()
                 CrmLead? lead = null;
                 if (documentoNormalizado is not null)
                 {
-                    lead = await db.CrmLeads.FirstOrDefaultAsync(l => l.DocumentoNormalizado == documentoNormalizado && l.Origem == "Migração Notion");
+                    lead = await db.CrmLeads.FirstOrDefaultAsync(l => l.DocumentoNormalizado == documentoNormalizado && l.ConsentimentoOrigem == "Migração da base histórica (Notion)");
                 }
                 if (lead is null)
                 {
@@ -874,7 +875,7 @@ async Task EnriquecerVendaConcluidaAsync()
                     if (telefoneNormalizado is { Length: > 0 and <= 20 })
                     {
                         lead = await db.CrmLeads.FirstOrDefaultAsync(l =>
-                            l.TelefoneNormalizado == telefoneNormalizado && l.DocumentoNormalizado == null && l.Origem == "Migração Notion");
+                            l.TelefoneNormalizado == telefoneNormalizado && l.DocumentoNormalizado == null && l.ConsentimentoOrigem == "Migração da base histórica (Notion)");
                     }
                 }
 
@@ -1117,7 +1118,8 @@ async Task ImportarNovosLeadsAsync()
                 EmailNormalizado = emailNormalizado,
                 Estado = estado,
                 Regional = regionalNome,
-                Origem = "Migração Notion",
+                // Origem = tag de campanha do card (Lookalike, UGC...); sem tag, "Migração Notion".
+                Origem = OrigemLead.TagDaCampanha(page.Select("Campanha", "CAMPANHA")) ?? OrigemLead.OrigemMigracaoNotion,
                 Campanha = page.Select("Campanha", "CAMPANHA"),
                 ProdutoInteresse = oQue,
                 Placa = page.Text("Placa") is { Length: <= 10 } placaValida ? placaValida : null,

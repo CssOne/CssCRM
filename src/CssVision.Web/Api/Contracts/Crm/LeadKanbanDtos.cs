@@ -26,7 +26,9 @@ public record LeadKanbanCardDto(
     DateTimeOffset? UltimoContatoEm,
     bool SemContato,
     bool Arquivado,
-    uint RowVersion);
+    uint RowVersion,
+    /// <summary>"O que?" — produto de interesse (AGV, AGV ELÉTRICO, AGV TRUCK...), visível para todos.</summary>
+    string? OQue = null);
 
 public record LeadKanbanColumnDto(LeadStageDto Etapa, IReadOnlyList<LeadKanbanCardDto> Cartoes);
 
@@ -46,7 +48,7 @@ public record LeadKanbanFilterRequest
     /// </summary>
     public bool? CriadoManualmente { get; init; }
 
-    /// <summary>"Migração" (Origem = "Migração Notion"), "Indicação" ou "Lead" (TipoIndicacao) —
+    /// <summary>"Migração" (leads da migração histórica do Notion), "Indicação" ou "Lead" (TipoIndicacao) —
     /// ver LeadKanbanService.ObterBoardAsync.</summary>
     public string? Categoria { get; init; }
 
