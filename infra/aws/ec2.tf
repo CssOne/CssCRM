@@ -2,9 +2,12 @@ data "aws_ami" "al2023" {
   most_recent = true
   owners      = ["amazon"]
 
+  # "al2023-ami-2023.*" pega só a AMI padrão. O padrão antigo ("al2023-ami-*") também casava com
+  # "al2023-ami-minimal-*", que não traz o agente SSM — sem ele o deploy via "aws ssm send-command"
+  # falha com InvalidInstanceId (foi o que aconteceu na instância criada em 15/09/2026).
   filter {
     name   = "name"
-    values = ["al2023-ami-*-x86_64"]
+    values = ["al2023-ami-2023.*-kernel-*-x86_64"]
   }
   filter {
     name   = "architecture"
@@ -44,6 +47,13 @@ resource "aws_instance" "app" {
   }
 
   tags = { Name = "${var.project_name}-app" }
+
+  # most_recent = true muda o id da AMI a cada release do Amazon Linux; sem isto, todo
+  # "terraform apply" recriaria a instância de produção só por ter saído uma AMI nova. A AMI
+  # passa a valer apenas quando a instância for criada (ou recriada de propósito, com -replace).
+  lifecycle {
+    ignore_changes = [ami]
+  }
 
   # O user_data só referencia o *nome* dos secrets (aws_secretsmanager_secret.app/.db), não o
   # valor — isso não cria dependência implícita nas *_version, que são quem de fato grava a senha.
