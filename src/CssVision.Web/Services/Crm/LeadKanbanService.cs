@@ -50,7 +50,8 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
         // (ex.: "LEAD" vs "Lead") — ILike compara sem diferenciar maiúsculas/minúsculas.
         query = filtro.Categoria switch
         {
-            "Migração" => query.Where(l => l.Origem == "Migração Notion"),
+            // Pelo marcador da migração, não pelo texto da Origem (que vira a tag de campanha).
+            "Migração" => query.Where(l => l.ConsentimentoOrigem == OrigemLead.MarcadorMigracaoNotion),
             "Indicação" => query.Where(l => l.TipoIndicacao != null && EF.Functions.ILike(l.TipoIndicacao, "Indicação")),
             "Lead" => query.Where(l => l.TipoIndicacao != null && EF.Functions.ILike(l.TipoIndicacao, "Lead")),
             _ => query,

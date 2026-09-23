@@ -28,6 +28,7 @@ public class NotionSyncBuscaLeadTests
         NotionPageId = pageId,
         Regional = regional,
         Origem = "Sincronização Notion",
+        ConsentimentoOrigem = CssVision.Web.Services.Crm.OrigemLead.MarcadorSincronizacaoNotion,
         Arquivado = arquivado,
     };
 

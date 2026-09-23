@@ -241,14 +241,15 @@ public sealed class NotionSyncService(
             {
                 TipoPessoa = documentoNormalizado?.Length == 14 ? TipoPessoa.Juridica : TipoPessoa.Fisica,
                 Regional = regionalNome,
-                Origem = "Sincronização Notion",
+                // Origem = tag de campanha do card (Lookalike, UGC...); sem tag, a origem técnica.
+                Origem = OrigemLead.TagDaCampanha(page.Select("Campanha", "CAMPANHA")) ?? OrigemLead.OrigemSincronizacaoNotion,
                 // Vendedor do card inativo no CRM (vendedorId nulo) ou que já bateu o limite mensal
                 // de leads: o lead novo vai para a distribuição automática (só ativos e abaixo do limite).
                 ResponsavelId = await VendedorPodeReceberAsync(vendedorId, placeholderVendedorId, ct)
                     ? vendedorId!.Value
                     : (distribuicao is null ? null : await distribuicao.ProximoResponsavelAsync(ct)) ?? placeholderVendedorId,
                 ConsentimentoContato = true,
-                ConsentimentoOrigem = "Sincronização automática (Notion)",
+                ConsentimentoOrigem = OrigemLead.MarcadorSincronizacaoNotion,
                 Arquivado = false,
             };
             if (ParseUtc(page.CreatedTime("Data de chegada")) is { } criadoEm) lead.CriadoEm = criadoEm;
@@ -269,6 +270,12 @@ public sealed class NotionSyncService(
         lead.Cidade = cidade ?? lead.Cidade;
         lead.Estado = estado ?? lead.Estado;
         lead.Campanha = page.Select("Campanha", "CAMPANHA") ?? lead.Campanha;
+        // Leads do Notion (migrados ou sincronizados): a Origem acompanha a tag de campanha do card.
+        if (lead.ConsentimentoOrigem is OrigemLead.MarcadorMigracaoNotion or OrigemLead.MarcadorSincronizacaoNotion
+            && OrigemLead.TagDaCampanha(lead.Campanha) is { } tagCampanha)
+        {
+            lead.Origem = tagCampanha;
+        }
         lead.ProdutoInteresse = oQue ?? lead.ProdutoInteresse;
         lead.TipoIndicacao = tipoIndicacao;
         lead.CriadoManualmente = NotionLeadClassifier.CriadoManualmente(oQue);
@@ -542,7 +549,7 @@ public sealed class NotionSyncService(
 
         var mesmoNome = await db.CrmLeads
             .Where(l => l.NomeOuRazaoSocial == id.Nome && l.Regional == id.RegionalNome
-                && l.Origem == "Sincronização Notion" && l.NotionPageId == null && !l.Arquivado)
+                && l.ConsentimentoOrigem == OrigemLead.MarcadorSincronizacaoNotion && l.NotionPageId == null && !l.Arquivado)
             .Take(2)
             .ToListAsync(ct);
         return (mesmoNome.Count == 1 ? mesmoNome[0] : null, false);

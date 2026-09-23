@@ -48,7 +48,7 @@ public record LeadKanbanFilterRequest
     /// </summary>
     public bool? CriadoManualmente { get; init; }
 
-    /// <summary>"Migração" (Origem = "Migração Notion"), "Indicação" ou "Lead" (TipoIndicacao) —
+    /// <summary>"Migração" (leads da migração histórica do Notion), "Indicação" ou "Lead" (TipoIndicacao) —
     /// ver LeadKanbanService.ObterBoardAsync.</summary>
     public string? Categoria { get; init; }
 
