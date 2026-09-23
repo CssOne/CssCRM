@@ -14,6 +14,7 @@ import {
   type OpportunityCreateRequest,
 } from "../../lib/types";
 import { Badge, Button, Card, ErrorState, Modal, Skeleton, Textarea, useToast } from "../../components/ui";
+import { useAuth } from "../../context/AuthContext";
 import { LeadForm, type LeadFormValues } from "../../components/crm/LeadForm";
 import { OpportunityForm, type OpportunityFormValues } from "../../components/crm/OpportunityForm";
 import { ActivityForm, type ActivityFormValues } from "../../components/crm/ActivityForm";
@@ -21,12 +22,6 @@ import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog"
 import { Timeline } from "../../components/crm/Timeline";
 
 const ETAPA_VENDA_CONCLUIDA = "Venda concluída";
-
-/** Mesma regra usada na etiqueta do rodapé do cartão no quadro de leads — só esses leads podem
- * ser excluídos (ver LeadService.ExcluirAsync no back-end). */
-function ehIndicacao(lead: LeadDetail): boolean {
-  return lead.criadoManualmente || lead.tipoIndicacao?.toLowerCase() === "indicação";
-}
 
 function paraFormValues(lead: LeadDetail): LeadFormValues {
   return {
@@ -80,6 +75,9 @@ export function LeadDetailPage() {
   const [duplicidade, setDuplicidade] = useState<LeadDuplicateWarning | null>(null);
   const [oportunidadeEditando, setOportunidadeEditando] = useState<Opportunity | null>(null);
   const [carregandoOportunidade, setCarregandoOportunidade] = useState(false);
+  // Excluir lead é só para Admin/GestorMaster (ver LeadService.ExcluirAsync no back-end).
+  const { temPapel } = useAuth();
+  const podeExcluir = temPapel("Admin", "GestorMaster");
   const [modalExcluir, setModalExcluir] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
 
@@ -308,7 +306,7 @@ export function LeadDetailPage() {
             </div>
           </div>
           <div className="flex shrink-0 gap-2">
-            {ehIndicacao(lead) && (
+            {podeExcluir && (
               <Button variant="secondary" onClick={() => setModalExcluir(true)}>
                 <Trash2 className="size-4" /> Excluir
               </Button>
@@ -480,8 +478,8 @@ export function LeadDetailPage() {
       <Modal open={modalExcluir} onClose={() => setModalExcluir(false)} title="Excluir lead" size="sm">
         <div className="space-y-4">
           <p className="text-sm text-[var(--fg)]">
-            Tem certeza que deseja excluir <strong>{lead.nomeOuRazaoSocial}</strong>? O lead sai do quadro e não pode ser
-            recuperado por aqui.
+            Tem certeza que deseja excluir <strong>{lead.nomeOuRazaoSocial}</strong>? O lead sai do quadro de leads, as
+            oportunidades dele saem do Pipeline e ele não pode ser recuperado por aqui.
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setModalExcluir(false)} disabled={excluindo}>
