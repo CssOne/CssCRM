@@ -25,6 +25,8 @@ import { AssignModal } from "../../components/crm/AssignModal";
 export function LeadsPage() {
   const { temPapel } = useAuth();
   const podeGerir = temPapel("Admin", "GestorMaster", "GestorComercial");
+  // Filtro por Origem só para administradores (o campo não é enviado aos demais).
+  const podeVerOrigem = temPapel("Admin", "GestorMaster");
   const { notificar } = useToast();
 
   const [busca, setBusca] = useState("");
@@ -179,10 +181,12 @@ export function LeadsPage() {
             ))}
           </Select>
         </div>
-        <div className="w-44">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Origem</label>
-          <Input value={origem} onChange={(e) => { setOrigem(e.target.value); setPagina(1); }} />
-        </div>
+        {podeVerOrigem && (
+          <div className="w-44">
+            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Origem</label>
+            <Input value={origem} onChange={(e) => { setOrigem(e.target.value); setPagina(1); }} />
+          </div>
+        )}
         {(busca || leadEtapaId || origem) && (
           <Button variant="ghost" size="sm" onClick={limparFiltros}>
             <X className="size-4" /> Limpar filtros

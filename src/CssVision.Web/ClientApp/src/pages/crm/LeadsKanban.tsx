@@ -48,6 +48,8 @@ export function LeadsKanbanPage() {
   const { notificar } = useToast();
   const { temPapel } = useAuth();
   const podeGerir = temPapel("Admin", "GestorMaster", "GestorComercial");
+  // Origem (filtro e rodapé do cartão) só para administradores — o servidor também não a envia aos demais.
+  const podeVerOrigem = temPapel("Admin", "GestorMaster");
   // Excluir lead é só para Admin/GestorMaster (ver LeadService.ExcluirAsync no back-end).
   const podeExcluir = temPapel("Admin", "GestorMaster");
 
@@ -389,17 +391,19 @@ export function LeadsKanbanPage() {
           <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Buscar</label>
           <Input placeholder="Nome, telefone ou e-mail" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </div>
-        <div className="w-44">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Origem</label>
-          <Select value={origem} onChange={(e) => setOrigem(e.target.value)}>
-            <option value="">Todas</option>
-            {origens.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
-          </Select>
-        </div>
+        {podeVerOrigem && (
+          <div className="w-44">
+            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Origem</label>
+            <Select value={origem} onChange={(e) => setOrigem(e.target.value)}>
+              <option value="">Todas</option>
+              {origens.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
         <div className="w-44">
           <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Categoria</label>
           <Select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
@@ -548,6 +552,7 @@ export function LeadsKanbanPage() {
                       )}
                       {cartao.migracao && <Badge variant="neutral">Migração</Badge>}
                       {cartao.indicacao && <Badge variant="brand">Indicação</Badge>}
+                      {podeVerOrigem && cartao.origem && <Badge variant="neutral">{cartao.origem}</Badge>}
                       {cartao.semContato && <Badge variant="warning">sem contato</Badge>}
                       {cartao.arquivado && <Badge variant="neutral">arquivado</Badge>}
                     </div>
@@ -579,7 +584,7 @@ export function LeadsKanbanPage() {
                     )}
                     <div className="mt-2 flex items-center justify-between">
                       <span className="text-xs text-[var(--fg-muted)]">
-                        {(podeGerir ? cartao.campanha : null) ?? cartao.origem ?? "—"}
+                        {(podeGerir ? cartao.campanha : null) ?? "—"}
                       </span>
                       <span className="text-xs text-[var(--fg-muted)]">{cartao.responsavelNome ?? "Sem responsável"}</span>
                     </div>

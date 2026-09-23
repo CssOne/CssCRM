@@ -78,6 +78,8 @@ export function LeadDetailPage() {
   // Excluir lead é só para Admin/GestorMaster (ver LeadService.ExcluirAsync no back-end).
   const { temPapel } = useAuth();
   const podeExcluir = temPapel("Admin", "GestorMaster");
+  // Origem do lead: só administradores veem (em forma de tag) — o servidor nem a envia aos demais.
+  const podeVerOrigem = temPapel("Admin", "GestorMaster");
   const [modalExcluir, setModalExcluir] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
 
@@ -298,6 +300,11 @@ export function LeadDetailPage() {
               {lead.tipoPessoa === TipoPessoa.Fisica ? "Pessoa física" : "Pessoa jurídica"} · {formatarDocumento(lead.documento)}
             </p>
             <div className="mt-2 flex flex-wrap gap-1">
+              {podeVerOrigem && lead.origem && (
+                <Badge variant="neutral">
+                  <span title="Origem do lead">Origem: {lead.origem}</span>
+                </Badge>
+              )}
               {lead.tags.map((tag) => (
                 <Badge key={tag} variant="brand">
                   {tag}
@@ -427,9 +434,6 @@ export function LeadDetailPage() {
                 <Plus className="size-4" /> Agendar
               </Button>
             </div>
-            <p className="text-sm text-[var(--fg-muted)]">
-              {lead.consentimentoContato ? "Consentimento de contato registrado (LGPD)." : "Sem consentimento de contato registrado."}
-            </p>
           </Card>
 
           <Card className="p-5">
