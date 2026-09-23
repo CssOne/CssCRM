@@ -44,6 +44,8 @@ public sealed class PublicLeadIntakeService(
             TipoPessoa = TipoPessoa.Fisica,
             Telefone = request.WhatsApp,
             TelefoneNormalizado = telefoneNormalizado,
+            Telefone2 = request.Telefone2,
+            Telefone2Normalizado = DocumentValidation.NormalizarTelefone(request.Telefone2),
             WhatsApp = request.WhatsApp,
             Email = request.Email,
             EmailNormalizado = emailNormalizado,

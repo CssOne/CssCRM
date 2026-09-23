@@ -19,7 +19,8 @@ public record PublicLeadCreateRequest(
     string? Fonte,
     string? Campanha,
     string? Oque,
-    string? Projeto);
+    string? Projeto,
+    string? Telefone2 = null);
 
 /// <summary>Devolvido ao formulário pra montar a página de obrigado com foto + WhatsApp do consultor sorteado.</summary>
 public record PublicLeadResultDto(
