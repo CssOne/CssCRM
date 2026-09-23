@@ -1,4 +1,4 @@
-import { ArrowRightLeft, List, Plus, X } from "lucide-react";
+import { ArrowRightLeft, List, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
@@ -13,7 +13,7 @@ import {
   type Regional,
   type VendedorResumo,
 } from "../../lib/types";
-import { Badge, Button, EmptyState, ErrorState, Input, Modal, Select, Skeleton, useToast } from "../../components/ui";
+import { Badge, Button, ConfirmDialog, EmptyState, ErrorState, Input, Modal, Select, Skeleton, useToast } from "../../components/ui";
 import { LeadForm, leadFormVazio, paraLeadCreateRequest, type LeadFormValues } from "../../components/crm/LeadForm";
 import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog";
 import { StageChangeDialog } from "../../components/crm/StageChangeDialog";
@@ -48,6 +48,8 @@ export function LeadsKanbanPage() {
   const { notificar } = useToast();
   const { temPapel } = useAuth();
   const podeGerir = temPapel("Admin", "GestorMaster", "GestorComercial");
+  // Excluir lead é só para Admin/GestorMaster (ver LeadService.ExcluirAsync no back-end).
+  const podeExcluir = temPapel("Admin", "GestorMaster");
 
   const [board, setBoard] = useState<LeadKanbanBoard | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -71,6 +73,8 @@ export function LeadsKanbanPage() {
 
   const [cartaoArrastando, setCartaoArrastando] = useState<LeadKanbanCard | null>(null);
   const [modalMobile, setModalMobile] = useState<LeadKanbanCard | null>(null);
+  const [leadExcluindo, setLeadExcluindo] = useState<LeadKanbanCard | null>(null);
+  const [excluindoLead, setExcluindoLead] = useState(false);
   const [enviando, setEnviando] = useState(false);
 
   const [modalNovo, setModalNovo] = useState(false);
@@ -236,6 +240,24 @@ export function LeadsKanbanPage() {
       notificar("error", mensagem);
     } finally {
       setEnviando(false);
+    }
+  }
+
+  async function excluirLead() {
+    if (!leadExcluindo) return;
+    const leadId = leadExcluindo.leadId;
+    setExcluindoLead(true);
+    try {
+      await api.del(`/crm/leads/${leadId}`);
+      setBoard((atual) =>
+        atual && { ...atual, colunas: atual.colunas.map((c) => ({ ...c, cartoes: c.cartoes.filter((x) => x.leadId !== leadId) })) }
+      );
+      notificar("success", "Lead excluído.");
+      setLeadExcluindo(null);
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível excluir o lead.");
+    } finally {
+      setExcluindoLead(false);
     }
   }
 
@@ -511,6 +533,19 @@ export function LeadsKanbanPage() {
                       >
                         <ArrowRightLeft className="size-3.5" />
                       </button>
+                      {podeExcluir && (
+                        <button
+                          type="button"
+                          title="Excluir lead"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLeadExcluindo(cartao);
+                          }}
+                          className="focus-ring shrink-0 rounded p-0.5 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--danger)]"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
                       {cartao.migracao && <Badge variant="neutral">Migração</Badge>}
                       {cartao.indicacao && <Badge variant="brand">Indicação</Badge>}
                       {cartao.semContato && <Badge variant="warning">sem contato</Badge>}
@@ -632,6 +667,22 @@ export function LeadsKanbanPage() {
           if (pendenciaVenda) moverPara(pendenciaVenda.cartao, pendenciaVenda.etapaId);
           setPendenciaVenda(null);
         }}
+      />
+
+      <ConfirmDialog
+        open={!!leadExcluindo}
+        title="Excluir lead"
+        danger
+        confirmLabel="Excluir"
+        loading={excluindoLead}
+        message={
+          <>
+            Tem certeza que deseja excluir <strong className="text-[var(--fg)]">{leadExcluindo?.nomeOuRazaoSocial}</strong>? O lead sai
+            do quadro de leads, as oportunidades dele saem do Pipeline e ele não pode ser recuperado por aqui.
+          </>
+        }
+        onConfirm={excluirLead}
+        onCancel={() => setLeadExcluindo(null)}
       />
 
       <StageChangeDialog

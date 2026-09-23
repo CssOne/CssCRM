@@ -520,22 +520,38 @@ public sealed class LeadService(
     /// leads com a etiqueta "Indicação" do quadro de leads (cadastro manual ou TipoIndicacao
     /// "Indicação" vindo do Notion) — mesma regra usada no rodapé do cartão no front-end.
     /// </summary>
+    /// <summary>
+    /// Exclusão de lead — só Admin/GestorMaster, qualquer lead. É um arquivamento (o histórico fica
+    /// para auditoria): o lead some do quadro e da lista, e as oportunidades dele saem do Pipeline.
+    /// Arquivar (e não apagar a linha) também é o que impede a sincronização com o Notion de trazer o
+    /// lead de volta — card ligado a lead arquivado é ignorado (ver NotionSyncService).
+    /// </summary>
     public async Task ExcluirAsync(Guid id, CancellationToken ct)
     {
-        var lead = await CarregarComEscopoAsync(id, ct);
-
-        var ehIndicacao = lead.CriadoManualmente ||
-            (lead.TipoIndicacao is not null && lead.TipoIndicacao.Equals("Indicação", StringComparison.OrdinalIgnoreCase));
-        if (!ehIndicacao)
+        if (!currentUser.TemVisaoTotal)
         {
-            throw new CrmBusinessException("Só é possível excluir leads com a etiqueta \"Indicação\".", "exclusao_nao_permitida");
+            throw new CrmForbiddenException("Apenas administradores podem excluir leads.");
         }
 
+        var lead = await CarregarComEscopoAsync(id, ct);
+        var agora = DateTimeOffset.UtcNow;
+
         lead.Arquivado = true;
-        lead.ArquivadoEm = DateTimeOffset.UtcNow;
+        lead.ArquivadoEm = agora;
         lead.ArquivadoPorId = currentUser.UserId;
+
+        var oportunidades = await db.CrmOpportunities.Where(o => o.LeadId == lead.Id && !o.Arquivado).ToListAsync(ct);
+        foreach (var oportunidade in oportunidades)
+        {
+            oportunidade.Arquivado = true;
+            oportunidade.ArquivadoEm = agora;
+            oportunidade.ArquivadoPorId = currentUser.UserId;
+        }
+
         await db.SaveChangesAsync(ct);
-        await audit.RegistrarAsync("LeadExcluido", nameof(CrmLead), lead.Id, new { lead.NomeOuRazaoSocial }, ct);
+        await audit.RegistrarAsync("LeadExcluido", nameof(CrmLead), lead.Id,
+            new { lead.NomeOuRazaoSocial, OportunidadesArquivadas = oportunidades.Count }, ct);
+        eventos?.PublicarQuadroAtualizado("crm");
     }
 
     public async Task<LeadImportResultDto> ImportarAsync(Stream planilha, CancellationToken ct)

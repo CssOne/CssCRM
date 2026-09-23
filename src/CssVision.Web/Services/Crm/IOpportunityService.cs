@@ -11,5 +11,6 @@ public interface IOpportunityService
     Task<OpportunityDto> CriarAsync(OpportunityCreateRequest request, CancellationToken ct);
     Task<OpportunityDto> AtualizarAsync(Guid id, OpportunityUpdateRequest request, CancellationToken ct);
     Task<OpportunityDto> MudarEtapaAsync(Guid id, ChangeStageRequest request, CancellationToken ct);
+    Task ExcluirAsync(Guid id, CancellationToken ct);
     Task<OpportunityDto> AnexarArquivoAsync(Guid id, string tipo, IFormFile arquivo, CancellationToken ct);
 }

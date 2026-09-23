@@ -325,6 +325,24 @@ public sealed class OpportunityService(
         return query;
     }
 
+    /// <summary>Exclusão (arquivamento) de um card do Pipeline — só Admin/GestorMaster. O lead continua no quadro de leads.</summary>
+    public async Task ExcluirAsync(Guid id, CancellationToken ct)
+    {
+        if (!currentUser.TemVisaoTotal)
+        {
+            throw new CrmForbiddenException("Apenas administradores podem excluir oportunidades.");
+        }
+
+        var opportunity = await CarregarComEscopoAsync(id, ct);
+        opportunity.Arquivado = true;
+        opportunity.ArquivadoEm = DateTimeOffset.UtcNow;
+        opportunity.ArquivadoPorId = currentUser.UserId;
+
+        await db.SaveChangesAsync(ct);
+        await audit.RegistrarAsync("OportunidadeExcluida", nameof(CrmOpportunity), opportunity.Id,
+            new { opportunity.Titulo, Lead = opportunity.Lead.NomeOuRazaoSocial }, ct);
+    }
+
     private async Task<CrmOpportunity> CarregarComEscopoAsync(Guid id, CancellationToken ct)
     {
         var opportunity = await db.CrmOpportunities

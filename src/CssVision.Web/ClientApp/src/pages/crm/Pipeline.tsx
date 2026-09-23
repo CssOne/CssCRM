@@ -1,10 +1,11 @@
-import { AlertTriangle, ArrowRightLeft, Clock } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, Clock, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
 import { formatarMoeda, diasRelativos } from "../../lib/format";
 import { TipoEtapaPipeline, type ChangeStageRequest, type PipelineBoard, type PipelineCard } from "../../lib/types";
-import { Badge, EmptyState, ErrorState, Modal, Skeleton, useToast } from "../../components/ui";
+import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Skeleton, useToast } from "../../components/ui";
+import { useAuth } from "../../context/AuthContext";
 import { StageChangeDialog } from "../../components/crm/StageChangeDialog";
 import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog";
 
@@ -17,6 +18,37 @@ export function PipelinePage() {
 
   const [cartaoArrastando, setCartaoArrastando] = useState<PipelineCard | null>(null);
   const [modalMobile, setModalMobile] = useState<PipelineCard | null>(null);
+  // Excluir card do Pipeline é só para Admin/GestorMaster (ver OpportunityService.ExcluirAsync no back-end).
+  const { temPapel } = useAuth();
+  const podeExcluir = temPapel("Admin", "GestorMaster");
+  const [cartaoExcluindo, setCartaoExcluindo] = useState<PipelineCard | null>(null);
+  const [excluindoCartao, setExcluindoCartao] = useState(false);
+
+  async function excluirCartao() {
+    if (!cartaoExcluindo) return;
+    const opportunityId = cartaoExcluindo.opportunityId;
+    setExcluindoCartao(true);
+    try {
+      await api.del(`/crm/opportunities/${opportunityId}`);
+      setBoard((atual) =>
+        atual && {
+          ...atual,
+          colunas: atual.colunas.map((c) => {
+            const removido = c.cartoes.find((x) => x.opportunityId === opportunityId);
+            return removido
+              ? { ...c, cartoes: c.cartoes.filter((x) => x.opportunityId !== opportunityId), valorTotal: c.valorTotal - removido.valorEstimado }
+              : c;
+          }),
+        }
+      );
+      notificar("success", "Oportunidade excluída.");
+      setCartaoExcluindo(null);
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível excluir a oportunidade.");
+    } finally {
+      setExcluindoCartao(false);
+    }
+  }
   const [pendencia, setPendencia] = useState<{ cartao: PipelineCard; etapaId: string; tipo: "ganho" | "perdido"; etapaNome: string } | null>(null);
   const [enviando, setEnviando] = useState(false);
 
@@ -157,7 +189,22 @@ export function PipelinePage() {
                       >
                         {cartao.leadNome}
                       </Link>
-                      {cartao.atrasada && <AlertTriangle className="size-4 shrink-0 text-[var(--danger)]" aria-hidden />}
+                      <div className="flex shrink-0 items-center gap-1">
+                        {cartao.atrasada && <AlertTriangle className="size-4 text-[var(--danger)]" aria-hidden />}
+                        {podeExcluir && (
+                          <button
+                            type="button"
+                            title="Excluir oportunidade"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCartaoExcluindo(cartao);
+                            }}
+                            className="focus-ring rounded p-0.5 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--danger)]"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <p className="truncate text-xs text-[var(--fg-muted)]">{cartao.titulo}</p>
                     <div className="mt-2 flex items-center justify-between">
@@ -197,6 +244,23 @@ export function PipelinePage() {
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!cartaoExcluindo}
+        title="Excluir oportunidade"
+        danger
+        confirmLabel="Excluir"
+        loading={excluindoCartao}
+        message={
+          <>
+            Tem certeza que deseja excluir a oportunidade <strong className="text-[var(--fg)]">{cartaoExcluindo?.titulo}</strong> de{" "}
+            <strong className="text-[var(--fg)]">{cartaoExcluindo?.leadNome}</strong>? O card sai do Pipeline; o lead continua no
+            quadro de leads.
+          </>
+        }
+        onConfirm={excluirCartao}
+        onCancel={() => setCartaoExcluindo(null)}
+      />
 
       <StageChangeDialog
         open={pendencia?.tipo === "perdido"}
