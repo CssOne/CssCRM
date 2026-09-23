@@ -41,7 +41,9 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
         }
 
         if (filtro.ResponsavelId.HasValue) query = query.Where(l => l.ResponsavelId == filtro.ResponsavelId);
-        if (!string.IsNullOrWhiteSpace(filtro.Origem)) query = query.Where(l => l.Origem == filtro.Origem);
+        // Origem é informação só de administrador (visão total): para os demais, nem filtra nem aparece no cartão.
+        var podeVerOrigem = visiveis is null;
+        if (podeVerOrigem && !string.IsNullOrWhiteSpace(filtro.Origem)) query = query.Where(l => l.Origem == filtro.Origem);
         if (!string.IsNullOrWhiteSpace(filtro.Regional)) query = query.Where(l => l.Regional == filtro.Regional);
 
         // Dados migrados em épocas diferentes gravaram TipoIndicacao com capitalização distinta
@@ -86,7 +88,7 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
             // houve uma atividade registrada) — some sozinho assim que um telefone é preenchido.
             var semTelefone = string.IsNullOrWhiteSpace(l.Telefone) && string.IsNullOrWhiteSpace(l.Telefone2);
             return new(
-                l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Telefone2, l.Email, l.Estado, l.Origem, l.Campanha,
+                l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Telefone2, l.Email, l.Estado, podeVerOrigem ? l.Origem : null, l.Campanha,
                 // Placa do lead; se ainda não tiver, a do veículo da oportunidade mais recente.
                 l.Placa ?? oportunidade?.Veiculo?.Placa, l.TemSeguro, l.UtilidadeVeiculo, l.TipoIndicacao,
                 oportunidade?.Migracao ?? false, oportunidade?.Indicacao, l.CriadoManualmente,

@@ -25,7 +25,9 @@ public sealed class PipelineService(ApplicationDbContext db, IEquipeComercialSer
         if (visiveis is not null) query = query.Where(o => visiveis.Contains(o.ResponsavelId));
 
         if (filtro.ResponsavelId.HasValue) query = query.Where(o => o.ResponsavelId == filtro.ResponsavelId);
-        if (!string.IsNullOrWhiteSpace(filtro.Origem)) query = query.Where(o => o.Lead.Origem == filtro.Origem);
+        // Origem é informação só de administrador (visão total): para os demais, nem filtra nem aparece no card.
+        var podeVerOrigem = visiveis is null;
+        if (podeVerOrigem && !string.IsNullOrWhiteSpace(filtro.Origem)) query = query.Where(o => o.Lead.Origem == filtro.Origem);
         if (!string.IsNullOrWhiteSpace(filtro.ProdutoOuServico)) query = query.Where(o => o.ProdutoOuServico == filtro.ProdutoOuServico);
         if (!string.IsNullOrWhiteSpace(filtro.Regional)) query = query.Where(o => o.Lead.Regional == filtro.Regional);
         if (filtro.DataInicio.HasValue)
@@ -65,7 +67,7 @@ public sealed class PipelineService(ApplicationDbContext db, IEquipeComercialSer
 
                     return new PipelineCardDto(
                         o.Id, o.LeadId, o.Lead.NomeOuRazaoSocial, o.Titulo, o.ProdutoOuServico, o.ValorEstimado,
-                        o.ResponsavelId, o.Responsavel.NomeCompleto, o.Lead.Origem,
+                        o.ResponsavelId, o.Responsavel.NomeCompleto, podeVerOrigem ? o.Lead.Origem : null,
                         proxima?.DataHoraPrevista, proxima?.Assunto, o.EtapaDesde, atrasada, o.RowVersion);
                 })
                 .ToList();

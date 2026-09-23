@@ -90,8 +90,9 @@ public sealed class LookupService(ApplicationDbContext db, ICurrentUserService c
         return new LeadStageDto(etapa.Id, etapa.Nome, etapa.Ordem, etapa.Cor, etapa.Fechada, etapa.Ativa);
     }
 
+    /// <summary>Lista de origens para o filtro — só administradores (Admin/GestorMaster) veem o campo Origem.</summary>
     public async Task<IReadOnlyList<string>> ObterOrigensAsync(CancellationToken ct) =>
-        await db.CrmLeads.AsNoTracking()
+        !currentUser.TemVisaoTotal ? [] : await db.CrmLeads.AsNoTracking()
             .Where(l => !l.Arquivado && l.Origem != null)
             .Select(l => l.Origem!)
             .Distinct()

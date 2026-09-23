@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { TipoPessoa, type LeadCreateRequest, type LeadListItem } from "../../lib/types";
-import { Button, Checkbox, DocumentoInput, FieldError, Input, Label, Select, Textarea } from "../ui";
+import { Button, DocumentoInput, FieldError, Input, Label, Select, Textarea } from "../ui";
 import { LeadPicker } from "./LeadPicker";
 import { useAuth } from "../../context/AuthContext";
 import { ESTADOS_BRASIL } from "../../lib/estados";
@@ -119,6 +119,8 @@ export function LeadForm({
   const [erros, setErros] = useState<Record<string, string>>({});
   const { temPapel } = useAuth();
   const podeVerMarketing = temPapel("Admin", "GestorMaster", "GestorComercial");
+  // Origem do lead é só para administradores (o servidor também não a envia nem a altera para os demais).
+  const podeVerOrigem = temPapel("Admin", "GestorMaster");
 
   function set<K extends keyof LeadFormValues>(campo: K, valor: LeadFormValues[K]) {
     setValores((v) => ({ ...v, [campo]: valor }));
@@ -210,10 +212,12 @@ export function LeadForm({
           <Input id={`${idPrefix}-regional`} value={valores.regional} onChange={(e) => set("regional", e.target.value)} />
         </div>
 
-        <div>
-          <Label htmlFor={`${idPrefix}-origem`}>Origem</Label>
-          <Input id={`${idPrefix}-origem`} value={valores.origem} onChange={(e) => set("origem", e.target.value)} placeholder="Site, indicação..." />
-        </div>
+        {podeVerOrigem && (
+          <div>
+            <Label htmlFor={`${idPrefix}-origem`}>Origem</Label>
+            <Input id={`${idPrefix}-origem`} value={valores.origem} onChange={(e) => set("origem", e.target.value)} placeholder="Site, indicação..." />
+          </div>
+        )}
 
         {podeVerMarketing && (
           <div>
@@ -330,14 +334,6 @@ export function LeadForm({
           </div>
         </div>
       )}
-
-      <div className="border-t border-[var(--border)] pt-4">
-        <Checkbox
-          label="O lead consentiu em ser contatado (LGPD)"
-          checked={valores.consentimentoContato}
-          onChange={(e) => set("consentimentoContato", e.target.checked)}
-        />
-      </div>
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={salvando}>

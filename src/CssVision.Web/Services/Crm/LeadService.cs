@@ -27,8 +27,16 @@ public sealed class LeadService(
     /// <summary>Nome da etapa "veículo fora do que a CSS Brasil atende" do quadro de leads — ver CrmSeeder.cs.</summary>
     private const string EtapaLeadNaoFazemos = "Não fazemos";
 
+    /// <summary>
+    /// O campo Origem (de onde veio o lead) é informação só de administrador (Admin/GestorMaster):
+    /// consultores e gestores comerciais não o recebem pela API, nem podem filtrar por ele.
+    /// </summary>
+    private bool PodeVerOrigem => currentUser.TemVisaoTotal;
+
     public async Task<PagedResult<LeadListItemDto>> ListarAsync(LeadFilterRequest filtro, CancellationToken ct)
     {
+        if (!PodeVerOrigem) filtro = filtro with { Origem = null };
+        var podeVerOrigem = PodeVerOrigem;
         var query = await QueryEscopadaAsync(filtro.IncluirArquivados, ct);
         query = AplicarFiltros(query, filtro);
         query = AplicarOrdenacao(query, filtro.OrdenarPor, filtro.OrdemDescendente);
@@ -49,7 +57,7 @@ public sealed class LeadService(
                 l.Cidade,
                 l.Estado,
                 l.Regional,
-                l.Origem,
+                podeVerOrigem ? l.Origem : null,
                 l.Placa,
                 l.TemSeguro,
                 l.UtilidadeVeiculo,
@@ -86,7 +94,7 @@ public sealed class LeadService(
     public async Task<LeadDetailDto> ObterPorIdAsync(Guid id, CancellationToken ct)
     {
         var lead = await CarregarComEscopoAsync(id, ct);
-        return ParaDetailDto(lead);
+        return ParaDetailDto(lead, PodeVerOrigem);
     }
 
     public async Task<IReadOnlyList<LeadTimelineItemDto>> ObterTimelineAsync(Guid id, CancellationToken ct)
@@ -94,7 +102,7 @@ public sealed class LeadService(
         var lead = await CarregarComEscopoAsync(id, ct);
         var itens = new List<LeadTimelineItemDto>
         {
-            new(lead.Id, TipoEventoTimeline.LeadCriado, "Lead cadastrado", lead.Origem is null ? null : $"Origem: {lead.Origem}", null, lead.CriadoEm)
+            new(lead.Id, TipoEventoTimeline.LeadCriado, "Lead cadastrado", lead.Origem is null || !PodeVerOrigem ? null : $"Origem: {lead.Origem}", null, lead.CriadoEm)
         };
 
         var auditorias = await db.CrmAuditLogs.AsNoTracking()
@@ -321,7 +329,7 @@ public sealed class LeadService(
         lead.Cidade = request.Cidade;
         lead.Estado = request.Estado?.ToUpperInvariant();
         lead.Regional = request.Regional;
-        lead.Origem = request.Origem;
+        if (PodeVerOrigem) lead.Origem = request.Origem;
         lead.Campanha = request.Campanha;
         lead.ProdutoInteresse = request.ProdutoInteresse;
         lead.Placa = request.Placa?.Trim().ToUpperInvariant() is { Length: > 0 and <= 10 } placaValida ? placaValida : null;
@@ -661,6 +669,8 @@ public sealed class LeadService(
 
     public async Task<byte[]> ExportarAsync(LeadFilterRequest filtro, CancellationToken ct)
     {
+        if (!PodeVerOrigem) filtro = filtro with { Origem = null };
+        var podeVerOrigem = PodeVerOrigem;
         var query = await QueryEscopadaAsync(filtro.IncluirArquivados, ct);
         query = AplicarFiltros(query, filtro);
 
@@ -676,7 +686,7 @@ public sealed class LeadService(
                 l.Cidade,
                 l.Estado,
                 l.Regional,
-                l.Origem,
+                Origem = podeVerOrigem ? l.Origem : null,
                 EtapaNome = l.Etapa != null ? l.Etapa.Nome : "Sem etapa",
                 Responsavel = l.Responsavel != null ? l.Responsavel.NomeCompleto : null,
                 l.CriadoEm
@@ -864,7 +874,7 @@ public sealed class LeadService(
         }
     }
 
-    private static LeadDetailDto ParaDetailDto(CrmLead lead) => new(
+    private static LeadDetailDto ParaDetailDto(CrmLead lead, bool podeVerOrigem) => new(
         lead.Id,
         lead.NomeOuRazaoSocial,
         lead.TipoPessoa,
@@ -877,7 +887,7 @@ public sealed class LeadService(
         lead.Cidade,
         lead.Estado,
         lead.Regional,
-        lead.Origem,
+        podeVerOrigem ? lead.Origem : null,
         lead.Campanha,
         lead.ProdutoInteresse,
         lead.Placa,
