@@ -49,6 +49,8 @@ public class NotionSyncQuadroDeLeadsTests
     [InlineData("EM ATENDIMENTO", "Indicação", "Em atendimento (Indicação)")]
     [InlineData("COTAÇÃO", "Lead", "Cotação")]
     [InlineData("PRÉ CADASTRO", "Lead", "Cotação")]
+    [InlineData("EM COTAÇÃO", "Lead", "Cotação")]
+    [InlineData("JÁ TEM SEGURO", "Lead", "Perdido")]
     [InlineData("VENDA CONCLUIDA", "Lead", "Venda concluída (Leads)")]
     [InlineData("VENDA CONCLUIDA", "Indicação", "Venda concluída (Indicação)")]
     [InlineData("PERDIDO", "Lead", "Perdido")]
@@ -140,6 +142,7 @@ public class NotionSyncQuadroDeLeadsTests
     [Theory]
     [InlineData("PERDIDO", "Não informado no Notion")]
     [InlineData("RECUSA/INATIVA", "Recusa/Inativa")]
+    [InlineData("JÁ TEM SEGURO", "Já tem seguro")]
     public async Task Perdido_SemMotivoNoNotion_RecebeMotivoPadrao(string status, string motivoEsperado)
     {
         using var factory = new TestDbContextFactory();

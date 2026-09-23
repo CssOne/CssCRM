@@ -8,7 +8,9 @@ namespace CssVision.Web.Services.Notion;
 /// <item>"Em atendimento" e "Venda concluída" têm duas colunas cada — "(Leads)" só recebe cartões
 /// Lead e "(Indicação)" só recebe cartões Indicação (mesma regra de LeadsKanban.tsx);</item>
 /// <item>PRÉ CADASTRO vai para "Cotação" e RECUSA/INATIVA para "Perdido", como fizeram as migrações
-/// que desativaram essas colunas (RemovePreCadastroLeadStage / RemoveRecusaInativaLeadStage).</item>
+/// que desativaram essas colunas (RemovePreCadastroLeadStage / RemoveRecusaInativaLeadStage);</item>
+/// <item>a base MG132 usa Status próprios: EM COTAÇÃO (= Cotação) e JÁ TEM SEGURO (lead perdido,
+/// com esse mesmo texto como motivo de perda).</item>
 /// </list>
 /// </summary>
 public static class NotionEtapaLead
@@ -23,10 +25,12 @@ public static class NotionEtapaLead
     {
         ["EM ATENDIMENTO"] = EmAtendimento,
         ["COTAÇÃO"] = Cotacao,
+        ["EM COTAÇÃO"] = Cotacao,
         ["PRÉ CADASTRO"] = Cotacao,
         ["VENDA CONCLUIDA"] = VendaConcluida,
         ["PERDIDO"] = Perdido,
         ["RECUSA/INATIVA"] = Perdido,
+        ["JÁ TEM SEGURO"] = Perdido,
         ["NÃO FAZEMOS"] = NaoFazemos,
     };
 
@@ -61,6 +65,10 @@ public static class NotionEtapaLead
     }
 
     /// <summary>Motivo de perda quando o card do Notion não tem "Motivo da perda" preenchido.</summary>
-    public static string MotivoPerdaPadrao(string? statusNotion) =>
-        Normalizar(statusNotion) == "RECUSA/INATIVA" ? "Recusa/Inativa" : "Não informado no Notion";
+    public static string MotivoPerdaPadrao(string? statusNotion) => Normalizar(statusNotion) switch
+    {
+        "RECUSA/INATIVA" => "Recusa/Inativa",
+        "JÁ TEM SEGURO" => "Já tem seguro",
+        _ => "Não informado no Notion",
+    };
 }

@@ -26,33 +26,40 @@ public class CrmEventosController(ICrmEventHub eventos) : ControllerBase
         Response.Headers.CacheControl = "no-cache";
         Response.Headers["X-Accel-Buffering"] = "no";
 
-        await Response.WriteAsync(": conectado\n\n", ct);
-        await Response.Body.FlushAsync(ct);
-
-        await using var enumerador = eventos.AssinarAsync(ct).GetAsyncEnumerator(ct);
-        var proximo = enumerador.MoveNextAsync().AsTask();
+        using var assinatura = eventos.Assinar();
 
         try
         {
+            await Response.WriteAsync(": conectado\n\n", ct);
+            await Response.Body.FlushAsync(ct);
+
             while (!ct.IsCancellationRequested)
             {
-                var concluida = await Task.WhenAny(proximo, Task.Delay(Heartbeat, ct));
-                if (concluida != proximo)
+                bool haEventos;
+                using (var espera = CancellationTokenSource.CreateLinkedTokenSource(ct))
                 {
-                    // Comentário SSE: mantém a conexão viva através de proxies (Caddy/ALB).
-                    await Response.WriteAsync(": ping\n\n", ct);
-                    await Response.Body.FlushAsync(ct);
-                    continue;
+                    espera.CancelAfter(Heartbeat);
+                    try
+                    {
+                        haEventos = await assinatura.Leitor.WaitToReadAsync(espera.Token);
+                    }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                    {
+                        // Nenhum evento no intervalo: comentário SSE mantém a conexão viva através de proxies (Caddy/ALB).
+                        await Response.WriteAsync(": ping\n\n", ct);
+                        await Response.Body.FlushAsync(ct);
+                        continue;
+                    }
                 }
 
-                if (!await proximo) break;
+                if (!haEventos) break;
 
-                var evento = enumerador.Current;
-                var dados = JsonSerializer.Serialize(new { evento.Origem, evento.OcorridoEm }, JsonSerializerOptions.Web);
-                await Response.WriteAsync($"event: {evento.Tipo}\ndata: {dados}\n\n", ct);
+                while (assinatura.Leitor.TryRead(out var evento))
+                {
+                    var dados = JsonSerializer.Serialize(new { evento.Origem, evento.OcorridoEm }, JsonSerializerOptions.Web);
+                    await Response.WriteAsync($"event: {evento.Tipo}\ndata: {dados}\n\n", ct);
+                }
                 await Response.Body.FlushAsync(ct);
-
-                proximo = enumerador.MoveNextAsync().AsTask();
             }
         }
         catch (OperationCanceledException)

@@ -9,21 +9,28 @@ public class CrmEventHubTests
     public async Task Publicar_EntregaOEventoATodosOsAssinantes()
     {
         var hub = new CrmEventHub();
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-
-        var aba1 = hub.AssinarAsync(cts.Token).GetAsyncEnumerator(cts.Token);
-        var aba2 = hub.AssinarAsync(cts.Token).GetAsyncEnumerator(cts.Token);
-        var proximo1 = aba1.MoveNextAsync().AsTask();
-        var proximo2 = aba2.MoveNextAsync().AsTask();
+        using var aba1 = hub.Assinar();
+        using var aba2 = hub.Assinar();
 
         hub.PublicarQuadroAtualizado("notion");
 
-        Assert.True(await proximo1);
-        Assert.True(await proximo2);
-        Assert.Equal("quadro-atualizado", aba1.Current.Tipo);
-        Assert.Equal("notion", aba2.Current.Origem);
+        var evento1 = await aba1.Leitor.ReadAsync();
+        var evento2 = await aba2.Leitor.ReadAsync();
+        Assert.Equal("quadro-atualizado", evento1.Tipo);
+        Assert.Equal("notion", evento2.Origem);
+    }
 
-        await aba1.DisposeAsync();
-        await aba2.DisposeAsync();
+    [Fact]
+    public async Task AssinaturaDescartada_ParaDeReceber_ELiberaQuemEstavaEsperando()
+    {
+        var hub = new CrmEventHub();
+        var aba = hub.Assinar();
+        var esperando = aba.Leitor.WaitToReadAsync().AsTask();
+
+        aba.Dispose();
+        hub.PublicarQuadroAtualizado("crm");
+
+        // Canal completado: a espera termina com "sem mais eventos", sem exceção.
+        Assert.False(await esperando.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 }
