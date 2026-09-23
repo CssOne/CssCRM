@@ -26,7 +26,9 @@ public record LeadKanbanCardDto(
     DateTimeOffset? UltimoContatoEm,
     bool SemContato,
     bool Arquivado,
-    uint RowVersion);
+    uint RowVersion,
+    /// <summary>"O que?" — produto de interesse (AGV, AGV ELÉTRICO, AGV TRUCK...), visível para todos.</summary>
+    string? OQue = null);
 
 public record LeadKanbanColumnDto(LeadStageDto Etapa, IReadOnlyList<LeadKanbanCardDto> Cartoes);
 

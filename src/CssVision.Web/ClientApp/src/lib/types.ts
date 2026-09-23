@@ -307,6 +307,8 @@ export interface LeadKanbanCard {
   semContato: boolean;
   arquivado: boolean;
   rowVersion: number;
+  /** "O que?" — produto de interesse (AGV, AGV ELÉTRICO, AGV TRUCK...). */
+  oQue?: string | null;
 }
 
 export interface LeadKanbanColumn {

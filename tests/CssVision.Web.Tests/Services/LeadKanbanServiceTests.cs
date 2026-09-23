@@ -77,4 +77,20 @@ public class LeadKanbanServiceTests
         Assert.Equal("ABC1D23", cartoes["Com placa"].Placa);
         Assert.Equal("XYZ9K87", cartoes["Placa no veículo"].Placa);
     }
+
+    [Fact]
+    public async Task ObterBoardAsync_CartaoTrazOOQue_ParaQualquerUsuario()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
+        db.CrmLeads.Add(new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id, ProdutoInteresse = "AGV TRUCK" });
+        await db.SaveChangesAsync();
+
+        var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
+        var service = new LeadKanbanService(db, new EquipeComercialService(db, currentUser.Object));
+
+        var cartao = Assert.Single((await service.ObterBoardAsync(new LeadKanbanFilterRequest(), CancellationToken.None)).Colunas.SelectMany(c => c.Cartoes));
+        Assert.Equal("AGV TRUCK", cartao.OQue);
+    }
 }

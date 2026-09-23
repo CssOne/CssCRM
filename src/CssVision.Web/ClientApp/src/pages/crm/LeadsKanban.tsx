@@ -552,6 +552,7 @@ export function LeadsKanbanPage() {
                       )}
                       {cartao.migracao && <Badge variant="neutral">Migração</Badge>}
                       {cartao.indicacao && <Badge variant="brand">Indicação</Badge>}
+                      {cartao.oQue && <Badge variant="info">{cartao.oQue}</Badge>}
                       {podeVerOrigem && cartao.origem && <Badge variant="neutral">{cartao.origem}</Badge>}
                       {cartao.semContato && <Badge variant="warning">sem contato</Badge>}
                       {cartao.arquivado && <Badge variant="neutral">arquivado</Badge>}

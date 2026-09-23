@@ -94,7 +94,7 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
                 oportunidade?.Migracao ?? false, oportunidade?.Indicacao, l.CriadoManualmente,
                 l.ResponsavelId, l.Responsavel?.NomeCompleto,
                 l.LeadTags.Select(lt => lt.Tag.Nome).ToList(),
-                l.CriadoEm, l.UltimoContatoEm, semTelefone, l.Arquivado, l.RowVersion);
+                l.CriadoEm, l.UltimoContatoEm, semTelefone, l.Arquivado, l.RowVersion, l.ProdutoInteresse);
         }
 
         // Coluna virtual (sem linha em CrmLeadStage): leads que ainda não foram trabalhados por
