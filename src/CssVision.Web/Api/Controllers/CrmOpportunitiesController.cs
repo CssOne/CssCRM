@@ -34,6 +34,14 @@ public class CrmOpportunitiesController(IOpportunityService opportunityService) 
     public async Task<ActionResult<OpportunityDto>> MudarEtapa(Guid id, ChangeStageRequest request, CancellationToken ct) =>
         Ok(await opportunityService.MudarEtapaAsync(id, request, ct));
 
+    [HttpDelete("{id:guid}")]
+    [Authorize(Policy = PolicyNames.VisaoTotalComercial)]
+    public async Task<IActionResult> Excluir(Guid id, CancellationToken ct)
+    {
+        await opportunityService.ExcluirAsync(id, ct);
+        return NoContent();
+    }
+
     [HttpPost("{id:guid}/attachments/{tipo}")]
     [RequestSizeLimit(10 * 1024 * 1024)]
     public async Task<ActionResult<OpportunityDto>> Anexar(Guid id, string tipo, IFormFile arquivo, CancellationToken ct) =>
