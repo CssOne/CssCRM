@@ -17,7 +17,7 @@ public sealed class NotionSyncBackgroundService(
             return;
         }
 
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(Math.Max(1, config.IntervalMinutes)));
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Max(5, config.IntervalSeconds)));
         do
         {
             try

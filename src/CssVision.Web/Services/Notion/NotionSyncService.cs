@@ -14,7 +14,11 @@ namespace CssVision.Web.Services.Notion;
 /// editadas depois do último checkpoint e cria/atualiza o lead (e a oportunidade, se for uma
 /// venda concluída) correspondente. Substitui a migração manual pontual por um processo contínuo.
 /// </summary>
-public sealed class NotionSyncService(ApplicationDbContext db, UserManager<ApplicationUser> userManager, ILogger<NotionSyncService> logger)
+public sealed class NotionSyncService(
+    ApplicationDbContext db,
+    UserManager<ApplicationUser> userManager,
+    ILogger<NotionSyncService> logger,
+    ICrmEventHub? eventos = null)
 {
     private static readonly (string DataSourceId, string RegionalName)[] DataSources =
     [
@@ -29,14 +33,14 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
     /// alguém ainda os edite no Notion.</summary>
     private static readonly DateOnly DataMinimaImportacao = new(2026, 1, 1);
 
-    private static readonly Dictionary<string, string> StatusParaEtapaLead = new()
-    {
-        ["EM ATENDIMENTO"] = "Em atendimento",
-        ["COTAÇÃO"] = "Cotação",
-        ["PERDIDO"] = "Perdido",
-        ["NÃO FAZEMOS"] = "Não fazemos",
-        ["RECUSA/INATIVA"] = "Recusa/Inativa",
-    };
+    /// <summary>
+    /// last_edited_time do Notion tem precisão de minuto: cada execução relê uma pequena janela antes
+    /// do checkpoint para não perder edições feitas no mesmo minuto da execução anterior.
+    /// </summary>
+    private static readonly TimeSpan JanelaSobreposicao = TimeSpan.FromMinutes(2);
+
+    /// <summary>Leads criados ou que mudaram de coluna nesta execução — dispara a atualização das telas abertas.</summary>
+    private int _mudancasNoQuadro;
 
     public async Task<string> SincronizarTudoAsync(string token, CancellationToken ct = default)
     {
@@ -61,9 +65,14 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
     {
         var inicioDaExecucao = DateTimeOffset.UtcNow;
         var checkpoint = await db.CrmNotionSyncCheckpoints.FindAsync([dataSourceId], ct);
-        // Sem checkpoint (primeira ativação): só olha pra frente — o histórico já foi trazido pela
-        // migração manual em lote, não faz sentido reprocessar tudo de novo aqui.
-        var desde = checkpoint?.UltimaSincronizacaoEm ?? inicioDaExecucao;
+
+        // Realinhamento (uma vez por base): relê todos os cards desde a data mínima para colocar cada
+        // lead na coluna do Status atual do Notion — inclusive os que ficaram em "Sem etapa" porque a
+        // sincronização antiga só definia a coluna na criação do lead. Depois disso, só o incremental.
+        var realinhar = checkpoint?.RealinhamentoConcluidoEm is null;
+        var paginas = realinhar
+            ? PaginasParaRealinhamentoAsync(notion, dataSourceId, ct)
+            : notion.QueryEditadasDesdeAsync(dataSourceId, checkpoint!.UltimaSincronizacaoEm - JanelaSobreposicao, DataMinimaImportacao, ct);
 
         var regional = await db.CrmRegionais.FirstOrDefaultAsync(r => r.Nome == regionalNome, ct);
         if (regional is null)
@@ -73,18 +82,19 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
             await db.SaveChangesAsync(ct);
         }
 
-        var etapasPorNome = await db.CrmLeadStages.ToDictionaryAsync(s => s.Nome.Trim(), s => s.Id, ct);
+        // Só colunas ativas: "Pré-cadastro" e "Recusa/Inativa" foram desativadas (ver NotionEtapaLead).
+        var etapasPorNome = await db.CrmLeadStages.Where(s => s.Ativa).ToDictionaryAsync(s => s.Nome.Trim(), s => s.Id, ct);
         var ganhoStageId = (await db.CrmPipelineStages.FirstAsync(s => s.Tipo == TipoEtapaPipeline.Ganho, ct)).Id;
         var placeholderVendedorId = await ObterOuCriarVendedorPlaceholderAsync(regional.Id, regionalNome, ct);
 
         int processados = 0, criados = 0, atualizados = 0, erros = 0;
 
-        await foreach (var page in notion.QueryEditadasDesdeAsync(dataSourceId, desde, DataMinimaImportacao, ct))
+        await foreach (var page in paginas)
         {
             processados++;
             try
             {
-                var resultado = await ProcessarPaginaAsync(page, regional.Id, regionalNome, etapasPorNome, ganhoStageId, placeholderVendedorId, ct);
+                var resultado = await ProcessarPaginaAsync(page, regional.Id, regionalNome, etapasPorNome, ganhoStageId, placeholderVendedorId, somenteColuna: realinhar, ct);
                 if (resultado) criados++; else atualizados++;
             }
             catch (Exception ex)
@@ -100,21 +110,31 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
 
         if (checkpoint is null)
         {
-            db.CrmNotionSyncCheckpoints.Add(new CrmNotionSyncCheckpoint { DataSourceId = dataSourceId, RegionalNome = regionalNome, UltimaSincronizacaoEm = inicioDaExecucao });
+            checkpoint = new CrmNotionSyncCheckpoint { DataSourceId = dataSourceId, RegionalNome = regionalNome };
+            db.CrmNotionSyncCheckpoints.Add(checkpoint);
         }
-        else
-        {
-            checkpoint.UltimaSincronizacaoEm = inicioDaExecucao;
-        }
+        checkpoint.UltimaSincronizacaoEm = inicioDaExecucao;
+        if (realinhar) checkpoint.RealinhamentoConcluidoEm = inicioDaExecucao;
         await db.SaveChangesAsync(ct);
 
-        return $"{regionalNome}: {processados} processados, {criados} criados, {atualizados} atualizados, {erros} erros";
+        if (_mudancasNoQuadro > 0)
+        {
+            eventos?.PublicarQuadroAtualizado("notion");
+            _mudancasNoQuadro = 0;
+        }
+
+        return $"{regionalNome}: {processados} processados, {criados} criados, {atualizados} atualizados, {erros} erros{(realinhar ? " (realinhamento)" : "")}";
     }
 
+    /// <param name="somenteColuna">
+    /// Realinhamento: só ajusta a coluna de leads que já existem no CRM — não cria leads (um lead
+    /// arquivado/excluído no CRM voltaria como novo), não cria usuários de vendedor e não mexe em
+    /// responsável nem nos demais campos. Isso continua a cargo da sincronização incremental.
+    /// </param>
     /// <returns>true se criou um lead novo, false se atualizou um existente.</returns>
     private async Task<bool> ProcessarPaginaAsync(
         JsonElement page, Guid regionalId, string regionalNome, Dictionary<string, Guid> etapasPorNome,
-        Guid ganhoStageId, Guid placeholderVendedorId, CancellationToken ct)
+        Guid ganhoStageId, Guid placeholderVendedorId, bool somenteColuna, CancellationToken ct)
     {
         var nome = page.Text("Name");
         if (string.IsNullOrWhiteSpace(nome)) throw new InvalidOperationException("Página sem nome (title vazio).");
@@ -154,9 +174,6 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
         var oQue = page.Select("O que");
         var tipoIndicacao = NotionLeadClassifier.Classificar(oQue);
 
-        var vendedorInfo = page.PrimeiroVendedor("Vendedor");
-        var vendedorId = await ResolverVendedorAsync(vendedorInfo, regionalId, regionalNome, placeholderVendedorId, ct);
-
         var status = page.Select("Status");
         var isVendaConcluida = string.Equals(status, "VENDA CONCLUIDA", StringComparison.OrdinalIgnoreCase);
 
@@ -169,6 +186,20 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
         lead ??= telefoneNormalizado is not null
             ? await db.CrmLeads.FirstOrDefaultAsync(l => l.TelefoneNormalizado == telefoneNormalizado && !l.Arquivado, ct)
             : null;
+
+        if (somenteColuna)
+        {
+            if (lead is null) return false;
+            if (await AplicarStatusDoNotionAsync(lead, status, page.Select("Motivo da perda"), page.Text("Veiculo"), etapasPorNome, ct))
+            {
+                _mudancasNoQuadro++;
+            }
+            await db.SaveChangesAsync(ct);
+            return false;
+        }
+
+        var vendedorInfo = page.PrimeiroVendedor("Vendedor");
+        var vendedorId = await ResolverVendedorAsync(vendedorInfo, regionalId, regionalNome, placeholderVendedorId, ct);
 
         var criadoAgora = lead is null;
         if (lead is null)
@@ -213,31 +244,96 @@ public sealed class NotionSyncService(ApplicationDbContext db, UserManager<Appli
 
         if (isVendaConcluida)
         {
-            lead.EtapaId = ResolverEtapaVendaConcluida(etapasPorNome, lead.CriadoManualmente, tipoIndicacao);
             await CriarOuAtualizarOportunidadeAsync(page, lead, vendedorId, ganhoStageId, ct);
         }
-        else if (criadoAgora && status is not null && StatusParaEtapaLead.TryGetValue(status, out var etapaNome) && etapasPorNome.TryGetValue(etapaNome, out var etapaId))
-        {
-            lead.EtapaId = etapaId;
-        }
+
+        var mudouDeColuna = await AplicarStatusDoNotionAsync(lead, status, page.Select("Motivo da perda"), page.Text("Veiculo"), etapasPorNome, ct);
 
         await db.SaveChangesAsync(ct);
+        if (criadoAgora || mudouDeColuna) _mudancasNoQuadro++;
         return criadoAgora;
     }
 
     /// <summary>
-    /// "Venda concluída" foi dividida em colunas "(Leads)" e "(Indicação)" com a mesma regra de
-    /// classificação usada no quadro Kanban e na migração que fez a divisão — mantém compatibilidade
-    /// com bases que ainda não tenham essa migração aplicada (usa a coluna única "Venda concluída").
+    /// Coloca o lead na coluna do quadro correspondente ao Status do Notion, com as mesmas regras de
+    /// quem arrasta o cartão no quadro (LeadService.MudarEtapaAsync): "Perdido" sempre com motivo de
+    /// perda, "Não fazemos" sempre com o veículo não atendido, e esses campos limpos nas demais colunas.
+    /// Só move quando o Status mudou no Notion desde a última sincronização (ou quando o lead ainda
+    /// está em "Sem etapa") — um movimento feito no CRM não é desfeito enquanto o Status lá não mudar.
     /// </summary>
-    private static Guid ResolverEtapaVendaConcluida(Dictionary<string, Guid> etapasPorNome, bool criadoManualmente, string? tipoIndicacao)
+    /// <returns>true se o lead mudou de coluna.</returns>
+    public async Task<bool> AplicarStatusDoNotionAsync(
+        CrmLead lead, string? statusNotion, string? motivoPerdaNotion, string? veiculoNotion,
+        IReadOnlyDictionary<string, Guid> etapasAtivasPorNome, CancellationToken ct)
     {
-        var ehIndicacao = !string.Equals(tipoIndicacao, "Lead", StringComparison.OrdinalIgnoreCase)
-            && (criadoManualmente || string.Equals(tipoIndicacao, "Indicação", StringComparison.OrdinalIgnoreCase));
+        var statusNovo = NotionEtapaLead.Normalizar(statusNotion);
+        var statusMudou = statusNovo != NotionEtapaLead.Normalizar(lead.NotionStatus);
+        var semEtapaComStatus = lead.EtapaId is null && statusNovo is not null;
+        var statusGravado = statusNotion?.Trim();
+        lead.NotionStatus = statusGravado is { Length: > 80 } ? statusGravado[..80] : statusGravado;
 
-        var chaveEsperada = ehIndicacao ? "Venda concluída (Indicação)" : "Venda concluída (Leads)";
-        if (etapasPorNome.TryGetValue(chaveEsperada, out var id)) return id;
-        return etapasPorNome["Venda concluída"];
+        if (!statusMudou && !semEtapaComStatus) return false;
+
+        var ehIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
+        var (reconhecido, etapaId, nomeEtapa) = NotionEtapaLead.Resolver(statusNotion, ehIndicacao, etapasAtivasPorNome);
+        if (!reconhecido)
+        {
+            logger.LogWarning("Status '{Status}' do Notion não tem coluna correspondente no quadro de leads; lead {LeadId} mantido na coluna atual.", statusNotion, lead.Id);
+            return false;
+        }
+        if (etapaId == lead.EtapaId) return false;
+
+        lead.EtapaId = etapaId;
+        if (nomeEtapa == NotionEtapaLead.Perdido)
+        {
+            var descricao = string.IsNullOrWhiteSpace(motivoPerdaNotion) ? NotionEtapaLead.MotivoPerdaPadrao(statusNotion) : motivoPerdaNotion.Trim();
+            lead.MotivoPerdaId = (await ObterOuCriarMotivoPerdaAsync(descricao, ct)).Id;
+            lead.MotivoPerdaObservacao = null;
+            lead.VeiculoNaoAtendido = null;
+        }
+        else if (nomeEtapa == NotionEtapaLead.NaoFazemos)
+        {
+            var veiculo = string.IsNullOrWhiteSpace(veiculoNotion) ? "Não informado no Notion" : veiculoNotion.Trim();
+            lead.VeiculoNaoAtendido = veiculo.Length > 200 ? veiculo[..200] : veiculo;
+            lead.MotivoPerdaId = null;
+            lead.MotivoPerdaObservacao = null;
+        }
+        else
+        {
+            lead.MotivoPerdaId = null;
+            lead.MotivoPerdaObservacao = null;
+            lead.VeiculoNaoAtendido = null;
+        }
+
+        return true;
+    }
+
+    private async Task<CrmLossReason> ObterOuCriarMotivoPerdaAsync(string descricao, CancellationToken ct)
+    {
+        var motivo = db.CrmLossReasons.Local.FirstOrDefault(m => string.Equals(m.Descricao, descricao, StringComparison.OrdinalIgnoreCase))
+            ?? await db.CrmLossReasons.FirstOrDefaultAsync(m => m.Descricao.ToLower() == descricao.ToLower(), ct);
+        if (motivo is not null) return motivo;
+
+        // Motivos usados no Notion ("Não responde", "Financeiro"...) passam a existir também no CRM,
+        // disponíveis no diálogo de perda do quadro.
+        motivo = new CrmLossReason { Descricao = descricao.Length > 200 ? descricao[..200] : descricao };
+        db.CrmLossReasons.Add(motivo);
+        return motivo;
+    }
+
+    /// <summary>Todos os cards desde a data mínima, em fatias mensais (cada consulta do Notion tem teto de ~10 mil linhas).</summary>
+    private static async IAsyncEnumerable<JsonElement> PaginasParaRealinhamentoAsync(
+        NotionClient notion, string dataSourceId, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        var amanha = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
+        for (var inicio = DataMinimaImportacao; inicio < amanha; inicio = inicio.AddMonths(1))
+        {
+            var fim = inicio.AddMonths(1) < amanha ? inicio.AddMonths(1) : amanha;
+            await foreach (var page in notion.QueryCriadasEntreAsync(dataSourceId, inicio, fim, ct))
+            {
+                yield return page;
+            }
+        }
     }
 
     private async Task CriarOuAtualizarOportunidadeAsync(JsonElement page, CrmLead lead, Guid vendedorId, Guid ganhoStageId, CancellationToken ct)

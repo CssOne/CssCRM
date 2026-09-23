@@ -78,6 +78,17 @@ public sealed class NotionClient(string token)
         return QueryAsync(dataSourceId, filtro, ct);
     }
 
+    /// <summary>Linhas com "Data de chegada" (created_time) no intervalo [de, ate) — usado no realinhamento em fatias mensais.</summary>
+    public IAsyncEnumerable<JsonElement> QueryCriadasEntreAsync(string dataSourceId, DateOnly de, DateOnly ate, CancellationToken ct = default) =>
+        QueryAsync(dataSourceId, new
+        {
+            and = new object[]
+            {
+                new { property = "Data de chegada", created_time = new { on_or_after = de.ToString("yyyy-MM-dd") } },
+                new { property = "Data de chegada", created_time = new { before = ate.ToString("yyyy-MM-dd") } },
+            }
+        }, ct);
+
     public async IAsyncEnumerable<JsonElement> QueryAsync(string dataSourceId, object? filter, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
         string? cursor = null;

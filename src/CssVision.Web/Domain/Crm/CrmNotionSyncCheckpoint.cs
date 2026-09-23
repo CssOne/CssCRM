@@ -14,4 +14,10 @@ public class CrmNotionSyncCheckpoint
     public string RegionalNome { get; set; } = string.Empty;
 
     public DateTimeOffset UltimaSincronizacaoEm { get; set; }
+
+    /// <summary>
+    /// Quando a base foi relida inteira (cards a partir da data mínima de importação) para alinhar a
+    /// coluna de cada lead ao Status atual do Notion. Nulo = realinhamento ainda pendente.
+    /// </summary>
+    public DateTimeOffset? RealinhamentoConcluidoEm { get; set; }
 }

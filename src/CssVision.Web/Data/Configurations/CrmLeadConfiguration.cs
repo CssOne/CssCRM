@@ -35,6 +35,7 @@ public class CrmLeadConfiguration : IEntityTypeConfiguration<CrmLead>
         builder.Property(e => e.TipoIndicacao).HasMaxLength(80);
         builder.Property(e => e.MotivoPerdaObservacao).HasMaxLength(1000);
         builder.Property(e => e.VeiculoNaoAtendido).HasMaxLength(200);
+        builder.Property(e => e.NotionStatus).HasMaxLength(80);
         builder.Property(e => e.CriadoManualmente).HasDefaultValue(true);
 
         // Deduplicação: únicos apenas entre leads não arquivados, ignorando nulos.
