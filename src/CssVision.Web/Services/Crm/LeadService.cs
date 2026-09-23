@@ -623,7 +623,8 @@ public sealed class LeadService(
                 Guid? responsavelId = null;
                 if (!string.IsNullOrWhiteSpace(responsavelEmail) && usuariosPorEmail.TryGetValue(responsavelEmail, out var uid))
                 {
-                    if (await equipe.PodeAcessarVendedorAsync(uid, ct)) responsavelId = uid;
+                    // Respeita o limite mensal do consultor da planilha; se já bateu, vai pro rodízio.
+                    if (await equipe.PodeAcessarVendedorAsync(uid, ct) && await assignment.PodeReceberAsync(uid, ct)) responsavelId = uid;
                 }
                 responsavelId ??= await assignment.ProximoResponsavelAsync(ct);
 

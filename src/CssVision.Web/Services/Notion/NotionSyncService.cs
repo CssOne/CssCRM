@@ -242,11 +242,11 @@ public sealed class NotionSyncService(
                 TipoPessoa = documentoNormalizado?.Length == 14 ? TipoPessoa.Juridica : TipoPessoa.Fisica,
                 Regional = regionalNome,
                 Origem = "Sincronização Notion",
-                // Vendedor do card inativo no CRM (vendedorId nulo): o lead novo vai para a
-                // distribuição automática, que só considera consultores ativos.
-                ResponsavelId = vendedorId
-                    ?? (distribuicao is null ? null : await distribuicao.ProximoResponsavelAsync(ct))
-                    ?? placeholderVendedorId,
+                // Vendedor do card inativo no CRM (vendedorId nulo) ou que já bateu o limite mensal
+                // de leads: o lead novo vai para a distribuição automática (só ativos e abaixo do limite).
+                ResponsavelId = await VendedorPodeReceberAsync(vendedorId, placeholderVendedorId, ct)
+                    ? vendedorId!.Value
+                    : (distribuicao is null ? null : await distribuicao.ProximoResponsavelAsync(ct)) ?? placeholderVendedorId,
                 ConsentimentoContato = true,
                 ConsentimentoOrigem = "Sincronização automática (Notion)",
                 Arquivado = false,
@@ -280,8 +280,14 @@ public sealed class NotionSyncService(
         lead.MetaClickId = page.Text("[META] Click ID") ?? lead.MetaClickId;
         lead.MetaFormId = page.Text("[META] Form") ?? lead.MetaFormId;
         lead.MetaLeadId = page.Text("[META] Lead ID") ?? lead.MetaLeadId;
-        // Vendedor inativo: não devolve o lead para ele — mantém o responsável atual.
-        if (vendedorId is { } vendedorAtivo && vendedorAtivo != placeholderVendedorId) lead.ResponsavelId = vendedorAtivo;
+        // Troca de vendedor no card de um lead que já existia: só passa o lead se o novo vendedor
+        // estiver ativo e abaixo do limite mensal; senão mantém o responsável atual. (Lead novo já
+        // teve o responsável decidido acima.)
+        if (!criadoAgora && vendedorId is { } vendedorAtivo && vendedorAtivo != placeholderVendedorId && vendedorAtivo != lead.ResponsavelId
+            && await VendedorPodeReceberAsync(vendedorAtivo, placeholderVendedorId, ct))
+        {
+            lead.ResponsavelId = vendedorAtivo;
+        }
 
         if (isVendaConcluida)
         {
@@ -433,6 +439,13 @@ public sealed class NotionSyncService(
 
     private readonly Dictionary<string, Guid?> _vendedorPorEmailCache = new();
     private readonly Dictionary<Guid, Guid> _placeholderPorRegionalCache = new();
+
+    /// <summary>Vendedor identificado, ativo e abaixo do LimiteMensalLeads (o placeholder de migração não conta).</summary>
+    private async Task<bool> VendedorPodeReceberAsync(Guid? vendedorId, Guid placeholderVendedorId, CancellationToken ct)
+    {
+        if (vendedorId is not { } id || id == placeholderVendedorId) return vendedorId is not null;
+        return distribuicao is null || await distribuicao.PodeReceberAsync(id, ct);
+    }
 
     /// <returns>
     /// O consultor do campo "Vendedor" do card; o placeholder quando o card não tem vendedor; e
