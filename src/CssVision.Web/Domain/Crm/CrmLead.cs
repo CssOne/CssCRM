@@ -86,6 +86,13 @@ public class CrmLead : CrmArchivableEntity
     /// <summary>Modelo do veículo que motivou mover o lead para a etapa "Não fazemos" (veículo fora do que a CSS Brasil atende).</summary>
     public string? VeiculoNaoAtendido { get; set; }
 
+    /// <summary>
+    /// Último "Status" do Notion aplicado a este lead pela sincronização. Serve para detectar quando
+    /// o Status mudou lá — só então o lead troca de coluna, sem desfazer movimentos feitos no CRM
+    /// enquanto o Status no Notion continua o mesmo.
+    /// </summary>
+    public string? NotionStatus { get; set; }
+
     public Guid? ResponsavelId { get; set; }
     public ApplicationUser? Responsavel { get; set; }
 

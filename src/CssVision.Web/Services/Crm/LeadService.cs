@@ -17,7 +17,8 @@ public sealed class LeadService(
     IEquipeComercialService equipe,
     ILeadAssignmentService assignment,
     IMetaConversionService conversion,
-    IAuditSink audit) : ILeadService
+    IAuditSink audit,
+    ICrmEventHub? eventos = null) : ILeadService
 {
     /// <summary>Nome da etapa terminal "perdida" do quadro de leads — ver CrmSeeder.cs. CrmLeadStage
     /// não tem um enum de tipo como CrmPipelineStage, então a identidade da etapa é pelo nome mesmo.</summary>
@@ -263,6 +264,7 @@ public sealed class LeadService(
         await db.SaveChangesAsync(ct);
 
         await audit.RegistrarAsync("LeadCriado", nameof(CrmLead), lead.Id, new { lead.NomeOuRazaoSocial }, ct);
+        eventos?.PublicarQuadroAtualizado("crm");
 
         return new CriarLeadResultado(await ObterPorIdAsync(lead.Id, ct), null);
     }
@@ -448,6 +450,7 @@ public sealed class LeadService(
         }
 
         await audit.RegistrarAsync("LeadMudouEtapa", nameof(CrmLead), lead.Id, new { EtapaNova = request.NovaEtapaId }, ct);
+        eventos?.PublicarQuadroAtualizado("crm");
 
         // Retorno de conversão offline (CAPI): manda um evento pra toda mudança de etapa (nomeado
         // com a própria etapa) — qual delas vira otimização de campanha é escolhido no

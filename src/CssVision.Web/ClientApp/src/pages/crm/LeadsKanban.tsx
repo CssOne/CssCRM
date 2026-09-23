@@ -19,6 +19,7 @@ import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog"
 import { StageChangeDialog } from "../../components/crm/StageChangeDialog";
 import { VeiculoNaoFazemosDialog } from "../../components/crm/VeiculoNaoFazemosDialog";
 import { useAuth } from "../../context/AuthContext";
+import { useCrmEventos } from "../../lib/useCrmEventos";
 
 /** Prefixo comum das duas colunas "Em atendimento (Leads)"/"Em atendimento (Indicação)" — uma só
  * aceita cartões "Lead" e a outra só "Indicação" (ver classificarCartao/colunasEmAtendimento abaixo). */
@@ -152,6 +153,29 @@ export function LeadsKanbanPage() {
     carregar(controller.signal);
     return () => controller.abort();
   }, [carregar, recarregar]);
+
+  // Tempo real: quando o quadro muda (sincronização com o Notion ou outro usuário), recarrega sem
+  // piscar. Se a pessoa estiver arrastando um cartão ou com um diálogo de etapa aberto, espera ela
+  // terminar para não mexer no quadro debaixo dela.
+  const ocupado = !!cartaoArrastando || !!pendenciaVenda || !!pendenciaPerda || !!pendenciaNaoFazemos || enviando;
+  const ocupadoRef = useRef(ocupado);
+  ocupadoRef.current = ocupado;
+  const recargaPendenteRef = useRef(false);
+
+  useCrmEventos(() => {
+    if (ocupadoRef.current) {
+      recargaPendenteRef.current = true;
+    } else {
+      carregar(undefined, true);
+    }
+  });
+
+  useEffect(() => {
+    if (!ocupado && recargaPendenteRef.current) {
+      recargaPendenteRef.current = false;
+      carregar(undefined, true);
+    }
+  }, [ocupado, carregar]);
 
   function verMaisCartoes(chaveColuna: string) {
     setVisiveisPorColuna((atual) => ({
