@@ -10,4 +10,11 @@ public interface ILeadAssignmentService
     /// nesse caso o lead fica sem responsável, do mesmo jeito que fica sem etapa.
     /// </summary>
     Task<Guid?> ProximoResponsavelAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Se um usuário específico pode receber mais um lead que está chegando (sincronização do Notion
+    /// pelo "Vendedor" do card, planilha com o e-mail do responsável): precisa estar ativo e abaixo do
+    /// LimiteMensalLeads definido pelo administrador — mesma contagem usada no rodízio.
+    /// </summary>
+    Task<bool> PodeReceberAsync(Guid usuarioId, CancellationToken ct);
 }

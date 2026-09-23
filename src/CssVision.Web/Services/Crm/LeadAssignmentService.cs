@@ -14,7 +14,7 @@ public sealed class LeadAssignmentService(ApplicationDbContext db) : ILeadAssign
             .ToListAsync(ct);
         if (vendedores.Count == 0) return null;
 
-        var inicioMes = new DateTimeOffset(new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1), TimeSpan.Zero);
+        var inicioMes = InicioDoMes();
         var ids = vendedores.Select(v => v.Id).ToList();
 
         var recebidosNoMes = await db.CrmLeads.AsNoTracking()
@@ -31,4 +31,22 @@ public sealed class LeadAssignmentService(ApplicationDbContext db) : ILeadAssign
             .Select(v => (Guid?)v.Id)
             .FirstOrDefault();
     }
+
+    public async Task<bool> PodeReceberAsync(Guid usuarioId, CancellationToken ct)
+    {
+        var usuario = await db.Users.AsNoTracking()
+            .Where(u => u.Id == usuarioId)
+            .Select(u => new { u.Ativo, u.LimiteMensalLeads })
+            .FirstOrDefaultAsync(ct);
+        if (usuario is null || !usuario.Ativo) return false;
+        if (usuario.LimiteMensalLeads is null) return true;
+
+        var inicioMes = InicioDoMes();
+        var recebidos = await db.CrmLeads.AsNoTracking()
+            .CountAsync(l => l.ResponsavelId == usuarioId && l.CriadoEm >= inicioMes, ct);
+        return recebidos < usuario.LimiteMensalLeads;
+    }
+
+    private static DateTimeOffset InicioDoMes() =>
+        new(new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1), TimeSpan.Zero);
 }

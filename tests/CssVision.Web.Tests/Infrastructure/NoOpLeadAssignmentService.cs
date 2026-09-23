@@ -6,4 +6,6 @@ namespace CssVision.Web.Tests.Infrastructure;
 public sealed class NoOpLeadAssignmentService : ILeadAssignmentService
 {
     public Task<Guid?> ProximoResponsavelAsync(CancellationToken ct) => Task.FromResult<Guid?>(null);
+
+    public Task<bool> PodeReceberAsync(Guid usuarioId, CancellationToken ct) => Task.FromResult(true);
 }

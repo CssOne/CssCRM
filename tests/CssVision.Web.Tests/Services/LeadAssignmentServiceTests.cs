@@ -107,4 +107,42 @@ public class LeadAssignmentServiceTests
         var service = new LeadAssignmentService(db);
         Assert.Null(await service.ProximoResponsavelAsync(CancellationToken.None));
     }
+
+    [Theory]
+    [InlineData(null, 5, true)]  // sem limite definido: sempre pode
+    [InlineData(3, 2, true)]     // abaixo do limite
+    [InlineData(3, 3, false)]    // bateu o limite do mês
+    public async Task PodeReceberAsync_RespeitaOLimiteMensalDefinidoPeloAdmin(int? limite, int recebidosNoMes, bool esperado)
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var ana = await factory.CriarUsuarioAsync(db, "Ana Vendedora");
+        ana.LimiteMensalLeads = limite;
+        for (var i = 0; i < recebidosNoMes; i++)
+        {
+            db.CrmLeads.Add(new CrmLead { NomeOuRazaoSocial = $"Lead {i}", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id });
+        }
+        // Lead de mês anterior não conta no limite do mês atual.
+        db.CrmLeads.Add(new CrmLead { NomeOuRazaoSocial = "Antigo", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id });
+        await db.SaveChangesAsync();
+        var antigo = db.CrmLeads.Local.Single(l => l.NomeOuRazaoSocial == "Antigo");
+        antigo.CriadoEm = DateTimeOffset.UtcNow.AddMonths(-2);
+        await db.SaveChangesAsync();
+
+        var service = new LeadAssignmentService(db);
+        Assert.Equal(esperado, await service.PodeReceberAsync(ana.Id, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task PodeReceberAsync_UsuarioInativo_NaoRecebe()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var ana = await factory.CriarUsuarioAsync(db, "Ana Vendedora");
+        ana.Ativo = false;
+        await db.SaveChangesAsync();
+
+        var service = new LeadAssignmentService(db);
+        Assert.False(await service.PodeReceberAsync(ana.Id, CancellationToken.None));
+    }
 }
