@@ -522,9 +522,16 @@ export function LeadsKanbanPage() {
                     )}
                     {cartao.email && <p className="truncate text-xs text-[var(--fg-muted)]">{cartao.email}</p>}
                     {(cartao.estado || cartao.placa || cartao.utilidadeVeiculo) && (
-                      <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-[var(--fg-muted)]">
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--fg-muted)]">
+                        {cartao.placa && (
+                          <span
+                            title="Placa do veículo"
+                            className="rounded border border-[var(--border)] bg-[var(--surface-hover)] px-1.5 py-px font-mono font-medium tracking-wider text-[var(--fg)]"
+                          >
+                            {cartao.placa}
+                          </span>
+                        )}
                         {cartao.estado && <span>{cartao.estado}</span>}
-                        {cartao.placa && <span>Placa {cartao.placa}</span>}
                         {cartao.utilidadeVeiculo && <span>{cartao.utilidadeVeiculo}</span>}
                       </div>
                     )}

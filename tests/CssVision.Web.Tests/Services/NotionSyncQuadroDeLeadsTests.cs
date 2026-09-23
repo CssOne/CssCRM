@@ -49,6 +49,8 @@ public class NotionSyncQuadroDeLeadsTests
     [InlineData("EM ATENDIMENTO", "Indicação", "Em atendimento (Indicação)")]
     [InlineData("COTAÇÃO", "Lead", "Cotação")]
     [InlineData("PRÉ CADASTRO", "Lead", "Cotação")]
+    [InlineData("EM COTAÇÃO", "Lead", "Cotação")]
+    [InlineData("JÁ TEM SEGURO", "Lead", "Perdido")]
     [InlineData("VENDA CONCLUIDA", "Lead", "Venda concluída (Leads)")]
     [InlineData("VENDA CONCLUIDA", "Indicação", "Venda concluída (Indicação)")]
     [InlineData("PERDIDO", "Lead", "Perdido")]
@@ -140,6 +142,7 @@ public class NotionSyncQuadroDeLeadsTests
     [Theory]
     [InlineData("PERDIDO", "Não informado no Notion")]
     [InlineData("RECUSA/INATIVA", "Recusa/Inativa")]
+    [InlineData("JÁ TEM SEGURO", "Já tem seguro")]
     public async Task Perdido_SemMotivoNoNotion_RecebeMotivoPadrao(string status, string motivoEsperado)
     {
         using var factory = new TestDbContextFactory();
@@ -211,5 +214,17 @@ public class NotionSyncQuadroDeLeadsTests
 
         Assert.True(reconhecido);
         Assert.Equal(etapas["Venda concluída"], etapaId);
+    }
+
+    [Theory]
+    [InlineData("Uqn2a59", "UQN2A59")]
+    [InlineData(" abc-1d23 ", "ABC1D23")]
+    [InlineData("ABC 1234", "ABC1234")]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    [InlineData("placa grande demais", null)]
+    public void NormalizarPlaca_PadronizaAPlacaVindaDoNotion(string? bruta, string? esperada)
+    {
+        Assert.Equal(esperada, NotionSyncService.NormalizarPlaca(bruta));
     }
 }

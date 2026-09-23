@@ -51,4 +51,30 @@ public class LeadKanbanServiceTests
 
         Assert.Single(board.Colunas.SelectMany(c => c.Cartoes));
     }
+
+    [Fact]
+    public async Task ObterBoardAsync_CartaoMostraPlacaDoLead_OuDoVeiculoDaOportunidade()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
+        var etapaPipeline = await factory.CriarEtapaAsync(db, "Ganho", 1, TipoEtapaPipeline.Ganho);
+
+        var comPlaca = new CrmLead { NomeOuRazaoSocial = "Com placa", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id, Placa = "ABC1D23" };
+        var soNoVeiculo = new CrmLead { NomeOuRazaoSocial = "Placa no veículo", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
+        db.CrmLeads.AddRange(comPlaca, soNoVeiculo);
+        var oportunidade = new CrmOpportunity { LeadId = soNoVeiculo.Id, Titulo = "AGV", ResponsavelId = vendedor.Id, EtapaId = etapaPipeline.Id };
+        oportunidade.Veiculo = new CrmVeiculo { OpportunityId = oportunidade.Id, Placa = "XYZ9K87" };
+        db.CrmOpportunities.Add(oportunidade);
+        await db.SaveChangesAsync();
+
+        var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
+        var service = new LeadKanbanService(db, new EquipeComercialService(db, currentUser.Object));
+
+        var cartoes = (await service.ObterBoardAsync(new LeadKanbanFilterRequest(), CancellationToken.None))
+            .Colunas.SelectMany(c => c.Cartoes).ToDictionary(c => c.NomeOuRazaoSocial);
+
+        Assert.Equal("ABC1D23", cartoes["Com placa"].Placa);
+        Assert.Equal("XYZ9K87", cartoes["Placa no veículo"].Placa);
+    }
 }
