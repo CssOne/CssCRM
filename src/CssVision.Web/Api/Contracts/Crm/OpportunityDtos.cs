@@ -47,7 +47,9 @@ public record OpportunityDto(
     string? TermoAdesaoArquivoUrl,
     string? PagamentoAdesaoArquivoUrl,
     string? ComprovanteIndicacaoArquivoUrl,
-    string? ComprovanteVistoriaArquivoUrl);
+    string? ComprovanteVistoriaArquivoUrl,
+    /// <summary>Preenchido só quando o Meta confirma (HTTP 2xx) o recebimento da conversão offline — null se nunca tentou ou se falhou.</summary>
+    DateTimeOffset? ConversaoOfflineEnviadaEm);
 
 public record VeiculoDto(
     Guid Id,

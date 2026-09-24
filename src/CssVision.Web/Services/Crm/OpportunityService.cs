@@ -441,7 +441,8 @@ public sealed class OpportunityService(
         o.TermoAdesaoArquivoUrl,
         o.PagamentoAdesaoArquivoUrl,
         o.ComprovanteIndicacaoArquivoUrl,
-        o.ComprovanteVistoriaArquivoUrl);
+        o.ComprovanteVistoriaArquivoUrl,
+        o.ConversaoOfflineEnviadaEm);
 
     public async Task<OpportunityDto> AnexarArquivoAsync(Guid id, string tipo, IFormFile arquivo, CancellationToken ct)
     {
