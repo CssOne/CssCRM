@@ -63,7 +63,7 @@ public sealed class PublicLeadIntakeService(
             Observacoes = observacoes.Length == 0 ? null : observacoes,
             ConsentimentoContato = true,
             ConsentimentoDataEm = DateTimeOffset.UtcNow,
-            ConsentimentoOrigem = "Formulário do site",
+            ConsentimentoOrigem = OrigemLead.MarcadorFormularioSite,
             ResponsavelId = responsavelId,
             CriadoManualmente = false,
         };

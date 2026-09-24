@@ -68,6 +68,7 @@ export function LeadsKanbanPage() {
   const [origem, setOrigem] = useState("");
   const [incluirArquivados, setIncluirArquivados] = useState(false);
   const [categoria, setCategoria] = useState("");
+  const [fonte, setFonte] = useState("");
   const [dataChegadaInicio, setDataChegadaInicio] = useState("");
   const [dataChegadaFim, setDataChegadaFim] = useState("");
   const [dataVendaInicio, setDataVendaInicio] = useState("");
@@ -125,6 +126,7 @@ export function LeadsKanbanPage() {
       origem: origem || undefined,
       incluirArquivados: incluirArquivados || undefined,
       categoria: categoria || undefined,
+      fonte: fonte || undefined,
       dataChegadaInicio: dataChegadaInicio || undefined,
       dataChegadaFim: dataChegadaFim || undefined,
       dataVendaInicio: dataVendaInicio || undefined,
@@ -137,6 +139,7 @@ export function LeadsKanbanPage() {
       origem,
       incluirArquivados,
       categoria,
+      fonte,
       dataChegadaInicio,
       dataChegadaFim,
       dataVendaInicio,
@@ -201,6 +204,7 @@ export function LeadsKanbanPage() {
     setOrigem("");
     setIncluirArquivados(false);
     setCategoria("");
+    setFonte("");
     setDataChegadaInicio("");
     setDataChegadaFim("");
     setDataVendaInicio("");
@@ -356,6 +360,7 @@ export function LeadsKanbanPage() {
     origem ||
     incluirArquivados ||
     categoria ||
+    fonte ||
     dataChegadaInicio ||
     dataChegadaFim ||
     dataVendaInicio ||
@@ -419,6 +424,14 @@ export function LeadsKanbanPage() {
             <option value="Migração">Migração</option>
             <option value="Indicação">Indicação</option>
             <option value="Lead">Lead</option>
+          </Select>
+        </div>
+        <div className="w-44">
+          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Fonte</label>
+          <Select value={fonte} onChange={(e) => setFonte(e.target.value)}>
+            <option value="">Todas</option>
+            <option value="TrafegoPago">Tráfego pago</option>
+            <option value="Notion">Notion</option>
           </Select>
         </div>
         <div className="flex items-end gap-1">

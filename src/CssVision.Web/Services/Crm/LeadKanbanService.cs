@@ -57,6 +57,15 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
             _ => query,
         };
 
+        query = filtro.Fonte switch
+        {
+            "Notion" => query.Where(l => l.ConsentimentoOrigem == OrigemLead.MarcadorMigracaoNotion
+                || l.ConsentimentoOrigem == OrigemLead.MarcadorSincronizacaoNotion),
+            // Direto dos anúncios: webhook do Meta Lead Ads (tem o ID do lead no Meta) ou formulário do site.
+            "TrafegoPago" => query.Where(l => l.MetaLeadId != null || l.ConsentimentoOrigem == OrigemLead.MarcadorFormularioSite),
+            _ => query,
+        };
+
         if (filtro.DataChegadaInicio is { } chegadaInicio)
         {
             var inicioUtc = chegadaInicio.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);

@@ -125,4 +125,30 @@ public class LeadKanbanServiceTests
     {
         Assert.Equal(esperado, OrigemLead.TagDaCampanha(campanha));
     }
+
+    [Theory]
+    [InlineData("TrafegoPago", new[] { "Meta", "Site" })]
+    [InlineData("Notion", new[] { "Migrado", "Sincronizado" })]
+    [InlineData(null, new[] { "Manual", "Meta", "Migrado", "Site", "Sincronizado" })]
+    public async Task ObterBoardAsync_FiltroFonte_SeparaTrafegoPagoDeNotion(string? fonte, string[] esperados)
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
+        CrmLead Lead(string nome) => new() { NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
+        var meta = Lead("Meta"); meta.MetaLeadId = "123";
+        var site = Lead("Site"); site.ConsentimentoOrigem = OrigemLead.MarcadorFormularioSite;
+        var migrado = Lead("Migrado"); migrado.ConsentimentoOrigem = OrigemLead.MarcadorMigracaoNotion;
+        var sincronizado = Lead("Sincronizado"); sincronizado.ConsentimentoOrigem = OrigemLead.MarcadorSincronizacaoNotion;
+        db.CrmLeads.AddRange(meta, site, migrado, sincronizado, Lead("Manual"));
+        await db.SaveChangesAsync();
+
+        var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
+        var service = new LeadKanbanService(db, new EquipeComercialService(db, currentUser.Object));
+
+        var nomes = (await service.ObterBoardAsync(new LeadKanbanFilterRequest { Fonte = fonte }, CancellationToken.None))
+            .Colunas.SelectMany(c => c.Cartoes).Select(c => c.NomeOuRazaoSocial).OrderBy(n => n).ToArray();
+
+        Assert.Equal(esperados.OrderBy(n => n).ToArray(), nomes);
+    }
 }

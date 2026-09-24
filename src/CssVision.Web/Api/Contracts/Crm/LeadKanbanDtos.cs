@@ -53,6 +53,12 @@ public record LeadKanbanFilterRequest
     /// ver LeadKanbanService.ObterBoardAsync.</summary>
     public string? Categoria { get; init; }
 
+    /// <summary>
+    /// Por onde o lead entrou no CRM: "TrafegoPago" (direto dos anúncios — Meta Lead Ads e formulário
+    /// do site) ou "Notion" (migração histórica e sincronização). Ver LeadKanbanService.
+    /// </summary>
+    public string? Fonte { get; init; }
+
     public DateOnly? DataChegadaInicio { get; init; }
     public DateOnly? DataChegadaFim { get; init; }
 
