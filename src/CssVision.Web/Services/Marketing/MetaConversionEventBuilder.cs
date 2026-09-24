@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using CssVision.Web.Domain.Crm;
 
 namespace CssVision.Web.Services.Marketing;
@@ -12,11 +13,14 @@ namespace CssVision.Web.Services.Marketing;
 /// enviado pra toda mudança — a escolha de qual etapa vira otimização de campanha é feita no
 /// Gerenciador de Anúncios, não aqui.
 /// </summary>
-public static class MetaConversionEventBuilder
+public static partial class MetaConversionEventBuilder
 {
     private const string ActionSource = "system_generated";
     private const string PurchaseEventName = "Purchase";
     private const string DefaultCurrency = "BRL";
+
+    [GeneratedRegex(@"\s*\([^)]*\)\s*$")]
+    private static partial Regex SufixoParentesesRegex();
 
     public static MetaCapiPayload BuildVendaGanhaPayload(CrmLead lead, CrmOpportunity opportunity, MetaCapiOptions options)
     {
@@ -52,7 +56,7 @@ public static class MetaConversionEventBuilder
     {
         var userData = BuildUserData(lead);
         var evento = new MetaCapiEvent(
-            etapaNome,
+            NormalizarNomeEvento(etapaNome),
             ToUnixTime(DateTimeOffset.UtcNow),
             ActionSource,
             $"etapa_{lead.Id}_{etapaId}",
@@ -61,6 +65,16 @@ public static class MetaConversionEventBuilder
 
         return new MetaCapiPayload([evento]);
     }
+
+    /// <summary>
+    /// Remove um sufixo entre parênteses no final do nome da etapa (ex: "Venda concluída
+    /// (Leads)" -> "Venda concluída") antes de usar como nome do evento no Meta. Etapas divididas
+    /// por categoria (Leads/Indicação) continuam sendo o mesmo evento de conversão pro Meta —
+    /// senão cada divisão nova do quadro criaria um evento novo do zero, perdendo o histórico e a
+    /// otimização de campanha já configurada em cima do nome original.
+    /// </summary>
+    private static string NormalizarNomeEvento(string etapaNome) =>
+        SufixoParentesesRegex().Replace(etapaNome, "");
 
     private static MetaCapiUserData BuildUserData(CrmLead lead)
     {

@@ -128,4 +128,18 @@ public class MetaConversionEventBuilderTests
 
         Assert.Equal(payload1.Data[0].EventId, payload2.Data[0].EventId);
     }
+
+    [Theory]
+    [InlineData("Venda concluída (Leads)", "Venda concluída")]
+    [InlineData("Venda concluída (Indicação)", "Venda concluída")]
+    [InlineData("Cotação", "Cotação")]
+    public void BuildEtapaEventPayload_DeveRemoverSufixoEntreParenteses_DoNomeDoEvento(string etapaNome, string nomeEsperado)
+    {
+        var lead = new CrmLead { Id = Guid.NewGuid(), NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica };
+        var options = new MetaCapiOptions { PixelId = "123", AccessToken = "token" };
+
+        var payload = MetaConversionEventBuilder.BuildEtapaEventPayload(lead, Guid.NewGuid(), etapaNome, options);
+
+        Assert.Equal(nomeEsperado, payload.Data[0].EventName);
+    }
 }
