@@ -27,6 +27,9 @@ public sealed class LeadService(
     /// <summary>Nome da etapa "veículo fora do que a CSS Brasil atende" do quadro de leads — ver CrmSeeder.cs.</summary>
     private const string EtapaLeadNaoFazemos = "Não fazemos";
 
+    /// <summary>Etapa "Cotação" do quadro de leads — só entra com o valor da adesão preenchido.</summary>
+    private const string EtapaLeadCotacao = "Cotação";
+
     /// <summary>
     /// O campo Origem (de onde veio o lead) é informação só de administrador (Admin/GestorMaster):
     /// consultores e gestores comerciais não o recebem pela API, nem podem filtrar por ele.
@@ -410,6 +413,16 @@ public sealed class LeadService(
             novaEtapa = await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Id == request.NovaEtapaId, ct)
                 ?? throw new CrmNotFoundException("Etapa de lead", request.NovaEtapaId.Value);
             lead.EtapaId = novaEtapa.Id;
+
+            if (novaEtapa.Nome == EtapaLeadCotacao)
+            {
+                var valorAdesao = request.ValorAdesao ?? lead.ValorAdesao;
+                if (valorAdesao is not > 0)
+                {
+                    throw new CrmBusinessException("Informe o valor da adesão para mover o lead para 'Cotação'.", "valor_adesao_obrigatorio");
+                }
+                lead.ValorAdesao = valorAdesao;
+            }
 
             if (novaEtapa.Nome == EtapaLeadPerdido)
             {
@@ -929,5 +942,6 @@ public sealed class LeadService(
         lead.CriadoEm,
         lead.AtualizadoEm,
         lead.RowVersion,
-        lead.Arquivado);
+        lead.Arquivado,
+        lead.ValorAdesao);
 }

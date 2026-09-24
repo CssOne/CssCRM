@@ -5,8 +5,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CssVision.Web.Services.Crm;
 
+/// <summary>
+/// Quadro de leads. A base tem dezenas de milhares de leads, então nada é carregado inteiro: cada
+/// coluna traz só os cartões mais recentes (<see cref="LeadKanbanFilterRequest.CartoesPorColuna"/>) e
+/// o total dela, contado no banco; "Ver mais" busca a próxima página de uma coluna
+/// (<see cref="ObterCartoesAsync"/>). Os cartões são projetados direto em SQL — só os campos exibidos.
+/// </summary>
 public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialService equipe) : ILeadKanbanService
 {
+    private const int MaxCartoesPorPagina = 200;
+
     public async Task<LeadKanbanBoardDto> ObterBoardAsync(LeadKanbanFilterRequest filtro, CancellationToken ct)
     {
         var etapas = await db.CrmLeadStages.AsNoTracking()
@@ -14,11 +22,84 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
             .OrderBy(s => s.Ordem)
             .ToListAsync(ct);
 
-        var query = db.CrmLeads.AsNoTracking()
-            .Include(l => l.Responsavel)
-            .Include(l => l.LeadTags).ThenInclude(lt => lt.Tag)
-            .Include(l => l.Oportunidades).ThenInclude(o => o.Veiculo)
-            .AsQueryable();
+        var (query, podeVerOrigem) = await FiltrarAsync(filtro, ct);
+        var porPagina = Math.Clamp(filtro.CartoesPorColuna, 1, MaxCartoesPorPagina);
+
+        var totais = await query
+            .GroupBy(l => l.EtapaId)
+            .Select(g => new { EtapaId = g.Key, Quantidade = g.Count() })
+            .ToListAsync(ct);
+        int Total(Guid? etapaId) => totais.FirstOrDefault(t => t.EtapaId == etapaId)?.Quantidade ?? 0;
+
+        // Coluna virtual (sem linha em CrmLeadStage): leads que ainda não foram trabalhados por
+        // ninguém. Fica sempre em primeiro, pra vendedora enxergar de cara quem ainda não pegou.
+        var colunas = new List<LeadKanbanColumnDto>
+        {
+            new(new LeadStageDto(null, "Sem etapa", -1, "#94a3b8", false, true),
+                Total(null) == 0 ? [] : await PaginaAsync(query, null, 0, porPagina, podeVerOrigem, ct),
+                Total(null)),
+        };
+
+        foreach (var etapa in etapas)
+        {
+            var total = Total(etapa.Id);
+            var cartoes = total == 0 ? [] : await PaginaAsync(query, etapa.Id, 0, porPagina, podeVerOrigem, ct);
+            colunas.Add(new LeadKanbanColumnDto(
+                new LeadStageDto(etapa.Id, etapa.Nome, etapa.Ordem, etapa.Cor, etapa.Fechada, etapa.Ativa), cartoes, total));
+        }
+
+        return new LeadKanbanBoardDto(colunas);
+    }
+
+    public async Task<IReadOnlyList<LeadKanbanCardDto>> ObterCartoesAsync(LeadKanbanColunaRequest request, CancellationToken ct)
+    {
+        var (query, podeVerOrigem) = await FiltrarAsync(request, ct);
+        var quantidade = Math.Clamp(request.Quantidade, 1, MaxCartoesPorPagina);
+        return await PaginaAsync(query, request.EtapaId, Math.Max(0, request.Pular), quantidade, podeVerOrigem, ct);
+    }
+
+    /// <summary>Uma página de cartões de uma coluna (EtapaId nulo = "Sem etapa"), dos mais recentes para os mais antigos.</summary>
+    private static async Task<IReadOnlyList<LeadKanbanCardDto>> PaginaAsync(
+        IQueryable<CrmLead> query, Guid? etapaId, int pular, int quantidade, bool podeVerOrigem, CancellationToken ct)
+    {
+        var linhas = await query
+            .Where(l => l.EtapaId == etapaId)
+            .OrderByDescending(l => l.CriadoEm)
+            .ThenBy(l => l.Id)
+            .Skip(pular)
+            .Take(quantidade)
+            .Select(l => new
+            {
+                l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Telefone2, l.Email, l.Estado, l.Origem, l.Campanha,
+                l.Placa, l.TemSeguro, l.UtilidadeVeiculo, l.TipoIndicacao, l.CriadoManualmente,
+                l.ResponsavelId,
+                ResponsavelNome = l.Responsavel != null ? l.Responsavel.NomeCompleto : null,
+                Tags = l.LeadTags.Select(lt => lt.Tag.Nome).ToList(),
+                l.CriadoEm, l.UltimoContatoEm, l.Arquivado, l.RowVersion, l.ProdutoInteresse, l.ValorAdesao,
+                // A oportunidade mais recente é a fonte dos selos Migração/Indicação — normalmente é a
+                // que fechou a venda (o lead só chega na coluna "Venda concluída" depois disso).
+                Oportunidade = l.Oportunidades
+                    .OrderByDescending(o => o.CriadoEm)
+                    .Select(o => new { o.Migracao, o.Indicacao, Placa = o.Veiculo != null ? o.Veiculo.Placa : null })
+                    .FirstOrDefault(),
+            })
+            .ToListAsync(ct);
+
+        return linhas.Select(l => new LeadKanbanCardDto(
+            l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Telefone2, l.Email, l.Estado, podeVerOrigem ? l.Origem : null, l.Campanha,
+            // Placa do lead; se ainda não tiver, a do veículo da oportunidade mais recente.
+            l.Placa ?? l.Oportunidade?.Placa, l.TemSeguro, l.UtilidadeVeiculo, l.TipoIndicacao,
+            l.Oportunidade?.Migracao ?? false, l.Oportunidade?.Indicacao, l.CriadoManualmente,
+            l.ResponsavelId, l.ResponsavelNome, l.Tags,
+            // "Sem contato" reflete se o lead tem ALGUM telefone cadastrado — some sozinho assim que
+            // um telefone é preenchido.
+            l.CriadoEm, l.UltimoContatoEm, string.IsNullOrWhiteSpace(l.Telefone) && string.IsNullOrWhiteSpace(l.Telefone2),
+            l.Arquivado, l.RowVersion, l.ProdutoInteresse, l.ValorAdesao)).ToList();
+    }
+
+    private async Task<(IQueryable<CrmLead> Query, bool PodeVerOrigem)> FiltrarAsync(LeadKanbanFilterRequest filtro, CancellationToken ct)
+    {
+        var query = db.CrmLeads.AsNoTracking();
 
         if (!filtro.IncluirArquivados) query = query.Where(l => !l.Arquivado);
         if (filtro.CriadoManualmente.HasValue) query = query.Where(l => l.CriadoManualmente == filtro.CriadoManualmente.Value);
@@ -57,6 +138,15 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
             _ => query,
         };
 
+        query = filtro.Fonte switch
+        {
+            "Notion" => query.Where(l => l.ConsentimentoOrigem == OrigemLead.MarcadorMigracaoNotion
+                || l.ConsentimentoOrigem == OrigemLead.MarcadorSincronizacaoNotion),
+            // Direto dos anúncios: webhook do Meta Lead Ads (tem o ID do lead no Meta) ou formulário do site.
+            "TrafegoPago" => query.Where(l => l.MetaLeadId != null || l.ConsentimentoOrigem == OrigemLead.MarcadorFormularioSite),
+            _ => query,
+        };
+
         if (filtro.DataChegadaInicio is { } chegadaInicio)
         {
             var inicioUtc = chegadaInicio.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
@@ -78,45 +168,6 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
             query = query.Where(l => l.Oportunidades.Any(o => o.DataEfetivaFechamento <= fimUtc));
         }
 
-        var leads = await query.ToListAsync(ct);
-
-        LeadKanbanCardDto ParaCartao(CrmLead l)
-        {
-            // A oportunidade mais recente é a fonte dos selos Migração/Indicação — normalmente é a
-            // que fechou a venda (o lead só chega na coluna "Venda concluída" depois disso).
-            var oportunidade = l.Oportunidades.OrderByDescending(o => o.CriadoEm).FirstOrDefault();
-            // "Sem contato" agora reflete se o lead tem ALGUM telefone cadastrado (não mais se já
-            // houve uma atividade registrada) — some sozinho assim que um telefone é preenchido.
-            var semTelefone = string.IsNullOrWhiteSpace(l.Telefone) && string.IsNullOrWhiteSpace(l.Telefone2);
-            return new(
-                l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Telefone2, l.Email, l.Estado, podeVerOrigem ? l.Origem : null, l.Campanha,
-                // Placa do lead; se ainda não tiver, a do veículo da oportunidade mais recente.
-                l.Placa ?? oportunidade?.Veiculo?.Placa, l.TemSeguro, l.UtilidadeVeiculo, l.TipoIndicacao,
-                oportunidade?.Migracao ?? false, oportunidade?.Indicacao, l.CriadoManualmente,
-                l.ResponsavelId, l.Responsavel?.NomeCompleto,
-                l.LeadTags.Select(lt => lt.Tag.Nome).ToList(),
-                l.CriadoEm, l.UltimoContatoEm, semTelefone, l.Arquivado, l.RowVersion, l.ProdutoInteresse);
-        }
-
-        // Coluna virtual (sem linha em CrmLeadStage): leads que ainda não foram trabalhados por
-        // ninguém. Fica sempre em primeiro, pra vendedora enxergar de cara quem ainda não pegou.
-        var semEtapa = new LeadKanbanColumnDto(
-            new LeadStageDto(null, "Sem etapa", -1, "#94a3b8", false, true),
-            leads.Where(l => l.EtapaId is null).OrderByDescending(l => l.CriadoEm).Select(ParaCartao).ToList());
-
-        var colunas = new List<LeadKanbanColumnDto> { semEtapa };
-        colunas.AddRange(etapas.Select(etapa =>
-        {
-            var cartoes = leads
-                .Where(l => l.EtapaId == etapa.Id)
-                .OrderByDescending(l => l.CriadoEm)
-                .Select(ParaCartao)
-                .ToList();
-
-            var etapaDto = new LeadStageDto(etapa.Id, etapa.Nome, etapa.Ordem, etapa.Cor, etapa.Fechada, etapa.Ativa);
-            return new LeadKanbanColumnDto(etapaDto, cartoes);
-        }));
-
-        return new LeadKanbanBoardDto(colunas);
+        return (query, podeVerOrigem);
     }
 }

@@ -14,6 +14,9 @@ public static class OrigemLead
     /// <summary>Marcador gravado pela sincronização periódica (NotionSyncService).</summary>
     public const string MarcadorSincronizacaoNotion = "Sincronização automática (Notion)";
 
+    /// <summary>Marcador gravado pela entrada de leads do site (PublicLeadIntakeService).</summary>
+    public const string MarcadorFormularioSite = "Formulário do site";
+
     public const string OrigemMigracaoNotion = "Migração Notion";
     public const string OrigemSincronizacaoNotion = "Sincronização Notion";
 

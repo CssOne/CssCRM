@@ -20,6 +20,10 @@ public class CrmLeadsController(ILeadService leadService, ILeadKanbanService kan
     public async Task<ActionResult<LeadKanbanBoardDto>> ObterKanban([FromQuery] LeadKanbanFilterRequest filtro, CancellationToken ct) =>
         Ok(await kanbanService.ObterBoardAsync(filtro, ct));
 
+    [HttpGet("kanban/coluna")]
+    public async Task<ActionResult<IReadOnlyList<LeadKanbanCardDto>>> ObterCartoesDaColuna([FromQuery] LeadKanbanColunaRequest request, CancellationToken ct) =>
+        Ok(await kanbanService.ObterCartoesAsync(request, ct));
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<LeadDetailDto>> ObterPorId(Guid id, CancellationToken ct) =>
         Ok(await leadService.ObterPorIdAsync(id, ct));

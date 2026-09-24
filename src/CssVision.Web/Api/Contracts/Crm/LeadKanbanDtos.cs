@@ -28,9 +28,14 @@ public record LeadKanbanCardDto(
     bool Arquivado,
     uint RowVersion,
     /// <summary>"O que?" — produto de interesse (AGV, AGV ELÉTRICO, AGV TRUCK...), visível para todos.</summary>
-    string? OQue = null);
+    string? OQue = null,
+    decimal? ValorAdesao = null);
 
-public record LeadKanbanColumnDto(LeadStageDto Etapa, IReadOnlyList<LeadKanbanCardDto> Cartoes);
+/// <summary>
+/// Coluna do quadro. <see cref="Cartoes"/> traz só a primeira página (os mais recentes);
+/// <see cref="Total"/> é a quantidade de leads da coluna inteira — o restante vem por "Ver mais".
+/// </summary>
+public record LeadKanbanColumnDto(LeadStageDto Etapa, IReadOnlyList<LeadKanbanCardDto> Cartoes, int Total);
 
 public record LeadKanbanBoardDto(IReadOnlyList<LeadKanbanColumnDto> Colunas);
 
@@ -52,12 +57,29 @@ public record LeadKanbanFilterRequest
     /// ver LeadKanbanService.ObterBoardAsync.</summary>
     public string? Categoria { get; init; }
 
+    /// <summary>
+    /// Por onde o lead entrou no CRM: "TrafegoPago" (direto dos anúncios — Meta Lead Ads e formulário
+    /// do site) ou "Notion" (migração histórica e sincronização). Ver LeadKanbanService.
+    /// </summary>
+    public string? Fonte { get; init; }
+
     public DateOnly? DataChegadaInicio { get; init; }
     public DateOnly? DataChegadaFim { get; init; }
 
     /// <summary>Filtra pela data efetiva de fechamento (venda) de alguma oportunidade do lead.</summary>
     public DateOnly? DataVendaInicio { get; init; }
     public DateOnly? DataVendaFim { get; init; }
+
+    /// <summary>Quantos cartões cada coluna traz na carga do quadro (os mais recentes). Máximo 200.</summary>
+    public int CartoesPorColuna { get; init; } = 30;
+}
+
+/// <summary>"Ver mais" de uma coluna: os mesmos filtros do quadro + a coluna (EtapaId nulo = "Sem etapa") e a página.</summary>
+public record LeadKanbanColunaRequest : LeadKanbanFilterRequest
+{
+    public Guid? EtapaId { get; init; }
+    public int Pular { get; init; }
+    public int Quantidade { get; init; } = 30;
 }
 
 /// <summary>NovaEtapaId nulo move o lead de volta pra "Sem etapa" (desmarca). MotivoPerdaId é obrigatório
@@ -69,6 +91,8 @@ public record ChangeLeadStageRequest(
     uint RowVersion,
     Guid? MotivoPerdaId = null,
     string? MotivoPerdaObservacao = null,
-    string? VeiculoNaoAtendido = null);
+    string? VeiculoNaoAtendido = null,
+    /// <summary>Valor da adesão — obrigatório ao mover para "Cotação" (ver LeadService.MudarEtapaAsync).</summary>
+    decimal? ValorAdesao = null);
 
 public record CreateLeadStageRequest(string Nome, int Ordem, string? Cor, bool Fechada);

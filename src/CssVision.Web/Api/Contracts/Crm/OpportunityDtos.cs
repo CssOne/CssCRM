@@ -102,7 +102,14 @@ public record OpportunityCreateRequest(
     decimal? Porcentagem,
     bool TermoAdesaoAceito,
     bool Migracao,
-    VeiculoUpsertRequest? Veiculo);
+    VeiculoUpsertRequest? Veiculo,
+    // Campos do formulário de Venda concluída, que a criação de oportunidade passou a usar.
+    string? Cpf = null,
+    string? Estado = null,
+    bool? Indicacao = null,
+    string? TipoIndicacao = null,
+    decimal? ValorIndicacao = null,
+    decimal? Total = null);
 
 public record OpportunityUpdateRequest(
     string Titulo,

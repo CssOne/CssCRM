@@ -3,6 +3,7 @@ using System;
 using CssVision.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CssVision.Web.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260924112813_ValorAdesaoDoLead")]
+    partial class ValorAdesaoDoLead
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -544,8 +547,6 @@ namespace CssVision.Web.Data.Migrations
                     b.HasIndex("TelefoneNormalizado");
 
                     b.HasIndex("UltimoContatoEm");
-
-                    b.HasIndex("EtapaId", "CriadoEm");
 
                     b.ToTable("CrmLeads", (string)null);
                 });
