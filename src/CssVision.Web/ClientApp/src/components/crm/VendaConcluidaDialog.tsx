@@ -26,7 +26,13 @@ const valoresIniciais: DadosVendaConcluida = {
   porcentagem: null,
   migracao: false,
   veiculo: { descricao: "", placa: "", fipe: null, rastreador: null, valorVistoria: null, vistoriadorId: null, dataChegada: "" },
+  dataPagamentoAdesaoPrevista: null,
 };
+
+function hojeLocal() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 /** Preenche o formulário com o que já está salvo numa oportunidade (só os campos preenchidos nela). */
 function mesclarOportunidade(v: DadosVendaConcluida, o: Opportunity): DadosVendaConcluida {
@@ -45,6 +51,7 @@ function mesclarOportunidade(v: DadosVendaConcluida, o: Opportunity): DadosVenda
     pagamentoAdesao: o.pagamentoAdesao ?? v.pagamentoAdesao,
     porcentagem: o.porcentagem ?? v.porcentagem,
     migracao: o.migracao || v.migracao,
+    dataPagamentoAdesaoPrevista: o.dataPagamentoAdesaoPrevista ?? v.dataPagamentoAdesaoPrevista,
     veiculo: {
       ...v.veiculo,
       descricao: o.veiculo?.descricao || v.veiculo?.descricao || "",
@@ -143,6 +150,7 @@ export function VendaConcluidaDialog({
         pagamentoAdesao: oportunidadeEditar.pagamentoAdesao ?? null,
         porcentagem: oportunidadeEditar.porcentagem ?? null,
         migracao: oportunidadeEditar.migracao ?? false,
+        dataPagamentoAdesaoPrevista: oportunidadeEditar.dataPagamentoAdesaoPrevista ?? null,
         veiculo: {
           descricao: oportunidadeEditar.veiculo?.descricao ?? "",
           placa: oportunidadeEditar.veiculo?.placa ?? "",
@@ -228,6 +236,9 @@ export function VendaConcluidaDialog({
   }
 
   const indicacaoPreenchida = !valores.indicacao || (!!valores.tipoIndicacao && (valores.valorIndicacao ?? -1) >= 0);
+  // Adesão paga depois: com a data do pagamento marcada, o comprovante deixa de ser obrigatório.
+  const pagamentoAgendado = !!valores.dataPagamentoAdesaoPrevista;
+  const temComprovantePagamento = !!pagamentoArquivo || !!oportunidadeEditar?.pagamentoAdesaoArquivoUrl;
 
   const podeConfirmar = !ehVenda
     ? !!nomeCliente.trim() && !enviandoArquivos && !enviando
@@ -247,7 +258,7 @@ export function VendaConcluidaDialog({
     (!temRastreador || (valores.veiculo?.rastreador ?? -1) >= 0) &&
     (!temVistoria || (valores.veiculo?.valorVistoria ?? -1) >= 0) &&
     (!!termoArquivo || !!oportunidadeEditar?.termoAdesaoArquivoUrl) &&
-    (!!pagamentoArquivo || !!oportunidadeEditar?.pagamentoAdesaoArquivoUrl) &&
+    (temComprovantePagamento || pagamentoAgendado) &&
     !enviandoArquivos &&
     !enviando;
 
@@ -303,7 +314,7 @@ export function VendaConcluidaDialog({
     if (!ehVenda) return criarOportunidade();
     if (!leadId) return;
     const precisaTermo = !termoArquivo && !oportunidadeEditar?.termoAdesaoArquivoUrl;
-    const precisaPagamento = !pagamentoArquivo && !oportunidadeEditar?.pagamentoAdesaoArquivoUrl;
+    const precisaPagamento = !temComprovantePagamento && !pagamentoAgendado;
     if (precisaTermo || precisaPagamento) return;
     setEnviandoArquivos(true);
 
@@ -378,6 +389,7 @@ export function VendaConcluidaDialog({
         valorIndicacao: valores.valorIndicacao,
         total: valores.total,
         dataEfetivaFechamento: valores.dataEfetivaFechamento || null,
+        dataPagamentoAdesaoPrevista: valores.dataPagamentoAdesaoPrevista || null,
       };
       try {
         await api.put(`/crm/opportunities/${idOportunidade}`, payload);
@@ -396,6 +408,7 @@ export function VendaConcluidaDialog({
       rowVersion: rowVersionAtual,
       ativoEm: valores.dataEfetivaFechamento || null,
       veiculo: veiculoFinal,
+      dataPagamentoAdesaoPrevista: valores.dataPagamentoAdesaoPrevista || null,
     };
 
     if (opportunityId) {
@@ -625,9 +638,24 @@ export function VendaConcluidaDialog({
               label="Comprovante de pagamento da adesão"
               arquivo={pagamentoArquivo}
               onSelecionar={setPagamentoArquivo}
-              obrigatorio={ehVenda && !oportunidadeEditar?.pagamentoAdesaoArquivoUrl}
+              obrigatorio={ehVenda && !oportunidadeEditar?.pagamentoAdesaoArquivoUrl && !pagamentoAgendado}
               jaEnviado={!!oportunidadeEditar?.pagamentoAdesaoArquivoUrl}
             />
+            {ehVenda && !temComprovantePagamento && (
+              <div className="sm:col-start-2">
+                <Label htmlFor="venda-data-pagamento-adesao">Adesão será paga em</Label>
+                <Input
+                  id="venda-data-pagamento-adesao"
+                  type="date"
+                  min={oportunidadeEditar ? undefined : hojeLocal()}
+                  value={valores.dataPagamentoAdesaoPrevista ?? ""}
+                  onChange={(e) => set("dataPagamentoAdesaoPrevista", e.target.value || null)}
+                />
+                <p className="mt-1 text-xs text-[var(--fg-muted)]">
+                  Se a adesão não foi paga hoje, marque a data: o comprovante fica dispensado e você recebe um lembrete nesse dia.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

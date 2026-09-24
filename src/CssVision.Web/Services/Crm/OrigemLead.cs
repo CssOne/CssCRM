@@ -17,6 +17,16 @@ public static class OrigemLead
     /// <summary>Marcador gravado pela entrada de leads do site (PublicLeadIntakeService).</summary>
     public const string MarcadorFormularioSite = "Formulário do site";
 
+    /// <summary>
+    /// Lead que chegou direto do tráfego pago (webhook do Meta Lead Ads ou formulário do site), sem ser
+    /// da migração/sincronização do Notion — cards migrados também podem trazer o ID do lead no Meta.
+    /// É o que conta no limite mensal de cada consultor e o que é distribuído automaticamente.
+    /// </summary>
+    public static readonly System.Linq.Expressions.Expression<Func<Domain.Crm.CrmLead, bool>> VeioDoTrafegoPago = l =>
+        l.ConsentimentoOrigem != MarcadorMigracaoNotion
+        && l.ConsentimentoOrigem != MarcadorSincronizacaoNotion
+        && (l.MetaLeadId != null || l.ConsentimentoOrigem == MarcadorFormularioSite);
+
     public const string OrigemMigracaoNotion = "Migração Notion";
     public const string OrigemSincronizacaoNotion = "Sincronização Notion";
 

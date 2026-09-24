@@ -3,6 +3,7 @@ using System;
 using CssVision.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CssVision.Web.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260924130954_DataPagamentoAdesaoPrevista")]
+    partial class DataPagamentoAdesaoPrevista
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -440,9 +443,6 @@ namespace CssVision.Web.Data.Migrations
                     b.Property<string>("Regional")
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
-
-                    b.Property<DateTimeOffset?>("ResponsavelAtribuidoEm")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("ResponsavelId")
                         .HasColumnType("uuid");

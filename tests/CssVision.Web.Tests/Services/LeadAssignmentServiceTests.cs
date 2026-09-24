@@ -47,8 +47,8 @@ public class LeadAssignmentServiceTests
 
         // Ana já recebeu 2 este mês, Bruna nenhum — deve escolher Bruna mesmo Ana vindo antes no alfabeto.
         db.CrmLeads.AddRange(
-            new CrmLead { NomeOuRazaoSocial = "L1", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id },
-            new CrmLead { NomeOuRazaoSocial = "L2", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id });
+            new CrmLead { NomeOuRazaoSocial = "L1", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, MetaLeadId = Guid.NewGuid().ToString() },
+            new CrmLead { NomeOuRazaoSocial = "L2", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, MetaLeadId = Guid.NewGuid().ToString() });
         await db.SaveChangesAsync();
 
         var service = new LeadAssignmentService(db);
@@ -68,7 +68,7 @@ public class LeadAssignmentServiceTests
         await factory.AtribuirPapelAsync(db, bruna, Roles.Comercial);
 
         ana.LimiteMensalLeads = 1;
-        db.CrmLeads.Add(new CrmLead { NomeOuRazaoSocial = "L1", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id });
+        db.CrmLeads.Add(new CrmLead { NomeOuRazaoSocial = "L1", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, MetaLeadId = Guid.NewGuid().ToString() });
         await db.SaveChangesAsync();
 
         var service = new LeadAssignmentService(db);
@@ -87,7 +87,7 @@ public class LeadAssignmentServiceTests
         await factory.AtribuirPapelAsync(db, ana, Roles.Comercial);
 
         ana.LimiteMensalLeads = 1;
-        db.CrmLeads.Add(new CrmLead { NomeOuRazaoSocial = "L1", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id });
+        db.CrmLeads.Add(new CrmLead { NomeOuRazaoSocial = "L1", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, MetaLeadId = Guid.NewGuid().ToString() });
         await db.SaveChangesAsync();
 
         var service = new LeadAssignmentService(db);
@@ -120,10 +120,10 @@ public class LeadAssignmentServiceTests
         ana.LimiteMensalLeads = limite;
         for (var i = 0; i < recebidosNoMes; i++)
         {
-            db.CrmLeads.Add(new CrmLead { NomeOuRazaoSocial = $"Lead {i}", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id });
+            db.CrmLeads.Add(new CrmLead { NomeOuRazaoSocial = $"Lead {i}", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, MetaLeadId = Guid.NewGuid().ToString() });
         }
         // Lead de mês anterior não conta no limite do mês atual.
-        db.CrmLeads.Add(new CrmLead { NomeOuRazaoSocial = "Antigo", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id });
+        db.CrmLeads.Add(new CrmLead { NomeOuRazaoSocial = "Antigo", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, MetaLeadId = Guid.NewGuid().ToString() });
         await db.SaveChangesAsync();
         var antigo = db.CrmLeads.Local.Single(l => l.NomeOuRazaoSocial == "Antigo");
         antigo.CriadoEm = DateTimeOffset.UtcNow.AddMonths(-2);

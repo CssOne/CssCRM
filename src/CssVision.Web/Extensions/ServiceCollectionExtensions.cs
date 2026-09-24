@@ -93,6 +93,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILeadService, LeadService>();
         services.AddScoped<ILeadKanbanService, LeadKanbanService>();
         services.AddScoped<ILeadAssignmentService, LeadAssignmentService>();
+        services.AddHostedService<DistribuicaoLeadsBackgroundService>();
         services.AddScoped<IOpportunityService, OpportunityService>();
         services.AddScoped<IPipelineService, PipelineService>();
         services.AddScoped<IActivityService, ActivityService>();

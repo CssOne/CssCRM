@@ -23,7 +23,9 @@ public class CrmEventosController(ICrmEventHub eventos) : ControllerBase
     public async Task Eventos(CancellationToken ct)
     {
         Response.Headers.ContentType = "text/event-stream";
-        Response.Headers.CacheControl = "no-cache";
+        // no-transform: o Caddy (encode gzip) não comprime nem segura o stream — comprimido, os eventos
+        // podiam ficar presos no proxy e a tela dos outros usuários não atualizava.
+        Response.Headers.CacheControl = "no-cache, no-transform";
         Response.Headers["X-Accel-Buffering"] = "no";
 
         using var assinatura = eventos.Assinar();

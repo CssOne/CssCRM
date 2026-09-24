@@ -15,7 +15,8 @@ public sealed class MetaLeadIngestionService(
     ApplicationDbContext db,
     IMetaGraphClient graph,
     ILeadAssignmentService assignment,
-    ILogger<MetaLeadIngestionService> logger)
+    ILogger<MetaLeadIngestionService> logger,
+    ICrmEventHub? eventos = null)
 {
     public async Task ProcessLeadEventAsync(string leadgenId, string? formId, CancellationToken ct)
     {
@@ -82,6 +83,7 @@ public sealed class MetaLeadIngestionService(
 
         db.CrmLeads.Add(lead);
         await db.SaveChangesAsync(ct);
+        eventos?.PublicarQuadroAtualizado("meta");
 
         logger.LogInformation("Lead {LeadgenId} criado a partir do webhook da Meta (form {FormId}, campanha {Campanha})", leadgenId, formId, campanha);
     }

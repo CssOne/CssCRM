@@ -109,5 +109,16 @@ public class ApplicationDbContext(
                     break;
             }
         }
+
+        // Lead que ganhou responsável (criado já atribuído, distribuído ou transferido): marca o momento.
+        foreach (var entry in ChangeTracker.Entries<CrmLead>())
+        {
+            var responsavel = entry.Property(l => l.ResponsavelId);
+            var ganhouResponsavel = entry.State == EntityState.Added
+                ? entry.Entity.ResponsavelId is not null
+                : entry.State == EntityState.Modified && responsavel.IsModified && entry.Entity.ResponsavelId is not null
+                    && !Equals(responsavel.OriginalValue, responsavel.CurrentValue);
+            if (ganhouResponsavel) entry.Entity.ResponsavelAtribuidoEm = agora;
+        }
     }
 }

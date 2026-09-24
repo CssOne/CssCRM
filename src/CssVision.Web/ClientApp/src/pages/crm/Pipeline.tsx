@@ -8,6 +8,7 @@ import { Badge, ConfirmDialog, EmptyState, ErrorState, Modal, Skeleton, useToast
 import { useAuth } from "../../context/AuthContext";
 import { StageChangeDialog } from "../../components/crm/StageChangeDialog";
 import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog";
+import { useCrmEventos } from "../../lib/useCrmEventos";
 
 export function PipelinePage() {
   const { notificar } = useToast();
@@ -70,6 +71,9 @@ export function PipelinePage() {
     carregar(controller.signal);
     return () => controller.abort();
   }, [carregar, recarregar]);
+
+  // Mudanças de outros usuários (ex.: card excluído pelo administrador) aparecem sem recarregar a página.
+  useCrmEventos(() => carregar(undefined, true));
 
   function moverCartaoLocal(opportunityId: string, etapaDestinoId: string) {
     setBoard((atual) => {
