@@ -15,6 +15,10 @@ public class CrmOpportunitiesController(IOpportunityService opportunityService) 
     public async Task<ActionResult> Listar([FromQuery] OpportunityFilterRequest filtro, CancellationToken ct) =>
         Ok(await opportunityService.ListarAsync(filtro, ct));
 
+    [HttpGet("lembretes-adesao")]
+    public async Task<ActionResult<IReadOnlyList<LembreteAdesaoDto>>> LembretesAdesao(CancellationToken ct) =>
+        Ok(await opportunityService.ListarLembretesAdesaoAsync(ct));
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<OpportunityDto>> ObterPorId(Guid id, CancellationToken ct) =>
         Ok(await opportunityService.ObterPorIdAsync(id, ct));

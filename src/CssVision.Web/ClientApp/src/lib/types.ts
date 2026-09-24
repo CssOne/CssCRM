@@ -402,6 +402,17 @@ export interface Opportunity {
   pagamentoAdesaoArquivoUrl?: string | null;
   comprovanteIndicacaoArquivoUrl?: string | null;
   comprovanteVistoriaArquivoUrl?: string | null;
+  /** Data combinada para pagar a adesão, quando não foi paga no dia da venda (dispensa o comprovante). */
+  dataPagamentoAdesaoPrevista?: string | null;
+}
+
+/** Venda do usuário com o pagamento da adesão marcado para hoje (ou atrasado) e ainda sem comprovante. */
+export interface LembreteAdesao {
+  opportunityId: string;
+  leadId: string;
+  leadNome: string;
+  dataPagamentoAdesaoPrevista: string;
+  pagamentoAdesao?: number | null;
 }
 
 export interface Veiculo {
@@ -481,6 +492,7 @@ export interface OpportunityUpdateRequest {
   valorIndicacao?: number | null;
   total?: number | null;
   dataEfetivaFechamento?: string | null;
+  dataPagamentoAdesaoPrevista?: string | null;
 }
 
 export interface ChangeStageRequest {
@@ -504,6 +516,7 @@ export interface ChangeStageRequest {
   porcentagem?: number | null;
   migracao?: boolean;
   veiculo?: VeiculoUpsertRequest | null;
+  dataPagamentoAdesaoPrevista?: string | null;
 }
 
 // --- Pipeline ---

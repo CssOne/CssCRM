@@ -32,6 +32,7 @@ import { VisaoAtividade, type PagedResult } from "../lib/types";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { Avatar, IconButton, useToast } from "./ui";
+import { LembretesAdesao } from "./crm/LembretesAdesao";
 
 const iconesPorChave: Record<string, typeof Gauge> = {
   gauge: Gauge,
@@ -230,6 +231,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </header>
 
         <main className="min-w-0 flex-1 p-4 lg:p-6">{children}</main>
+        {!emPortal && <LembretesAdesao />}
       </div>
     </div>
   );

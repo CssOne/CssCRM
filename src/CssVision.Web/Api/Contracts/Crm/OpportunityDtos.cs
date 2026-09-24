@@ -49,7 +49,16 @@ public record OpportunityDto(
     string? ComprovanteIndicacaoArquivoUrl,
     string? ComprovanteVistoriaArquivoUrl,
     /// <summary>Preenchido só quando o Meta confirma (HTTP 2xx) o recebimento da conversão offline — null se nunca tentou ou se falhou.</summary>
-    DateTimeOffset? ConversaoOfflineEnviadaEm);
+    DateTimeOffset? ConversaoOfflineEnviadaEm,
+    DateOnly? DataPagamentoAdesaoPrevista);
+
+/// <summary>Venda com pagamento da adesão marcado para hoje (ou atrasado) e ainda sem comprovante.</summary>
+public record LembreteAdesaoDto(
+    Guid OpportunityId,
+    Guid LeadId,
+    string LeadNome,
+    DateOnly DataPagamentoAdesaoPrevista,
+    decimal? PagamentoAdesao);
 
 public record VeiculoDto(
     Guid Id,
@@ -137,7 +146,8 @@ public record OpportunityUpdateRequest(
     string? TipoIndicacao = null,
     decimal? ValorIndicacao = null,
     decimal? Total = null,
-    DateOnly? DataEfetivaFechamento = null);
+    DateOnly? DataEfetivaFechamento = null,
+    DateOnly? DataPagamentoAdesaoPrevista = null);
 
 public record ChangeStageRequest(
     Guid NovaEtapaId,
@@ -159,4 +169,5 @@ public record ChangeStageRequest(
     decimal? PagamentoAdesao = null,
     decimal? Porcentagem = null,
     bool Migracao = false,
-    VeiculoUpsertRequest? Veiculo = null);
+    VeiculoUpsertRequest? Veiculo = null,
+    DateOnly? DataPagamentoAdesaoPrevista = null);

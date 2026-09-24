@@ -81,6 +81,13 @@ public class CrmOpportunity : CrmArchivableEntity
     /// <summary>Caminho relativo (/uploads/...) do comprovante de pagamento da adesão, enviado ao concluir a venda.</summary>
     public string? PagamentoAdesaoArquivoUrl { get; set; }
 
+    /// <summary>
+    /// Quando a adesão não é paga no dia da venda: data combinada para o pagamento. Com ela, a venda
+    /// pode ser concluída sem o comprovante, e nessa data o responsável recebe um lembrete
+    /// (ver OpportunityService.ListarLembretesAdesaoAsync) até o comprovante ser anexado.
+    /// </summary>
+    public DateOnly? DataPagamentoAdesaoPrevista { get; set; }
+
     /// <summary>Caminho relativo (/uploads/...) do comprovante de indicação, quando a venda teve origem em indicação.</summary>
     public string? ComprovanteIndicacaoArquivoUrl { get; set; }
 

@@ -14,7 +14,8 @@ public sealed class OpportunityService(
     IEquipeComercialService equipe,
     IMetaConversionService conversion,
     IAuditSink audit,
-    IFileStorageService armazenamento) : IOpportunityService
+    IFileStorageService armazenamento,
+    ICrmEventHub? eventos = null) : IOpportunityService
 {
     private static readonly string[] ExtensoesAnexoPermitidas = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
     private static readonly HashSet<string> TiposAnexoValidos = new(StringComparer.OrdinalIgnoreCase)
@@ -195,6 +196,11 @@ public sealed class OpportunityService(
         {
             opportunity.DataEfetivaFechamento = request.DataEfetivaFechamento.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         }
+        // Só quando vier: as outras telas de edição não mandam o campo e não podem apagar a data.
+        if (request.DataPagamentoAdesaoPrevista is not null)
+        {
+            opportunity.DataPagamentoAdesaoPrevista = request.DataPagamentoAdesaoPrevista;
+        }
 
         if (request.Veiculo is not null)
         {
@@ -211,6 +217,7 @@ public sealed class OpportunityService(
         }
 
         await audit.RegistrarAsync("OportunidadeAtualizada", nameof(CrmOpportunity), opportunity.Id, null, ct);
+        eventos?.PublicarQuadroAtualizado("crm");
 
         return await ObterPorIdAsync(opportunity.Id, ct);
     }
@@ -265,6 +272,7 @@ public sealed class OpportunityService(
             opportunity.PagamentoAdesao = request.PagamentoAdesao;
             opportunity.Porcentagem = request.Porcentagem;
             opportunity.Migracao = request.Migracao;
+            opportunity.DataPagamentoAdesaoPrevista = request.DataPagamentoAdesaoPrevista;
 
             if (request.Veiculo is not null)
             {
@@ -311,6 +319,7 @@ public sealed class OpportunityService(
 
         await audit.RegistrarAsync("OportunidadeMudouEtapa", nameof(CrmOpportunity), opportunity.Id,
             new { EtapaAnterior = etapaAnteriorId, EtapaNova = novaEtapa.Id }, ct);
+        eventos?.PublicarQuadroAtualizado("crm");
 
         // Retorno de conversão offline (CAPI): só depois que a venda ganha já está persistida —
         // uma falha aqui nunca deve desfazer nem bloquear o registro da venda no CRM.
@@ -353,6 +362,25 @@ public sealed class OpportunityService(
         await db.SaveChangesAsync(ct);
         await audit.RegistrarAsync("OportunidadeExcluida", nameof(CrmOpportunity), opportunity.Id,
             new { opportunity.Titulo, Lead = opportunity.Lead.NomeOuRazaoSocial }, ct);
+        // Tira o card da tela de quem estiver com o Pipeline aberto (ex.: o consultor responsável).
+        eventos?.PublicarQuadroAtualizado("crm");
+    }
+
+    public async Task<IReadOnlyList<LembreteAdesaoDto>> ListarLembretesAdesaoAsync(CancellationToken ct)
+    {
+        // "Hoje" no horário de Brasília (UTC-3, sem horário de verão desde 2019).
+        var hoje = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(-3));
+        var usuarioId = currentUser.UserId;
+
+        return await db.CrmOpportunities.AsNoTracking()
+            .Where(o => o.ResponsavelId == usuarioId
+                && !o.Arquivado
+                && o.DataPagamentoAdesaoPrevista != null
+                && o.DataPagamentoAdesaoPrevista <= hoje
+                && o.PagamentoAdesaoArquivoUrl == null)
+            .OrderBy(o => o.DataPagamentoAdesaoPrevista)
+            .Select(o => new LembreteAdesaoDto(o.Id, o.LeadId, o.Lead.NomeOuRazaoSocial, o.DataPagamentoAdesaoPrevista!.Value, o.PagamentoAdesao))
+            .ToListAsync(ct);
     }
 
     private async Task<CrmOpportunity> CarregarComEscopoAsync(Guid id, CancellationToken ct)
@@ -448,7 +476,8 @@ public sealed class OpportunityService(
         o.PagamentoAdesaoArquivoUrl,
         o.ComprovanteIndicacaoArquivoUrl,
         o.ComprovanteVistoriaArquivoUrl,
-        o.ConversaoOfflineEnviadaEm);
+        o.ConversaoOfflineEnviadaEm,
+        o.DataPagamentoAdesaoPrevista);
 
     public async Task<OpportunityDto> AnexarArquivoAsync(Guid id, string tipo, IFormFile arquivo, CancellationToken ct)
     {

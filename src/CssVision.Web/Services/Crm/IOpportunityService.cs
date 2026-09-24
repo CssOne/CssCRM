@@ -13,4 +13,7 @@ public interface IOpportunityService
     Task<OpportunityDto> MudarEtapaAsync(Guid id, ChangeStageRequest request, CancellationToken ct);
     Task ExcluirAsync(Guid id, CancellationToken ct);
     Task<OpportunityDto> AnexarArquivoAsync(Guid id, string tipo, IFormFile arquivo, CancellationToken ct);
+
+    /// <summary>Lembretes do usuário logado: vendas dele com o pagamento da adesão marcado até hoje e sem comprovante.</summary>
+    Task<IReadOnlyList<LembreteAdesaoDto>> ListarLembretesAdesaoAsync(CancellationToken ct);
 }
