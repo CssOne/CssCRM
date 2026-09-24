@@ -108,7 +108,7 @@ public class MetaConversionEventBuilderTests
         var payload = MetaConversionEventBuilder.BuildEtapaEventPayload(lead, etapaId, "Cotação", options);
 
         var evento = Assert.Single(payload.Data);
-        Assert.Equal("Cotação", evento.EventName);
+        Assert.Equal("cotacao", evento.EventName);
         Assert.Equal($"etapa_{lead.Id}_{etapaId}", evento.EventId);
         Assert.Equal("system_generated", evento.ActionSource);
         Assert.Null(evento.CustomData.Value);
@@ -130,10 +130,11 @@ public class MetaConversionEventBuilderTests
     }
 
     [Theory]
-    [InlineData("Venda concluída (Leads)", "Venda concluída")]
-    [InlineData("Venda concluída (Indicação)", "Venda concluída")]
-    [InlineData("Cotação", "Cotação")]
-    public void BuildEtapaEventPayload_DeveRemoverSufixoEntreParenteses_DoNomeDoEvento(string etapaNome, string nomeEsperado)
+    [InlineData("Venda concluída (Leads)", "venda_concluida")]
+    [InlineData("Venda concluída (Indicação)", "venda_concluida")]
+    [InlineData("Cotação", "cotacao")]
+    [InlineData("Não responde", "nao_responde")]
+    public void BuildEtapaEventPayload_DeveNormalizarNomeDoEvento_ComoOsEventosAntigosDoN8n(string etapaNome, string nomeEsperado)
     {
         var lead = new CrmLead { Id = Guid.NewGuid(), NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica };
         var options = new MetaCapiOptions { PixelId = "123", AccessToken = "token" };

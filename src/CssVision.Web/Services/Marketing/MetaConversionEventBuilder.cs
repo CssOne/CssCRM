@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -21,6 +22,9 @@ public static partial class MetaConversionEventBuilder
 
     [GeneratedRegex(@"\s*\([^)]*\)\s*$")]
     private static partial Regex SufixoParentesesRegex();
+
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex EspacosRegex();
 
     public static MetaCapiPayload BuildVendaGanhaPayload(CrmLead lead, CrmOpportunity opportunity, MetaCapiOptions options)
     {
@@ -67,14 +71,33 @@ public static partial class MetaConversionEventBuilder
     }
 
     /// <summary>
-    /// Remove um sufixo entre parênteses no final do nome da etapa (ex: "Venda concluída
-    /// (Leads)" -> "Venda concluída") antes de usar como nome do evento no Meta. Etapas divididas
-    /// por categoria (Leads/Indicação) continuam sendo o mesmo evento de conversão pro Meta —
-    /// senão cada divisão nova do quadro criaria um evento novo do zero, perdendo o histórico e a
-    /// otimização de campanha já configurada em cima do nome original.
+    /// Normaliza o nome da etapa pro mesmo formato de nome de evento que a automação antiga (n8n)
+    /// já usava com o Notion: sem sufixo entre parênteses (etapas divididas por categoria, tipo
+    /// "Venda concluída (Leads)"/"(Indicação)", contam pro mesmo evento), sem acento, minúsculo e
+    /// espaço virando "_" (ex: "Venda concluída" -> "venda_concluida"). Manter esse formato é o
+    /// que faz continuar somando no evento antigo (com histórico e otimização de campanha já
+    /// configurada) em vez de criar um evento novo do zero com nome "bonito".
     /// </summary>
-    private static string NormalizarNomeEvento(string etapaNome) =>
-        SufixoParentesesRegex().Replace(etapaNome, "");
+    private static string NormalizarNomeEvento(string etapaNome)
+    {
+        var semSufixo = SufixoParentesesRegex().Replace(etapaNome, "").Trim();
+        var semAcentos = RemoverAcentos(semSufixo);
+        return EspacosRegex().Replace(semAcentos, "_").ToLowerInvariant();
+    }
+
+    private static string RemoverAcentos(string texto)
+    {
+        var normalizado = texto.Normalize(NormalizationForm.FormD);
+        var semMarcas = new StringBuilder();
+        foreach (var c in normalizado)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+            {
+                semMarcas.Append(c);
+            }
+        }
+        return semMarcas.ToString().Normalize(NormalizationForm.FormC);
+    }
 
     private static MetaCapiUserData BuildUserData(CrmLead lead)
     {
