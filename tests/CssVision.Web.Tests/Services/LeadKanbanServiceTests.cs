@@ -139,7 +139,8 @@ public class LeadKanbanServiceTests
         CrmLead Lead(string nome) => new() { NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
         var meta = Lead("Meta"); meta.MetaLeadId = "123";
         var site = Lead("Site"); site.ConsentimentoOrigem = OrigemLead.MarcadorFormularioSite;
-        var migrado = Lead("Migrado"); migrado.ConsentimentoOrigem = OrigemLead.MarcadorMigracaoNotion;
+        // Card migrado do Notion que trouxe o ID do lead no Meta: continua sendo do Notion.
+        var migrado = Lead("Migrado"); migrado.ConsentimentoOrigem = OrigemLead.MarcadorMigracaoNotion; migrado.MetaLeadId = "999";
         var sincronizado = Lead("Sincronizado"); sincronizado.ConsentimentoOrigem = OrigemLead.MarcadorSincronizacaoNotion;
         db.CrmLeads.AddRange(meta, site, migrado, sincronizado, Lead("Manual"));
         await db.SaveChangesAsync();

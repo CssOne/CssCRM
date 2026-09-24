@@ -142,8 +142,9 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
         {
             "Notion" => query.Where(l => l.ConsentimentoOrigem == OrigemLead.MarcadorMigracaoNotion
                 || l.ConsentimentoOrigem == OrigemLead.MarcadorSincronizacaoNotion),
-            // Direto dos anúncios: webhook do Meta Lead Ads (tem o ID do lead no Meta) ou formulário do site.
-            "TrafegoPago" => query.Where(l => l.MetaLeadId != null || l.ConsentimentoOrigem == OrigemLead.MarcadorFormularioSite),
+            // Direto dos anúncios (Meta Lead Ads ou formulário do site), sem os do Notion — cards
+            // migrados também podem trazer o ID do lead no Meta.
+            "TrafegoPago" => query.Where(OrigemLead.VeioDoTrafegoPago),
             _ => query,
         };
 

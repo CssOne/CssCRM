@@ -1,11 +1,17 @@
+using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Authorization;
 using CssVision.Web.Data;
+using CssVision.Web.Domain.Crm;
 using Microsoft.EntityFrameworkCore;
 
 namespace CssVision.Web.Services.Crm;
 
-public sealed class LeadAssignmentService(ApplicationDbContext db) : ILeadAssignmentService
+public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub? eventos = null) : ILeadAssignmentService
 {
+    /// <summary>Leads que contam no limite mensal: só os do tráfego pago, sem os do Notion.</summary>
+    private IQueryable<CrmLead> LeadsDoTrafegoNoMes() =>
+        db.CrmLeads.AsNoTracking().Where(OrigemLead.VeioDoTrafegoPago).Where(l => l.CriadoEm >= InicioDoMes());
+
     public async Task<Guid?> ProximoResponsavelAsync(CancellationToken ct)
     {
         var vendedores = await db.UserRoles
@@ -14,11 +20,10 @@ public sealed class LeadAssignmentService(ApplicationDbContext db) : ILeadAssign
             .ToListAsync(ct);
         if (vendedores.Count == 0) return null;
 
-        var inicioMes = InicioDoMes();
         var ids = vendedores.Select(v => v.Id).ToList();
 
-        var recebidosNoMes = await db.CrmLeads.AsNoTracking()
-            .Where(l => l.ResponsavelId != null && ids.Contains(l.ResponsavelId.Value) && l.CriadoEm >= inicioMes)
+        var recebidosNoMes = await LeadsDoTrafegoNoMes()
+            .Where(l => l.ResponsavelId != null && ids.Contains(l.ResponsavelId.Value))
             .GroupBy(l => l.ResponsavelId!.Value)
             .Select(g => new { ResponsavelId = g.Key, Quantidade = g.Count() })
             .ToDictionaryAsync(x => x.ResponsavelId, x => x.Quantidade, ct);
@@ -41,10 +46,48 @@ public sealed class LeadAssignmentService(ApplicationDbContext db) : ILeadAssign
         if (usuario is null || !usuario.Ativo) return false;
         if (usuario.LimiteMensalLeads is null) return true;
 
-        var inicioMes = InicioDoMes();
-        var recebidos = await db.CrmLeads.AsNoTracking()
-            .CountAsync(l => l.ResponsavelId == usuarioId && l.CriadoEm >= inicioMes, ct);
+        var recebidos = await LeadsDoTrafegoNoMes().CountAsync(l => l.ResponsavelId == usuarioId, ct);
         return recebidos < usuario.LimiteMensalLeads;
+    }
+
+    public async Task<int> DistribuirPendentesAsync(CancellationToken ct)
+    {
+        var pendentes = await db.CrmLeads
+            .Where(OrigemLead.VeioDoTrafegoPago)
+            .Where(l => l.ResponsavelId == null && !l.Arquivado)
+            .OrderBy(l => l.CriadoEm)
+            .Take(200)
+            .ToListAsync(ct);
+
+        var distribuidos = 0;
+        foreach (var lead in pendentes)
+        {
+            var responsavelId = await ProximoResponsavelAsync(ct);
+            if (responsavelId is null) break; // ninguém disponível agora: tenta de novo no próximo ciclo
+            lead.ResponsavelId = responsavelId;
+            await db.SaveChangesAsync(ct); // um por vez: o rodízio olha quantos cada um já recebeu
+            distribuidos++;
+        }
+
+        if (distribuidos > 0) eventos?.PublicarQuadroAtualizado("distribuicao");
+        return distribuidos;
+    }
+
+    public async Task<NovosLeadsDto> NovosLeadsAsync(Guid usuarioId, DateTimeOffset? desde, CancellationToken ct)
+    {
+        var agora = DateTimeOffset.UtcNow;
+        if (desde is null) return new NovosLeadsDto(agora, []);
+
+        var leads = await db.CrmLeads.AsNoTracking()
+            .Where(l => l.ResponsavelId == usuarioId && !l.Arquivado
+                && l.ResponsavelAtribuidoEm > desde && l.ResponsavelAtribuidoEm <= agora
+                // Lead que a própria pessoa cadastrou ou pegou pra si não é novidade pra ela.
+                && (l.AtualizadoPorId ?? l.CriadoPorId) != usuarioId)
+            .OrderByDescending(l => l.ResponsavelAtribuidoEm)
+            .Take(20)
+            .Select(l => new NovoLeadDto(l.Id, l.NomeOuRazaoSocial, l.ResponsavelAtribuidoEm!.Value))
+            .ToListAsync(ct);
+        return new NovosLeadsDto(agora, leads);
     }
 
     private static DateTimeOffset InicioDoMes() =>

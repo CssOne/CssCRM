@@ -107,6 +107,12 @@ public class CrmLead : CrmArchivableEntity
     public string? NotionPageId { get; set; }
 
     public Guid? ResponsavelId { get; set; }
+
+    /// <summary>
+    /// Quando o lead passou para o responsável atual — preenchido sozinho ao salvar (ver
+    /// ApplicationDbContext.AplicarAuditoria). É o que dispara a notificação de "novo lead" do consultor.
+    /// </summary>
+    public DateTimeOffset? ResponsavelAtribuidoEm { get; set; }
     public ApplicationUser? Responsavel { get; set; }
 
     public string? Observacoes { get; set; }

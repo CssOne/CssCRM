@@ -221,3 +221,8 @@ public record LeadTimelineItemDto(
     string? Descricao,
     string? UsuarioNome,
     DateTimeOffset OcorridoEm);
+
+/// <summary>Leads que passaram a ser do usuário desde a última verificação. <see cref="Agora"/> é o cursor da próxima.</summary>
+public record NovosLeadsDto(DateTimeOffset Agora, IReadOnlyList<NovoLeadDto> Leads);
+
+public record NovoLeadDto(Guid LeadId, string Nome, DateTimeOffset AtribuidoEm);

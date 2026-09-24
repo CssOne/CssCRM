@@ -14,7 +14,8 @@ namespace CssVision.Web.Services.Crm;
 public sealed class PublicLeadIntakeService(
     ApplicationDbContext db,
     ILeadAssignmentService assignment,
-    ILogger<PublicLeadIntakeService> logger) : IPublicLeadIntakeService
+    ILogger<PublicLeadIntakeService> logger,
+    ICrmEventHub? eventos = null) : IPublicLeadIntakeService
 {
     public async Task<PublicLeadResultDto> CriarAsync(PublicLeadCreateRequest request, CancellationToken ct)
     {
@@ -70,6 +71,7 @@ public sealed class PublicLeadIntakeService(
 
         db.CrmLeads.Add(lead);
         await db.SaveChangesAsync(ct);
+        eventos?.PublicarQuadroAtualizado("site");
 
         logger.LogInformation("Lead {LeadId} criado via formulário do site (projeto {Projeto})", lead.Id, request.Projeto);
 
