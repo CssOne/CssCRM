@@ -20,4 +20,17 @@ public class PublicLeadsController(IPublicLeadIntakeService intake) : Controller
     [HttpPost]
     public async Task<ActionResult<PublicLeadResultDto>> Criar(PublicLeadCreateRequest request, CancellationToken ct) =>
         Ok(await intake.CriarAsync(request, ct));
+
+    /// <summary>
+    /// Consulta o consultor sorteado por lead_id do Meta — a página de obrigado do formulário
+    /// instantâneo chama isso depois de carregar (a Meta manda {{leadgen_id}} como parâmetro
+    /// dinâmico no botão "Ver site", uma URL estática definida na hora de criar o anúncio, sem
+    /// como saber ainda quem vai ser o consultor).
+    /// </summary>
+    [HttpGet("by-meta-lead-id/{metaLeadId}")]
+    public async Task<ActionResult<PublicLeadResultDto>> ObterPorMetaLeadId(string metaLeadId, CancellationToken ct)
+    {
+        var resultado = await intake.ObterPorMetaLeadIdAsync(metaLeadId, ct);
+        return resultado is null ? NotFound() : Ok(resultado);
+    }
 }

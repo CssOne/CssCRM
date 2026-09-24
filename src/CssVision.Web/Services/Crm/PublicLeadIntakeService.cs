@@ -76,6 +76,16 @@ public sealed class PublicLeadIntakeService(
         return await MontarResultadoAsync(lead.Id, responsavelId, ct);
     }
 
+    public async Task<PublicLeadResultDto?> ObterPorMetaLeadIdAsync(string metaLeadId, CancellationToken ct)
+    {
+        var lead = await db.CrmLeads.AsNoTracking()
+            .Where(l => l.MetaLeadId == metaLeadId)
+            .Select(l => new { l.Id, l.ResponsavelId })
+            .FirstOrDefaultAsync(ct);
+
+        return lead is null ? null : await MontarResultadoAsync(lead.Id, lead.ResponsavelId, ct);
+    }
+
     private async Task<CrmLead?> EncontrarLeadExistenteAsync(string? emailNormalizado, string? telefoneNormalizado, CancellationToken ct)
     {
         if (!string.IsNullOrEmpty(emailNormalizado))
