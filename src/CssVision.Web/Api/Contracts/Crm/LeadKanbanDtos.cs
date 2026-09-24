@@ -31,7 +31,11 @@ public record LeadKanbanCardDto(
     string? OQue = null,
     decimal? ValorAdesao = null);
 
-public record LeadKanbanColumnDto(LeadStageDto Etapa, IReadOnlyList<LeadKanbanCardDto> Cartoes);
+/// <summary>
+/// Coluna do quadro. <see cref="Cartoes"/> traz só a primeira página (os mais recentes);
+/// <see cref="Total"/> é a quantidade de leads da coluna inteira — o restante vem por "Ver mais".
+/// </summary>
+public record LeadKanbanColumnDto(LeadStageDto Etapa, IReadOnlyList<LeadKanbanCardDto> Cartoes, int Total);
 
 public record LeadKanbanBoardDto(IReadOnlyList<LeadKanbanColumnDto> Colunas);
 
@@ -65,6 +69,17 @@ public record LeadKanbanFilterRequest
     /// <summary>Filtra pela data efetiva de fechamento (venda) de alguma oportunidade do lead.</summary>
     public DateOnly? DataVendaInicio { get; init; }
     public DateOnly? DataVendaFim { get; init; }
+
+    /// <summary>Quantos cartões cada coluna traz na carga do quadro (os mais recentes). Máximo 200.</summary>
+    public int CartoesPorColuna { get; init; } = 30;
+}
+
+/// <summary>"Ver mais" de uma coluna: os mesmos filtros do quadro + a coluna (EtapaId nulo = "Sem etapa") e a página.</summary>
+public record LeadKanbanColunaRequest : LeadKanbanFilterRequest
+{
+    public Guid? EtapaId { get; init; }
+    public int Pular { get; init; }
+    public int Quantidade { get; init; } = 30;
 }
 
 /// <summary>NovaEtapaId nulo move o lead de volta pra "Sem etapa" (desmarca). MotivoPerdaId é obrigatório

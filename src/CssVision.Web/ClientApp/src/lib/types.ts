@@ -317,7 +317,10 @@ export interface LeadKanbanCard {
 
 export interface LeadKanbanColumn {
   etapa: LeadStage;
+  /** Só as páginas já carregadas (os mais recentes); o restante vem por "Ver mais". */
   cartoes: LeadKanbanCard[];
+  /** Quantidade de leads da coluna inteira. */
+  total: number;
 }
 
 export interface LeadKanbanBoard {

@@ -9,6 +9,7 @@ import {
   type LeadDuplicateWarning,
   type LeadKanbanBoard,
   type LeadKanbanCard,
+  type LeadKanbanColumn,
   type PipelineBoard,
   type Regional,
   type VendedorResumo,
@@ -35,8 +36,8 @@ const ETAPA_NAO_FAZEMOS = "Não fazemos";
 /** Etapa que exige o valor da adesão (o servidor também recusa sem ele — ver LeadService.MudarEtapaAsync). */
 const ETAPA_COTACAO = "Cotação";
 
-/** Quantos cartões mostrar por coluna antes de precisar clicar em "Ver mais" — evita renderizar
- * centenas de cartões de uma vez e deixar a página pesada. */
+/** Quantos cartões cada coluna busca por vez no servidor (carga do quadro e cada "Ver mais") — a base
+ * tem dezenas de milhares de leads, então nunca se carrega tudo de uma vez. */
 const CARTOES_POR_PAGINA = 30;
 
 /** Mesma regra usada na etiqueta do rodapé do cartão — mantém as duas em sincronia. */
@@ -60,7 +61,7 @@ export function LeadsKanbanPage() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [recarregar, setRecarregar] = useState(0);
-  const [visiveisPorColuna, setVisiveisPorColuna] = useState<Record<string, number>>({});
+  const [carregandoMais, setCarregandoMais] = useState<string | null>(null);
 
   const [busca, setBusca] = useState("");
   const [responsavelId, setResponsavelId] = useState("");
@@ -151,8 +152,11 @@ export function LeadsKanbanPage() {
     (signal?: AbortSignal, silencioso = false) => {
       if (!silencioso) setCarregando(true);
       setErro(null);
+      // Recarga silenciosa (tempo real): mantém as páginas que a pessoa já abriu com "Ver mais".
+      const jaCarregados = silencioso ? Math.max(0, ...(boardRef.current?.colunas.map((c) => c.cartoes.length) ?? [])) : 0;
+      const cartoesPorColuna = Math.min(200, Math.max(CARTOES_POR_PAGINA, jaCarregados));
       api
-        .get<LeadKanbanBoard>(`/crm/leads/kanban${toQueryString(filtro)}`, signal)
+        .get<LeadKanbanBoard>(`/crm/leads/kanban${toQueryString({ ...filtro, cartoesPorColuna })}`, signal)
         .then(setBoard)
         .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar o quadro de leads."); })
         .finally(() => { if (!signal?.aborted) setCarregando(false); });
@@ -162,7 +166,6 @@ export function LeadsKanbanPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    setVisiveisPorColuna({});
     carregar(controller.signal);
     return () => controller.abort();
   }, [carregar, recarregar]);
@@ -190,11 +193,33 @@ export function LeadsKanbanPage() {
     }
   }, [ocupado, carregar]);
 
-  function verMaisCartoes(chaveColuna: string) {
-    setVisiveisPorColuna((atual) => ({
-      ...atual,
-      [chaveColuna]: (atual[chaveColuna] ?? CARTOES_POR_PAGINA) + CARTOES_POR_PAGINA,
-    }));
+  async function verMaisCartoes(coluna: LeadKanbanColumn) {
+    const chave = coluna.etapa.id ?? "sem-etapa";
+    setCarregandoMais(chave);
+    try {
+      const proximos = await api.get<LeadKanbanCard[]>(
+        `/crm/leads/kanban/coluna${toQueryString({
+          ...filtro,
+          etapaId: coluna.etapa.id ?? undefined,
+          pular: coluna.cartoes.length,
+          quantidade: CARTOES_POR_PAGINA,
+        })}`
+      );
+      setBoard((atual) =>
+        atual && {
+          ...atual,
+          colunas: atual.colunas.map((c) => {
+            if ((c.etapa.id ?? "sem-etapa") !== chave) return c;
+            const jaTem = new Set(c.cartoes.map((x) => x.leadId));
+            return { ...c, cartoes: [...c.cartoes, ...proximos.filter((x) => !jaTem.has(x.leadId))] };
+          }),
+        }
+      );
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível carregar mais leads.");
+    } finally {
+      setCarregandoMais(null);
+    }
   }
 
   function limparFiltros() {
@@ -217,13 +242,15 @@ export function LeadsKanbanPage() {
       let cartao: LeadKanbanCard | undefined;
       const colunas = atual.colunas.map((col) => {
         const encontrado = col.cartoes.find((c) => c.leadId === leadId);
-        if (encontrado) cartao = encontrado;
-        return { ...col, cartoes: col.cartoes.filter((c) => c.leadId !== leadId) };
+        if (!encontrado) return col;
+        cartao = encontrado;
+        return { ...col, cartoes: col.cartoes.filter((c) => c.leadId !== leadId), total: col.total - 1 };
       });
       if (!cartao) return atual;
       return {
+        ...atual,
         colunas: colunas.map((col) =>
-          col.etapa.id === etapaDestinoId ? { ...col, cartoes: [cartao!, ...col.cartoes] } : col
+          col.etapa.id === etapaDestinoId ? { ...col, cartoes: [cartao!, ...col.cartoes], total: col.total + 1 } : col
         ),
       };
     });
@@ -502,7 +529,7 @@ export function LeadsKanbanPage() {
         </div>
       ) : erro || !board || !colunasExibidas ? (
         <ErrorState message={erro ?? "Não foi possível carregar o quadro de leads."} onRetry={() => setRecarregar((n) => n + 1)} />
-      ) : colunasExibidas.every((c) => c.cartoes.length === 0) ? (
+      ) : colunasExibidas.every((c) => c.total === 0) ? (
         <EmptyState
           title="Nenhum lead no quadro"
           description={filtrosAtivos ? "Ajuste os filtros ou cadastre um novo lead." : "Cadastre um novo lead para começar."}
@@ -511,9 +538,7 @@ export function LeadsKanbanPage() {
         <div className="flex gap-4 overflow-x-auto pb-2">
           {colunasExibidas.map((coluna) => {
             const chaveColuna = coluna.etapa.id ?? "sem-etapa";
-            const visiveis = visiveisPorColuna[chaveColuna] ?? CARTOES_POR_PAGINA;
-            const cartoesVisiveis = coluna.cartoes.slice(0, visiveis);
-            const restantes = coluna.cartoes.length - cartoesVisiveis.length;
+            const restantes = Math.max(0, coluna.total - coluna.cartoes.length);
             return (
             <div
               key={chaveColuna}
@@ -525,12 +550,12 @@ export function LeadsKanbanPage() {
                 <div className="flex items-center gap-2">
                   <span className="size-2 rounded-full" style={{ backgroundColor: coluna.etapa.cor ?? "#64748b" }} />
                   <span className="text-sm font-medium text-[var(--fg)]">{coluna.etapa.nome}</span>
-                  <span className="text-xs text-[var(--fg-muted)]">({coluna.cartoes.length})</span>
+                  <span className="text-xs text-[var(--fg-muted)]">({coluna.total.toLocaleString("pt-BR")})</span>
                 </div>
               </div>
 
               <div className="max-h-[60vh] space-y-2 overflow-y-auto p-2">
-                {cartoesVisiveis.map((cartao) => (
+                {coluna.cartoes.map((cartao) => (
                   <div
                     key={cartao.leadId}
                     draggable
@@ -635,8 +660,14 @@ export function LeadsKanbanPage() {
                   </div>
                 ))}
                 {restantes > 0 && (
-                  <Button variant="secondary" size="sm" className="w-full" onClick={() => verMaisCartoes(chaveColuna)}>
-                    Ver mais ({restantes})
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="w-full"
+                    loading={carregandoMais === chaveColuna}
+                    onClick={() => verMaisCartoes(coluna)}
+                  >
+                    Ver mais ({restantes.toLocaleString("pt-BR")})
                   </Button>
                 )}
               </div>

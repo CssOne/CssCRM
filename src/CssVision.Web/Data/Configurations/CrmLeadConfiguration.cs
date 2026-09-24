@@ -36,6 +36,9 @@ public class CrmLeadConfiguration : IEntityTypeConfiguration<CrmLead>
         builder.Property(e => e.MotivoPerdaObservacao).HasMaxLength(1000);
         builder.Property(e => e.VeiculoNaoAtendido).HasMaxLength(200);
         builder.Property(e => e.ValorAdesao).HasColumnType("numeric(14,2)");
+
+        // Quadro de leads: "os N mais recentes de cada coluna" (ver LeadKanbanService).
+        builder.HasIndex(e => new { e.EtapaId, e.CriadoEm });
         builder.Property(e => e.NotionStatus).HasMaxLength(80);
         builder.Property(e => e.NotionPageId).HasMaxLength(64);
         builder.HasIndex(e => e.NotionPageId)

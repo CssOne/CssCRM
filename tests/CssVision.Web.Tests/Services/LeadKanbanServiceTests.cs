@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Domain.Crm;
 using CssVision.Web.Services.Crm;
@@ -150,5 +151,34 @@ public class LeadKanbanServiceTests
             .Colunas.SelectMany(c => c.Cartoes).Select(c => c.NomeOuRazaoSocial).OrderBy(n => n).ToArray();
 
         Assert.Equal(esperados.OrderBy(n => n).ToArray(), nomes);
+    }
+
+    [Fact]
+    public async Task ObterBoardAsync_TrazSoAPrimeiraPaginaPorColuna_ComOTotalDaColuna()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
+        var inicio = DateTimeOffset.UtcNow.AddDays(-10);
+        for (var i = 0; i < 7; i++)
+        {
+            db.CrmLeads.Add(new CrmLead { NomeOuRazaoSocial = $"Lead {i}", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id });
+        }
+        await db.SaveChangesAsync();
+        // Data de chegada distinta por lead: "Lead 6" é o mais recente.
+        var todos = await db.CrmLeads.ToListAsync();
+        foreach (var lead in todos) lead.CriadoEm = inicio.AddHours(int.Parse(lead.NomeOuRazaoSocial[5..]));
+        await db.SaveChangesAsync();
+
+        var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
+        var service = new LeadKanbanService(db, new EquipeComercialService(db, currentUser.Object));
+
+        var semEtapa = (await service.ObterBoardAsync(new LeadKanbanFilterRequest { CartoesPorColuna = 3 }, CancellationToken.None)).Colunas[0];
+        Assert.Equal(7, semEtapa.Total);
+        Assert.Equal(["Lead 6", "Lead 5", "Lead 4"], semEtapa.Cartoes.Select(c => c.NomeOuRazaoSocial));
+
+        // "Ver mais": próxima página da mesma coluna, sem repetir cartões.
+        var proxima = await service.ObterCartoesAsync(new LeadKanbanColunaRequest { EtapaId = null, Pular = 3, Quantidade = 3 }, CancellationToken.None);
+        Assert.Equal(["Lead 3", "Lead 2", "Lead 1"], proxima.Select(c => c.NomeOuRazaoSocial));
     }
 }
