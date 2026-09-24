@@ -25,6 +25,7 @@ public sealed class PublicLeadIntakeService(
         var existente = await EncontrarLeadExistenteAsync(emailNormalizado, telefoneNormalizado, ct);
         if (existente is not null)
         {
+            await GarantirClassificacaoTrafegoPagoAsync(existente, request.MetaLeadId, ct);
             logger.LogInformation(
                 "Lead do site (projeto {Projeto}) associado ao contato já existente {LeadId}", request.Projeto, existente.Id);
             return await MontarResultadoAsync(existente.Id, existente.ResponsavelId, ct);
@@ -89,6 +90,22 @@ public sealed class PublicLeadIntakeService(
             .FirstOrDefaultAsync(ct);
 
         return lead is null ? null : await MontarResultadoAsync(lead.Id, lead.ResponsavelId, ct);
+    }
+
+    /// <summary>
+    /// Um contato antigo (ex: migrado do Notion) pode mandar um lead novo de verdade pelo tráfego
+    /// pago hoje — sem isso, o card ficava com a classificação antiga e sumia do filtro "Tráfego
+    /// pago" do quadro, escondendo do time que chegou uma oportunidade nova pra esse contato.
+    /// </summary>
+    private async Task GarantirClassificacaoTrafegoPagoAsync(CrmLead existente, string? metaLeadId, CancellationToken ct)
+    {
+        if (OrigemLead.VeioDoTrafegoPago.Compile()(existente)) return;
+
+        existente.ConsentimentoOrigem = OrigemLead.MarcadorFormularioSite;
+        existente.MetaLeadId ??= metaLeadId;
+        await db.SaveChangesAsync(ct);
+        eventos?.PublicarQuadroAtualizado("site");
+        logger.LogInformation("Lead {LeadId} reclassificado como tráfego pago (contato antigo recebeu lead novo)", existente.Id);
     }
 
     private async Task<CrmLead?> EncontrarLeadExistenteAsync(string? emailNormalizado, string? telefoneNormalizado, CancellationToken ct)
