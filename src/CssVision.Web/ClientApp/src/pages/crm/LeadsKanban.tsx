@@ -18,6 +18,7 @@ import { LeadForm, leadFormVazio, paraLeadCreateRequest, type LeadFormValues } f
 import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog";
 import { StageChangeDialog } from "../../components/crm/StageChangeDialog";
 import { VeiculoNaoFazemosDialog } from "../../components/crm/VeiculoNaoFazemosDialog";
+import { AdesaoCotacaoDialog } from "../../components/crm/AdesaoCotacaoDialog";
 import { useAuth } from "../../context/AuthContext";
 import { useCrmEventos } from "../../lib/useCrmEventos";
 
@@ -31,6 +32,8 @@ const ETAPA_VENDA_CONCLUIDA = "Venda concluída";
 const ETAPA_PERDIDO = "Perdido";
 /** Nome da etapa "veículo fora do que a CSS Brasil atende" — mesma lógica de ETAPA_VENDA_CONCLUIDA acima. */
 const ETAPA_NAO_FAZEMOS = "Não fazemos";
+/** Etapa que exige o valor da adesão (o servidor também recusa sem ele — ver LeadService.MudarEtapaAsync). */
+const ETAPA_COTACAO = "Cotação";
 
 /** Quantos cartões mostrar por coluna antes de precisar clicar em "Ver mais" — evita renderizar
  * centenas de cartões de uma vez e deixar a página pesada. */
@@ -86,6 +89,7 @@ export function LeadsKanbanPage() {
   const [pendenciaVenda, setPendenciaVenda] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
   const [pendenciaPerda, setPendenciaPerda] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
   const [pendenciaNaoFazemos, setPendenciaNaoFazemos] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
+  const [pendenciaCotacao, setPendenciaCotacao] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
   const [etapaGanhoPipelineId, setEtapaGanhoPipelineId] = useState<string | null>(null);
 
   const boardRef = useRef<LeadKanbanBoard | null>(null);
@@ -163,7 +167,7 @@ export function LeadsKanbanPage() {
   // Tempo real: quando o quadro muda (sincronização com o Notion ou outro usuário), recarrega sem
   // piscar. Se a pessoa estiver arrastando um cartão ou com um diálogo de etapa aberto, espera ela
   // terminar para não mexer no quadro debaixo dela.
-  const ocupado = !!cartaoArrastando || !!pendenciaVenda || !!pendenciaPerda || !!pendenciaNaoFazemos || enviando;
+  const ocupado = !!cartaoArrastando || !!pendenciaVenda || !!pendenciaPerda || !!pendenciaNaoFazemos || !!pendenciaCotacao || enviando;
   const ocupadoRef = useRef(ocupado);
   ocupadoRef.current = ocupado;
   const recargaPendenteRef = useRef(false);
@@ -224,7 +228,7 @@ export function LeadsKanbanPage() {
   async function moverPara(
     cartao: LeadKanbanCard,
     etapaId: string | null,
-    extra?: { motivoPerdaId?: string; motivoPerdaObservacao?: string; veiculoNaoAtendido?: string }
+    extra?: { motivoPerdaId?: string; motivoPerdaObservacao?: string; veiculoNaoAtendido?: string; valorAdesao?: number }
   ) {
     const boardAnterior = boardRef.current;
     moverCartaoLocal(cartao.leadId, etapaId);
@@ -235,6 +239,7 @@ export function LeadsKanbanPage() {
       setModalMobile(null);
       setPendenciaPerda(null);
       setPendenciaNaoFazemos(null);
+      setPendenciaCotacao(null);
       carregar(undefined, true);
     } catch (e) {
       setBoard(boardAnterior);
@@ -303,6 +308,9 @@ export function LeadsKanbanPage() {
     } else if (etapaId && etapa?.nome === ETAPA_NAO_FAZEMOS) {
       setModalMobile(null);
       setPendenciaNaoFazemos({ cartao, etapaId });
+    } else if (etapaId && etapa?.nome === ETAPA_COTACAO) {
+      setModalMobile(null);
+      setPendenciaCotacao({ cartao, etapaId });
     } else {
       moverPara(cartao, etapaId);
     }
@@ -699,6 +707,17 @@ export function LeadsKanbanPage() {
         onCancel={() => setPendenciaPerda(null)}
         onConfirm={(dados) => {
           if (pendenciaPerda) moverPara(pendenciaPerda.cartao, pendenciaPerda.etapaId, dados);
+        }}
+      />
+
+      <AdesaoCotacaoDialog
+        open={!!pendenciaCotacao}
+        etapaNome={ETAPA_COTACAO}
+        valorAtual={pendenciaCotacao?.cartao.valorAdesao}
+        enviando={enviando}
+        onCancel={() => setPendenciaCotacao(null)}
+        onConfirm={(dados) => {
+          if (pendenciaCotacao) moverPara(pendenciaCotacao.cartao, pendenciaCotacao.etapaId, dados);
         }}
       />
 

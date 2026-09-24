@@ -28,7 +28,8 @@ public record LeadKanbanCardDto(
     bool Arquivado,
     uint RowVersion,
     /// <summary>"O que?" — produto de interesse (AGV, AGV ELÉTRICO, AGV TRUCK...), visível para todos.</summary>
-    string? OQue = null);
+    string? OQue = null,
+    decimal? ValorAdesao = null);
 
 public record LeadKanbanColumnDto(LeadStageDto Etapa, IReadOnlyList<LeadKanbanCardDto> Cartoes);
 
@@ -69,6 +70,8 @@ public record ChangeLeadStageRequest(
     uint RowVersion,
     Guid? MotivoPerdaId = null,
     string? MotivoPerdaObservacao = null,
-    string? VeiculoNaoAtendido = null);
+    string? VeiculoNaoAtendido = null,
+    /// <summary>Valor da adesão — obrigatório ao mover para "Cotação" (ver LeadService.MudarEtapaAsync).</summary>
+    decimal? ValorAdesao = null);
 
 public record CreateLeadStageRequest(string Nome, int Ordem, string? Cor, bool Fechada);

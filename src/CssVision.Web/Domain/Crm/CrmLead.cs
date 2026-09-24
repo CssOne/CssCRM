@@ -87,6 +87,12 @@ public class CrmLead : CrmArchivableEntity
     public string? VeiculoNaoAtendido { get; set; }
 
     /// <summary>
+    /// Valor da adesão informado ao mover o lead para "Cotação" (obrigatório nessa etapa). Pré-preenche
+    /// o "Pagamento de adesão" dos formulários de Oportunidade e de Venda concluída.
+    /// </summary>
+    public decimal? ValorAdesao { get; set; }
+
+    /// <summary>
     /// Último "Status" do Notion aplicado a este lead pela sincronização. Serve para detectar quando
     /// o Status mudou lá — só então o lead troca de coluna, sem desfazer movimentos feitos no CRM
     /// enquanto o Status no Notion continua o mesmo.

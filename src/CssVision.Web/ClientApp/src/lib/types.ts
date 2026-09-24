@@ -225,6 +225,8 @@ export interface LeadDetail {
   atualizadoEm?: string | null;
   rowVersion: number;
   arquivado: boolean;
+  /** Valor da adesão informado ao mover para "Cotação". */
+  valorAdesao?: number | null;
 }
 
 export interface LeadCreateRequest {
@@ -309,6 +311,8 @@ export interface LeadKanbanCard {
   rowVersion: number;
   /** "O que?" — produto de interesse (AGV, AGV ELÉTRICO, AGV TRUCK...). */
   oQue?: string | null;
+  /** Valor da adesão informado ao mover para "Cotação". */
+  valorAdesao?: number | null;
 }
 
 export interface LeadKanbanColumn {
@@ -439,6 +443,12 @@ export interface OpportunityCreateRequest {
   termoAdesaoAceito: boolean;
   migracao: boolean;
   veiculo?: VeiculoUpsertRequest | null;
+  cpf?: string | null;
+  estado?: string | null;
+  indicacao?: boolean | null;
+  tipoIndicacao?: string | null;
+  valorIndicacao?: number | null;
+  total?: number | null;
 }
 
 export interface OpportunityUpdateRequest {

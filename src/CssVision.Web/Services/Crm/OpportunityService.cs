@@ -118,7 +118,13 @@ public sealed class OpportunityService(
             PagamentoAdesao = request.PagamentoAdesao,
             Porcentagem = request.Porcentagem,
             TermoAdesaoAceito = request.TermoAdesaoAceito,
-            Migracao = request.Migracao
+            Migracao = request.Migracao,
+            Cpf = string.IsNullOrWhiteSpace(request.Cpf) ? null : request.Cpf.Trim(),
+            Estado = string.IsNullOrWhiteSpace(request.Estado) ? null : request.Estado.Trim().ToUpperInvariant(),
+            Indicacao = request.Indicacao,
+            TipoIndicacao = string.IsNullOrWhiteSpace(request.TipoIndicacao) ? null : request.TipoIndicacao.Trim(),
+            ValorIndicacao = request.ValorIndicacao,
+            Total = request.Total
         };
 
         if (request.Veiculo is not null)

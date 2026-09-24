@@ -11,12 +11,10 @@ import {
   type LeadDuplicateWarning,
   type LeadTimelineItem,
   type Opportunity,
-  type OpportunityCreateRequest,
 } from "../../lib/types";
 import { Badge, Button, Card, ErrorState, Modal, Skeleton, Textarea, useToast } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { LeadForm, type LeadFormValues } from "../../components/crm/LeadForm";
-import { OpportunityForm, type OpportunityFormValues } from "../../components/crm/OpportunityForm";
 import { ActivityForm, type ActivityFormValues } from "../../components/crm/ActivityForm";
 import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog";
 import { Timeline } from "../../components/crm/Timeline";
@@ -157,52 +155,6 @@ export function LeadDetailPage() {
       } else {
         notificar("error", "Não foi possível salvar as alterações.");
       }
-    } finally {
-      setSalvando(false);
-    }
-  }
-
-  async function criarOportunidade(valores: OpportunityFormValues) {
-    if (!lead) return;
-    setSalvando(true);
-    try {
-      const temVeiculo = [valores.veiculoDescricao, valores.veiculoPlaca, valores.veiculoFipe, valores.veiculoRastreador, valores.veiculoValorVistoria, valores.veiculoVistoriadorId].some(Boolean);
-      const request: OpportunityCreateRequest = {
-        leadId: lead.id,
-        titulo: valores.titulo,
-        responsavelId: lead.responsavelId!,
-        produtoOuServico: valores.produtoOuServico || null,
-        valorEstimado: Number(valores.valorEstimado) || 0,
-        probabilidadeFechamento: valores.probabilidadeFechamento ? Number(valores.probabilidadeFechamento) : null,
-        dataPrevistaFechamento: valores.dataPrevistaFechamento || null,
-        concorrente: valores.concorrente || null,
-        observacoes: valores.observacoes || null,
-        dataAdesao: valores.dataAdesao || null,
-        mensalidade: valores.mensalidade ? Number(valores.mensalidade) : null,
-        mensalidadeComDesconto: valores.mensalidadeComDesconto ? Number(valores.mensalidadeComDesconto) : null,
-        mensalidadeComCupom: valores.mensalidadeComCupom ? Number(valores.mensalidadeComCupom) : null,
-        pagamentoAdesao: valores.pagamentoAdesao ? Number(valores.pagamentoAdesao) : null,
-        porcentagem: valores.porcentagem ? Number(valores.porcentagem) : null,
-        termoAdesaoAceito: valores.termoAdesaoAceito,
-        migracao: valores.migracao,
-        veiculo: temVeiculo
-          ? {
-              descricao: valores.veiculoDescricao || null,
-              placa: valores.veiculoPlaca || null,
-              fipe: valores.veiculoFipe ? Number(valores.veiculoFipe) : null,
-              rastreador: valores.veiculoRastreador ? Number(valores.veiculoRastreador) : null,
-              valorVistoria: valores.veiculoValorVistoria ? Number(valores.veiculoValorVistoria) : null,
-              vistoriadorId: valores.veiculoVistoriadorId || null,
-              dataChegada: null,
-            }
-          : null,
-      };
-      await api.post("/crm/opportunities", request);
-      setModalOportunidade(false);
-      notificar("success", "Oportunidade criada com sucesso.");
-      carregar();
-    } catch {
-      notificar("error", "Não foi possível criar a oportunidade.");
     } finally {
       setSalvando(false);
     }
@@ -462,9 +414,20 @@ export function LeadDetailPage() {
         <LeadForm valoresIniciais={paraFormValues(lead)} salvando={salvando} onSubmit={salvarEdicao} onCancel={() => setModalEditar(false)} idPrefix="editar" />
       </Modal>
 
-      <Modal open={modalOportunidade} onClose={() => setModalOportunidade(false)} title="Nova oportunidade">
-        <OpportunityForm salvando={salvando} onSubmit={criarOportunidade} onCancel={() => setModalOportunidade(false)} />
-      </Modal>
+      {/* Nova oportunidade: mesmo formulário da Venda concluída, só o nome do cliente é obrigatório. */}
+      <VendaConcluidaDialog
+        open={modalOportunidade}
+        modo="oportunidade"
+        leadId={lead.id}
+        etapaNome=""
+        valorEstimado={0}
+        onCancel={() => setModalOportunidade(false)}
+        onConcluido={() => {
+          setModalOportunidade(false);
+          notificar("success", "Oportunidade criada com sucesso.");
+          carregar();
+        }}
+      />
 
       <Modal open={modalAtividade} onClose={() => setModalAtividade(false)} title="Agendar atividade">
         <ActivityForm salvando={salvando} onSubmit={criarAtividade} onCancel={() => setModalAtividade(false)} />

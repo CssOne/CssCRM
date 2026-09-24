@@ -96,7 +96,9 @@ public record LeadDetailDto(
     DateTimeOffset CriadoEm,
     DateTimeOffset? AtualizadoEm,
     uint RowVersion,
-    bool Arquivado);
+    bool Arquivado,
+    /// <summary>Valor da adesão informado na "Cotação" — pré-preenche Oportunidade e Venda concluída.</summary>
+    decimal? ValorAdesao = null);
 
 public record LeadOpportunitySummaryDto(
     Guid Id,

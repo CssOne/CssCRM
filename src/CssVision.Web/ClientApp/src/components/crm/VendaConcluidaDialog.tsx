@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Paperclip } from "lucide-react";
 import { api, ApiRequestError, uploadFile } from "../../lib/api";
-import type { ChangeStageRequest, LeadDetail, Opportunity, OpportunityUpdateRequest } from "../../lib/types";
+import type { ChangeStageRequest, LeadDetail, Opportunity, OpportunityCreateRequest, OpportunityUpdateRequest } from "../../lib/types";
 import { ESTADOS_BRASIL } from "../../lib/estados";
 import { formatarData } from "../../lib/format";
 import { Button, Checkbox, CpfInput, Input, Label, Modal, MoneyInput, Select, useToast } from "../ui";
@@ -28,8 +28,40 @@ const valoresIniciais: DadosVendaConcluida = {
   veiculo: { descricao: "", placa: "", fipe: null, rastreador: null, valorVistoria: null, vistoriadorId: null, dataChegada: "" },
 };
 
+/** Preenche o formulário com o que já está salvo numa oportunidade (só os campos preenchidos nela). */
+function mesclarOportunidade(v: DadosVendaConcluida, o: Opportunity): DadosVendaConcluida {
+  return {
+    ...v,
+    rowVersion: o.rowVersion,
+    cpf: o.cpf || v.cpf,
+    estado: o.estado || v.estado,
+    indicacao: o.indicacao ?? v.indicacao,
+    tipoIndicacao: o.tipoIndicacao || v.tipoIndicacao,
+    valorIndicacao: o.valorIndicacao ?? v.valorIndicacao,
+    total: o.total ?? v.total,
+    mensalidade: o.mensalidade ?? v.mensalidade,
+    mensalidadeComDesconto: o.mensalidadeComDesconto ?? v.mensalidadeComDesconto,
+    mensalidadeComCupom: o.mensalidadeComCupom ?? v.mensalidadeComCupom,
+    pagamentoAdesao: o.pagamentoAdesao ?? v.pagamentoAdesao,
+    porcentagem: o.porcentagem ?? v.porcentagem,
+    migracao: o.migracao || v.migracao,
+    veiculo: {
+      ...v.veiculo,
+      descricao: o.veiculo?.descricao || v.veiculo?.descricao || "",
+      placa: o.veiculo?.placa || v.veiculo?.placa || "",
+      fipe: o.veiculo?.fipe ?? v.veiculo?.fipe ?? null,
+      rastreador: o.veiculo?.rastreador ?? v.veiculo?.rastreador ?? null,
+      valorVistoria: o.veiculo?.valorVistoria ?? v.veiculo?.valorVistoria ?? null,
+      vistoriadorId: o.veiculo?.vistoriadorId ?? v.veiculo?.vistoriadorId ?? null,
+      dataChegada: o.veiculo?.dataChegada || v.veiculo?.dataChegada || "",
+    },
+  };
+}
+
 /**
- * Dois modos de uso:
+ * Três modos de uso (os dois primeiros são de Venda concluída; o terceiro, `modo="oportunidade"`,
+ * reaproveita o mesmo formulário para criar uma oportunidade, com todos os campos opcionais
+ * exceto o nome do cliente, mais Concorrente e Previsão de fechamento):
  * - Modo Pipeline (`opportunityId` conhecido): o diálogo só envia os anexos e devolve os dados via
  *   `onConfirm` — quem muda a etapa da oportunidade é o chamador (Pipeline.tsx já faz isso).
  * - Modo Quadro de leads (`opportunityId` null): a oportunidade pode nem existir ainda. O diálogo
@@ -47,6 +79,7 @@ export function VendaConcluidaDialog({
   enviando = false,
   pipelineGanhoEtapaId,
   oportunidadeEditar = null,
+  modo = "venda",
   onConfirm,
   onConcluido,
   onCancel,
@@ -62,6 +95,8 @@ export function VendaConcluidaDialog({
   /** Quando informada, o diálogo abre em modo de edição: pré-preenche com os dados já salvos
    *  dessa oportunidade e, ao confirmar, salva via PUT em vez de mudar de etapa. */
   oportunidadeEditar?: Opportunity | null;
+  /** "oportunidade": cria uma oportunidade com este mesmo formulário (só o nome do cliente é obrigatório). */
+  modo?: "venda" | "oportunidade";
   onConfirm?: (dados: DadosVendaConcluida) => void;
   onConcluido?: () => void;
   onCancel: () => void;
@@ -76,12 +111,19 @@ export function VendaConcluidaDialog({
   const [dataChegadaLead, setDataChegadaLead] = useState<string | null>(null);
   const [temRastreador, setTemRastreador] = useState(false);
   const [temVistoria, setTemVistoria] = useState(false);
+  const [nomeCliente, setNomeCliente] = useState("");
+  const [concorrente, setConcorrente] = useState("");
+  const [previsaoFechamento, setPrevisaoFechamento] = useState("");
+  const ehVenda = modo === "venda";
 
   useEffect(() => {
     if (!open || !leadId) return;
     setTermoArquivo(null);
     setPagamentoArquivo(null);
     setDataChegadaLead(null);
+    setNomeCliente("");
+    setConcorrente("");
+    setPrevisaoFechamento("");
 
     if (oportunidadeEditar) {
       setValores({
@@ -128,18 +170,32 @@ export function VendaConcluidaDialog({
       .get<LeadDetail>(`/crm/leads/${leadId}`, controller.signal)
       .then((lead) => {
         setDataChegadaLead(lead.criadoEm);
+        setNomeCliente(lead.nomeOuRazaoSocial);
         if (oportunidadeEditar) return;
+        // Dados do cadastro do cliente e o valor da adesão informado na Cotação.
         setValores((v) => ({
           ...v,
           cpf: lead.documento ?? "",
           estado: lead.estado ?? "",
           tipoIndicacao: lead.tipoIndicacao ?? "",
+          pagamentoAdesao: v.pagamentoAdesao ?? lead.valorAdesao ?? null,
           veiculo: { ...v.veiculo, placa: lead.placa ?? "" },
         }));
         setResponsavelIdLead(lead.responsavelId ?? null);
-        if (!opportunityId) {
-          setOportunidadeResolvidaId(lead.oportunidades.find((o) => o.ativa)?.id ?? null);
-        }
+        if (!ehVenda) return;
+
+        // Venda concluída: se o lead já tem uma oportunidade, o que já foi preenchido nela vem pronto.
+        const idExistente = opportunityId ?? lead.oportunidades.find((o) => o.ativa)?.id ?? null;
+        if (!opportunityId) setOportunidadeResolvidaId(idExistente);
+        if (!idExistente) return;
+        api
+          .get<Opportunity>(`/crm/opportunities/${idExistente}`, controller.signal)
+          .then((o) => {
+            setValores((v) => mesclarOportunidade(v, o));
+            setTemRastreador((o.veiculo?.rastreador ?? null) != null);
+            setTemVistoria((o.veiculo?.valorVistoria ?? null) != null);
+          })
+          .catch(() => {});
       })
       .catch(() => {});
     return () => controller.abort();
@@ -173,8 +229,9 @@ export function VendaConcluidaDialog({
 
   const indicacaoPreenchida = !valores.indicacao || (!!valores.tipoIndicacao && (valores.valorIndicacao ?? -1) >= 0);
 
-  const podeConfirmar =
-    (valores.valorFinal ?? -1) >= 0 &&
+  const podeConfirmar = !ehVenda
+    ? !!nomeCliente.trim() && !enviandoArquivos && !enviando
+    : (valores.valorFinal ?? -1) >= 0 &&
     !!valores.dataEfetivaFechamento &&
     !!valores.cpf &&
     !!valores.estado &&
@@ -194,7 +251,56 @@ export function VendaConcluidaDialog({
     !enviandoArquivos &&
     !enviando;
 
+  async function criarOportunidade() {
+    if (!leadId || !nomeCliente.trim()) return;
+    if (!responsavelIdLead) {
+      notificar("error", "Este lead não tem um responsável definido. Atribua um consultor antes de criar a oportunidade.");
+      return;
+    }
+    setEnviandoArquivos(true);
+    const v = valores.veiculo;
+    const temVeiculo = !!v && [v.descricao, v.placa, v.fipe, v.rastreador, v.valorVistoria, v.vistoriadorId, v.dataChegada].some((x) => x != null && x !== "");
+    const request: OpportunityCreateRequest = {
+      leadId,
+      titulo: nomeCliente.trim(),
+      responsavelId: responsavelIdLead,
+      produtoOuServico: null,
+      valorEstimado: valores.mensalidade ?? 0,
+      probabilidadeFechamento: null,
+      dataPrevistaFechamento: previsaoFechamento || null,
+      concorrente: concorrente.trim() || null,
+      observacoes: null,
+      dataAdesao: null,
+      mensalidade: valores.mensalidade,
+      mensalidadeComDesconto: valores.mensalidadeComDesconto,
+      mensalidadeComCupom: valores.mensalidadeComCupom,
+      pagamentoAdesao: valores.pagamentoAdesao,
+      porcentagem: valores.porcentagem,
+      termoAdesaoAceito: false,
+      migracao: valores.migracao ?? false,
+      veiculo: temVeiculo ? { ...v!, dataChegada: v!.dataChegada || null } : null,
+      cpf: valores.cpf || null,
+      estado: valores.estado || null,
+      indicacao: valores.indicacao ?? null,
+      tipoIndicacao: valores.indicacao ? valores.tipoIndicacao || null : null,
+      valorIndicacao: valores.indicacao ? valores.valorIndicacao : null,
+      total: valores.total,
+    };
+    try {
+      const nova = await api.post<Opportunity>("/crm/opportunities", request);
+      if (termoArquivo) await uploadFile<Opportunity>(`/crm/opportunities/${nova.id}/attachments/termo-adesao`, termoArquivo);
+      if (pagamentoArquivo) await uploadFile<Opportunity>(`/crm/opportunities/${nova.id}/attachments/pagamento-adesao`, pagamentoArquivo);
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível criar a oportunidade.");
+      setEnviandoArquivos(false);
+      return;
+    }
+    setEnviandoArquivos(false);
+    onConcluido?.();
+  }
+
   async function confirmar() {
+    if (!ehVenda) return criarOportunidade();
     if (!leadId) return;
     const precisaTermo = !termoArquivo && !oportunidadeEditar?.termoAdesaoArquivoUrl;
     const precisaPagamento = !pagamentoArquivo && !oportunidadeEditar?.pagamentoAdesaoArquivoUrl;
@@ -312,29 +418,50 @@ export function VendaConcluidaDialog({
   }
 
   return (
-    <Modal open={open} onClose={onCancel} title={oportunidadeEditar ? "Editar venda concluída" : `Concluir venda — mover para "${etapaNome}"`} size="lg">
+    <Modal open={open} onClose={onCancel} title={!ehVenda ? "Nova oportunidade" : oportunidadeEditar ? "Editar venda concluída" : `Concluir venda — mover para "${etapaNome}"`} size="lg">
       <div className="space-y-5">
         <div>
-          <h3 className="mb-3 text-sm font-semibold text-[var(--fg)]">Dados da venda</h3>
+          <h3 className="mb-3 text-sm font-semibold text-[var(--fg)]">{ehVenda ? "Dados da venda" : "Dados da oportunidade"}</h3>
           <div className="grid gap-4 sm:grid-cols-2">
+            {!ehVenda && (
+              <div className="sm:col-span-2">
+                <Label htmlFor="venda-nome-cliente" required>
+                  Nome do cliente
+                </Label>
+                <Input id="venda-nome-cliente" value={nomeCliente} onChange={(e) => setNomeCliente(e.target.value)} />
+              </div>
+            )}
             <div>
               <Label htmlFor="venda-chegada">Data de chegada</Label>
               <Input id="venda-chegada" disabled value={dataChegadaLead ? formatarData(dataChegadaLead) : "—"} />
             </div>
+            {ehVenda ? (
+              <div>
+                <Label htmlFor="venda-data" required={ehVenda}>
+                  Data da venda
+                </Label>
+                <Input id="venda-data" type="date" value={valores.dataEfetivaFechamento ?? ""} onChange={(e) => set("dataEfetivaFechamento", e.target.value)} />
+              </div>
+            ) : (
+              <div>
+                <Label htmlFor="venda-previsao">Previsão de fechamento</Label>
+                <Input id="venda-previsao" type="date" value={previsaoFechamento} onChange={(e) => setPrevisaoFechamento(e.target.value)} />
+              </div>
+            )}
+            {!ehVenda && (
+              <div className="sm:col-span-2">
+                <Label htmlFor="venda-concorrente">Concorrente</Label>
+                <Input id="venda-concorrente" value={concorrente} onChange={(e) => setConcorrente(e.target.value)} />
+              </div>
+            )}
             <div>
-              <Label htmlFor="venda-data" required>
-                Data da venda
-              </Label>
-              <Input id="venda-data" type="date" value={valores.dataEfetivaFechamento ?? ""} onChange={(e) => set("dataEfetivaFechamento", e.target.value)} />
-            </div>
-            <div>
-              <Label htmlFor="venda-cpf" required>
+              <Label htmlFor="venda-cpf" required={ehVenda}>
                 CPF
               </Label>
               <CpfInput id="venda-cpf" value={valores.cpf ?? ""} onChange={(e) => set("cpf", e.target.value)} />
             </div>
             <div>
-              <Label htmlFor="venda-estado" required>
+              <Label htmlFor="venda-estado" required={ehVenda}>
                 Estado
               </Label>
               <Select id="venda-estado" value={valores.estado ?? ""} onChange={(e) => set("estado", e.target.value)}>
@@ -354,7 +481,7 @@ export function VendaConcluidaDialog({
             {valores.indicacao && (
               <>
                 <div className="w-48">
-                  <Label htmlFor="venda-tipo-indicacao" required>
+                  <Label htmlFor="venda-tipo-indicacao" required={ehVenda}>
                     Tipo de indicação
                   </Label>
                   <Select id="venda-tipo-indicacao" value={valores.tipoIndicacao ?? ""} onChange={(e) => set("tipoIndicacao", e.target.value)}>
@@ -364,7 +491,7 @@ export function VendaConcluidaDialog({
                   </Select>
                 </div>
                 <div className="w-40">
-                  <Label htmlFor="venda-valor-indicacao" required>
+                  <Label htmlFor="venda-valor-indicacao" required={ehVenda}>
                     Valor da indicação (R$)
                   </Label>
                   <MoneyInput id="venda-valor-indicacao" value={valores.valorIndicacao} onChange={(v) => set("valorIndicacao", v)} />
@@ -379,19 +506,19 @@ export function VendaConcluidaDialog({
           <h3 className="mb-3 text-sm font-semibold text-[var(--fg)]">Veículo</h3>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <Label htmlFor="venda-veiculo-descricao" required>
+              <Label htmlFor="venda-veiculo-descricao" required={ehVenda}>
                 Veículo (marca/modelo)
               </Label>
               <Input id="venda-veiculo-descricao" value={valores.veiculo?.descricao ?? ""} onChange={(e) => setVeiculo("descricao", e.target.value)} />
             </div>
             <div>
-              <Label htmlFor="venda-veiculo-placa" required>
+              <Label htmlFor="venda-veiculo-placa" required={ehVenda}>
                 Placa
               </Label>
               <Input id="venda-veiculo-placa" value={valores.veiculo?.placa ?? ""} onChange={(e) => setVeiculo("placa", e.target.value.toUpperCase())} />
             </div>
             <div>
-              <Label htmlFor="venda-veiculo-fipe" required>
+              <Label htmlFor="venda-veiculo-fipe" required={ehVenda}>
                 Valor FIPE (R$)
               </Label>
               <MoneyInput id="venda-veiculo-fipe" value={valores.veiculo?.fipe} onChange={(v) => setVeiculo("fipe", v)} />
@@ -407,7 +534,7 @@ export function VendaConcluidaDialog({
               />
               {temRastreador && (
                 <div className="mt-2">
-                  <Label htmlFor="venda-veiculo-rastreador" required>
+                  <Label htmlFor="venda-veiculo-rastreador" required={ehVenda}>
                     Custo do rastreador (R$)
                   </Label>
                   <MoneyInput id="venda-veiculo-rastreador" value={valores.veiculo?.rastreador ?? null} onChange={(v) => setVeiculo("rastreador", v)} />
@@ -425,7 +552,7 @@ export function VendaConcluidaDialog({
               />
               {temVistoria && (
                 <div className="mt-2">
-                  <Label htmlFor="venda-veiculo-valor-vistoria" required>
+                  <Label htmlFor="venda-veiculo-valor-vistoria" required={ehVenda}>
                     Custo da vistoria (R$)
                   </Label>
                   <MoneyInput id="venda-veiculo-valor-vistoria" value={valores.veiculo?.valorVistoria ?? null} onChange={(v) => setVeiculo("valorVistoria", v)} />
@@ -438,13 +565,13 @@ export function VendaConcluidaDialog({
         <div className="border-t border-[var(--border)] pt-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label htmlFor="venda-mensalidade" required>
+              <Label htmlFor="venda-mensalidade" required={ehVenda}>
                 Mensalidade (R$)
               </Label>
               <MoneyInput id="venda-mensalidade" value={valores.mensalidade} onChange={(v) => set("mensalidade", v)} />
             </div>
             <div>
-              <Label htmlFor="venda-porcentagem" required>
+              <Label htmlFor="venda-porcentagem" required={ehVenda}>
                 Cupom de desconto (Porcentagem)
               </Label>
               <div className="relative">
@@ -462,19 +589,19 @@ export function VendaConcluidaDialog({
               </div>
             </div>
             <div>
-              <Label htmlFor="venda-mensalidade-cupom" required>
+              <Label htmlFor="venda-mensalidade-cupom" required={ehVenda}>
                 Mensalidade com desconto (R$)
               </Label>
               <MoneyInput id="venda-mensalidade-cupom" value={valores.mensalidadeComCupom} onChange={(v) => set("mensalidadeComCupom", v)} />
             </div>
             <div>
-              <Label htmlFor="venda-adesao" required>
+              <Label htmlFor="venda-adesao" required={ehVenda}>
                 Pagamento de adesão (R$)
               </Label>
               <MoneyInput id="venda-adesao" value={valores.pagamentoAdesao} onChange={(v) => set("pagamentoAdesao", v)} />
             </div>
             <div>
-              <Label htmlFor="venda-total" required>
+              <Label htmlFor="venda-total" required={ehVenda}>
                 Total (R$)
               </Label>
               <MoneyInput id="venda-total" value={valores.total} onChange={(v) => set("total", v)} />
@@ -490,7 +617,7 @@ export function VendaConcluidaDialog({
               label="Termo de adesão"
               arquivo={termoArquivo}
               onSelecionar={setTermoArquivo}
-              obrigatorio={!oportunidadeEditar?.termoAdesaoArquivoUrl}
+              obrigatorio={ehVenda && !oportunidadeEditar?.termoAdesaoArquivoUrl}
               jaEnviado={!!oportunidadeEditar?.termoAdesaoArquivoUrl}
             />
             <CampoArquivo
@@ -498,7 +625,7 @@ export function VendaConcluidaDialog({
               label="Comprovante de pagamento da adesão"
               arquivo={pagamentoArquivo}
               onSelecionar={setPagamentoArquivo}
-              obrigatorio={!oportunidadeEditar?.pagamentoAdesaoArquivoUrl}
+              obrigatorio={ehVenda && !oportunidadeEditar?.pagamentoAdesaoArquivoUrl}
               jaEnviado={!!oportunidadeEditar?.pagamentoAdesaoArquivoUrl}
             />
           </div>
@@ -509,7 +636,7 @@ export function VendaConcluidaDialog({
             Cancelar
           </Button>
           <Button loading={enviandoArquivos || enviando} disabled={!podeConfirmar} onClick={confirmar}>
-            {oportunidadeEditar ? "Salvar alterações" : "Confirmar e mover"}
+            {!ehVenda ? "Criar oportunidade" : oportunidadeEditar ? "Salvar alterações" : "Confirmar e mover"}
           </Button>
         </div>
       </div>
