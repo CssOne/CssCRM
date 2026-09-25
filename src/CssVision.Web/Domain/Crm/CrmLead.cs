@@ -106,6 +106,13 @@ public class CrmLead : CrmArchivableEntity
     /// </summary>
     public string? NotionPageId { get; set; }
 
+    /// <summary>
+    /// E-mail (minúsculo) do "Vendedor" do card no Notion na última sincronização, ou
+    /// <c>NotionSyncService.SemVendedor</c>. O responsável só é trocado pela sincronização quando o
+    /// vendedor do card muda — uma troca feita no CRM não é desfeita enquanto o card não mudar.
+    /// </summary>
+    public string? NotionVendedorEmail { get; set; }
+
     public Guid? ResponsavelId { get; set; }
 
     /// <summary>

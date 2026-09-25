@@ -41,6 +41,7 @@ public class CrmLeadConfiguration : IEntityTypeConfiguration<CrmLead>
         builder.HasIndex(e => new { e.EtapaId, e.CriadoEm });
         builder.Property(e => e.NotionStatus).HasMaxLength(80);
         builder.Property(e => e.NotionPageId).HasMaxLength(64);
+        builder.Property(e => e.NotionVendedorEmail).HasMaxLength(256);
         builder.HasIndex(e => e.NotionPageId)
             .HasFilter("\"NotionPageId\" IS NOT NULL")
             .IsUnique();
