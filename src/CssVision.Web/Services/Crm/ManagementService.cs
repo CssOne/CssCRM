@@ -46,15 +46,28 @@ public sealed class ManagementService(
         return new GestaoComercialResumoDto(tempoMedioContatoHoras, tempoMedioPorEtapa, oportunidadesSemMovimentacao, ranking, motivosPerda);
     }
 
-    public async Task<IReadOnlyList<VendedorResumoDto>> ObterVendedoresAsync(CancellationToken ct)
+    public async Task<IReadOnlyList<VendedorResumoDto>> ObterVendedoresAsync(CancellationToken ct, bool incluirInativos = false)
     {
         ExigirGestaoComercial();
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
-        var query = db.Users.AsNoTracking().Where(u => u.Ativo);
+        var query = db.Users.AsNoTracking();
+        if (incluirInativos)
+        {
+            // Inativos: só quem é vendedor (papel Comercial) — os ativos seguem como sempre.
+            var comercial = db.UserRoles.Join(db.Roles.Where(r => r.Name == Roles.Comercial), ur => ur.RoleId, r => r.Id, (ur, _) => ur.UserId);
+            query = query.Where(u => u.Ativo || comercial.Contains(u.Id));
+        }
+        else
+        {
+            query = query.Where(u => u.Ativo);
+        }
         if (visiveis is not null) query = query.Where(u => visiveis.Contains(u.Id));
 
-        var vendedores = await query.Select(u => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads }).ToListAsync(ct);
+        var vendedores = await query
+            .OrderByDescending(u => u.Ativo).ThenBy(u => u.NomeCompleto)
+            .Select(u => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.Ativo, u.RecebeLeads })
+            .ToListAsync(ct);
         var resultado = new List<VendedorResumoDto>();
         var inicioMes = new DateTimeOffset(new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1), TimeSpan.Zero);
         var inicioDia = LeadAssignmentService.InicioDoDia();
@@ -67,7 +80,7 @@ public sealed class ManagementService(
             var doTrafego = db.CrmLeads.Where(OrigemLead.VeioDoTrafegoPago).Where(l => l.ResponsavelId == v.Id);
             var recebidosNoMes = await doTrafego.CountAsync(l => l.CriadoEm >= inicioMes, ct);
             var recebidosHoje = await doTrafego.CountAsync(l => (l.ResponsavelAtribuidoEm ?? l.CriadoEm) >= inicioDia, ct);
-            resultado.Add(new VendedorResumoDto(v.Id, v.NomeCompleto, leadsAtivos, abertas, v.LimiteMensalLeads, recebidosNoMes, v.LimiteDiarioLeads, recebidosHoje));
+            resultado.Add(new VendedorResumoDto(v.Id, v.NomeCompleto, leadsAtivos, abertas, v.LimiteMensalLeads, recebidosNoMes, v.LimiteDiarioLeads, recebidosHoje, v.Ativo, v.RecebeLeads));
         }
 
         return resultado;
@@ -186,6 +199,22 @@ public sealed class ManagementService(
             ?? throw new CrmNotFoundException("Vendedor", vendedorId);
 
         vendedor.LimiteDiarioLeads = request.Limite;
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task AtualizarRecebeLeadsAsync(Guid vendedorId, AtualizarRecebeLeadsRequest request, CancellationToken ct)
+    {
+        ExigirGestaoComercial();
+
+        if (!await equipe.PodeAcessarVendedorAsync(vendedorId, ct))
+        {
+            throw new CrmForbiddenException("Você não pode alterar este vendedor.");
+        }
+
+        var vendedor = await db.Users.FirstOrDefaultAsync(u => u.Id == vendedorId, ct)
+            ?? throw new CrmNotFoundException("Vendedor", vendedorId);
+
+        vendedor.RecebeLeads = request.RecebeLeads;
         await db.SaveChangesAsync(ct);
     }
 

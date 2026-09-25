@@ -777,6 +777,10 @@ export interface VendedorResumo {
   /** Teto de leads do tráfego pago por dia. Nulo = sem limite. */
   limiteDiarioLeads?: number | null;
   leadsRecebidosHoje?: number;
+  /** Usuário ativo (consegue entrar no CRM). */
+  ativo?: boolean;
+  /** Entra no rodízio da distribuição automática de leads. */
+  recebeLeads?: boolean;
 }
 
 export interface ConsultorDesempenho {

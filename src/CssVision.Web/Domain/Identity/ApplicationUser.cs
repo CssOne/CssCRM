@@ -32,6 +32,12 @@ public class ApplicationUser : IdentityUser<Guid>
     public int? LimiteDiarioLeads { get; set; }
 
     /// <summary>
+    /// Se o vendedor entra no rodízio da distribuição automática. Desligado na Gestão comercial, ele
+    /// para de receber leads novos, mas continua entrando no CRM e trabalhando a própria carteira.
+    /// </summary>
+    public bool RecebeLeads { get; set; } = true;
+
+    /// <summary>
     /// Se preenchido, a distribuição automática só entrega a este consultor leads com um destes
     /// "O que?" (ProdutoInteresse), separados por vírgula — ex.: "AGV TRUCK". Nulo = recebe qualquer lead.
     /// </summary>

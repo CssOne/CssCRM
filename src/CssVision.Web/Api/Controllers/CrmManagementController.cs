@@ -17,8 +17,15 @@ public class CrmManagementController(IManagementService managementService) : Con
         Ok(await managementService.ObterResumoAsync(dataInicio, dataFim, ct));
 
     [HttpGet("vendedores")]
-    public async Task<ActionResult<IReadOnlyList<VendedorResumoDto>>> ObterVendedores(CancellationToken ct) =>
-        Ok(await managementService.ObterVendedoresAsync(ct));
+    public async Task<ActionResult<IReadOnlyList<VendedorResumoDto>>> ObterVendedores([FromQuery] bool incluirInativos, CancellationToken ct) =>
+        Ok(await managementService.ObterVendedoresAsync(ct, incluirInativos));
+
+    [HttpPut("vendedores/{id:guid}/recebe-leads")]
+    public async Task<IActionResult> AtualizarRecebeLeads(Guid id, AtualizarRecebeLeadsRequest request, CancellationToken ct)
+    {
+        await managementService.AtualizarRecebeLeadsAsync(id, request, ct);
+        return NoContent();
+    }
 
     [HttpPut("vendedores/{id:guid}/limite")]
     public async Task<IActionResult> AtualizarLimiteMensal(Guid id, AtualizarLimiteMensalRequest request, CancellationToken ct)

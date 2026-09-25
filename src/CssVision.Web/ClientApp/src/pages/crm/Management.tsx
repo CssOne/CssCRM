@@ -60,6 +60,49 @@ function LimiteInput({
   );
 }
 
+function RecebeLeadsSwitch({ vendedor, onSalvo }: { vendedor: VendedorResumo; onSalvo: () => void }) {
+  const { notificar } = useToast();
+  const [ligado, setLigado] = useState(vendedor.recebeLeads !== false);
+  const [salvando, setSalvando] = useState(false);
+
+  async function alternar() {
+    const novo = !ligado;
+    setLigado(novo);
+    setSalvando(true);
+    try {
+      await api.put(`/crm/management/vendedores/${vendedor.id}/recebe-leads`, { recebeLeads: novo });
+      notificar("success", novo ? `${vendedor.nome} voltou a receber leads.` : `${vendedor.nome} parou de receber leads.`);
+      onSalvo();
+    } catch {
+      setLigado(!novo);
+      notificar("error", "Não foi possível alterar.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={ligado}
+      disabled={salvando}
+      onClick={alternar}
+      title={ligado ? "Recebendo leads da distribuição automática — clique para pausar" : "Fora da distribuição de leads — clique para voltar a receber"}
+      className="focus-ring mt-2 flex cursor-pointer items-center gap-2 text-xs font-medium disabled:opacity-60"
+    >
+      <span
+        className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
+          ligado ? "bg-[var(--success)]" : "bg-[var(--border)]"
+        }`}
+      >
+        <span className={`inline-block size-3 rounded-full bg-white shadow transition-transform ${ligado ? "translate-x-3.5" : "translate-x-0.5"}`} />
+      </span>
+      <span className={ligado ? "text-[var(--success)]" : "text-[var(--fg-muted)]"}>{ligado ? "Recebe leads" : "Não recebe leads"}</span>
+    </button>
+  );
+}
+
 export function ManagementPage() {
   const [resumo, setResumo] = useState<GestaoComercialResumo | null>(null);
   const [vendedores, setVendedores] = useState<VendedorResumo[] | null>(null);
@@ -128,6 +171,7 @@ export function ManagementPage() {
                 <p className="text-xs text-[var(--fg-muted)]">{v.leadsAtivos} leads · {v.oportunidadesAbertas} oportunidades</p>
                 <LimiteInput tipo="mensal" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
                 <LimiteInput tipo="diario" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
+                <RecebeLeadsSwitch vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
               </div>
             ))}
           </div>

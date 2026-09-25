@@ -54,6 +54,8 @@ interface FiltrosQuadro {
   categoria: string[];
   fonte: string[];
   tipoIndicacao: string[];
+  /** Filtro de vendedor lista também os inativos. */
+  vendedoresInativos: boolean;
   dataChegadaInicio: string;
   dataChegadaFim: string;
   dataVendaInicio: string;
@@ -74,6 +76,7 @@ const FILTROS_VAZIOS: FiltrosQuadro = {
   categoria: [],
   fonte: [],
   tipoIndicacao: [],
+  vendedoresInativos: false,
   dataChegadaInicio: "",
   dataChegadaFim: "",
   dataVendaInicio: "",
@@ -145,6 +148,7 @@ export function LeadsKanbanPage() {
   const [categoria, setCategoria] = useState(filtrosIniciais.categoria);
   const [fonte, setFonte] = useState(filtrosIniciais.fonte);
   const [tipoIndicacao, setTipoIndicacao] = useState(filtrosIniciais.tipoIndicacao);
+  const [vendedoresInativos, setVendedoresInativos] = useState(filtrosIniciais.vendedoresInativos);
   const [dataChegadaInicio, setDataChegadaInicio] = useState(filtrosIniciais.dataChegadaInicio);
   const [dataChegadaFim, setDataChegadaFim] = useState(filtrosIniciais.dataChegadaFim);
   const [dataVendaInicio, setDataVendaInicio] = useState(filtrosIniciais.dataVendaInicio);
@@ -196,7 +200,8 @@ export function LeadsKanbanPage() {
 
   useEffect(() => {
     if (!podeGerir) return;
-    api.get<VendedorResumo[]>("/crm/management/vendedores").then(setVendedores).catch(() => setVendedores([]));
+    // Sempre com os inativos: a opção "Só ativos / Todos" do filtro só esconde ou mostra na lista.
+    api.get<VendedorResumo[]>("/crm/management/vendedores?incluirInativos=true").then(setVendedores).catch(() => setVendedores([]));
     api.get<Regional[]>("/crm/settings/regionals").then(setRegionais).catch(() => setRegionais([]));
   }, [podeGerir]);
 
@@ -241,12 +246,13 @@ export function LeadsKanbanPage() {
       categoria,
       fonte,
       tipoIndicacao,
+      vendedoresInativos,
       dataChegadaInicio,
       dataChegadaFim,
       dataVendaInicio,
       dataVendaFim,
     }),
-    [busca, responsavelId, regional, origem, incluirArquivados, categoria, fonte, tipoIndicacao, dataChegadaInicio, dataChegadaFim, dataVendaInicio, dataVendaFim]
+    [busca, responsavelId, regional, origem, incluirArquivados, categoria, fonte, tipoIndicacao, vendedoresInativos, dataChegadaInicio, dataChegadaFim, dataVendaInicio, dataVendaFim]
   );
 
   // Mantém os filtros ao abrir um card e voltar, ou ao recarregar a página.
@@ -263,6 +269,7 @@ export function LeadsKanbanPage() {
     setCategoria(f.categoria);
     setFonte(f.fonte);
     setTipoIndicacao(f.tipoIndicacao);
+    setVendedoresInativos(f.vendedoresInativos);
     setDataChegadaInicio(f.dataChegadaInicio);
     setDataChegadaFim(f.dataChegadaFim);
     setDataVendaInicio(f.dataVendaInicio);
@@ -641,10 +648,24 @@ export function LeadsKanbanPage() {
         {podeGerir && (
           <>
             <div className="w-48">
-              <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Vendedor</label>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label className="block text-xs font-medium text-[var(--fg-muted)]">Vendedor</label>
+                <select
+                  aria-label="Quais vendedores listar"
+                  value={vendedoresInativos ? "todos" : "ativos"}
+                  onChange={(e) => setVendedoresInativos(e.target.value === "todos")}
+                  className="focus-ring cursor-pointer rounded bg-transparent text-[11px] font-medium text-[var(--brand)]"
+                >
+                  <option value="ativos">Só ativos</option>
+                  <option value="todos">Todos (inclui inativos)</option>
+                </select>
+              </div>
               <MultiSelect
                 ariaLabel="Vendedor"
-                opcoes={vendedores.map((v) => ({ valor: v.id, rotulo: v.nome }))}
+                opcoes={vendedores
+                  // Um inativo já escolhido continua aparecendo para poder ser desmarcado.
+                  .filter((v) => vendedoresInativos || v.ativo !== false || responsavelId.includes(v.id))
+                  .map((v) => ({ valor: v.id, rotulo: v.ativo === false ? `${v.nome} (inativo)` : v.nome }))}
                 valores={responsavelId}
                 onChange={setResponsavelId}
               />
