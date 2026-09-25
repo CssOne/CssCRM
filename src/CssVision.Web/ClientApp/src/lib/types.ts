@@ -318,6 +318,8 @@ export interface LeadKanbanCard {
   oQue?: string | null;
   /** Valor da adesão informado ao mover para "Cotação". */
   valorAdesao?: number | null;
+  /** Foto do consultor responsável. */
+  responsavelFotoUrl?: string | null;
 }
 
 export interface LeadKanbanColumn {

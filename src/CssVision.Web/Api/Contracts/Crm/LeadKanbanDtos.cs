@@ -29,7 +29,9 @@ public record LeadKanbanCardDto(
     uint RowVersion,
     /// <summary>"O que?" — produto de interesse (AGV, AGV ELÉTRICO, AGV TRUCK...), visível para todos.</summary>
     string? OQue = null,
-    decimal? ValorAdesao = null);
+    decimal? ValorAdesao = null,
+    /// <summary>Foto do consultor responsável (mostrada em círculo no rodapé do cartão).</summary>
+    string? ResponsavelFotoUrl = null);
 
 /// <summary>
 /// Coluna do quadro. <see cref="Cartoes"/> traz só a primeira página (os mais recentes);
