@@ -16,7 +16,7 @@ public class LeadAssignmentServiceTests
         await factory.CriarUsuarioAsync(db, "Gestora"); // sem papel Comercial
 
         var service = new LeadAssignmentService(db);
-        Assert.Null(await service.ProximoResponsavelAsync(CancellationToken.None));
+        Assert.Null(await service.ProximoResponsavelAsync(null, CancellationToken.None));
     }
 
     [Fact]
@@ -30,7 +30,7 @@ public class LeadAssignmentServiceTests
         await factory.AtribuirPapelAsync(db, ana, Roles.Comercial);
 
         var service = new LeadAssignmentService(db);
-        var escolhido = await service.ProximoResponsavelAsync(CancellationToken.None);
+        var escolhido = await service.ProximoResponsavelAsync(null, CancellationToken.None);
 
         Assert.Equal(ana.Id, escolhido);
     }
@@ -52,7 +52,7 @@ public class LeadAssignmentServiceTests
         await db.SaveChangesAsync();
 
         var service = new LeadAssignmentService(db);
-        var escolhido = await service.ProximoResponsavelAsync(CancellationToken.None);
+        var escolhido = await service.ProximoResponsavelAsync(null, CancellationToken.None);
 
         Assert.Equal(bruna.Id, escolhido);
     }
@@ -72,7 +72,7 @@ public class LeadAssignmentServiceTests
         await db.SaveChangesAsync();
 
         var service = new LeadAssignmentService(db);
-        var escolhido = await service.ProximoResponsavelAsync(CancellationToken.None);
+        var escolhido = await service.ProximoResponsavelAsync(null, CancellationToken.None);
 
         // Ana já bateu o limite (1/1) — mesmo tendo "menos" leads que ninguém mais, Bruna (0 recebidos, sem limite) é escolhida.
         Assert.Equal(bruna.Id, escolhido);
@@ -91,7 +91,7 @@ public class LeadAssignmentServiceTests
         await db.SaveChangesAsync();
 
         var service = new LeadAssignmentService(db);
-        Assert.Null(await service.ProximoResponsavelAsync(CancellationToken.None));
+        Assert.Null(await service.ProximoResponsavelAsync(null, CancellationToken.None));
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public class LeadAssignmentServiceTests
         await db.SaveChangesAsync();
 
         var service = new LeadAssignmentService(db);
-        Assert.Null(await service.ProximoResponsavelAsync(CancellationToken.None));
+        Assert.Null(await service.ProximoResponsavelAsync(null, CancellationToken.None));
     }
 
     [Theory]

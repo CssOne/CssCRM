@@ -247,7 +247,7 @@ public sealed class NotionSyncService(
                 // de leads: o lead novo vai para a distribuição automática (só ativos e abaixo do limite).
                 ResponsavelId = await VendedorPodeReceberAsync(vendedorId, placeholderVendedorId, ct)
                     ? vendedorId!.Value
-                    : (distribuicao is null ? null : await distribuicao.ProximoResponsavelAsync(ct)) ?? placeholderVendedorId,
+                    : (distribuicao is null ? null : await distribuicao.ProximoResponsavelAsync(oQue, ct)) ?? placeholderVendedorId,
                 ConsentimentoContato = true,
                 ConsentimentoOrigem = OrigemLead.MarcadorSincronizacaoNotion,
                 Arquivado = false,

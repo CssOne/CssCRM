@@ -37,7 +37,7 @@ public class DistribuicaoLeadsTests
 
         var service = new LeadAssignmentService(db);
         Assert.True(await service.PodeReceberAsync(ana.Id, CancellationToken.None));
-        Assert.Equal(ana.Id, await service.ProximoResponsavelAsync(CancellationToken.None));
+        Assert.Equal(ana.Id, await service.ProximoResponsavelAsync(null, CancellationToken.None));
 
         db.CrmLeads.Add(Trafego("Meta 2", ana.Id));
         await db.SaveChangesAsync();

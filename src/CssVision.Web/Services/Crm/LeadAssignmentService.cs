@@ -12,12 +12,24 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
     private IQueryable<CrmLead> LeadsDoTrafegoNoMes() =>
         db.CrmLeads.AsNoTracking().Where(OrigemLead.VeioDoTrafegoPago).Where(l => l.CriadoEm >= InicioDoMes());
 
-    public async Task<Guid?> ProximoResponsavelAsync(CancellationToken ct)
+    public async Task<Guid?> ProximoResponsavelAsync(string? oQue, CancellationToken ct)
     {
-        var vendedores = await db.UserRoles
+        var todos = await db.UserRoles
             .Join(db.Roles.Where(r => r.Name == Roles.Comercial), ur => ur.RoleId, r => r.Id, (ur, _) => ur.UserId)
-            .Join(db.Users.Where(u => u.Ativo), id => id, u => u.Id, (_, u) => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads })
+            .Join(db.Users.Where(u => u.Ativo), id => id, u => u.Id, (_, u) => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.RecebeSomenteOQue })
             .ToListAsync(ct);
+
+        // Especialistas (ex.: só AGV TRUCK) ficam fora do rodízio geral; nos leads da especialidade
+        // deles, têm a preferência — os demais só recebem se nenhum especialista estiver disponível.
+        var especialistas = todos.Where(v => FiltroOQue.Aceita(v.RecebeSomenteOQue, oQue) && v.RecebeSomenteOQue is not null).ToList();
+        var gerais = todos.Where(v => v.RecebeSomenteOQue is null).ToList();
+
+        return await EscolherAsync(especialistas.Select(v => (v.Id, v.NomeCompleto, v.LimiteMensalLeads)).ToList(), ct)
+            ?? await EscolherAsync(gerais.Select(v => (v.Id, v.NomeCompleto, v.LimiteMensalLeads)).ToList(), ct);
+    }
+
+    private async Task<Guid?> EscolherAsync(List<(Guid Id, string NomeCompleto, int? LimiteMensalLeads)> vendedores, CancellationToken ct)
+    {
         if (vendedores.Count == 0) return null;
 
         var ids = vendedores.Select(v => v.Id).ToList();
@@ -62,7 +74,7 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
         var distribuidos = 0;
         foreach (var lead in pendentes)
         {
-            var responsavelId = await ProximoResponsavelAsync(ct);
+            var responsavelId = await ProximoResponsavelAsync(lead.ProdutoInteresse, ct);
             if (responsavelId is null) break; // ninguém disponível agora: tenta de novo no próximo ciclo
             lead.ResponsavelId = responsavelId;
             await db.SaveChangesAsync(ct); // um por vez: o rodízio olha quantos cada um já recebeu

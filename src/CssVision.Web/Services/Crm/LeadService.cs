@@ -225,7 +225,7 @@ public sealed class LeadService(
         }
         else
         {
-            responsavelId = await assignment.ProximoResponsavelAsync(ct);
+            responsavelId = await assignment.ProximoResponsavelAsync(request.ProdutoInteresse, ct);
         }
 
         // Leads automáticos (Meta Ads, site) ficam de propósito sem etapa — "ninguém pegou
@@ -400,6 +400,7 @@ public sealed class LeadService(
 
         await db.SaveChangesAsync(ct);
         await audit.RegistrarAsync("LeadAtribuido", nameof(CrmLead), lead.Id, new { request.ResponsavelId }, ct);
+        eventos?.PublicarQuadroAtualizado("crm");
     }
 
     public async Task<LeadDetailDto> MudarEtapaAsync(Guid id, ChangeLeadStageRequest request, CancellationToken ct)
@@ -526,6 +527,7 @@ public sealed class LeadService(
 
         await db.SaveChangesAsync(ct);
         await audit.RegistrarAsync("LeadRedistribuicaoLote", nameof(CrmLead), null, new { Quantidade = leads.Count, request.ResponsavelId }, ct);
+        eventos?.PublicarQuadroAtualizado("crm");
 
         return leads.Count;
     }
@@ -647,7 +649,7 @@ public sealed class LeadService(
                     // Respeita o limite mensal do consultor da planilha; se já bateu, vai pro rodízio.
                     if (await equipe.PodeAcessarVendedorAsync(uid, ct) && await assignment.PodeReceberAsync(uid, ct)) responsavelId = uid;
                 }
-                responsavelId ??= await assignment.ProximoResponsavelAsync(ct);
+                responsavelId ??= await assignment.ProximoResponsavelAsync(null, ct);
 
                 db.CrmLeads.Add(new CrmLead
                 {

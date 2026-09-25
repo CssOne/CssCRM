@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../../lib/api";
 import type { Grupo, PagedResult, Regional, UserCreateRequest, UserSummary, UserUpdateRequest } from "../../lib/types";
+import { OPCOES_O_QUE } from "../../lib/opcoesLead";
 import { Button, Checkbox, FieldError, Input, Label, Select } from "../ui";
 
 const PAPEL_LABEL: Record<string, string> = {
@@ -21,6 +22,8 @@ export interface UserFormValues {
   gestorComercialId: string;
   grupoId: string;
   limiteMensalLeads: string;
+  /** Vazio = recebe qualquer lead na distribuição automática. */
+  recebeSomenteOQue: string[];
   ativo: boolean;
 }
 
@@ -35,6 +38,7 @@ function valoresVazios(papelFixo?: string): UserFormValues {
     gestorComercialId: "",
     grupoId: "",
     limiteMensalLeads: "",
+    recebeSomenteOQue: [],
     ativo: true,
   };
 }
@@ -50,6 +54,7 @@ export function paraFormValues(usuario: UserSummary): UserFormValues {
     gestorComercialId: usuario.gestorComercialId ?? "",
     grupoId: usuario.grupoId ?? "",
     limiteMensalLeads: usuario.limiteMensalLeads != null ? String(usuario.limiteMensalLeads) : "",
+    recebeSomenteOQue: usuario.recebeSomenteOQue ?? [],
     ativo: usuario.ativo,
   };
 }
@@ -65,6 +70,7 @@ export function paraCriarRequest(v: UserFormValues): UserCreateRequest {
     gestorComercialId: v.gestorComercialId || null,
     grupoId: v.papel === "Comercial" ? v.grupoId || null : null,
     limiteMensalLeads: v.limiteMensalLeads ? Number(v.limiteMensalLeads) : null,
+    recebeSomenteOQue: v.papel === "Comercial" ? v.recebeSomenteOQue : null,
   };
 }
 
@@ -78,6 +84,7 @@ export function paraAtualizarRequest(v: UserFormValues): UserUpdateRequest {
     grupoId: v.papel === "Comercial" ? v.grupoId || null : null,
     limiteMensalLeads: v.limiteMensalLeads ? Number(v.limiteMensalLeads) : null,
     ativo: v.ativo,
+    recebeSomenteOQue: v.papel === "Comercial" ? v.recebeSomenteOQue : null,
   };
 }
 
@@ -264,6 +271,30 @@ export function UserForm({
           <div>
             <Label htmlFor="user-limite">Limite mensal de leads (opcional)</Label>
             <Input id="user-limite" type="number" min={0} value={valores.limiteMensalLeads} onChange={(e) => set("limiteMensalLeads", e.target.value)} />
+          </div>
+        )}
+
+        {exibirLimite && (
+          <div className="sm:col-span-2">
+            <Label>Recebe somente leads de ("O que?")</Label>
+            <div className="flex flex-wrap gap-4">
+              {OPCOES_O_QUE.map((opcao) => (
+                <Checkbox
+                  key={opcao}
+                  label={opcao}
+                  checked={valores.recebeSomenteOQue.includes(opcao)}
+                  onChange={(e) =>
+                    set(
+                      "recebeSomenteOQue",
+                      e.target.checked ? [...valores.recebeSomenteOQue, opcao] : valores.recebeSomenteOQue.filter((o) => o !== opcao)
+                    )
+                  }
+                />
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-[var(--fg-muted)]">
+              Nenhum marcado = recebe qualquer lead. Marcando, a distribuição automática só entrega a este consultor leads desses tipos.
+            </p>
           </div>
         )}
 
