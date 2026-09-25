@@ -131,7 +131,7 @@ public sealed class NotionSyncService(
             {
                 try
                 {
-                    if (await DevolverAoVendedorDoCardAsync(page, regional.Id, regionalNome, placeholderVendedorId, ct)) devolvidos++;
+                    if (await DevolverAoVendedorDoCardAsync(page, regional.Id, regionalNome, placeholderVendedorId, ct, etapasPorNome)) devolvidos++;
                     else ignorados++;
                 }
                 catch (Exception ex)
@@ -227,7 +227,9 @@ public sealed class NotionSyncService(
     /// "Vendedor não identificado" da base). Não cria lead nem mexe nos outros campos.
     /// </summary>
     /// <returns>true se o lead foi devolvido.</returns>
-    internal async Task<bool> DevolverAoVendedorDoCardAsync(JsonElement page, Guid regionalId, string regionalNome, Guid placeholderVendedorId, CancellationToken ct)
+    internal async Task<bool> DevolverAoVendedorDoCardAsync(
+        JsonElement page, Guid regionalId, string regionalNome, Guid placeholderVendedorId, CancellationToken ct,
+        IReadOnlyDictionary<string, Guid>? etapasPorNome = null)
     {
         await CarregarUsuariosAtivosAsync(ct);
         var nome = page.Text("Name") ?? PrimeiroTexto(page, "WhatsApp", "[META] Phone Number", "E-mail", "[META] Email") ?? "Sem nome (Notion)";
@@ -242,10 +244,101 @@ public sealed class NotionSyncService(
         var vendedorId = await ResolverVendedorAsync(vendedorInfo, regionalId, regionalNome, placeholderVendedorId, ct);
         var anterior = lead.ResponsavelId;
         await AjustarResponsavelAsync(lead, vendedorId, ChaveVendedor(vendedorInfo), ct);
+
+        // Tipo de indicação do card também vale para os leads que ficam com outro vendedor.
+        if (lead.ConsentimentoOrigem is OrigemLead.MarcadorMigracaoNotion or OrigemLead.MarcadorSincronizacaoNotion)
+        {
+            var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
+            lead.TipoIndicacao = TipoIndicacaoDoCard(page, page.Select("O que"));
+            lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
+            if (etapasPorNome is not null && eraIndicacao != NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao)
+                && TrocarColunaLeadIndicacao(lead, etapasPorNome))
+            {
+                _mudancasNoQuadro++;
+            }
+            if (string.Equals(page.Select("Status"), "VENDA CONCLUIDA", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var oportunidade in await db.CrmOpportunities.Where(o => o.LeadId == lead.Id && !o.Arquivado).ToListAsync(ct))
+                {
+                    AplicarIndicacaoNaOportunidade(oportunidade, page);
+                }
+            }
+        }
+
         await db.SaveChangesAsync(ct);
         if (anterior == lead.ResponsavelId) return false;
         _mudancasNoQuadro++;
         return true;
+    }
+
+    /// <summary>
+    /// Tipo de indicação do lead conforme o card: o campo "Tipo de Indicação?" do Notion (Lead,
+    /// Pessoal, Contemplando Sonhos...); sem ele, "Indicação" se "Indicação?" = SIM; sem nenhum dos
+    /// dois, a classificação antiga pelo "O que" (Lead/Indicação).
+    /// </summary>
+    public static string TipoIndicacaoDoCard(JsonElement page, string? oQue)
+    {
+        var tipo = page.SelectPorNomeAproximado("Tpo de Indicação?", "Tipo de Indicação?", "Tipo de Indicação");
+        if (!string.IsNullOrWhiteSpace(tipo)) return NormalizarTipoIndicacao(tipo);
+        if (IndicacaoMarcada(page)) return "Indicação";
+        return NotionLeadClassifier.Classificar(oQue);
+    }
+
+    /// <summary>"Indicação?" = SIM no card.</summary>
+    private static bool IndicacaoMarcada(JsonElement page) =>
+        string.Equals(page.SelectPorNomeAproximado("Indicação?"), "SIM", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>"PESSOAL" → "Pessoal", "CONTEMPLANDO SONHOS" → "Contemplando Sonhos" (mesma grafia das opções do CRM).</summary>
+    public static string NormalizarTipoIndicacao(string tipo)
+    {
+        var t = tipo.Trim();
+        var conhecido = new[] { "Lead", "Indicação", "Pessoal", "Contemplando Sonhos" }
+            .FirstOrDefault(o => string.Equals(RemoverAcentos(o), RemoverAcentos(t), StringComparison.OrdinalIgnoreCase));
+        if (conhecido is not null) return conhecido;
+        var titulo = System.Globalization.CultureInfo.GetCultureInfo("pt-BR").TextInfo.ToTitleCase(t.ToLowerInvariant());
+        return titulo.Length > 80 ? titulo[..80] : titulo;
+    }
+
+    private static string RemoverAcentos(string texto)
+    {
+        var decomposto = texto.Normalize(System.Text.NormalizationForm.FormD);
+        return new string(decomposto.Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark).ToArray());
+    }
+
+    private static bool EhTipoLead(string? tipo) => string.Equals(tipo?.Trim(), "Lead", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Venda: "Indicação?" = SIM marca a oportunidade como indicação e o tipo do card vai junto.</summary>
+    private static void AplicarIndicacaoNaOportunidade(CrmOpportunity oportunidade, JsonElement page)
+    {
+        if (IndicacaoMarcada(page)) oportunidade.Indicacao = true;
+        var tipo = page.SelectPorNomeAproximado("Tpo de Indicação?", "Tipo de Indicação?", "Tipo de Indicação");
+        if (!string.IsNullOrWhiteSpace(tipo)) oportunidade.TipoIndicacao = NormalizarTipoIndicacao(tipo);
+    }
+
+    /// <summary>
+    /// O lead passou de Lead para Indicação (ou o contrário) e está numa das colunas separadas por
+    /// esse critério ("Em atendimento (Leads)/(Indicação)", "Venda concluída (Leads)/(Indicação)"):
+    /// vai para a coluna par. Outras colunas não mudam.
+    /// </summary>
+    /// <returns>true se mudou de coluna.</returns>
+    private static bool TrocarColunaLeadIndicacao(CrmLead lead, IReadOnlyDictionary<string, Guid> etapasPorNome)
+    {
+        if (lead.EtapaId is not { } etapaAtual) return false;
+        var nomeAtual = etapasPorNome.FirstOrDefault(e => e.Value == etapaAtual).Key;
+        if (nomeAtual is null) return false;
+
+        var ehIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
+        foreach (var coluna in new[] { NotionEtapaLead.EmAtendimento, NotionEtapaLead.VendaConcluida })
+        {
+            if (!nomeAtual.StartsWith(coluna, StringComparison.OrdinalIgnoreCase)) continue;
+            var destino = $"{coluna} ({(ehIndicacao ? "Indicação" : "Leads")})";
+            if (etapasPorNome.TryGetValue(destino, out var destinoId) && destinoId != etapaAtual)
+            {
+                lead.EtapaId = destinoId;
+                return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>
@@ -338,7 +431,7 @@ public sealed class NotionSyncService(
         var estado = estadoSelect is { Length: 2 } ? estadoSelect : (estadoTexto is { Length: 2 } ? estadoTexto : null);
         var cidade = page.Text("Cidade");
         var oQue = page.Select("O que");
-        var tipoIndicacao = NotionLeadClassifier.Classificar(oQue);
+        var tipoIndicacao = TipoIndicacaoDoCard(page, oQue);
 
         var status = page.Select("Status");
         var isVendaConcluida = string.Equals(status, "VENDA CONCLUIDA", StringComparison.OrdinalIgnoreCase);
@@ -436,8 +529,14 @@ public sealed class NotionSyncService(
             lead.Origem = tagCampanha;
         }
         lead.ProdutoInteresse = Cortar(oQue, 120) ?? lead.ProdutoInteresse;
+        var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
         lead.TipoIndicacao = tipoIndicacao;
-        lead.CriadoManualmente = NotionLeadClassifier.CriadoManualmente(oQue);
+        lead.CriadoManualmente = !EhTipoLead(tipoIndicacao);
+        if (!criadoAgora && eraIndicacao != NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao)
+            && TrocarColunaLeadIndicacao(lead, etapasPorNome))
+        {
+            _mudancasNoQuadro++;
+        }
         lead.Placa = placa ?? lead.Placa;
         lead.Gclid = Cortar(page.Text("GCLID"), 200) ?? lead.Gclid;
         lead.UtmSource = Cortar(page.Text("UTM SOURCE"), 120) ?? lead.UtmSource;
@@ -584,6 +683,7 @@ public sealed class NotionSyncService(
         oportunidade.PagamentoAdesao = adesao ?? oportunidade.PagamentoAdesao;
         oportunidade.Porcentagem = porcentagem ?? oportunidade.Porcentagem;
         oportunidade.ValorIndicacao = page.Number("Indicação") is { } valorIndicacao ? (decimal)valorIndicacao : oportunidade.ValorIndicacao;
+        AplicarIndicacaoNaOportunidade(oportunidade, page);
         oportunidade.TermoAdesaoAceito = page.HasFiles("Termo Adesão") || oportunidade.TermoAdesaoAceito;
         oportunidade.Migracao = page.Select("Migração", "Migração?") is not null || oportunidade.Migracao;
 

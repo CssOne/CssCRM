@@ -50,6 +50,30 @@ public static partial class NotionPageExtensions
         return null;
     }
 
+    /// <summary>
+    /// Select cujo nome da propriedade bate com um dos informados ignorando maiúsculas, acentos e
+    /// espaços nas pontas — os nomes variam entre as bases ("Tpo de Indicação? ", "Tipo de Indicação?").
+    /// </summary>
+    public static string? SelectPorNomeAproximado(this JsonElement page, params string[] nomes)
+    {
+        var procurados = nomes.Select(ChaveDeNome).ToHashSet();
+        foreach (var prop in page.GetProperty("properties").EnumerateObject())
+        {
+            if (!procurados.Contains(ChaveDeNome(prop.Name))) continue;
+            var valor = prop.Value;
+            if (valor.GetProperty("type").GetString() != "select") continue;
+            var select = valor.GetProperty("select");
+            if (select.ValueKind == JsonValueKind.Object && select.GetProperty("name").GetString() is { Length: > 0 } nome) return nome.Trim();
+        }
+        return null;
+    }
+
+    private static string ChaveDeNome(string nome)
+    {
+        var decomposto = nome.Trim().ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+        return new string(decomposto.Where(c => CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark).ToArray());
+    }
+
     public static string? Select(this JsonElement page, params string[] nomes)
     {
         var prop = page.Prop(nomes);
