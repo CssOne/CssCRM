@@ -17,6 +17,10 @@ public sealed class PublicLeadIntakeService(
     ILogger<PublicLeadIntakeService> logger,
     ICrmEventHub? eventos = null) : IPublicLeadIntakeService
 {
+    /// <summary>form_ids do formulário de caminhão (AGV Truck) — não passam pelo rodízio, vão direto pra Samys.</summary>
+    private static readonly HashSet<string> FormsCaminhaoSamys = ["1148948400894957", "2294287594679432", "1101990252362830"];
+    private const string EmailConsultoraCaminhao = "samys.alexandre@gmail.com";
+
     public async Task<PublicLeadResultDto> CriarAsync(PublicLeadCreateRequest request, CancellationToken ct)
     {
         var emailNormalizado = DocumentValidation.NormalizarEmail(request.Email);
@@ -36,7 +40,7 @@ public sealed class PublicLeadIntakeService(
                 string.IsNullOrWhiteSpace(request.Veiculo) ? null : $"Veículo: {request.Veiculo}",
             }.Where(s => s is not null));
 
-        var responsavelId = await assignment.ProximoResponsavelAsync(ct);
+        var responsavelId = await ResolverResponsavelAsync(request.Projeto, ct);
 
         var lead = new CrmLead
         {
@@ -106,6 +110,29 @@ public sealed class PublicLeadIntakeService(
         await db.SaveChangesAsync(ct);
         eventos?.PublicarQuadroAtualizado("site");
         logger.LogInformation("Lead {LeadId} reclassificado como tráfego pago (contato antigo recebeu lead novo)", existente.Id);
+    }
+
+    /// <summary>
+    /// Leads dos formulários de caminhão vão direto pra Samys, sem passar pelo rodízio normal —
+    /// só cai no rodízio se a conta dela não existir ou estiver inativa (não deixa o lead sem
+    /// responsável só porque a exceção não pôde ser aplicada).
+    /// </summary>
+    private async Task<Guid?> ResolverResponsavelAsync(string? projeto, CancellationToken ct)
+    {
+        var formId = projeto?.StartsWith("meta-instant-") == true ? projeto["meta-instant-".Length..] : null;
+        if (formId is not null && FormsCaminhaoSamys.Contains(formId))
+        {
+            var emailNormalizado = EmailConsultoraCaminhao.ToUpperInvariant();
+            var consultoraId = await db.Users.AsNoTracking()
+                .Where(u => u.NormalizedEmail == emailNormalizado && u.Ativo)
+                .Select(u => (Guid?)u.Id)
+                .FirstOrDefaultAsync(ct);
+
+            if (consultoraId is not null) return consultoraId;
+            logger.LogWarning("Lead de caminhão (form {FormId}) não pôde ser atribuído à consultora fixa — caindo no rodízio normal", formId);
+        }
+
+        return await assignment.ProximoResponsavelAsync(ct);
     }
 
     private async Task<CrmLead?> EncontrarLeadExistenteAsync(string? emailNormalizado, string? telefoneNormalizado, CancellationToken ct)
