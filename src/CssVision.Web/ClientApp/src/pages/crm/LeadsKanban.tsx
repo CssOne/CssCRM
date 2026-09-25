@@ -21,6 +21,8 @@ import { StageChangeDialog } from "../../components/crm/StageChangeDialog";
 import { VeiculoNaoFazemosDialog } from "../../components/crm/VeiculoNaoFazemosDialog";
 import { AdesaoCotacaoDialog } from "../../components/crm/AdesaoCotacaoDialog";
 import { AlterarResponsavelDialog } from "../../components/crm/AlterarResponsavelDialog";
+import { MultiSelect } from "../../components/MultiSelect";
+import { OPCOES_FILTRO_TIPO_INDICACAO } from "../../lib/opcoesLead";
 import { useAuth } from "../../context/AuthContext";
 import { useCrmEventos } from "../../lib/useCrmEventos";
 
@@ -43,20 +45,23 @@ const CARTOES_POR_PAGINA = 30;
 
 /** Mesma regra usada na etiqueta do rodapé do cartão — mantém as duas em sincronia. */
 function classificarCartao(cartao: LeadKanbanCard): "lead" | "indicacao" | null {
-  if (cartao.tipoIndicacao?.toLowerCase() === "lead") return "lead";
-  if (cartao.criadoManualmente || cartao.tipoIndicacao?.toLowerCase() === "indicação") return "indicacao";
+  const tipo = cartao.tipoIndicacao?.trim().toLowerCase();
+  if (tipo === "lead") return "lead";
+  // Indicação, Pessoal, Contemplando Sonhos... — qualquer tipo que não seja "Lead".
+  if (cartao.criadoManualmente || tipo) return "indicacao";
   return null;
 }
 
 /** Filtros do quadro — guardados no navegador para não se perderem ao abrir um card ou recarregar. */
 interface FiltrosQuadro {
   busca: string;
-  responsavelId: string;
-  regional: string;
-  origem: string;
+  responsavelId: string[];
+  regional: string[];
+  origem: string[];
   incluirArquivados: boolean;
-  categoria: string;
-  fonte: string;
+  categoria: string[];
+  fonte: string[];
+  tipoIndicacao: string[];
   dataChegadaInicio: string;
   dataChegadaFim: string;
   dataVendaInicio: string;
@@ -70,31 +75,44 @@ interface FiltroSalvo {
 
 const FILTROS_VAZIOS: FiltrosQuadro = {
   busca: "",
-  responsavelId: "",
-  regional: "",
-  origem: "",
+  responsavelId: [],
+  regional: [],
+  origem: [],
   incluirArquivados: false,
-  categoria: "",
-  fonte: "",
+  categoria: [],
+  fonte: [],
+  tipoIndicacao: [],
   dataChegadaInicio: "",
   dataChegadaFim: "",
   dataVendaInicio: "",
   dataVendaFim: "",
 };
 
-function lerJson<T>(chave: string, padrao: T): T {
+const CAMPOS_MULTIPLOS = ["responsavelId", "regional", "origem", "categoria", "fonte", "tipoIndicacao"] as const;
+
+/** Completa e corrige filtros guardados — os salvos antes da múltipla escolha tinham um valor só (texto). */
+function normalizarFiltros(bruto: unknown): FiltrosQuadro {
+  const f = { ...FILTROS_VAZIOS, ...(typeof bruto === "object" && bruto ? bruto : {}) } as Record<string, unknown>;
+  for (const campo of CAMPOS_MULTIPLOS) {
+    const valor = f[campo];
+    f[campo] = Array.isArray(valor) ? valor.map(String) : typeof valor === "string" && valor ? [valor] : [];
+  }
+  return f as unknown as FiltrosQuadro;
+}
+
+function lerFiltros(chave: string): FiltrosQuadro {
   try {
     const bruto = localStorage.getItem(chave);
-    return bruto ? { ...padrao, ...JSON.parse(bruto) } : padrao;
+    return bruto ? normalizarFiltros(JSON.parse(bruto)) : FILTROS_VAZIOS;
   } catch {
-    return padrao;
+    return FILTROS_VAZIOS;
   }
 }
 
 function lerFiltrosSalvos(chave: string): FiltroSalvo[] {
   try {
     const lista = JSON.parse(localStorage.getItem(chave) ?? "[]");
-    return Array.isArray(lista) ? lista.map((f) => ({ nome: String(f.nome), filtros: { ...FILTROS_VAZIOS, ...f.filtros } })) : [];
+    return Array.isArray(lista) ? lista.map((f) => ({ nome: String(f.nome), filtros: normalizarFiltros(f.filtros) })) : [];
   } catch {
     return [];
   }
@@ -115,7 +133,7 @@ export function LeadsKanbanPage() {
   const podeGerir = temPapel("Admin", "GestorMaster", "GestorComercial");
   const chaveFiltros = `quadro-leads-filtros:${sessao?.id ?? ""}`;
   const chaveFiltrosSalvos = `quadro-leads-filtros-salvos:${sessao?.id ?? ""}`;
-  const [filtrosIniciais] = useState(() => lerJson(chaveFiltros, FILTROS_VAZIOS));
+  const [filtrosIniciais] = useState(() => lerFiltros(chaveFiltros));
   // Origem (filtro e rodapé do cartão) só para administradores — o servidor também não a envia aos demais.
   const podeVerOrigem = temPapel("Admin", "GestorMaster");
   // Excluir lead é só para Admin/GestorMaster (ver LeadService.ExcluirAsync no back-end).
@@ -134,6 +152,7 @@ export function LeadsKanbanPage() {
   const [incluirArquivados, setIncluirArquivados] = useState(filtrosIniciais.incluirArquivados);
   const [categoria, setCategoria] = useState(filtrosIniciais.categoria);
   const [fonte, setFonte] = useState(filtrosIniciais.fonte);
+  const [tipoIndicacao, setTipoIndicacao] = useState(filtrosIniciais.tipoIndicacao);
   const [dataChegadaInicio, setDataChegadaInicio] = useState(filtrosIniciais.dataChegadaInicio);
   const [dataChegadaFim, setDataChegadaFim] = useState(filtrosIniciais.dataChegadaFim);
   const [dataVendaInicio, setDataVendaInicio] = useState(filtrosIniciais.dataVendaInicio);
@@ -191,12 +210,13 @@ export function LeadsKanbanPage() {
   const filtro = useMemo(
     () => ({
       busca: busca || undefined,
-      responsavelId: responsavelId || undefined,
-      regional: regional || undefined,
-      origem: origem || undefined,
+      responsavelId,
+      regional,
+      origem,
       incluirArquivados: incluirArquivados || undefined,
-      categoria: categoria || undefined,
-      fonte: fonte || undefined,
+      categoria,
+      fonte,
+      tipoIndicacao,
       dataChegadaInicio: dataChegadaInicio || undefined,
       dataChegadaFim: dataChegadaFim || undefined,
       dataVendaInicio: dataVendaInicio || undefined,
@@ -210,6 +230,7 @@ export function LeadsKanbanPage() {
       incluirArquivados,
       categoria,
       fonte,
+      tipoIndicacao,
       dataChegadaInicio,
       dataChegadaFim,
       dataVendaInicio,
@@ -226,12 +247,13 @@ export function LeadsKanbanPage() {
       incluirArquivados,
       categoria,
       fonte,
+      tipoIndicacao,
       dataChegadaInicio,
       dataChegadaFim,
       dataVendaInicio,
       dataVendaFim,
     }),
-    [busca, responsavelId, regional, origem, incluirArquivados, categoria, fonte, dataChegadaInicio, dataChegadaFim, dataVendaInicio, dataVendaFim]
+    [busca, responsavelId, regional, origem, incluirArquivados, categoria, fonte, tipoIndicacao, dataChegadaInicio, dataChegadaFim, dataVendaInicio, dataVendaFim]
   );
 
   // Mantém os filtros ao abrir um card e voltar, ou ao recarregar a página.
@@ -247,6 +269,7 @@ export function LeadsKanbanPage() {
     setIncluirArquivados(f.incluirArquivados);
     setCategoria(f.categoria);
     setFonte(f.fonte);
+    setTipoIndicacao(f.tipoIndicacao);
     setDataChegadaInicio(f.dataChegadaInicio);
     setDataChegadaFim(f.dataChegadaFim);
     setDataVendaInicio(f.dataVendaInicio);
@@ -508,12 +531,13 @@ export function LeadsKanbanPage() {
 
   const filtrosAtivos = !!(
     busca ||
-    responsavelId ||
-    regional ||
-    origem ||
+    responsavelId.length ||
+    regional.length ||
+    origem.length ||
     incluirArquivados ||
-    categoria ||
-    fonte ||
+    categoria.length ||
+    fonte.length ||
+    tipoIndicacao.length ||
     dataChegadaInicio ||
     dataChegadaFim ||
     dataVendaInicio ||
@@ -560,32 +584,46 @@ export function LeadsKanbanPage() {
         {podeVerOrigem && (
           <div className="w-44">
             <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Origem</label>
-            <Select value={origem} onChange={(e) => setOrigem(e.target.value)}>
-              <option value="">Todas</option>
-              {origens.map((o) => (
-                <option key={o} value={o}>
-                  {o}
-                </option>
-              ))}
-            </Select>
+            <MultiSelect
+              ariaLabel="Origem"
+              rotuloTodos="Todas"
+              opcoes={origens.map((o) => ({ valor: o, rotulo: o }))}
+              valores={origem}
+              onChange={setOrigem}
+            />
           </div>
         )}
         <div className="w-44">
           <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Categoria</label>
-          <Select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
-            <option value="">Todas</option>
-            <option value="Migração">Migração</option>
-            <option value="Indicação">Indicação</option>
-            <option value="Lead">Lead</option>
-          </Select>
+          <MultiSelect
+            ariaLabel="Categoria"
+            rotuloTodos="Todas"
+            opcoes={["Migração", "Indicação", "Lead"].map((c) => ({ valor: c, rotulo: c }))}
+            valores={categoria}
+            onChange={setCategoria}
+          />
+        </div>
+        <div className="w-48">
+          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Tipo de indicação</label>
+          <MultiSelect
+            ariaLabel="Tipo de indicação"
+            opcoes={OPCOES_FILTRO_TIPO_INDICACAO.map((t) => ({ valor: t, rotulo: t }))}
+            valores={tipoIndicacao}
+            onChange={setTipoIndicacao}
+          />
         </div>
         <div className="w-44">
           <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Fonte</label>
-          <Select value={fonte} onChange={(e) => setFonte(e.target.value)}>
-            <option value="">Todas</option>
-            <option value="TrafegoPago">Tráfego pago</option>
-            <option value="Notion">Notion</option>
-          </Select>
+          <MultiSelect
+            ariaLabel="Fonte"
+            rotuloTodos="Todas"
+            opcoes={[
+              { valor: "TrafegoPago", rotulo: "Tráfego pago" },
+              { valor: "Notion", rotulo: "Notion" },
+            ]}
+            valores={fonte}
+            onChange={setFonte}
+          />
         </div>
         <div className="flex items-end gap-1">
           <div className="w-36">
@@ -611,25 +649,22 @@ export function LeadsKanbanPage() {
           <>
             <div className="w-48">
               <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Vendedor</label>
-              <Select value={responsavelId} onChange={(e) => setResponsavelId(e.target.value)}>
-                <option value="">Todos</option>
-                {vendedores.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.nome}
-                  </option>
-                ))}
-              </Select>
+              <MultiSelect
+                ariaLabel="Vendedor"
+                opcoes={vendedores.map((v) => ({ valor: v.id, rotulo: v.nome }))}
+                valores={responsavelId}
+                onChange={setResponsavelId}
+              />
             </div>
             <div className="w-44">
               <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Regional</label>
-              <Select value={regional} onChange={(e) => setRegional(e.target.value)}>
-                <option value="">Todas</option>
-                {regionais.map((r) => (
-                  <option key={r.id} value={r.nome}>
-                    {r.nome}
-                  </option>
-                ))}
-              </Select>
+              <MultiSelect
+                ariaLabel="Regional"
+                rotuloTodos="Todas"
+                opcoes={regionais.map((r) => ({ valor: r.nome, rotulo: r.nome }))}
+                valores={regional}
+                onChange={setRegional}
+              />
             </div>
             <div className="w-40">
               <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Status</label>
@@ -839,11 +874,16 @@ export function LeadsKanbanPage() {
                       {/* TipoIndicacao === "Lead" manda mesmo quando CriadoManualmente diz o
                           contrário — bases migradas em épocas diferentes às vezes gravaram esse
                           campo sem sincronizar CriadoManualmente junto (ver NotionLeadClassifier). */}
-                      {cartao.tipoIndicacao?.toLowerCase() === "lead" ? (
+                      {classificarCartao(cartao) === "lead" ? (
                         <Badge variant="info">Lead</Badge>
                       ) : (
-                        (cartao.criadoManualmente || cartao.tipoIndicacao?.toLowerCase() === "indicação") && (
-                          <Badge variant="brand">Indicação</Badge>
+                        classificarCartao(cartao) === "indicacao" && (
+                          // O tipo escolhido (Pessoal, Contemplando Sonhos...) ou "Indicação".
+                          <Badge variant="brand">
+                            {cartao.tipoIndicacao?.trim() && cartao.tipoIndicacao.trim().toLowerCase() !== "lead"
+                              ? cartao.tipoIndicacao.trim()
+                              : "Indicação"}
+                          </Badge>
                         )
                       )}
                     </div>

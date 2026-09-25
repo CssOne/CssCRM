@@ -5,39 +5,52 @@ import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/f
 import type { GestaoComercialResumo, RedistribuicaoHistorico, VendedorResumo } from "../../lib/types";
 import { Badge, Card, ErrorState, Input, Skeleton, useToast } from "../../components/ui";
 
-function LimiteMensalInput({ vendedor, onSalvo }: { vendedor: VendedorResumo; onSalvo: () => void }) {
+function LimiteInput({
+  vendedor,
+  tipo,
+  onSalvo,
+}: {
+  vendedor: VendedorResumo;
+  tipo: "mensal" | "diario";
+  onSalvo: () => void;
+}) {
   const { notificar } = useToast();
-  const [valor, setValor] = useState(vendedor.limiteMensalLeads?.toString() ?? "");
+  const atual = (tipo === "mensal" ? vendedor.limiteMensalLeads : vendedor.limiteDiarioLeads) ?? null;
+  const [valor, setValor] = useState(atual?.toString() ?? "");
   const [salvando, setSalvando] = useState(false);
 
   async function salvar() {
     const limite = valor.trim() === "" ? null : Number(valor);
     if (limite !== null && (Number.isNaN(limite) || limite < 0)) {
       notificar("error", "Limite inválido.");
-      setValor(vendedor.limiteMensalLeads?.toString() ?? "");
+      setValor(atual?.toString() ?? "");
       return;
     }
-    if (limite === (vendedor.limiteMensalLeads ?? null)) return;
+    if (limite === atual) return;
 
     setSalvando(true);
     try {
-      await api.put(`/crm/management/vendedores/${vendedor.id}/limite`, { limite });
-      notificar("success", "Limite mensal atualizado.");
+      await api.put(`/crm/management/vendedores/${vendedor.id}/${tipo === "mensal" ? "limite" : "limite-diario"}`, { limite });
+      notificar("success", tipo === "mensal" ? "Limite mensal atualizado." : "Limite diário atualizado.");
       onSalvo();
     } catch {
       notificar("error", "Não foi possível atualizar o limite.");
-      setValor(vendedor.limiteMensalLeads?.toString() ?? "");
+      setValor(atual?.toString() ?? "");
     } finally {
       setSalvando(false);
     }
   }
 
+  const recebidos = tipo === "mensal" ? vendedor.leadsRecebidosNoMes : vendedor.leadsRecebidosHoje ?? 0;
   return (
     <div className="mt-1 flex items-center gap-1 text-xs text-[var(--fg-muted)]">
-      <span>{vendedor.leadsRecebidosNoMes} recebido(s) no mês · limite:</span>
+      <span>
+        {recebidos} recebido(s) {tipo === "mensal" ? "no mês" : "hoje"} · limite {tipo === "mensal" ? "mensal" : "diário"}:
+      </span>
       <Input
         className="h-6 w-16 px-1 py-0 text-xs"
         placeholder="—"
+        aria-label={tipo === "mensal" ? "Limite mensal de leads" : "Limite diário de leads"}
         value={valor}
         disabled={salvando}
         onChange={(e) => setValor(e.target.value.replace(/[^0-9]/g, ""))}
@@ -113,7 +126,8 @@ export function ManagementPage() {
               <div key={v.id} className="rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm">
                 <p className="font-medium text-[var(--fg)]">{v.nome}</p>
                 <p className="text-xs text-[var(--fg-muted)]">{v.leadsAtivos} leads · {v.oportunidadesAbertas} oportunidades</p>
-                <LimiteMensalInput vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
+                <LimiteInput tipo="mensal" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
+                <LimiteInput tipo="diario" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
               </div>
             ))}
           </div>

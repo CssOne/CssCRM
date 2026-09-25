@@ -121,32 +121,48 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
                 (buscaDigitos != "" && l.TelefoneNormalizado != null && l.TelefoneNormalizado.Contains(buscaDigitos)));
         }
 
-        if (filtro.ResponsavelId.HasValue) query = query.Where(l => l.ResponsavelId == filtro.ResponsavelId);
+        var responsaveis = Valores(filtro.ResponsavelId?.Select(id => (Guid?)id));
+        if (responsaveis.Count > 0) query = query.Where(l => responsaveis.Contains(l.ResponsavelId));
         // Origem é informação só de administrador (visão total): para os demais, nem filtra nem aparece no cartão.
         var podeVerOrigem = visiveis is null;
-        if (podeVerOrigem && !string.IsNullOrWhiteSpace(filtro.Origem)) query = query.Where(l => l.Origem == filtro.Origem);
-        if (!string.IsNullOrWhiteSpace(filtro.Regional)) query = query.Where(l => l.Regional == filtro.Regional);
+        var origens = Valores(filtro.Origem);
+        if (podeVerOrigem && origens.Count > 0) query = query.Where(l => origens.Contains(l.Origem));
+        var regionais = Valores(filtro.Regional);
+        if (regionais.Count > 0) query = query.Where(l => regionais.Contains(l.Regional));
 
         // Dados migrados em épocas diferentes gravaram TipoIndicacao com capitalização distinta
-        // (ex.: "LEAD" vs "Lead") — ILike compara sem diferenciar maiúsculas/minúsculas.
-        query = filtro.Categoria switch
+        // (ex.: "LEAD" vs "Lead") — as comparações abaixo ignoram maiúsculas/minúsculas.
+        var categorias = Valores(filtro.Categoria);
+        if (categorias.Count > 0)
         {
-            // Pelo marcador da migração, não pelo texto da Origem (que vira a tag de campanha).
-            "Migração" => query.Where(l => l.ConsentimentoOrigem == OrigemLead.MarcadorMigracaoNotion),
-            "Indicação" => query.Where(l => l.TipoIndicacao != null && EF.Functions.ILike(l.TipoIndicacao, "Indicação")),
-            "Lead" => query.Where(l => l.TipoIndicacao != null && EF.Functions.ILike(l.TipoIndicacao, "Lead")),
-            _ => query,
-        };
+            var migracao = categorias.Contains("Migração");
+            var indicacao = categorias.Contains("Indicação");
+            var lead = categorias.Contains("Lead");
+            query = query.Where(l =>
+                // Pelo marcador da migração, não pelo texto da Origem (que vira a tag de campanha).
+                (migracao && l.ConsentimentoOrigem == OrigemLead.MarcadorMigracaoNotion)
+                // Indicação = qualquer tipo que não seja "Lead" (Indicação, Pessoal, Contemplando Sonhos...).
+                || (indicacao && l.TipoIndicacao != null && l.TipoIndicacao.ToLower() != "lead")
+                || (lead && l.TipoIndicacao != null && l.TipoIndicacao.ToLower() == "lead"));
+        }
 
-        query = filtro.Fonte switch
+        var tipos = Valores(filtro.TipoIndicacao).Select(t => t!.ToLower()).ToList();
+        if (tipos.Count > 0) query = query.Where(l => l.TipoIndicacao != null && tipos.Contains(l.TipoIndicacao.ToLower()));
+
+        var fontes = Valores(filtro.Fonte);
+        if (fontes.Count > 0)
         {
-            "Notion" => query.Where(l => l.ConsentimentoOrigem == OrigemLead.MarcadorMigracaoNotion
-                || l.ConsentimentoOrigem == OrigemLead.MarcadorSincronizacaoNotion),
-            // Direto dos anúncios (Meta Lead Ads ou formulário do site), sem os do Notion — cards
-            // migrados também podem trazer o ID do lead no Meta.
-            "TrafegoPago" => query.Where(OrigemLead.VeioDoTrafegoPago),
-            _ => query,
-        };
+            var notion = fontes.Contains("Notion");
+            var trafego = fontes.Contains("TrafegoPago");
+            query = query.Where(l =>
+                (notion && (l.ConsentimentoOrigem == OrigemLead.MarcadorMigracaoNotion
+                    || l.ConsentimentoOrigem == OrigemLead.MarcadorSincronizacaoNotion))
+                // Direto dos anúncios (Meta Lead Ads ou formulário do site), sem os do Notion — cards
+                // migrados também podem trazer o ID do lead no Meta. Mesma regra de OrigemLead.VeioDoTrafegoPago.
+                || (trafego && l.ConsentimentoOrigem != OrigemLead.MarcadorMigracaoNotion
+                    && l.ConsentimentoOrigem != OrigemLead.MarcadorSincronizacaoNotion
+                    && (l.MetaLeadId != null || l.ConsentimentoOrigem == OrigemLead.MarcadorFormularioSite)));
+        }
 
         if (filtro.DataChegadaInicio is { } chegadaInicio)
         {
@@ -171,4 +187,8 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
 
         return (query, podeVerOrigem);
     }
+
+    /// <summary>Valores preenchidos de um filtro de múltipla escolha (ignora vazios e repetidos).</summary>
+    private static List<T> Valores<T>(IEnumerable<T>? valores) =>
+        (valores ?? []).Where(v => v is not null && (v is not string s || !string.IsNullOrWhiteSpace(s))).Distinct().ToList();
 }

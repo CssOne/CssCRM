@@ -22,6 +22,7 @@ export interface UserFormValues {
   gestorComercialId: string;
   grupoId: string;
   limiteMensalLeads: string;
+  limiteDiarioLeads: string;
   /** Vazio = recebe qualquer lead na distribuição automática. */
   recebeSomenteOQue: string[];
   ativo: boolean;
@@ -38,6 +39,7 @@ function valoresVazios(papelFixo?: string): UserFormValues {
     gestorComercialId: "",
     grupoId: "",
     limiteMensalLeads: "",
+    limiteDiarioLeads: "",
     recebeSomenteOQue: [],
     ativo: true,
   };
@@ -54,6 +56,7 @@ export function paraFormValues(usuario: UserSummary): UserFormValues {
     gestorComercialId: usuario.gestorComercialId ?? "",
     grupoId: usuario.grupoId ?? "",
     limiteMensalLeads: usuario.limiteMensalLeads != null ? String(usuario.limiteMensalLeads) : "",
+    limiteDiarioLeads: usuario.limiteDiarioLeads != null ? String(usuario.limiteDiarioLeads) : "",
     recebeSomenteOQue: usuario.recebeSomenteOQue ?? [],
     ativo: usuario.ativo,
   };
@@ -70,6 +73,7 @@ export function paraCriarRequest(v: UserFormValues): UserCreateRequest {
     gestorComercialId: v.gestorComercialId || null,
     grupoId: v.papel === "Comercial" ? v.grupoId || null : null,
     limiteMensalLeads: v.limiteMensalLeads ? Number(v.limiteMensalLeads) : null,
+    limiteDiarioLeads: v.limiteDiarioLeads ? Number(v.limiteDiarioLeads) : null,
     recebeSomenteOQue: v.papel === "Comercial" ? v.recebeSomenteOQue : null,
   };
 }
@@ -83,6 +87,7 @@ export function paraAtualizarRequest(v: UserFormValues): UserUpdateRequest {
     gestorComercialId: v.gestorComercialId || null,
     grupoId: v.papel === "Comercial" ? v.grupoId || null : null,
     limiteMensalLeads: v.limiteMensalLeads ? Number(v.limiteMensalLeads) : null,
+    limiteDiarioLeads: v.limiteDiarioLeads ? Number(v.limiteDiarioLeads) : null,
     ativo: v.ativo,
     recebeSomenteOQue: v.papel === "Comercial" ? v.recebeSomenteOQue : null,
   };
@@ -271,6 +276,13 @@ export function UserForm({
           <div>
             <Label htmlFor="user-limite">Limite mensal de leads (opcional)</Label>
             <Input id="user-limite" type="number" min={0} value={valores.limiteMensalLeads} onChange={(e) => set("limiteMensalLeads", e.target.value)} />
+          </div>
+        )}
+
+        {exibirLimite && (
+          <div>
+            <Label htmlFor="user-limite-diario">Limite diário de leads (opcional)</Label>
+            <Input id="user-limite-diario" type="number" min={0} value={valores.limiteDiarioLeads} onChange={(e) => set("limiteDiarioLeads", e.target.value)} />
           </div>
         )}
 

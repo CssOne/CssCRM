@@ -42,9 +42,11 @@ public record LeadKanbanBoardDto(IReadOnlyList<LeadKanbanColumnDto> Colunas);
 public record LeadKanbanFilterRequest
 {
     public string? Busca { get; init; }
-    public Guid? ResponsavelId { get; init; }
-    public string? Origem { get; init; }
-    public string? Regional { get; init; }
+
+    // Filtros de múltipla escolha: ?origem=A&origem=B traz leads de A OU de B.
+    public Guid[]? ResponsavelId { get; init; }
+    public string[]? Origem { get; init; }
+    public string[]? Regional { get; init; }
     public bool IncluirArquivados { get; init; }
 
     /// <summary>
@@ -55,13 +57,16 @@ public record LeadKanbanFilterRequest
 
     /// <summary>"Migração" (leads da migração histórica do Notion), "Indicação" ou "Lead" (TipoIndicacao) —
     /// ver LeadKanbanService.ObterBoardAsync.</summary>
-    public string? Categoria { get; init; }
+    public string[]? Categoria { get; init; }
+
+    /// <summary>Tipo de indicação do lead (Lead, Indicação, Pessoal, Contemplando Sonhos...), sem diferenciar maiúsculas.</summary>
+    public string[]? TipoIndicacao { get; init; }
 
     /// <summary>
     /// Por onde o lead entrou no CRM: "TrafegoPago" (direto dos anúncios — Meta Lead Ads e formulário
     /// do site) ou "Notion" (migração histórica e sincronização). Ver LeadKanbanService.
     /// </summary>
-    public string? Fonte { get; init; }
+    public string[]? Fonte { get; init; }
 
     public DateOnly? DataChegadaInicio { get; init; }
     public DateOnly? DataChegadaFim { get; init; }

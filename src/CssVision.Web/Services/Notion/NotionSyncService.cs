@@ -57,22 +57,34 @@ public sealed class NotionSyncService(
     {
         var notion = new NotionClient(token);
         var relatorios = new List<string>();
-        foreach (var spec in DataSources)
+        // Primeiro o incremental de todas as bases (cards novos/editados não esperam a reimportação,
+        // que é longa); depois, a reimportação das bases que ainda não a fizeram.
+        foreach (var reimportacao in new[] { false, true })
         {
-            try
+            foreach (var spec in DataSources)
             {
-                relatorios.Add(await SincronizarDataSourceAsync(notion, spec.DataSourceId, spec.RegionalName, ct));
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Falha sincronizando data source {DataSourceId} ({Regional})", spec.DataSourceId, spec.RegionalName);
-                relatorios.Add($"{spec.RegionalName}: FALHOU ({ex.Message})");
+                try
+                {
+                    if (await SincronizarDataSourceAsync(notion, spec.DataSourceId, spec.RegionalName, reimportacao, ct) is { } relatorio)
+                    {
+                        relatorios.Add(relatorio);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Falha sincronizando data source {DataSourceId} ({Regional})", spec.DataSourceId, spec.RegionalName);
+                    relatorios.Add($"{spec.RegionalName}: FALHOU ({ex.Message})");
+                }
             }
         }
         return string.Join(" | ", relatorios);
     }
 
-    private async Task<string> SincronizarDataSourceAsync(NotionClient notion, string dataSourceId, string regionalNome, CancellationToken ct)
+    /// <param name="reimportacao">
+    /// false: realinhamento (se pendente) ou incremental. true: só a reimportação dos consultores
+    /// ativos, se ainda pendente nesta base — senão não faz nada e devolve null.
+    /// </param>
+    private async Task<string?> SincronizarDataSourceAsync(NotionClient notion, string dataSourceId, string regionalNome, bool reimportacao, CancellationToken ct)
     {
         var inicioDaExecucao = DateTimeOffset.UtcNow;
         var checkpoint = await db.CrmNotionSyncCheckpoints.FindAsync([dataSourceId], ct);
@@ -83,7 +95,8 @@ public sealed class NotionSyncService(
         var realinhar = checkpoint?.RealinhamentoConcluidoEm is null;
         // Reimportação (uma vez por base, depois do realinhamento): relê a base inteira, de todas as
         // datas, e traz com todos os campos os cards cujo Vendedor é um usuário ativo no CRM.
-        var reimportarAtivos = !realinhar && checkpoint!.ReimportacaoAtivosConcluidaEm is null;
+        var reimportarAtivos = reimportacao && !realinhar && checkpoint!.ReimportacaoAtivosConcluidaEm is null;
+        if (reimportacao && !reimportarAtivos) return null;
         await CarregarUsuariosAtivosAsync(ct);
         var paginas = realinhar
             ? PaginasCriadasDesdeAsync(notion, dataSourceId, DataMinimaImportacao, ct)
@@ -125,6 +138,9 @@ public sealed class NotionSyncService(
                 {
                     erros++;
                     logger.LogWarning(ex, "Erro conferindo o vendedor da pagina {PageId} ({Regional})", page.PageId(), regionalNome);
+                }
+                finally
+                {
                     db.ChangeTracker.Clear();
                 }
                 continue;
@@ -156,9 +172,13 @@ public sealed class NotionSyncService(
             {
                 erros++;
                 logger.LogWarning(ex, "Erro sincronizando pagina {PageId} ({Regional})", page.PageId(), regionalNome);
-                // Uma falha de SaveChangesAsync deixa a entidade inválida presa no change tracker —
-                // sem isso, toda gravação seguinte (mesmo de páginas OK, de outras fontes até) falha
-                // tentando persistir de novo a mesma entidade quebrada.
+            }
+            finally
+            {
+                // Cada card é gravado na hora: o change tracker não precisa guardar nada entre um card
+                // e outro. Limpar sempre evita (1) que uma entidade inválida de uma falha trave as
+                // gravações seguintes e (2) que milhares de leads rastreados deixem cada SaveChanges
+                // mais lento que o anterior (a reimportação chegou a ~20 leads por minuto).
                 db.ChangeTracker.Clear();
             }
         }

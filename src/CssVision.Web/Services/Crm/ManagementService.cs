@@ -54,16 +54,20 @@ public sealed class ManagementService(
         var query = db.Users.AsNoTracking().Where(u => u.Ativo);
         if (visiveis is not null) query = query.Where(u => visiveis.Contains(u.Id));
 
-        var vendedores = await query.Select(u => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads }).ToListAsync(ct);
+        var vendedores = await query.Select(u => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads }).ToListAsync(ct);
         var resultado = new List<VendedorResumoDto>();
         var inicioMes = new DateTimeOffset(new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1), TimeSpan.Zero);
+        var inicioDia = LeadAssignmentService.InicioDoDia();
 
         foreach (var v in vendedores)
         {
             var leadsAtivos = await db.CrmLeads.CountAsync(l => l.ResponsavelId == v.Id && !l.Arquivado, ct);
             var abertas = await db.CrmOpportunities.CountAsync(o => o.ResponsavelId == v.Id && !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Aberta, ct);
-            var recebidosNoMes = await db.CrmLeads.CountAsync(l => l.ResponsavelId == v.Id && l.CriadoEm >= inicioMes, ct);
-            resultado.Add(new VendedorResumoDto(v.Id, v.NomeCompleto, leadsAtivos, abertas, v.LimiteMensalLeads, recebidosNoMes));
+            // Mesma contagem dos limites: só leads do tráfego pago (ver LeadAssignmentService).
+            var doTrafego = db.CrmLeads.Where(OrigemLead.VeioDoTrafegoPago).Where(l => l.ResponsavelId == v.Id);
+            var recebidosNoMes = await doTrafego.CountAsync(l => l.CriadoEm >= inicioMes, ct);
+            var recebidosHoje = await doTrafego.CountAsync(l => (l.ResponsavelAtribuidoEm ?? l.CriadoEm) >= inicioDia, ct);
+            resultado.Add(new VendedorResumoDto(v.Id, v.NomeCompleto, leadsAtivos, abertas, v.LimiteMensalLeads, recebidosNoMes, v.LimiteDiarioLeads, recebidosHoje));
         }
 
         return resultado;
@@ -107,7 +111,7 @@ public sealed class ManagementService(
                 .SumAsync(o => (decimal?)(o.ValorFinal ?? o.ValorEstimado), ct) ?? 0m;
             var taxa = (ganhas + perdidas) == 0 ? 0m : Math.Round(100m * ganhas / (ganhas + perdidas), 1);
 
-            var recebidosNoMes = await db.CrmLeads.CountAsync(l => l.ResponsavelId == c.Id && l.CriadoEm >= inicioMes, ct);
+            var recebidosNoMes = await db.CrmLeads.Where(OrigemLead.VeioDoTrafegoPago).CountAsync(l => l.ResponsavelId == c.Id && l.CriadoEm >= inicioMes, ct);
 
             metas.TryGetValue(c.Id, out var meta);
             var metaValor = meta?.MetaValor ?? 0m;
@@ -161,6 +165,27 @@ public sealed class ManagementService(
             ?? throw new CrmNotFoundException("Vendedor", vendedorId);
 
         vendedor.LimiteMensalLeads = request.Limite;
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task AtualizarLimiteDiarioAsync(Guid vendedorId, AtualizarLimiteDiarioRequest request, CancellationToken ct)
+    {
+        ExigirGestaoComercial();
+
+        if (!await equipe.PodeAcessarVendedorAsync(vendedorId, ct))
+        {
+            throw new CrmForbiddenException("Você não pode alterar o limite deste vendedor.");
+        }
+
+        if (request.Limite is < 0)
+        {
+            throw new CrmBusinessException("O limite diário não pode ser negativo.", "limite_invalido");
+        }
+
+        var vendedor = await db.Users.FirstOrDefaultAsync(u => u.Id == vendedorId, ct)
+            ?? throw new CrmNotFoundException("Vendedor", vendedorId);
+
+        vendedor.LimiteDiarioLeads = request.Limite;
         await db.SaveChangesAsync(ct);
     }
 

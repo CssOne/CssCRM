@@ -27,6 +27,13 @@ public class CrmManagementController(IManagementService managementService) : Con
         return NoContent();
     }
 
+    [HttpPut("vendedores/{id:guid}/limite-diario")]
+    public async Task<IActionResult> AtualizarLimiteDiario(Guid id, AtualizarLimiteDiarioRequest request, CancellationToken ct)
+    {
+        await managementService.AtualizarLimiteDiarioAsync(id, request, ct);
+        return NoContent();
+    }
+
     [HttpGet("consultores")]
     public async Task<ActionResult<IReadOnlyList<ConsultorDesempenhoDto>>> ObterDesempenhoConsultores(
         [FromQuery] DateOnly? mesReferencia, CancellationToken ct) =>
