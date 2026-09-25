@@ -20,4 +20,11 @@ public class CrmNotionSyncCheckpoint
     /// coluna de cada lead ao Status atual do Notion. Nulo = realinhamento ainda pendente.
     /// </summary>
     public DateTimeOffset? RealinhamentoConcluidoEm { get; set; }
+
+    /// <summary>
+    /// Quando a base foi relida inteira (todas as datas) para trazer todos os cards dos consultores
+    /// ativos no CRM, com todos os campos — inclusive cards sem nome ou anteriores à data mínima.
+    /// Nulo = reimportação ainda pendente (roda uma vez, depois do realinhamento).
+    /// </summary>
+    public DateTimeOffset? ReimportacaoAtivosConcluidaEm { get; set; }
 }
