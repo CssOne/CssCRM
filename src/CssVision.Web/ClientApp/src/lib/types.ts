@@ -870,6 +870,8 @@ export interface UserSummary {
   limiteMensalLeads?: number | null;
   fotoUrl?: string | null;
   criadoEm: string;
+  /** Distribuição automática: só recebe leads com estes "O que?". Nulo = qualquer lead. */
+  recebeSomenteOQue?: string[] | null;
 }
 
 export interface UserFilterRequest {
@@ -892,6 +894,7 @@ export interface UserCreateRequest {
   gestorComercialId?: string | null;
   grupoId?: string | null;
   limiteMensalLeads?: number | null;
+  recebeSomenteOQue?: string[] | null;
 }
 
 export interface UserUpdateRequest {
@@ -903,6 +906,7 @@ export interface UserUpdateRequest {
   grupoId?: string | null;
   limiteMensalLeads?: number | null;
   ativo: boolean;
+  recebeSomenteOQue?: string[] | null;
 }
 
 export interface GrupoMembro {

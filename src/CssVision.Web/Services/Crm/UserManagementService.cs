@@ -136,6 +136,7 @@ public sealed class UserManagementService(
             GestorComercialId = gestorComercialId,
             GrupoId = grupoId,
             LimiteMensalLeads = request.Papel == Roles.Comercial ? request.LimiteMensalLeads : null,
+            RecebeSomenteOQue = request.Papel == Roles.Comercial ? FiltroOQue.Juntar(request.RecebeSomenteOQue) : null,
         };
 
         var resultado = await userManager.CreateAsync(usuario, request.Senha);
@@ -213,6 +214,9 @@ public sealed class UserManagementService(
         usuario.GestorComercialId = gestorComercialId;
         usuario.GrupoId = grupoId;
         usuario.LimiteMensalLeads = request.Papel == Roles.Comercial ? request.LimiteMensalLeads : null;
+        // Só quando vier (lista vazia limpa): outras telas que editam o usuário não mandam o campo.
+        if (request.Papel != Roles.Comercial) usuario.RecebeSomenteOQue = null;
+        else if (request.RecebeSomenteOQue is not null) usuario.RecebeSomenteOQue = FiltroOQue.Juntar(request.RecebeSomenteOQue);
         usuario.Ativo = request.Ativo;
 
         var papeisAtuais = await userManager.GetRolesAsync(usuario);
@@ -342,6 +346,6 @@ public sealed class UserManagementService(
             papeis.ToList(), usuario.RegionalId, usuario.Regional?.Nome,
             usuario.GestorComercialId, usuario.GestorComercial?.NomeCompleto,
             usuario.GrupoId, usuario.Grupo?.Nome,
-            usuario.Ativo, usuario.LimiteMensalLeads, usuario.FotoUrl, usuario.CriadoEm);
+            usuario.Ativo, usuario.LimiteMensalLeads, usuario.FotoUrl, usuario.CriadoEm, FiltroOQue.Separar(usuario.RecebeSomenteOQue));
     }
 }

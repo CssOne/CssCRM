@@ -1,4 +1,4 @@
-import { ArrowRightLeft, List, Plus, Trash2, X } from "lucide-react";
+import { ArrowRightLeft, List, Plus, Save, Trash2, UserCog, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
@@ -20,6 +20,7 @@ import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog"
 import { StageChangeDialog } from "../../components/crm/StageChangeDialog";
 import { VeiculoNaoFazemosDialog } from "../../components/crm/VeiculoNaoFazemosDialog";
 import { AdesaoCotacaoDialog } from "../../components/crm/AdesaoCotacaoDialog";
+import { AlterarResponsavelDialog } from "../../components/crm/AlterarResponsavelDialog";
 import { useAuth } from "../../context/AuthContext";
 import { useCrmEventos } from "../../lib/useCrmEventos";
 
@@ -47,11 +48,74 @@ function classificarCartao(cartao: LeadKanbanCard): "lead" | "indicacao" | null 
   return null;
 }
 
+/** Filtros do quadro — guardados no navegador para não se perderem ao abrir um card ou recarregar. */
+interface FiltrosQuadro {
+  busca: string;
+  responsavelId: string;
+  regional: string;
+  origem: string;
+  incluirArquivados: boolean;
+  categoria: string;
+  fonte: string;
+  dataChegadaInicio: string;
+  dataChegadaFim: string;
+  dataVendaInicio: string;
+  dataVendaFim: string;
+}
+
+interface FiltroSalvo {
+  nome: string;
+  filtros: FiltrosQuadro;
+}
+
+const FILTROS_VAZIOS: FiltrosQuadro = {
+  busca: "",
+  responsavelId: "",
+  regional: "",
+  origem: "",
+  incluirArquivados: false,
+  categoria: "",
+  fonte: "",
+  dataChegadaInicio: "",
+  dataChegadaFim: "",
+  dataVendaInicio: "",
+  dataVendaFim: "",
+};
+
+function lerJson<T>(chave: string, padrao: T): T {
+  try {
+    const bruto = localStorage.getItem(chave);
+    return bruto ? { ...padrao, ...JSON.parse(bruto) } : padrao;
+  } catch {
+    return padrao;
+  }
+}
+
+function lerFiltrosSalvos(chave: string): FiltroSalvo[] {
+  try {
+    const lista = JSON.parse(localStorage.getItem(chave) ?? "[]");
+    return Array.isArray(lista) ? lista.map((f) => ({ nome: String(f.nome), filtros: { ...FILTROS_VAZIOS, ...f.filtros } })) : [];
+  } catch {
+    return [];
+  }
+}
+
+function gravarJson(chave: string, valor: unknown) {
+  try {
+    localStorage.setItem(chave, JSON.stringify(valor));
+  } catch {
+    /* sem storage (aba anônima/bloqueada): os filtros só valem até sair da página */
+  }
+}
+
 export function LeadsKanbanPage() {
   const navigate = useNavigate();
   const { notificar } = useToast();
-  const { temPapel } = useAuth();
+  const { temPapel, sessao } = useAuth();
   const podeGerir = temPapel("Admin", "GestorMaster", "GestorComercial");
+  const chaveFiltros = `quadro-leads-filtros:${sessao?.id ?? ""}`;
+  const chaveFiltrosSalvos = `quadro-leads-filtros-salvos:${sessao?.id ?? ""}`;
+  const [filtrosIniciais] = useState(() => lerJson(chaveFiltros, FILTROS_VAZIOS));
   // Origem (filtro e rodapé do cartão) só para administradores — o servidor também não a envia aos demais.
   const podeVerOrigem = temPapel("Admin", "GestorMaster");
   // Excluir lead é só para Admin/GestorMaster (ver LeadService.ExcluirAsync no back-end).
@@ -63,17 +127,22 @@ export function LeadsKanbanPage() {
   const [recarregar, setRecarregar] = useState(0);
   const [carregandoMais, setCarregandoMais] = useState<string | null>(null);
 
-  const [busca, setBusca] = useState("");
-  const [responsavelId, setResponsavelId] = useState("");
-  const [regional, setRegional] = useState("");
-  const [origem, setOrigem] = useState("");
-  const [incluirArquivados, setIncluirArquivados] = useState(false);
-  const [categoria, setCategoria] = useState("");
-  const [fonte, setFonte] = useState("");
-  const [dataChegadaInicio, setDataChegadaInicio] = useState("");
-  const [dataChegadaFim, setDataChegadaFim] = useState("");
-  const [dataVendaInicio, setDataVendaInicio] = useState("");
-  const [dataVendaFim, setDataVendaFim] = useState("");
+  const [busca, setBusca] = useState(filtrosIniciais.busca);
+  const [responsavelId, setResponsavelId] = useState(filtrosIniciais.responsavelId);
+  const [regional, setRegional] = useState(filtrosIniciais.regional);
+  const [origem, setOrigem] = useState(filtrosIniciais.origem);
+  const [incluirArquivados, setIncluirArquivados] = useState(filtrosIniciais.incluirArquivados);
+  const [categoria, setCategoria] = useState(filtrosIniciais.categoria);
+  const [fonte, setFonte] = useState(filtrosIniciais.fonte);
+  const [dataChegadaInicio, setDataChegadaInicio] = useState(filtrosIniciais.dataChegadaInicio);
+  const [dataChegadaFim, setDataChegadaFim] = useState(filtrosIniciais.dataChegadaFim);
+  const [dataVendaInicio, setDataVendaInicio] = useState(filtrosIniciais.dataVendaInicio);
+  const [dataVendaFim, setDataVendaFim] = useState(filtrosIniciais.dataVendaFim);
+  const [filtrosSalvos, setFiltrosSalvos] = useState<FiltroSalvo[]>(() => lerFiltrosSalvos(chaveFiltrosSalvos));
+  const [filtroSalvoAtual, setFiltroSalvoAtual] = useState("");
+  const [salvandoFiltro, setSalvandoFiltro] = useState(false);
+  const [nomeFiltro, setNomeFiltro] = useState("");
+  const [trocandoResponsavel, setTrocandoResponsavel] = useState<LeadKanbanCard | null>(null);
   const [vendedores, setVendedores] = useState<VendedorResumo[]>([]);
   const [regionais, setRegionais] = useState<Regional[]>([]);
   const [origens, setOrigens] = useState<string[]>([]);
@@ -147,6 +216,72 @@ export function LeadsKanbanPage() {
       dataVendaFim,
     ]
   );
+
+  const filtrosAtuais: FiltrosQuadro = useMemo(
+    () => ({
+      busca,
+      responsavelId,
+      regional,
+      origem,
+      incluirArquivados,
+      categoria,
+      fonte,
+      dataChegadaInicio,
+      dataChegadaFim,
+      dataVendaInicio,
+      dataVendaFim,
+    }),
+    [busca, responsavelId, regional, origem, incluirArquivados, categoria, fonte, dataChegadaInicio, dataChegadaFim, dataVendaInicio, dataVendaFim]
+  );
+
+  // Mantém os filtros ao abrir um card e voltar, ou ao recarregar a página.
+  useEffect(() => {
+    gravarJson(chaveFiltros, filtrosAtuais);
+  }, [chaveFiltros, filtrosAtuais]);
+
+  function aplicarFiltros(f: FiltrosQuadro) {
+    setBusca(f.busca);
+    setResponsavelId(f.responsavelId);
+    setRegional(f.regional);
+    setOrigem(f.origem);
+    setIncluirArquivados(f.incluirArquivados);
+    setCategoria(f.categoria);
+    setFonte(f.fonte);
+    setDataChegadaInicio(f.dataChegadaInicio);
+    setDataChegadaFim(f.dataChegadaFim);
+    setDataVendaInicio(f.dataVendaInicio);
+    setDataVendaFim(f.dataVendaFim);
+  }
+
+  function escolherFiltroSalvo(nome: string) {
+    setFiltroSalvoAtual(nome);
+    const salvo = filtrosSalvos.find((f) => f.nome === nome);
+    if (salvo) aplicarFiltros(salvo.filtros);
+  }
+
+  function salvarFiltro() {
+    const nome = nomeFiltro.trim();
+    if (!nome) return;
+    // Mesmo nome substitui o filtro salvo anterior.
+    const lista = [...filtrosSalvos.filter((f) => f.nome !== nome), { nome, filtros: filtrosAtuais }].sort((a, b) =>
+      a.nome.localeCompare(b.nome, "pt-BR")
+    );
+    setFiltrosSalvos(lista);
+    gravarJson(chaveFiltrosSalvos, lista);
+    setFiltroSalvoAtual(nome);
+    setSalvandoFiltro(false);
+    setNomeFiltro("");
+    notificar("success", `Filtro "${nome}" salvo.`);
+  }
+
+  function excluirFiltroSalvo() {
+    if (!filtroSalvoAtual) return;
+    const lista = filtrosSalvos.filter((f) => f.nome !== filtroSalvoAtual);
+    setFiltrosSalvos(lista);
+    gravarJson(chaveFiltrosSalvos, lista);
+    notificar("success", `Filtro "${filtroSalvoAtual}" excluído.`);
+    setFiltroSalvoAtual("");
+  }
 
   const carregar = useCallback(
     (signal?: AbortSignal, silencioso = false) => {
@@ -223,17 +358,8 @@ export function LeadsKanbanPage() {
   }
 
   function limparFiltros() {
-    setBusca("");
-    setResponsavelId("");
-    setRegional("");
-    setOrigem("");
-    setIncluirArquivados(false);
-    setCategoria("");
-    setFonte("");
-    setDataChegadaInicio("");
-    setDataChegadaFim("");
-    setDataVendaInicio("");
-    setDataVendaFim("");
+    aplicarFiltros(FILTROS_VAZIOS);
+    setFiltroSalvoAtual("");
   }
 
   function moverCartaoLocal(leadId: string, etapaDestinoId: string | null) {
@@ -519,6 +645,57 @@ export function LeadsKanbanPage() {
             <X className="size-4" /> Limpar filtros
           </Button>
         )}
+        <div className="flex w-full flex-wrap items-end gap-2 border-t border-[var(--border)] pt-3">
+          <div className="w-56">
+            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Filtros salvos</label>
+            <Select value={filtroSalvoAtual} onChange={(e) => escolherFiltroSalvo(e.target.value)} disabled={filtrosSalvos.length === 0}>
+              <option value="">{filtrosSalvos.length === 0 ? "Nenhum filtro salvo" : "Escolha um filtro..."}</option>
+              {filtrosSalvos.map((f) => (
+                <option key={f.nome} value={f.nome}>
+                  {f.nome}
+                </option>
+              ))}
+            </Select>
+          </div>
+          {filtroSalvoAtual && (
+            <Button variant="ghost" size="sm" onClick={excluirFiltroSalvo}>
+              <Trash2 className="size-4" /> Excluir filtro
+            </Button>
+          )}
+          {salvandoFiltro ? (
+            <form
+              className="flex items-end gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                salvarFiltro();
+              }}
+            >
+              <div className="w-56">
+                <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Nome do filtro</label>
+                <Input autoFocus value={nomeFiltro} onChange={(e) => setNomeFiltro(e.target.value)} placeholder="Ex.: Tráfego pago da semana" />
+              </div>
+              <Button size="sm" type="submit" disabled={!nomeFiltro.trim()}>
+                Salvar
+              </Button>
+              <Button variant="ghost" size="sm" type="button" onClick={() => setSalvandoFiltro(false)}>
+                Cancelar
+              </Button>
+            </form>
+          ) : (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!filtrosAtivos}
+              title={filtrosAtivos ? undefined : "Escolha algum filtro para salvar"}
+              onClick={() => {
+                setNomeFiltro(filtroSalvoAtual);
+                setSalvandoFiltro(true);
+              }}
+            >
+              <Save className="size-4" /> Salvar filtro atual
+            </Button>
+          )}
+        </div>
       </div>
 
       {carregando ? (
@@ -583,6 +760,19 @@ export function LeadsKanbanPage() {
                       >
                         <ArrowRightLeft className="size-3.5" />
                       </button>
+                      {podeGerir && (
+                        <button
+                          type="button"
+                          title="Alterar responsável"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTrocandoResponsavel(cartao);
+                          }}
+                          className="focus-ring shrink-0 rounded p-0.5 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+                        >
+                          <UserCog className="size-3.5" />
+                        </button>
+                      )}
                       {podeExcluir && (
                         <button
                           type="button"
@@ -724,6 +914,18 @@ export function LeadsKanbanPage() {
         onConcluido={() => {
           if (pendenciaVenda) moverPara(pendenciaVenda.cartao, pendenciaVenda.etapaId);
           setPendenciaVenda(null);
+        }}
+      />
+
+      <AlterarResponsavelDialog
+        open={!!trocandoResponsavel}
+        leadId={trocandoResponsavel?.leadId ?? null}
+        leadNome={trocandoResponsavel?.nomeOuRazaoSocial}
+        responsavelAtualId={trocandoResponsavel?.responsavelId}
+        onCancel={() => setTrocandoResponsavel(null)}
+        onConcluido={() => {
+          setTrocandoResponsavel(null);
+          carregar(undefined, true);
         }}
       />
 

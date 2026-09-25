@@ -17,6 +17,7 @@ import { useAuth } from "../../context/AuthContext";
 import { LeadForm, type LeadFormValues } from "../../components/crm/LeadForm";
 import { ActivityForm, type ActivityFormValues } from "../../components/crm/ActivityForm";
 import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog";
+import { AlterarResponsavelDialog } from "../../components/crm/AlterarResponsavelDialog";
 import { Timeline } from "../../components/crm/Timeline";
 
 const ETAPA_VENDA_CONCLUIDA = "Venda concluída";
@@ -76,6 +77,8 @@ export function LeadDetailPage() {
   // Excluir lead é só para Admin/GestorMaster (ver LeadService.ExcluirAsync no back-end).
   const { temPapel } = useAuth();
   const podeExcluir = temPapel("Admin", "GestorMaster");
+  const podeTrocarResponsavel = temPapel("Admin", "GestorMaster", "GestorComercial");
+  const [trocandoResponsavel, setTrocandoResponsavel] = useState(false);
   // Origem do lead: só administradores veem (em forma de tag) — o servidor nem a envia aos demais.
   const podeVerOrigem = temPapel("Admin", "GestorMaster");
   const [modalExcluir, setModalExcluir] = useState(false);
@@ -286,7 +289,18 @@ export function LeadDetailPage() {
           {lead.telefone2 && <InfoItem icone={Phone} label="Telefone 2" valor={formatarTelefone(lead.telefone2)} />}
           <InfoItem icone={Mail} label="E-mail" valor={lead.email || "-"} />
           <InfoItem icone={MapPin} label="Local" valor={[lead.cidade, lead.estado].filter(Boolean).join(" - ") || "-"} />
-          <InfoItem icone={Handshake} label="Responsável" valor={lead.responsavelNome ?? "Sem responsável"} />
+          <div className="flex items-start gap-2">
+            <InfoItem icone={Handshake} label="Responsável" valor={lead.responsavelNome ?? "Sem responsável"} />
+            {podeTrocarResponsavel && (
+              <button
+                type="button"
+                onClick={() => setTrocandoResponsavel(true)}
+                className="focus-ring mt-0.5 cursor-pointer text-xs font-medium text-[var(--brand)] hover:underline"
+              >
+                Alterar
+              </button>
+            )}
+          </div>
           {(lead.placa || lead.temSeguro !== null || lead.utilidadeVeiculo) && (
             <>
               <InfoItem icone={IdCard} label="Placa" valor={lead.placa || "-"} />
@@ -415,6 +429,18 @@ export function LeadDetailPage() {
       </Modal>
 
       {/* Nova oportunidade: mesmo formulário da Venda concluída, só o nome do cliente é obrigatório. */}
+      <AlterarResponsavelDialog
+        open={trocandoResponsavel}
+        leadId={lead.id}
+        leadNome={lead.nomeOuRazaoSocial}
+        responsavelAtualId={lead.responsavelId}
+        onCancel={() => setTrocandoResponsavel(false)}
+        onConcluido={() => {
+          setTrocandoResponsavel(false);
+          carregar();
+        }}
+      />
+
       <VendaConcluidaDialog
         open={modalOportunidade}
         modo="oportunidade"

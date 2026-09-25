@@ -28,6 +28,12 @@ public class ApplicationUser : IdentityUser<Guid>
     /// <summary>Teto de leads que a distribuição automática atribui a este vendedor por mês corrente. Nulo = sem limite.</summary>
     public int? LimiteMensalLeads { get; set; }
 
+    /// <summary>
+    /// Se preenchido, a distribuição automática só entrega a este consultor leads com um destes
+    /// "O que?" (ProdutoInteresse), separados por vírgula — ex.: "AGV TRUCK". Nulo = recebe qualquer lead.
+    /// </summary>
+    public string? RecebeSomenteOQue { get; set; }
+
     /// <summary>Caminho da foto do vendedor (ex: /uploads/consultores/nome.jpeg), usada na página de obrigado pós-lead.</summary>
     public string? FotoUrl { get; set; }
 

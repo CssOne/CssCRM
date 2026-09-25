@@ -57,7 +57,7 @@ public sealed class MetaLeadIngestionService(
             return;
         }
 
-        var responsavelId = await assignment.ProximoResponsavelAsync(ct);
+        var responsavelId = await assignment.ProximoResponsavelAsync(produtoInteresse, ct);
 
         var lead = new CrmLead
         {

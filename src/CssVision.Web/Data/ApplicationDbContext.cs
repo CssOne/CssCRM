@@ -1,6 +1,7 @@
 using CssVision.Web.Domain.Crm;
 using CssVision.Web.Domain.Identity;
 using CssVision.Web.Services.Crm;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -10,8 +11,11 @@ namespace CssVision.Web.Data;
 public class ApplicationDbContext(
     DbContextOptions<ApplicationDbContext> options,
     ICurrentUserService currentUser)
-    : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>(options)
+    : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>(options), IDataProtectionKeyContext
 {
+    /// <summary>Chaves do ASP.NET Data Protection (assinam o cookie de login) — ver AddDataProtection.</summary>
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+
     public DbSet<CrmLead> CrmLeads => Set<CrmLead>();
     public DbSet<CrmOpportunity> CrmOpportunities => Set<CrmOpportunity>();
     public DbSet<CrmPipelineStage> CrmPipelineStages => Set<CrmPipelineStage>();

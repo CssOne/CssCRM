@@ -12,7 +12,9 @@ public interface ILeadAssignmentService
     /// Retorna null se não houver ninguém elegível (nenhum vendedor ativo, ou todos no limite) —
     /// nesse caso o lead fica sem responsável, do mesmo jeito que fica sem etapa.
     /// </summary>
-    Task<Guid?> ProximoResponsavelAsync(CancellationToken ct);
+    /// <param name="oQue">"O que?" do lead (ProdutoInteresse): consultores com RecebeSomenteOQue só
+    /// entram no rodízio de leads com um desses valores — e, nesses leads, têm a preferência.</param>
+    Task<Guid?> ProximoResponsavelAsync(string? oQue, CancellationToken ct);
 
     /// <summary>
     /// Se um usuário específico pode receber mais um lead que está chegando (sincronização do Notion

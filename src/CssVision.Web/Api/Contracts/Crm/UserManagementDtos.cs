@@ -17,7 +17,8 @@ public record UserSummaryDto(
     bool Ativo,
     int? LimiteMensalLeads,
     string? FotoUrl,
-    DateTimeOffset CriadoEm);
+    DateTimeOffset CriadoEm,
+    IReadOnlyList<string>? RecebeSomenteOQue = null);
 
 public record UserFilterRequest : PagedRequest
 {
@@ -37,7 +38,8 @@ public record UserCreateRequest(
     Guid? RegionalId,
     Guid? GestorComercialId,
     Guid? GrupoId,
-    int? LimiteMensalLeads);
+    int? LimiteMensalLeads,
+    IReadOnlyList<string>? RecebeSomenteOQue = null);
 
 public record UserUpdateRequest(
     string NomeCompleto,
@@ -47,7 +49,8 @@ public record UserUpdateRequest(
     Guid? GestorComercialId,
     Guid? GrupoId,
     int? LimiteMensalLeads,
-    bool Ativo);
+    bool Ativo,
+    IReadOnlyList<string>? RecebeSomenteOQue = null);
 
 public record ResetPasswordRequest(string NovaSenha);
 

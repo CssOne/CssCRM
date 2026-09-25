@@ -40,7 +40,7 @@ public sealed class PublicLeadIntakeService(
                 string.IsNullOrWhiteSpace(request.Veiculo) ? null : $"Veículo: {request.Veiculo}",
             }.Where(s => s is not null));
 
-        var responsavelId = await ResolverResponsavelAsync(request.Projeto, ct);
+        var responsavelId = await ResolverResponsavelAsync(request.Projeto, request.Oque, ct);
 
         var lead = new CrmLead
         {
@@ -117,7 +117,7 @@ public sealed class PublicLeadIntakeService(
     /// só cai no rodízio se a conta dela não existir ou estiver inativa (não deixa o lead sem
     /// responsável só porque a exceção não pôde ser aplicada).
     /// </summary>
-    private async Task<Guid?> ResolverResponsavelAsync(string? projeto, CancellationToken ct)
+    private async Task<Guid?> ResolverResponsavelAsync(string? projeto, string? oQue, CancellationToken ct)
     {
         var formId = projeto?.StartsWith("meta-instant-") == true ? projeto["meta-instant-".Length..] : null;
         if (formId is not null && FormsCaminhaoSamys.Contains(formId))
@@ -132,7 +132,7 @@ public sealed class PublicLeadIntakeService(
             logger.LogWarning("Lead de caminhão (form {FormId}) não pôde ser atribuído à consultora fixa — caindo no rodízio normal", formId);
         }
 
-        return await assignment.ProximoResponsavelAsync(ct);
+        return await assignment.ProximoResponsavelAsync(oQue, ct);
     }
 
     private async Task<CrmLead?> EncontrarLeadExistenteAsync(string? emailNormalizado, string? telefoneNormalizado, CancellationToken ct)

@@ -8,6 +8,7 @@ using CssVision.Web.Services.Marketing;
 using CssVision.Web.Services.Notion;
 using CssVision.Web.Services.Storage;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -38,12 +39,20 @@ public static class ServiceCollectionExtensions
             .AddEntityFrameworkStores<ApplicationDbContext>()
             .AddDefaultTokenProviders();
 
+        // Chaves que assinam o cookie de login guardadas no banco: sem isso cada deploy (container
+        // novo) gerava chaves novas e derrubava o login de todo mundo.
+        services.AddDataProtection()
+            .SetApplicationName("CssVision.Web")
+            .PersistKeysToDbContext<ApplicationDbContext>();
+
         services.ConfigureApplicationCookie(options =>
         {
             options.Cookie.Name = "CssVision.Auth";
             options.Cookie.HttpOnly = true;
             options.Cookie.SameSite = SameSiteMode.Lax;
-            options.ExpireTimeSpan = TimeSpan.FromHours(8);
+            // Sem deslogar sozinho durante o uso: 30 dias, renovados a cada acesso (sliding) — só sai
+            // quem clicar em "Sair" ou ficar 30 dias sem abrir o CRM.
+            options.ExpireTimeSpan = TimeSpan.FromDays(30);
             options.SlidingExpiration = true;
             options.LoginPath = "/api/account/login";
             options.LogoutPath = "/api/account/logout";
