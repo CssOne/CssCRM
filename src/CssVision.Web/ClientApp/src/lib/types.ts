@@ -165,6 +165,11 @@ export interface LeadOpportunitySummary {
   tipoIndicacao?: string | null;
   valorIndicacao?: number | null;
   veiculo?: LeadOpportunityVeiculoSummary | null;
+  termoAdesaoArquivoUrl?: string | null;
+  pagamentoAdesaoArquivoUrl?: string | null;
+  comprovanteIndicacaoArquivoUrl?: string | null;
+  comprovanteVistoriaArquivoUrl?: string | null;
+  dataPagamentoAdesaoPrevista?: string | null;
 }
 
 export interface LeadOpportunityVeiculoSummary {

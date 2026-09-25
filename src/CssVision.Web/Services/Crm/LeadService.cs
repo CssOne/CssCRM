@@ -939,7 +939,9 @@ public sealed class LeadService(
                 o.Id, o.Titulo, o.Etapa.Nome, o.Etapa.Tipo, o.ValorEstimado, o.DataPrevistaFechamento, o.Etapa.Tipo == TipoEtapaPipeline.Aberta, o.Migracao, o.Indicacao,
                 o.Cpf, o.Estado, o.AtivoEm, o.Porcentagem, o.Mensalidade, o.MensalidadeComDesconto, o.MensalidadeComCupom, o.PagamentoAdesao, o.Total,
                 o.TipoIndicacao, o.ValorIndicacao,
-                o.Veiculo == null ? null : new LeadOpportunityVeiculoSummaryDto(o.Veiculo.Descricao, o.Veiculo.Placa, o.Veiculo.Fipe, o.Veiculo.Rastreador, o.Veiculo.ValorVistoria, o.Veiculo.DataChegada)))
+                o.Veiculo == null ? null : new LeadOpportunityVeiculoSummaryDto(o.Veiculo.Descricao, o.Veiculo.Placa, o.Veiculo.Fipe, o.Veiculo.Rastreador, o.Veiculo.ValorVistoria, o.Veiculo.DataChegada),
+                o.TermoAdesaoArquivoUrl, o.PagamentoAdesaoArquivoUrl, o.ComprovanteIndicacaoArquivoUrl, o.ComprovanteVistoriaArquivoUrl,
+                o.DataPagamentoAdesaoPrevista))
             .ToList(),
         lead.CriadoEm,
         lead.AtualizadoEm,

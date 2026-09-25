@@ -2,7 +2,7 @@ import { ArrowRightLeft, List, Plus, Save, Trash2, UserCog, X } from "lucide-rea
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
-import { diasRelativos, formatarTelefone } from "../../lib/format";
+import { diasRelativos, formatarDataHora, formatarTelefone } from "../../lib/format";
 import {
   TipoEtapaPipeline,
   type LeadCreateRequest,
@@ -870,7 +870,9 @@ export function LeadsKanbanPage() {
                       </div>
                     )}
                     <div className="mt-2 flex items-center justify-between gap-2">
-                      <span className="text-xs text-[var(--fg-muted)]">{diasRelativos(cartao.criadoEm)}</span>
+                      <span className="text-xs text-[var(--fg-muted)]" title={`Chegou ${diasRelativos(cartao.criadoEm)}`}>
+                        {formatarDataHora(cartao.criadoEm)}
+                      </span>
                       {/* TipoIndicacao === "Lead" manda mesmo quando CriadoManualmente diz o
                           contrário — bases migradas em épocas diferentes às vezes gravaram esse
                           campo sem sincronizar CriadoManualmente junto (ver NotionLeadClassifier). */}
