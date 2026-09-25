@@ -88,6 +88,12 @@ public class CrmOpportunity : CrmArchivableEntity
     /// </summary>
     public DateOnly? DataPagamentoAdesaoPrevista { get; set; }
 
+    /// <summary>
+    /// Card de venda do Notion que originou esta oportunidade — um cliente com várias vendas (ex.: dois
+    /// veículos) tem um card e uma oportunidade para cada. Nulo para vendas feitas só no CRM.
+    /// </summary>
+    public string? NotionPageId { get; set; }
+
     /// <summary>Caminho relativo (/uploads/...) do comprovante de indicação, quando a venda teve origem em indicação.</summary>
     public string? ComprovanteIndicacaoArquivoUrl { get; set; }
 

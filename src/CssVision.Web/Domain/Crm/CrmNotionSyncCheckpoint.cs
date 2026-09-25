@@ -27,4 +27,10 @@ public class CrmNotionSyncCheckpoint
     /// Nulo = reimportação ainda pendente (roda uma vez, depois do realinhamento).
     /// </summary>
     public DateTimeOffset? ReimportacaoAtivosConcluidaEm { get; set; }
+
+    /// <summary>
+    /// Quando todas as vendas da base (cards "VENDA CONCLUIDA", de qualquer vendedor e data) foram
+    /// trazidas para o CRM, uma oportunidade por card. Nulo = importação de vendas pendente.
+    /// </summary>
+    public DateTimeOffset? ImportacaoVendasConcluidaEm { get; set; }
 }

@@ -89,6 +89,18 @@ public sealed class NotionClient(string token)
             }
         }, ct);
 
+    /// <summary>Cards "VENDA CONCLUIDA" com "Data de chegada" (created_time) no intervalo [de, ate).</summary>
+    public IAsyncEnumerable<JsonElement> QueryVendasCriadasEntreAsync(string dataSourceId, DateOnly de, DateOnly ate, CancellationToken ct = default) =>
+        QueryAsync(dataSourceId, new
+        {
+            and = new object[]
+            {
+                new { property = "Status", select = new { equals = "VENDA CONCLUIDA" } },
+                new { property = "Data de chegada", created_time = new { on_or_after = de.ToString("yyyy-MM-dd") } },
+                new { property = "Data de chegada", created_time = new { before = ate.ToString("yyyy-MM-dd") } },
+            }
+        }, ct);
+
     public async IAsyncEnumerable<JsonElement> QueryAsync(string dataSourceId, object? filter, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
         string? cursor = null;

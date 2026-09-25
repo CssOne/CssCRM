@@ -57,15 +57,15 @@ public sealed class NotionSyncService(
     {
         var notion = new NotionClient(token);
         var relatorios = new List<string>();
-        // Primeiro o incremental de todas as bases (cards novos/editados não esperam a reimportação,
-        // que é longa); depois, a reimportação das bases que ainda não a fizeram.
-        foreach (var reimportacao in new[] { false, true })
+        // Primeiro o incremental de todas as bases (cards novos/editados não esperam as passadas
+        // longas); depois, a reimportação dos consultores ativos e a importação das vendas pendentes.
+        foreach (var passada in new[] { Passada.Normal, Passada.ReimportacaoAtivos, Passada.ImportacaoVendas })
         {
             foreach (var spec in DataSources)
             {
                 try
                 {
-                    if (await SincronizarDataSourceAsync(notion, spec.DataSourceId, spec.RegionalName, reimportacao, ct) is { } relatorio)
+                    if (await SincronizarDataSourceAsync(notion, spec.DataSourceId, spec.RegionalName, passada, ct) is { } relatorio)
                     {
                         relatorios.Add(relatorio);
                     }
@@ -80,11 +80,13 @@ public sealed class NotionSyncService(
         return string.Join(" | ", relatorios);
     }
 
-    /// <param name="reimportacao">
-    /// false: realinhamento (se pendente) ou incremental. true: só a reimportação dos consultores
-    /// ativos, se ainda pendente nesta base — senão não faz nada e devolve null.
+    private enum Passada { Normal, ReimportacaoAtivos, ImportacaoVendas }
+
+    /// <param name="passada">
+    /// Normal: realinhamento (se pendente) ou incremental. ReimportacaoAtivos / ImportacaoVendas: só
+    /// essa passada única, se ainda pendente nesta base — senão não faz nada e devolve null.
     /// </param>
-    private async Task<string?> SincronizarDataSourceAsync(NotionClient notion, string dataSourceId, string regionalNome, bool reimportacao, CancellationToken ct)
+    private async Task<string?> SincronizarDataSourceAsync(NotionClient notion, string dataSourceId, string regionalNome, Passada passada, CancellationToken ct)
     {
         var inicioDaExecucao = DateTimeOffset.UtcNow;
         var checkpoint = await db.CrmNotionSyncCheckpoints.FindAsync([dataSourceId], ct);
@@ -95,11 +97,17 @@ public sealed class NotionSyncService(
         var realinhar = checkpoint?.RealinhamentoConcluidoEm is null;
         // Reimportação (uma vez por base, depois do realinhamento): relê a base inteira, de todas as
         // datas, e traz com todos os campos os cards cujo Vendedor é um usuário ativo no CRM.
-        var reimportarAtivos = reimportacao && !realinhar && checkpoint!.ReimportacaoAtivosConcluidaEm is null;
-        if (reimportacao && !reimportarAtivos) return null;
+        var reimportarAtivos = passada == Passada.ReimportacaoAtivos && !realinhar && checkpoint!.ReimportacaoAtivosConcluidaEm is null;
+        // Importação das vendas (uma vez por base, depois da reimportação): todos os cards "VENDA
+        // CONCLUIDA", de qualquer vendedor e data — cada um vira (ou atualiza) a sua oportunidade.
+        var importarVendas = passada == Passada.ImportacaoVendas && !realinhar
+            && checkpoint!.ReimportacaoAtivosConcluidaEm is not null && checkpoint.ImportacaoVendasConcluidaEm is null;
+        if (passada != Passada.Normal && !reimportarAtivos && !importarVendas) return null;
         await CarregarUsuariosAtivosAsync(ct);
         var paginas = realinhar
             ? PaginasCriadasDesdeAsync(notion, dataSourceId, DataMinimaImportacao, ct)
+            : importarVendas
+                ? PaginasDeVendaAsync(notion, dataSourceId, ct)
             : reimportarAtivos
                 ? PaginasCriadasDesdeAsync(notion, dataSourceId, InicioHistoricoNotion, ct)
                 // Sem filtro de data no Notion: cards antigos de consultores ativos também entram (o
@@ -147,7 +155,7 @@ public sealed class NotionSyncService(
             }
 
             // Incremental: cards anteriores à data mínima só entram se forem de um consultor ativo.
-            if (!realinhar && !reimportarAtivos && !doConsultorAtivo && CriadoAntesDaDataMinima(page))
+            if (!realinhar && !reimportarAtivos && !importarVendas && !doConsultorAtivo && CriadoAntesDaDataMinima(page))
             {
                 ignorados++;
                 continue;
@@ -165,7 +173,8 @@ public sealed class NotionSyncService(
 
             try
             {
-                var resultado = await ProcessarPaginaAsync(page, regional.Id, regionalNome, etapasPorNome, ganhoStageId, placeholderVendedorId, somenteColuna: realinhar, ct);
+                var resultado = await ProcessarPaginaAsync(page, regional.Id, regionalNome, etapasPorNome, ganhoStageId, placeholderVendedorId,
+                    somenteColuna: realinhar, ct, manterResponsavel: importarVendas);
                 if (resultado) criados++; else atualizados++;
             }
             catch (Exception ex)
@@ -194,9 +203,10 @@ public sealed class NotionSyncService(
         }
         // A reimportação relê a base inteira e demora: não adianta o checkpoint do incremental (as
         // edições feitas durante ela são pegas na próxima execução, a partir do checkpoint anterior).
-        if (!reimportarAtivos) checkpoint.UltimaSincronizacaoEm = inicioDaExecucao;
+        if (passada == Passada.Normal) checkpoint.UltimaSincronizacaoEm = inicioDaExecucao;
         if (realinhar) checkpoint.RealinhamentoConcluidoEm = inicioDaExecucao;
         if (reimportarAtivos) checkpoint.ReimportacaoAtivosConcluidaEm = inicioDaExecucao;
+        if (importarVendas) checkpoint.ImportacaoVendasConcluidaEm = inicioDaExecucao;
         await db.SaveChangesAsync(ct);
 
         if (_mudancasNoQuadro > 0)
@@ -205,7 +215,7 @@ public sealed class NotionSyncService(
             _mudancasNoQuadro = 0;
         }
 
-        var modo = realinhar ? " (realinhamento)" : reimportarAtivos ? " (reimportação dos consultores ativos)" : "";
+        var modo = realinhar ? " (realinhamento)" : reimportarAtivos ? " (reimportação dos consultores ativos)" : importarVendas ? " (importação das vendas)" : "";
         return $"{regionalNome}: {processados} processados, {criados} criados, {atualizados} atualizados, {devolvidos} devolvidos ao vendedor do card, {erros} erros, {semNome} sem nome, {ignorados} ignorados{modo}";
     }
 
@@ -385,7 +395,7 @@ public sealed class NotionSyncService(
     /// <returns>true se criou um lead novo, false se atualizou um existente.</returns>
     internal async Task<bool> ProcessarPaginaAsync(
         JsonElement page, Guid regionalId, string regionalNome, Dictionary<string, Guid> etapasPorNome,
-        Guid ganhoStageId, Guid placeholderVendedorId, bool somenteColuna, CancellationToken ct)
+        Guid ganhoStageId, Guid placeholderVendedorId, bool somenteColuna, CancellationToken ct, bool manterResponsavel = false)
     {
         // Card sem título: entra com um nome provisório (telefone/e-mail) para não perder o card.
         var nome = page.Text("Name")
@@ -551,7 +561,9 @@ public sealed class NotionSyncService(
             lead.MetaLeadId = metaLeadId;
         }
         // Lead que já existia: o responsável acompanha o vendedor do card (ver AjustarResponsavelAsync).
-        if (!criadoAgora) await AjustarResponsavelAsync(lead, vendedorId, chaveVendedor, ct);
+        // Importação das vendas: um cliente pode ter vendas de vendedores diferentes — o lead mantém o
+        // responsável e cada venda fica com o vendedor do seu card.
+        if (!criadoAgora && !manterResponsavel) await AjustarResponsavelAsync(lead, vendedorId, chaveVendedor, ct);
 
         if (isVendaConcluida)
         {
@@ -632,6 +644,21 @@ public sealed class NotionSyncService(
         return motivo;
     }
 
+    /// <summary>Todos os cards "VENDA CONCLUIDA" da base, de todas as datas, em fatias mensais.</summary>
+    private static async IAsyncEnumerable<JsonElement> PaginasDeVendaAsync(
+        NotionClient notion, string dataSourceId, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        var amanha = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
+        for (var inicio = InicioHistoricoNotion; inicio < amanha; inicio = inicio.AddMonths(1))
+        {
+            var fim = inicio.AddMonths(1) < amanha ? inicio.AddMonths(1) : amanha;
+            await foreach (var page in notion.QueryVendasCriadasEntreAsync(dataSourceId, inicio, fim, ct))
+            {
+                yield return page;
+            }
+        }
+    }
+
     /// <summary>Todos os cards criados desde <paramref name="desde"/>, em fatias mensais (cada consulta do Notion tem teto de ~10 mil linhas).</summary>
     private static async IAsyncEnumerable<JsonElement> PaginasCriadasDesdeAsync(
         NotionClient notion, string dataSourceId, DateOnly desde, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
@@ -649,8 +676,18 @@ public sealed class NotionSyncService(
 
     private async Task CriarOuAtualizarOportunidadeAsync(JsonElement page, CrmLead lead, Guid vendedorId, Guid ganhoStageId, CancellationToken ct)
     {
+        // A oportunidade deste card; senão, uma do lead ainda sem card (venda da migração antiga ou
+        // aberta no CRM), que passa a ser deste card; senão, uma nova — cliente com duas vendas
+        // (ex.: dois veículos) fica com duas oportunidades.
+        var pageId = page.PageId();
         var oportunidade = await db.CrmOpportunities.Include(o => o.Veiculo)
-            .FirstOrDefaultAsync(o => o.LeadId == lead.Id && !o.Arquivado, ct);
+                .FirstOrDefaultAsync(o => o.NotionPageId == pageId, ct)
+            ?? await db.CrmOpportunities.Include(o => o.Veiculo)
+                .Where(o => o.LeadId == lead.Id && !o.Arquivado && o.NotionPageId == null)
+                .OrderBy(o => o.CriadoEm)
+                .FirstOrDefaultAsync(ct);
+        // Venda que alguém excluiu no CRM continua excluída.
+        if (oportunidade is { Arquivado: true }) return;
 
         var dataVenda = ParseUtc(page.DateStart("Data da venda"));
         var mensalidade = page.Number("Mensalidade") is { } m ? (decimal)m : (decimal?)null;
@@ -666,6 +703,7 @@ public sealed class NotionSyncService(
             oportunidade = new CrmOpportunity { LeadId = lead.Id, Veiculo = new CrmVeiculo() };
             db.CrmOpportunities.Add(oportunidade);
         }
+        oportunidade.NotionPageId = pageId;
 
         oportunidade.Titulo = oQue ?? "Proteção veicular";
         oportunidade.ResponsavelId = vendedorId;
@@ -694,7 +732,16 @@ public sealed class NotionSyncService(
             if (motivo is not null) oportunidade.MotivoPerdaId = motivo.Id;
         }
 
-        var veiculo = oportunidade.Veiculo ??= new CrmVeiculo { OpportunityId = oportunidade.Id };
+        var veiculo = oportunidade.Veiculo;
+        if (veiculo is null)
+        {
+            // Veículo novo numa venda que já existia (ex.: migrada sem veículo): Add explícito — sem
+            // isso o EF trata o veículo (Id já preenchido) como existente e tenta um UPDATE que não
+            // afeta nenhuma linha (ver OpportunityService.CriarOuAtualizarVeiculo).
+            veiculo = new CrmVeiculo { OpportunityId = oportunidade.Id };
+            oportunidade.Veiculo = veiculo;
+            if (db.Entry(oportunidade).State != EntityState.Added) db.CrmVeiculos.Add(veiculo);
+        }
         veiculo.Descricao = page.Text("Veiculo") ?? veiculo.Descricao;
         veiculo.Placa = page.Text("Placa") is { Length: <= 10 } placaValida ? placaValida : veiculo.Placa;
         veiculo.Fipe = page.Number("FIPE") is { } fipe ? (decimal)fipe : veiculo.Fipe;
