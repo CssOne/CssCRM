@@ -68,4 +68,7 @@
     </ItemGroup>
   </Target>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="CssVision.Web.Tests" />
+  </ItemGroup>
 </Project>
