@@ -1,6 +1,12 @@
 /** Tags do campo "O que?" (produto de interesse do lead) — mesmas opções do campo "O que" no Notion. */
 export const OPCOES_O_QUE = ["AGV", "AGV ELÉTRICO", "AGV TRUCK"];
 
+/** Tipo de indicação escolhido no cadastro do lead e na venda. */
+export const OPCOES_TIPO_INDICACAO = ["Lead", "Pessoal", "Contemplando Sonhos"];
+
+/** Filtro "Tipo de indicação" do quadro: inclui "Indicação", o valor que vem do Notion. */
+export const OPCOES_FILTRO_TIPO_INDICACAO = ["Lead", "Indicação", "Pessoal", "Contemplando Sonhos"];
+
 /**
  * Tags do campo Origem (visível só para administradores) — mesmas opções de campanha usadas no
  * Notion. Leads automáticos ainda chegam com a origem técnica ("Meta ads", "Site", "Sincronização

@@ -767,6 +767,9 @@ export interface VendedorResumo {
   /** Teto de leads que a distribuição automática atribui por mês corrente. Nulo = sem limite. */
   limiteMensalLeads?: number | null;
   leadsRecebidosNoMes: number;
+  /** Teto de leads do tráfego pago por dia. Nulo = sem limite. */
+  limiteDiarioLeads?: number | null;
+  leadsRecebidosHoje?: number;
 }
 
 export interface ConsultorDesempenho {
@@ -872,6 +875,7 @@ export interface UserSummary {
   criadoEm: string;
   /** Distribuição automática: só recebe leads com estes "O que?". Nulo = qualquer lead. */
   recebeSomenteOQue?: string[] | null;
+  limiteDiarioLeads?: number | null;
 }
 
 export interface UserFilterRequest {
@@ -895,6 +899,7 @@ export interface UserCreateRequest {
   grupoId?: string | null;
   limiteMensalLeads?: number | null;
   recebeSomenteOQue?: string[] | null;
+  limiteDiarioLeads?: number | null;
 }
 
 export interface UserUpdateRequest {
@@ -907,6 +912,7 @@ export interface UserUpdateRequest {
   limiteMensalLeads?: number | null;
   ativo: boolean;
   recebeSomenteOQue?: string[] | null;
+  limiteDiarioLeads?: number | null;
 }
 
 export interface GrupoMembro {

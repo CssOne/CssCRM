@@ -6,9 +6,13 @@ public record VendedorResumoDto(
     int LeadsAtivos,
     int OportunidadesAbertas,
     int? LimiteMensalLeads,
-    int LeadsRecebidosNoMes);
+    int LeadsRecebidosNoMes,
+    int? LimiteDiarioLeads = null,
+    int LeadsRecebidosHoje = 0);
 
 public record AtualizarLimiteMensalRequest(int? Limite);
+
+public record AtualizarLimiteDiarioRequest(int? Limite);
 
 /// <summary>Ficha de desempenho de um consultor (papel Comercial) para a tela de gestão de consultores.</summary>
 public record ConsultorDesempenhoDto(

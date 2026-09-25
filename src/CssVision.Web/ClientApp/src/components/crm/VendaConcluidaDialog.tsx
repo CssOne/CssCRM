@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { OPCOES_TIPO_INDICACAO } from "../../lib/opcoesLead";
 import { Paperclip } from "lucide-react";
 import { api, ApiRequestError, uploadFile } from "../../lib/api";
 import type { ChangeStageRequest, LeadDetail, Opportunity, OpportunityCreateRequest, OpportunityUpdateRequest } from "../../lib/types";
@@ -499,8 +500,11 @@ export function VendaConcluidaDialog({
                   </Label>
                   <Select id="venda-tipo-indicacao" value={valores.tipoIndicacao ?? ""} onChange={(e) => set("tipoIndicacao", e.target.value)}>
                     <option value="">Selecione...</option>
-                    <option value="Lead">Lead</option>
-                    <option value="Pessoal">Pessoal</option>
+                    {OPCOES_TIPO_INDICACAO.map((tipo) => (
+                      <option key={tipo} value={tipo}>
+                        {tipo}
+                      </option>
+                    ))}
                   </Select>
                 </div>
                 <div className="w-40">

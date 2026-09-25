@@ -4,7 +4,7 @@ import { Button, DocumentoInput, FieldError, Input, Label, Select, Textarea } fr
 import { LeadPicker } from "./LeadPicker";
 import { useAuth } from "../../context/AuthContext";
 import { ESTADOS_BRASIL } from "../../lib/estados";
-import { OPCOES_O_QUE, OPCOES_ORIGEM } from "../../lib/opcoesLead";
+import { OPCOES_O_QUE, OPCOES_ORIGEM, OPCOES_TIPO_INDICACAO } from "../../lib/opcoesLead";
 import { TagSelect } from "./TagSelect";
 
 export interface LeadFormValues {
@@ -311,8 +311,11 @@ export function LeadForm({
             <Label htmlFor={`${idPrefix}-tipo-indicacao`}>Tipo de indicação</Label>
             <Select id={`${idPrefix}-tipo-indicacao`} value={valores.tipoIndicacao} onChange={(e) => set("tipoIndicacao", e.target.value)}>
               <option value="">Selecione...</option>
-              <option value="Lead">Lead</option>
-              <option value="Pessoal">Pessoal</option>
+              {OPCOES_TIPO_INDICACAO.map((tipo) => (
+                <option key={tipo} value={tipo}>
+                  {tipo}
+                </option>
+              ))}
             </Select>
           </div>
         </div>

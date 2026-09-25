@@ -111,7 +111,7 @@ public class LeadKanbanServiceTests
         var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
         var service = new LeadKanbanService(db, new EquipeComercialService(db, currentUser.Object));
 
-        var board = await service.ObterBoardAsync(new LeadKanbanFilterRequest { Categoria = "Migração" }, CancellationToken.None);
+        var board = await service.ObterBoardAsync(new LeadKanbanFilterRequest { Categoria = ["Migração"] }, CancellationToken.None);
 
         Assert.Equal("Migrado", Assert.Single(board.Colunas.SelectMany(c => c.Cartoes)).NomeOuRazaoSocial);
     }
@@ -148,7 +148,7 @@ public class LeadKanbanServiceTests
         var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
         var service = new LeadKanbanService(db, new EquipeComercialService(db, currentUser.Object));
 
-        var nomes = (await service.ObterBoardAsync(new LeadKanbanFilterRequest { Fonte = fonte }, CancellationToken.None))
+        var nomes = (await service.ObterBoardAsync(new LeadKanbanFilterRequest { Fonte = fonte is null ? null : [fonte] }, CancellationToken.None))
             .Colunas.SelectMany(c => c.Cartoes).Select(c => c.NomeOuRazaoSocial).OrderBy(n => n).ToArray();
 
         Assert.Equal(esperados.OrderBy(n => n).ToArray(), nomes);

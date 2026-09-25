@@ -41,7 +41,8 @@ public static class NotionEtapaLead
     /// <summary>Mesma regra da etiqueta Lead/Indicação do cartão do quadro (classificarCartao em LeadsKanban.tsx).</summary>
     public static bool EhIndicacao(bool criadoManualmente, string? tipoIndicacao) =>
         !string.Equals(tipoIndicacao, "Lead", StringComparison.OrdinalIgnoreCase)
-        && (criadoManualmente || string.Equals(tipoIndicacao, "Indicação", StringComparison.OrdinalIgnoreCase));
+        // Indicação, Pessoal, Contemplando Sonhos... — qualquer tipo que não seja "Lead".
+        && (criadoManualmente || !string.IsNullOrWhiteSpace(tipoIndicacao));
 
     /// <param name="etapasAtivasPorNome">Colunas ativas do quadro, por nome.</param>
     /// <returns>
