@@ -31,6 +31,10 @@ public class CrmOpportunityConfiguration : IEntityTypeConfiguration<CrmOpportuni
         builder.HasIndex(e => e.ResponsavelId);
         builder.HasIndex(e => e.EtapaId);
         builder.HasIndex(e => e.LeadId);
+        builder.Property(e => e.NotionPageId).HasMaxLength(64);
+        builder.HasIndex(e => e.NotionPageId)
+            .HasFilter("\"NotionPageId\" IS NOT NULL")
+            .IsUnique();
         builder.HasIndex(e => e.DataPrevistaFechamento);
         builder.HasIndex(e => e.DataEfetivaFechamento);
         builder.HasIndex(e => e.CriadoEm);

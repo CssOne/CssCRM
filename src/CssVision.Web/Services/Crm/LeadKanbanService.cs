@@ -74,6 +74,7 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
                 l.Placa, l.TemSeguro, l.UtilidadeVeiculo, l.TipoIndicacao, l.CriadoManualmente,
                 l.ResponsavelId,
                 ResponsavelNome = l.Responsavel != null ? l.Responsavel.NomeCompleto : null,
+                ResponsavelFotoUrl = l.Responsavel != null ? l.Responsavel.FotoUrl : null,
                 Tags = l.LeadTags.Select(lt => lt.Tag.Nome).ToList(),
                 l.CriadoEm, l.UltimoContatoEm, l.Arquivado, l.RowVersion, l.ProdutoInteresse, l.ValorAdesao,
                 // A oportunidade mais recente é a fonte dos selos Migração/Indicação — normalmente é a
@@ -94,7 +95,7 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
             // "Sem contato" reflete se o lead tem ALGUM telefone cadastrado — some sozinho assim que
             // um telefone é preenchido.
             l.CriadoEm, l.UltimoContatoEm, string.IsNullOrWhiteSpace(l.Telefone) && string.IsNullOrWhiteSpace(l.Telefone2),
-            l.Arquivado, l.RowVersion, l.ProdutoInteresse, l.ValorAdesao)).ToList();
+            l.Arquivado, l.RowVersion, l.ProdutoInteresse, l.ValorAdesao, l.ResponsavelFotoUrl)).ToList();
     }
 
     private async Task<(IQueryable<CrmLead> Query, bool PodeVerOrigem)> FiltrarAsync(LeadKanbanFilterRequest filtro, CancellationToken ct)

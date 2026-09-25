@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, isAbortError } from "../../lib/api";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { GestaoComercialResumo, RedistribuicaoHistorico, VendedorResumo } from "../../lib/types";
-import { Badge, Card, ErrorState, Input, Skeleton, useToast } from "../../components/ui";
+import { Badge, Card, ErrorState, Skeleton, useToast } from "../../components/ui";
 
 function LimiteInput({
   vendedor,
@@ -42,21 +42,74 @@ function LimiteInput({
   }
 
   const recebidos = tipo === "mensal" ? vendedor.leadsRecebidosNoMes : vendedor.leadsRecebidosHoje ?? 0;
+  const limite = valor.trim() === "" ? null : Number(valor);
+  const noLimite = limite !== null && recebidos >= limite;
   return (
-    <div className="mt-1 flex items-center gap-1 text-xs text-[var(--fg-muted)]">
-      <span>
-        {recebidos} recebido(s) {tipo === "mensal" ? "no mês" : "hoje"} · limite {tipo === "mensal" ? "mensal" : "diário"}:
-      </span>
-      <Input
-        className="h-6 w-16 px-1 py-0 text-xs"
-        placeholder="—"
-        aria-label={tipo === "mensal" ? "Limite mensal de leads" : "Limite diário de leads"}
-        value={valor}
-        disabled={salvando}
-        onChange={(e) => setValor(e.target.value.replace(/[^0-9]/g, ""))}
-        onBlur={salvar}
-      />
+    <div className="flex items-center justify-between gap-2 text-xs">
+      <span className="text-[var(--fg-muted)]">{tipo === "mensal" ? "Limite mensal" : "Limite diário"}</span>
+      <div className="flex items-center gap-1.5">
+        <span className={noLimite ? "font-semibold text-[var(--danger)]" : "text-[var(--fg-muted)]"} title={tipo === "mensal" ? "Recebidos no mês" : "Recebidos hoje"}>
+          {recebidos} /
+        </span>
+        <input
+          inputMode="numeric"
+          className="focus-ring h-7 w-14 rounded-md border border-[var(--border)] bg-[var(--surface)] px-1.5 text-center text-xs text-[var(--fg)] placeholder:text-[var(--fg-muted)] disabled:opacity-50"
+          placeholder="∞"
+          aria-label={tipo === "mensal" ? "Limite mensal de leads" : "Limite diário de leads"}
+          title="Vazio = sem limite"
+          value={valor}
+          disabled={salvando}
+          onChange={(e) => setValor(e.target.value.replace(/[^0-9]/g, ""))}
+          onBlur={salvar}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          }}
+        />
+      </div>
     </div>
+  );
+}
+
+function RecebeLeadsSwitch({ vendedor, onSalvo }: { vendedor: VendedorResumo; onSalvo: () => void }) {
+  const { notificar } = useToast();
+  const [ligado, setLigado] = useState(vendedor.recebeLeads !== false);
+  const [salvando, setSalvando] = useState(false);
+
+  async function alternar() {
+    const novo = !ligado;
+    setLigado(novo);
+    setSalvando(true);
+    try {
+      await api.put(`/crm/management/vendedores/${vendedor.id}/recebe-leads`, { recebeLeads: novo });
+      notificar("success", novo ? `${vendedor.nome} voltou a receber leads.` : `${vendedor.nome} parou de receber leads.`);
+      onSalvo();
+    } catch {
+      setLigado(!novo);
+      notificar("error", "Não foi possível alterar.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={ligado}
+      disabled={salvando}
+      onClick={alternar}
+      title={ligado ? "Recebendo leads da distribuição automática — clique para pausar" : "Fora da distribuição de leads — clique para voltar a receber"}
+      className="focus-ring mt-2 flex cursor-pointer items-center gap-2 text-xs font-medium disabled:opacity-60"
+    >
+      <span
+        className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
+          ligado ? "bg-[var(--success)]" : "bg-[var(--border)]"
+        }`}
+      >
+        <span className={`inline-block size-3 rounded-full bg-white shadow transition-transform ${ligado ? "translate-x-3.5" : "translate-x-0.5"}`} />
+      </span>
+      <span className={ligado ? "text-[var(--success)]" : "text-[var(--fg-muted)]"}>{ligado ? "Recebe leads" : "Não recebe leads"}</span>
+    </button>
   );
 }
 
@@ -121,13 +174,20 @@ export function ManagementPage() {
         </Card>
         <Card className="p-4 lg:col-span-2">
           <h2 className="mb-2 text-sm font-semibold text-[var(--fg)]">Carteira por vendedor</h2>
-          <div className="flex flex-wrap gap-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {vendedores.map((v) => (
-              <div key={v.id} className="rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm">
-                <p className="font-medium text-[var(--fg)]">{v.nome}</p>
-                <p className="text-xs text-[var(--fg-muted)]">{v.leadsAtivos} leads · {v.oportunidadesAbertas} oportunidades</p>
-                <LimiteInput tipo="mensal" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
-                <LimiteInput tipo="diario" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
+              <div key={v.id} className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface-hover)]/60 p-3 text-sm">
+                <div>
+                  <p className="truncate font-semibold text-[var(--fg)]" title={v.nome}>{v.nome}</p>
+                  <p className="text-xs text-[var(--fg-muted)]">
+                    {v.leadsAtivos.toLocaleString("pt-BR")} leads · {v.oportunidadesAbertas} oportunidades
+                  </p>
+                </div>
+                <div className="space-y-1.5 border-t border-[var(--border)] pt-2">
+                  <LimiteInput tipo="mensal" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
+                  <LimiteInput tipo="diario" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
+                </div>
+                <RecebeLeadsSwitch vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
               </div>
             ))}
           </div>

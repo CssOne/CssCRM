@@ -31,7 +31,7 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
     {
         var todos = await db.UserRoles
             .Join(db.Roles.Where(r => r.Name == Roles.Comercial), ur => ur.RoleId, r => r.Id, (ur, _) => ur.UserId)
-            .Join(db.Users.Where(u => u.Ativo), id => id, u => u.Id, (_, u) => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.RecebeSomenteOQue })
+            .Join(db.Users.Where(u => u.Ativo && u.RecebeLeads), id => id, u => u.Id, (_, u) => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.RecebeSomenteOQue })
             .ToListAsync(ct);
 
         // Especialistas (ex.: só AGV TRUCK) ficam fora do rodízio geral; nos leads da especialidade

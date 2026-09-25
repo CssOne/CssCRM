@@ -1,4 +1,4 @@
-import { ArrowLeft, Calendar, Car, Handshake, IdCard, Mail, MapPin, Pencil, Percent, Phone, Plus, ShieldCheck, Trash2, Wallet } from "lucide-react";
+import { ArrowLeft, Calendar, Car, FileText, Handshake, IdCard, Mail, MapPin, Pencil, Percent, Phone, Plus, ShieldCheck, Trash2, Wallet } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiRequestError, isAbortError } from "../../lib/api";
@@ -9,6 +9,7 @@ import {
   type ActivityCreateRequest,
   type LeadDetail,
   type LeadDuplicateWarning,
+  type LeadOpportunitySummary,
   type LeadTimelineItem,
   type Opportunity,
 } from "../../lib/types";
@@ -384,6 +385,8 @@ export function LeadDetailPage() {
                           {op.veiculo?.dataChegada && <InfoItem icone={Calendar} label="Chegada do veículo" valor={formatarData(op.veiculo.dataChegada)} />}
                         </div>
                       )}
+
+                      <AnexosDaVenda op={op} />
                     </li>
                   );
                 })}
@@ -489,6 +492,46 @@ export function LeadDetailPage() {
           </div>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+/** Termo de adesão, comprovante de pagamento e demais anexos enviados ao concluir a venda. */
+function AnexosDaVenda({ op }: { op: LeadOpportunitySummary }) {
+  const anexos = [
+    { rotulo: "Termo de adesão", url: op.termoAdesaoArquivoUrl },
+    { rotulo: "Comprovante de pagamento da adesão", url: op.pagamentoAdesaoArquivoUrl },
+    { rotulo: "Comprovante de indicação", url: op.comprovanteIndicacaoArquivoUrl },
+    { rotulo: "Comprovante de vistoria", url: op.comprovanteVistoriaArquivoUrl },
+  ].filter((a) => !!a.url);
+  const pagamentoAgendado = !op.pagamentoAdesaoArquivoUrl && !!op.dataPagamentoAdesaoPrevista;
+  if (anexos.length === 0 && !pagamentoAgendado) return null;
+
+  // "2026-09-25" → "25/09/2026" sem passar por Date (que converteria de UTC e poderia voltar um dia).
+  const dataPagamento = op.dataPagamentoAdesaoPrevista?.slice(0, 10).split("-").reverse().join("/");
+  return (
+    <div className="mt-3 border-t border-[var(--border)] pt-3">
+      <p className="mb-2 text-xs font-medium text-[var(--fg-muted)]">Anexos da venda</p>
+      <div className="flex flex-wrap gap-2">
+        {anexos.map((a) => (
+          <a
+            key={a.rotulo}
+            href={a.url!}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-xs font-medium text-[var(--fg)] hover:border-[var(--brand)] hover:text-[var(--brand)]"
+          >
+            <FileText className="size-3.5 shrink-0" aria-hidden />
+            {a.rotulo}
+          </a>
+        ))}
+        {pagamentoAgendado && (
+          <span className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--warning-soft)] px-2.5 py-1.5 text-xs font-medium text-[var(--warning)]">
+            <Calendar className="size-3.5 shrink-0" aria-hidden />
+            Adesão será paga em {dataPagamento} — comprovante pendente
+          </span>
+        )}
+      </div>
     </div>
   );
 }

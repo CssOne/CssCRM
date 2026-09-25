@@ -8,11 +8,15 @@ public record VendedorResumoDto(
     int? LimiteMensalLeads,
     int LeadsRecebidosNoMes,
     int? LimiteDiarioLeads = null,
-    int LeadsRecebidosHoje = 0);
+    int LeadsRecebidosHoje = 0,
+    bool Ativo = true,
+    bool RecebeLeads = true);
 
 public record AtualizarLimiteMensalRequest(int? Limite);
 
 public record AtualizarLimiteDiarioRequest(int? Limite);
+
+public record AtualizarRecebeLeadsRequest(bool RecebeLeads);
 
 /// <summary>Ficha de desempenho de um consultor (papel Comercial) para a tela de gestão de consultores.</summary>
 public record ConsultorDesempenhoDto(

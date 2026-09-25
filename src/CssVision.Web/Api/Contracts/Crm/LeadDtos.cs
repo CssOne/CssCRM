@@ -121,7 +121,13 @@ public record LeadOpportunitySummaryDto(
     decimal? Total,
     string? TipoIndicacao,
     decimal? ValorIndicacao,
-    LeadOpportunityVeiculoSummaryDto? Veiculo);
+    LeadOpportunityVeiculoSummaryDto? Veiculo,
+    // Anexos da venda concluída (URLs públicas do armazenamento) e a data combinada para a adesão.
+    string? TermoAdesaoArquivoUrl = null,
+    string? PagamentoAdesaoArquivoUrl = null,
+    string? ComprovanteIndicacaoArquivoUrl = null,
+    string? ComprovanteVistoriaArquivoUrl = null,
+    DateOnly? DataPagamentoAdesaoPrevista = null);
 
 public record LeadOpportunityVeiculoSummaryDto(
     string? Descricao,

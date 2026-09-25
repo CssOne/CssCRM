@@ -165,6 +165,11 @@ export interface LeadOpportunitySummary {
   tipoIndicacao?: string | null;
   valorIndicacao?: number | null;
   veiculo?: LeadOpportunityVeiculoSummary | null;
+  termoAdesaoArquivoUrl?: string | null;
+  pagamentoAdesaoArquivoUrl?: string | null;
+  comprovanteIndicacaoArquivoUrl?: string | null;
+  comprovanteVistoriaArquivoUrl?: string | null;
+  dataPagamentoAdesaoPrevista?: string | null;
 }
 
 export interface LeadOpportunityVeiculoSummary {
@@ -313,6 +318,8 @@ export interface LeadKanbanCard {
   oQue?: string | null;
   /** Valor da adesão informado ao mover para "Cotação". */
   valorAdesao?: number | null;
+  /** Foto do consultor responsável. */
+  responsavelFotoUrl?: string | null;
 }
 
 export interface LeadKanbanColumn {
@@ -770,6 +777,10 @@ export interface VendedorResumo {
   /** Teto de leads do tráfego pago por dia. Nulo = sem limite. */
   limiteDiarioLeads?: number | null;
   leadsRecebidosHoje?: number;
+  /** Usuário ativo (consegue entrar no CRM). */
+  ativo?: boolean;
+  /** Entra no rodízio da distribuição automática de leads. */
+  recebeLeads?: boolean;
 }
 
 export interface ConsultorDesempenho {

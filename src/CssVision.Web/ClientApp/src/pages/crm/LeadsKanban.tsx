@@ -1,8 +1,7 @@
-import { ArrowRightLeft, List, Plus, Save, Trash2, UserCog, X } from "lucide-react";
+import { ArrowRightLeft, List, Plus, Save, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
-import { diasRelativos, formatarTelefone } from "../../lib/format";
 import {
   TipoEtapaPipeline,
   type LeadCreateRequest,
@@ -14,13 +13,14 @@ import {
   type Regional,
   type VendedorResumo,
 } from "../../lib/types";
-import { Badge, Button, ConfirmDialog, EmptyState, ErrorState, Input, Modal, Select, Skeleton, useToast } from "../../components/ui";
+import { Button, ConfirmDialog, EmptyState, ErrorState, Input, Modal, Select, Skeleton, useToast } from "../../components/ui";
 import { LeadForm, leadFormVazio, paraLeadCreateRequest, type LeadFormValues } from "../../components/crm/LeadForm";
 import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog";
 import { StageChangeDialog } from "../../components/crm/StageChangeDialog";
 import { VeiculoNaoFazemosDialog } from "../../components/crm/VeiculoNaoFazemosDialog";
 import { AdesaoCotacaoDialog } from "../../components/crm/AdesaoCotacaoDialog";
 import { AlterarResponsavelDialog } from "../../components/crm/AlterarResponsavelDialog";
+import { CartaoLead, classificarCartao } from "../../components/crm/CartaoLead";
 import { MultiSelect } from "../../components/MultiSelect";
 import { OPCOES_FILTRO_TIPO_INDICACAO } from "../../lib/opcoesLead";
 import { useAuth } from "../../context/AuthContext";
@@ -43,14 +43,6 @@ const ETAPA_COTACAO = "Cotação";
  * tem dezenas de milhares de leads, então nunca se carrega tudo de uma vez. */
 const CARTOES_POR_PAGINA = 30;
 
-/** Mesma regra usada na etiqueta do rodapé do cartão — mantém as duas em sincronia. */
-function classificarCartao(cartao: LeadKanbanCard): "lead" | "indicacao" | null {
-  const tipo = cartao.tipoIndicacao?.trim().toLowerCase();
-  if (tipo === "lead") return "lead";
-  // Indicação, Pessoal, Contemplando Sonhos... — qualquer tipo que não seja "Lead".
-  if (cartao.criadoManualmente || tipo) return "indicacao";
-  return null;
-}
 
 /** Filtros do quadro — guardados no navegador para não se perderem ao abrir um card ou recarregar. */
 interface FiltrosQuadro {
@@ -62,6 +54,8 @@ interface FiltrosQuadro {
   categoria: string[];
   fonte: string[];
   tipoIndicacao: string[];
+  /** Filtro de vendedor lista também os inativos. */
+  vendedoresInativos: boolean;
   dataChegadaInicio: string;
   dataChegadaFim: string;
   dataVendaInicio: string;
@@ -82,6 +76,7 @@ const FILTROS_VAZIOS: FiltrosQuadro = {
   categoria: [],
   fonte: [],
   tipoIndicacao: [],
+  vendedoresInativos: false,
   dataChegadaInicio: "",
   dataChegadaFim: "",
   dataVendaInicio: "",
@@ -153,6 +148,7 @@ export function LeadsKanbanPage() {
   const [categoria, setCategoria] = useState(filtrosIniciais.categoria);
   const [fonte, setFonte] = useState(filtrosIniciais.fonte);
   const [tipoIndicacao, setTipoIndicacao] = useState(filtrosIniciais.tipoIndicacao);
+  const [vendedoresInativos, setVendedoresInativos] = useState(filtrosIniciais.vendedoresInativos);
   const [dataChegadaInicio, setDataChegadaInicio] = useState(filtrosIniciais.dataChegadaInicio);
   const [dataChegadaFim, setDataChegadaFim] = useState(filtrosIniciais.dataChegadaFim);
   const [dataVendaInicio, setDataVendaInicio] = useState(filtrosIniciais.dataVendaInicio);
@@ -162,6 +158,7 @@ export function LeadsKanbanPage() {
   const [salvandoFiltro, setSalvandoFiltro] = useState(false);
   const [nomeFiltro, setNomeFiltro] = useState("");
   const [trocandoResponsavel, setTrocandoResponsavel] = useState<LeadKanbanCard | null>(null);
+  const [colunaSobre, setColunaSobre] = useState<string | null>(null);
   const [vendedores, setVendedores] = useState<VendedorResumo[]>([]);
   const [regionais, setRegionais] = useState<Regional[]>([]);
   const [origens, setOrigens] = useState<string[]>([]);
@@ -203,7 +200,8 @@ export function LeadsKanbanPage() {
 
   useEffect(() => {
     if (!podeGerir) return;
-    api.get<VendedorResumo[]>("/crm/management/vendedores").then(setVendedores).catch(() => setVendedores([]));
+    // Sempre com os inativos: a opção "Só ativos / Todos" do filtro só esconde ou mostra na lista.
+    api.get<VendedorResumo[]>("/crm/management/vendedores?incluirInativos=true").then(setVendedores).catch(() => setVendedores([]));
     api.get<Regional[]>("/crm/settings/regionals").then(setRegionais).catch(() => setRegionais([]));
   }, [podeGerir]);
 
@@ -248,12 +246,13 @@ export function LeadsKanbanPage() {
       categoria,
       fonte,
       tipoIndicacao,
+      vendedoresInativos,
       dataChegadaInicio,
       dataChegadaFim,
       dataVendaInicio,
       dataVendaFim,
     }),
-    [busca, responsavelId, regional, origem, incluirArquivados, categoria, fonte, tipoIndicacao, dataChegadaInicio, dataChegadaFim, dataVendaInicio, dataVendaFim]
+    [busca, responsavelId, regional, origem, incluirArquivados, categoria, fonte, tipoIndicacao, vendedoresInativos, dataChegadaInicio, dataChegadaFim, dataVendaInicio, dataVendaFim]
   );
 
   // Mantém os filtros ao abrir um card e voltar, ou ao recarregar a página.
@@ -270,6 +269,7 @@ export function LeadsKanbanPage() {
     setCategoria(f.categoria);
     setFonte(f.fonte);
     setTipoIndicacao(f.tipoIndicacao);
+    setVendedoresInativos(f.vendedoresInativos);
     setDataChegadaInicio(f.dataChegadaInicio);
     setDataChegadaFim(f.dataChegadaFim);
     setDataVendaInicio(f.dataVendaInicio);
@@ -648,10 +648,24 @@ export function LeadsKanbanPage() {
         {podeGerir && (
           <>
             <div className="w-48">
-              <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Vendedor</label>
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label className="block text-xs font-medium text-[var(--fg-muted)]">Vendedor</label>
+                <select
+                  aria-label="Quais vendedores listar"
+                  value={vendedoresInativos ? "todos" : "ativos"}
+                  onChange={(e) => setVendedoresInativos(e.target.value === "todos")}
+                  className="focus-ring cursor-pointer rounded bg-transparent text-[11px] font-medium text-[var(--brand)]"
+                >
+                  <option value="ativos">Só ativos</option>
+                  <option value="todos">Todos (inclui inativos)</option>
+                </select>
+              </div>
               <MultiSelect
                 ariaLabel="Vendedor"
-                opcoes={vendedores.map((v) => ({ valor: v.id, rotulo: v.nome }))}
+                opcoes={vendedores
+                  // Um inativo já escolhido continua aparecendo para poder ser desmarcado.
+                  .filter((v) => vendedoresInativos || v.ativo !== false || responsavelId.includes(v.id))
+                  .map((v) => ({ valor: v.id, rotulo: v.ativo === false ? `${v.nome} (inativo)` : v.nome }))}
                 valores={responsavelId}
                 onChange={setResponsavelId}
               />
@@ -736,7 +750,7 @@ export function LeadsKanbanPage() {
       {carregando ? (
         <div className="flex gap-4 overflow-x-auto">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-96 w-72 shrink-0" />
+            <Skeleton key={i} className="h-96 w-80 shrink-0 rounded-2xl" />
           ))}
         </div>
       ) : erro || !board || !colunasExibidas ? (
@@ -747,161 +761,88 @@ export function LeadsKanbanPage() {
           description={filtrosAtivos ? "Ajuste os filtros ou cadastre um novo lead." : "Cadastre um novo lead para começar."}
         />
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-2">
+        <div className="flex gap-4 overflow-x-auto pb-3">
           {colunasExibidas.map((coluna) => {
             const chaveColuna = coluna.etapa.id ?? "sem-etapa";
             const restantes = Math.max(0, coluna.total - coluna.cartoes.length);
+            const cor = coluna.etapa.cor ?? "#64748b";
+            const alvo = !!cartaoArrastando && colunaSobre === chaveColuna;
             return (
-            <div
-              key={chaveColuna}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => handleDrop(coluna.etapa.id)}
-              className="flex w-72 shrink-0 flex-col rounded-xl border border-[var(--border)] bg-[var(--surface-hover)]/40"
-            >
-              <div className="sticky top-0 flex items-center justify-between rounded-t-xl border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <span className="size-2 rounded-full" style={{ backgroundColor: coluna.etapa.cor ?? "#64748b" }} />
-                  <span className="text-sm font-medium text-[var(--fg)]">{coluna.etapa.nome}</span>
-                  <span className="text-xs text-[var(--fg-muted)]">({coluna.total.toLocaleString("pt-BR")})</span>
-                </div>
-              </div>
-
-              <div className="max-h-[60vh] space-y-2 overflow-y-auto p-2">
-                {coluna.cartoes.map((cartao) => (
-                  <div
-                    key={cartao.leadId}
-                    draggable
-                    onDragStart={() => setCartaoArrastando(cartao)}
-                    onDragEnd={() => setCartaoArrastando(null)}
-                    onClick={() => navigate(`/app/crm/leads/${cartao.leadId}`)}
-                    className="focus-ring cursor-grab rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 text-sm shadow-sm active:cursor-grabbing"
-                  >
-                    <div className="mb-1 flex items-start justify-between gap-2">
-                      <Link
-                        to={`/app/crm/leads/${cartao.leadId}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="truncate font-medium text-[var(--fg)] hover:text-[var(--brand)]"
-                      >
-                        {cartao.nomeOuRazaoSocial}
-                      </Link>
-                      <button
-                        type="button"
-                        title="Mover para outra etapa"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setModalMobile(cartao);
-                        }}
-                        className="focus-ring shrink-0 rounded p-0.5 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
-                      >
-                        <ArrowRightLeft className="size-3.5" />
-                      </button>
-                      {podeGerir && (
-                        <button
-                          type="button"
-                          title="Alterar responsável"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setTrocandoResponsavel(cartao);
-                          }}
-                          className="focus-ring shrink-0 rounded p-0.5 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
-                        >
-                          <UserCog className="size-3.5" />
-                        </button>
-                      )}
-                      {podeExcluir && (
-                        <button
-                          type="button"
-                          title="Excluir lead"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setLeadExcluindo(cartao);
-                          }}
-                          className="focus-ring shrink-0 rounded p-0.5 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--danger)]"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </button>
-                      )}
-                      {cartao.migracao && <Badge variant="neutral">Migração</Badge>}
-                      {cartao.indicacao && <Badge variant="brand">Indicação</Badge>}
-                      {cartao.oQue && <Badge variant="info">{cartao.oQue}</Badge>}
-                      {podeVerOrigem && cartao.origem && <Badge variant="neutral">{cartao.origem}</Badge>}
-                      {cartao.semContato && <Badge variant="warning">sem contato</Badge>}
-                      {cartao.arquivado && <Badge variant="neutral">arquivado</Badge>}
+              <section
+                key={chaveColuna}
+                aria-label={coluna.etapa.nome}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (colunaSobre !== chaveColuna) setColunaSobre(chaveColuna);
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) setColunaSobre(null);
+                }}
+                onDrop={() => {
+                  setColunaSobre(null);
+                  handleDrop(coluna.etapa.id);
+                }}
+                className={`flex w-80 shrink-0 flex-col overflow-hidden rounded-2xl border bg-[var(--surface-hover)]/60 transition-colors ${
+                  alvo ? "border-[var(--brand)] bg-[var(--brand-soft)]/60" : "border-[var(--border)]"
+                }`}
+              >
+                <header className="bg-[var(--surface)]">
+                  <div className="h-1" style={{ backgroundColor: cor }} />
+                  <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2.5">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: cor }} />
+                      <h2 className="truncate text-sm font-semibold text-[var(--fg)]" title={coluna.etapa.nome}>
+                        {coluna.etapa.nome}
+                      </h2>
                     </div>
-                    <p className="truncate text-xs text-[var(--fg-muted)]">{formatarTelefone(cartao.telefone) || "—"}</p>
-                    {cartao.telefone2 && (
-                      <p className="truncate text-xs text-[var(--fg-muted)]">{formatarTelefone(cartao.telefone2)}</p>
-                    )}
-                    {cartao.email && <p className="truncate text-xs text-[var(--fg-muted)]">{cartao.email}</p>}
-                    {(cartao.estado || cartao.placa || cartao.utilidadeVeiculo) && (
-                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--fg-muted)]">
-                        {cartao.placa && (
-                          <span
-                            title="Placa do veículo"
-                            className="rounded border border-[var(--border)] bg-[var(--surface-hover)] px-1.5 py-px font-mono font-medium tracking-wider text-[var(--fg)]"
-                          >
-                            {cartao.placa}
-                          </span>
-                        )}
-                        {cartao.estado && <span>{cartao.estado}</span>}
-                        {cartao.utilidadeVeiculo && <span>{cartao.utilidadeVeiculo}</span>}
-                      </div>
-                    )}
-                    {(cartao.temSeguro === true || cartao.temSeguro === false) && (
-                      <div className="mt-1">
-                        <Badge variant={cartao.temSeguro ? "warning" : "success"}>
-                          {cartao.temSeguro ? "Tem seguro" : "Sem seguro"}
-                        </Badge>
-                      </div>
-                    )}
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className="text-xs text-[var(--fg-muted)]">
-                        {(podeGerir ? cartao.campanha : null) ?? "—"}
-                      </span>
-                      <span className="text-xs text-[var(--fg-muted)]">{cartao.responsavelNome ?? "Sem responsável"}</span>
-                    </div>
-                    {cartao.tags.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {cartao.tags.map((tag) => (
-                          <Badge key={tag} variant="brand">
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <span className="text-xs text-[var(--fg-muted)]">{diasRelativos(cartao.criadoEm)}</span>
-                      {/* TipoIndicacao === "Lead" manda mesmo quando CriadoManualmente diz o
-                          contrário — bases migradas em épocas diferentes às vezes gravaram esse
-                          campo sem sincronizar CriadoManualmente junto (ver NotionLeadClassifier). */}
-                      {classificarCartao(cartao) === "lead" ? (
-                        <Badge variant="info">Lead</Badge>
-                      ) : (
-                        classificarCartao(cartao) === "indicacao" && (
-                          // O tipo escolhido (Pessoal, Contemplando Sonhos...) ou "Indicação".
-                          <Badge variant="brand">
-                            {cartao.tipoIndicacao?.trim() && cartao.tipoIndicacao.trim().toLowerCase() !== "lead"
-                              ? cartao.tipoIndicacao.trim()
-                              : "Indicação"}
-                          </Badge>
-                        )
-                      )}
-                    </div>
+                    <span
+                      className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold"
+                      style={{ backgroundColor: `${cor}1f`, color: cor }}
+                      title="Leads nesta coluna"
+                    >
+                      {coluna.total.toLocaleString("pt-BR")}
+                    </span>
                   </div>
-                ))}
-                {restantes > 0 && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="w-full"
-                    loading={carregandoMais === chaveColuna}
-                    onClick={() => verMaisCartoes(coluna)}
-                  >
-                    Ver mais ({restantes.toLocaleString("pt-BR")})
-                  </Button>
-                )}
-              </div>
-            </div>
+                </header>
+
+                <div className="max-h-[calc(100vh-22rem)] min-h-24 space-y-2.5 overflow-y-auto p-2.5">
+                  {coluna.cartoes.length === 0 && (
+                    <p className="rounded-xl border border-dashed border-[var(--border)] px-3 py-6 text-center text-xs text-[var(--fg-muted)]">
+                      Nenhum lead aqui
+                    </p>
+                  )}
+                  {coluna.cartoes.map((cartao) => (
+                    <CartaoLead
+                      key={cartao.leadId}
+                      cartao={cartao}
+                      corColuna={cor}
+                      podeGerir={podeGerir}
+                      podeExcluir={podeExcluir}
+                      podeVerOrigem={podeVerOrigem}
+                      onAbrir={() => navigate(`/app/crm/leads/${cartao.leadId}`)}
+                      onMover={() => setModalMobile(cartao)}
+                      onTrocarResponsavel={() => setTrocandoResponsavel(cartao)}
+                      onExcluir={() => setLeadExcluindo(cartao)}
+                      onDragStart={() => setCartaoArrastando(cartao)}
+                      onDragEnd={() => {
+                        setCartaoArrastando(null);
+                        setColunaSobre(null);
+                      }}
+                    />
+                  ))}
+                  {restantes > 0 && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full"
+                      loading={carregandoMais === chaveColuna}
+                      onClick={() => verMaisCartoes(coluna)}
+                    >
+                      Ver mais ({restantes.toLocaleString("pt-BR")})
+                    </Button>
+                  )}
+                </div>
+              </section>
             );
           })}
         </div>

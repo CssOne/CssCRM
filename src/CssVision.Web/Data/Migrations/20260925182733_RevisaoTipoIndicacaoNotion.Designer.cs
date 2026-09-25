@@ -3,6 +3,7 @@ using System;
 using CssVision.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CssVision.Web.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260925182733_RevisaoTipoIndicacaoNotion")]
+    partial class RevisaoTipoIndicacaoNotion
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -753,9 +756,6 @@ namespace CssVision.Web.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.Property<DateTimeOffset?>("ImportacaoVendasConcluidaEm")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<DateTimeOffset?>("RealinhamentoConcluidoEm")
                         .HasColumnType("timestamp with time zone");
 
@@ -869,10 +869,6 @@ namespace CssVision.Web.Data.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
-                    b.Property<string>("NotionPageId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.Property<string>("Observacoes")
                         .HasColumnType("text");
 
@@ -943,10 +939,6 @@ namespace CssVision.Web.Data.Migrations
                     b.HasIndex("LeadId");
 
                     b.HasIndex("MotivoPerdaId");
-
-                    b.HasIndex("NotionPageId")
-                        .IsUnique()
-                        .HasFilter("\"NotionPageId\" IS NOT NULL");
 
                     b.HasIndex("ResponsavelId");
 
@@ -1372,9 +1364,6 @@ namespace CssVision.Web.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<bool>("PhoneNumberConfirmed")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("RecebeLeads")
                         .HasColumnType("boolean");
 
                     b.Property<string>("RecebeSomenteOQue")
