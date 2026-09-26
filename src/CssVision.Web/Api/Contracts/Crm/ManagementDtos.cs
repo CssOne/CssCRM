@@ -75,4 +75,10 @@ public record GestaoComercialResumoDto(
     IReadOnlyList<TempoMedioEtapaDto> TempoMedioPorEtapa,
     IReadOnlyList<OportunidadeParadaDto> OportunidadesSemMovimentacao,
     IReadOnlyList<RankingComercialDto> Ranking,
-    IReadOnlyList<MotivoPerdaResumoDto> MotivosPerda);
+    IReadOnlyList<MotivoPerdaResumoDto> MotivosPerda,
+    /// <summary>Quantos leads entraram na média de primeiro contato (os que já tiveram contato no período).</summary>
+    int LeadsComPrimeiroContato = 0,
+    IReadOnlyList<PrimeiroContatoVendedorDto>? PrimeiroContatoPorVendedor = null);
+
+/// <summary>Tempo médio até o primeiro contato de um vendedor.</summary>
+public record PrimeiroContatoVendedorDto(Guid VendedorId, string VendedorNome, double Horas, int Leads);

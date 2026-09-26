@@ -37,13 +37,14 @@ public sealed class ManagementService(
             oportunidadesQuery = oportunidadesQuery.Where(o => visiveis.Contains(o.ResponsavelId));
         }
 
-        var tempoMedioContatoHoras = await ObterTempoMedioPrimeiroContatoAsync(leadsQuery, ct);
+        var (tempoMedioContatoHoras, leadsComContato, contatoPorVendedor) = await ObterTempoMedioPrimeiroContatoAsync(leadsQuery, inicio, fim, ct);
         var tempoMedioPorEtapa = await ObterTempoMedioPorEtapaAsync(oportunidadesQuery, ct);
         var oportunidadesSemMovimentacao = await ObterOportunidadesSemMovimentacaoAsync(oportunidadesQuery, agora, ct);
         var ranking = await ObterRankingAsync(visiveis, inicio, fim, ct);
         var motivosPerda = await ObterMotivosPerdaAsync(oportunidadesQuery, inicio, fim, ct);
 
-        return new GestaoComercialResumoDto(tempoMedioContatoHoras, tempoMedioPorEtapa, oportunidadesSemMovimentacao, ranking, motivosPerda);
+        return new GestaoComercialResumoDto(tempoMedioContatoHoras, tempoMedioPorEtapa, oportunidadesSemMovimentacao, ranking, motivosPerda,
+            leadsComContato, contatoPorVendedor);
     }
 
     public async Task<IReadOnlyList<VendedorResumoDto>> ObterVendedoresAsync(CancellationToken ct, bool incluirInativos = false)
@@ -241,29 +242,61 @@ public sealed class ManagementService(
         }
     }
 
-    private static async Task<double> ObterTempoMedioPrimeiroContatoAsync(IQueryable<CrmLead> leadsQuery, CancellationToken ct)
+    /// <summary>
+    /// Tempo entre o lead chegar para o vendedor e o primeiro contato dele: a primeira vez que o
+    /// vendedor move o lead de etapa no quadro (registro de auditoria "LeadMudouEtapa") ou conclui
+    /// uma atividade — o que vier antes. Considera os leads do CRM (tráfego pago e cadastros; os do
+    /// Notion foram trabalhados lá) que chegaram no período.
+    /// </summary>
+    private async Task<(double Horas, int Leads, IReadOnlyList<PrimeiroContatoVendedorDto> PorVendedor)> ObterTempoMedioPrimeiroContatoAsync(
+        IQueryable<CrmLead> leadsQuery, DateTime inicio, DateTime fim, CancellationToken ct)
     {
-        var leadIds = await leadsQuery.Select(l => l.Id).ToListAsync(ct);
-        if (leadIds.Count == 0) return 0;
+        var inicioUtc = new DateTimeOffset(inicio, TimeSpan.Zero);
+        var fimUtc = new DateTimeOffset(fim, TimeSpan.Zero);
+        var leads = await leadsQuery
+            .Where(l => l.ResponsavelId != null
+                && l.ConsentimentoOrigem != OrigemLead.MarcadorMigracaoNotion
+                && l.ConsentimentoOrigem != OrigemLead.MarcadorSincronizacaoNotion)
+            .Select(l => new { l.Id, Chegada = l.ResponsavelAtribuidoEm ?? l.CriadoEm, VendedorId = l.ResponsavelId!.Value, Vendedor = l.Responsavel!.NomeCompleto })
+            .Where(l => l.Chegada >= inicioUtc && l.Chegada <= fimUtc)
+            .ToListAsync(ct);
+        if (leads.Count == 0) return (0, 0, []);
 
-        var dados = await leadsQuery
-            .Select(l => new
-            {
-                l.Id,
-                l.CriadoEm,
-                PrimeiroContato = l.Atividades
-                    .Where(a => a.Status == StatusAtividade.Concluida)
-                    .OrderBy(a => a.DataHoraConclusao)
-                    .Select(a => a.DataHoraConclusao)
-                    .FirstOrDefault()
-            })
-            .Where(x => x.PrimeiroContato != null)
+        var ids = leads.Select(l => l.Id).ToList();
+        var idsAnulaveis = ids.Select(id => (Guid?)id).ToList();
+        var movimentos = await db.CrmAuditLogs.AsNoTracking()
+            .Where(a => a.EntidadeTipo == nameof(CrmLead) && a.Acao == "LeadMudouEtapa" && idsAnulaveis.Contains(a.EntidadeId))
+            .Select(a => new { LeadId = a.EntidadeId!.Value, a.OcorridoEm })
+            .ToListAsync(ct);
+        var atividades = await db.CrmActivities.AsNoTracking()
+            .Where(a => ids.Contains(a.LeadId) && a.Status == StatusAtividade.Concluida && a.DataHoraConclusao != null)
+            .Select(a => new { a.LeadId, OcorridoEm = a.DataHoraConclusao!.Value })
             .ToListAsync(ct);
 
-        if (dados.Count == 0) return 0;
+        var contatos = movimentos.Concat(atividades)
+            .GroupBy(c => c.LeadId)
+            .ToDictionary(g => g.Key, g => g.Select(c => c.OcorridoEm).ToList());
 
-        var horas = dados.Select(d => (d.PrimeiroContato!.Value - d.CriadoEm).TotalHours).ToList();
-        return Math.Round(horas.Average(), 1);
+        var tempos = leads
+            .Select(l => new
+            {
+                l.VendedorId,
+                l.Vendedor,
+                // Primeiro contato depois de o lead chegar para o vendedor atual.
+                Primeiro = contatos.TryGetValue(l.Id, out var lista) ? lista.Where(t => t >= l.Chegada).DefaultIfEmpty().Min() : default,
+                l.Chegada,
+            })
+            .Where(t => t.Primeiro != default)
+            .Select(t => new { t.VendedorId, t.Vendedor, Horas = (t.Primeiro - t.Chegada).TotalHours })
+            .ToList();
+        if (tempos.Count == 0) return (0, 0, []);
+
+        var porVendedor = tempos
+            .GroupBy(t => new { t.VendedorId, t.Vendedor })
+            .Select(g => new PrimeiroContatoVendedorDto(g.Key.VendedorId, g.Key.Vendedor, Math.Round(g.Average(t => t.Horas), 1), g.Count()))
+            .OrderBy(v => v.Horas)
+            .ToList();
+        return (Math.Round(tempos.Average(t => t.Horas), 1), tempos.Count, porVendedor);
     }
 
     private static async Task<List<TempoMedioEtapaDto>> ObterTempoMedioPorEtapaAsync(IQueryable<CrmOpportunity> oportunidadesQuery, CancellationToken ct)

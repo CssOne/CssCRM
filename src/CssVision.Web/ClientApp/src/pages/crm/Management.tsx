@@ -113,6 +113,17 @@ function RecebeLeadsSwitch({ vendedor, onSalvo }: { vendedor: VendedorResumo; on
   );
 }
 
+/** 0,4 h → "24 min"; 5,5 h → "5h 30min"; 50 h → "2,1 dias". */
+function formatarDuracao(horas: number) {
+  if (horas < 1) return `${Math.max(1, Math.round(horas * 60))} min`;
+  if (horas < 24) {
+    const h = Math.floor(horas);
+    const m = Math.round((horas - h) * 60);
+    return m > 0 ? `${h}h ${m}min` : `${h}h`;
+  }
+  return `${(horas / 24).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} dias`;
+}
+
 export function ManagementPage() {
   const [resumo, setResumo] = useState<GestaoComercialResumo | null>(null);
   const [vendedores, setVendedores] = useState<VendedorResumo[] | null>(null);
@@ -170,7 +181,33 @@ export function ManagementPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="p-4">
           <h2 className="mb-2 text-sm font-semibold text-[var(--fg)]">Tempo médio até 1º contato</h2>
-          <p className="text-2xl font-semibold text-[var(--fg)]">{resumo.tempoMedioPrimeiroContatoHoras.toFixed(1)}h</p>
+          {(resumo.leadsComPrimeiroContato ?? 0) === 0 ? (
+            <p className="text-sm text-[var(--fg-muted)]">
+              Nenhum lead do CRM teve contato nos últimos 30 dias. O contato conta quando o consultor move o lead de etapa no quadro ou conclui uma
+              atividade.
+            </p>
+          ) : (
+            <>
+              <p className="text-2xl font-semibold text-[var(--fg)]">{formatarDuracao(resumo.tempoMedioPrimeiroContatoHoras)}</p>
+              <p className="text-xs text-[var(--fg-muted)]">
+                média de {resumo.leadsComPrimeiroContato} lead(s) dos últimos 30 dias, da chegada até o consultor mover de etapa ou concluir uma atividade
+              </p>
+              {(resumo.primeiroContatoPorVendedor?.length ?? 0) > 0 && (
+                <ul className="mt-3 space-y-1.5 border-t border-[var(--border)] pt-3">
+                  {resumo.primeiroContatoPorVendedor!.map((v) => (
+                    <li key={v.vendedorId} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate text-[var(--fg)]" title={v.vendedorNome}>
+                        {v.vendedorNome}
+                      </span>
+                      <span className="shrink-0 text-[var(--fg-muted)]">
+                        <strong className="text-[var(--fg)]">{formatarDuracao(v.horas)}</strong> · {v.leads} lead(s)
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
         </Card>
         <Card className="p-4 lg:col-span-2">
           <h2 className="mb-2 text-sm font-semibold text-[var(--fg)]">Carteira por vendedor</h2>

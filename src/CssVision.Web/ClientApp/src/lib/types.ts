@@ -846,8 +846,18 @@ export interface RedistribuicaoHistorico {
   alteradoEm: string;
 }
 
+export interface PrimeiroContatoVendedor {
+  vendedorId: string;
+  vendedorNome: string;
+  horas: number;
+  leads: number;
+}
+
 export interface GestaoComercialResumo {
   tempoMedioPrimeiroContatoHoras: number;
+  /** Quantos leads entraram na média (os que já tiveram contato no período). */
+  leadsComPrimeiroContato?: number;
+  primeiroContatoPorVendedor?: PrimeiroContatoVendedor[] | null;
   tempoMedioPorEtapa: TempoMedioEtapa[];
   oportunidadesSemMovimentacao: OportunidadeParada[];
   ranking: RankingComercial[];
