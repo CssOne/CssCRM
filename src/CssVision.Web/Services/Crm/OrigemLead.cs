@@ -27,6 +27,15 @@ public static class OrigemLead
         && l.ConsentimentoOrigem != MarcadorSincronizacaoNotion
         && (l.MetaLeadId != null || l.ConsentimentoOrigem == MarcadorFormularioSite);
 
+    /// <summary>
+    /// Lead de tráfego pago vindo de qualquer lugar: direto dos anúncios pelo sistema novo
+    /// (<see cref="VeioDoTrafegoPago"/>) ou card do Notion com sinal de anúncio — ID do lead no Meta,
+    /// GCLID do Google ou campanha preenchida. Usado nos números da Gestão comercial.
+    /// </summary>
+    public static readonly System.Linq.Expressions.Expression<Func<Domain.Crm.CrmLead, bool>> DeTrafegoPagoInclusiveNotion = l =>
+        l.MetaLeadId != null || l.Gclid != null || l.ConsentimentoOrigem == MarcadorFormularioSite
+        || ((l.ConsentimentoOrigem == MarcadorMigracaoNotion || l.ConsentimentoOrigem == MarcadorSincronizacaoNotion) && l.Campanha != null);
+
     public const string OrigemMigracaoNotion = "Migração Notion";
     public const string OrigemSincronizacaoNotion = "Sincronização Notion";
 

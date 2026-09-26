@@ -104,7 +104,9 @@ public class ApplicationDbContext(
             switch (entry.State)
             {
                 case EntityState.Added:
-                    entry.Entity.CriadoEm = agora;
+                    // Mantém a data informada (importações); antes, toda data de chegada vinda do
+                    // Notion era trocada pelo momento da gravação.
+                    if (entry.Entity.CriadoEm == default) entry.Entity.CriadoEm = agora;
                     entry.Entity.CriadoPorId = userId;
                     break;
                 case EntityState.Modified:

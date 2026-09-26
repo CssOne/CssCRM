@@ -781,6 +781,8 @@ export interface VendedorResumo {
   ativo?: boolean;
   /** Entra no rodízio da distribuição automática de leads. */
   recebeLeads?: boolean;
+  /** Leads de tráfego pago (Notion + sistema novo) que chegaram no mês. */
+  leadsTrafegoNoMes?: number;
 }
 
 export interface ConsultorDesempenho {
@@ -801,6 +803,8 @@ export interface ConsultorDesempenho {
   metaValor: number;
   realizadoValor: number;
   percentualMeta: number;
+  /** Leads de tráfego pago (Notion + sistema novo) que chegaram no mês. */
+  leadsTrafegoNoMes?: number;
 }
 
 export interface RankingComercial {
@@ -842,8 +846,18 @@ export interface RedistribuicaoHistorico {
   alteradoEm: string;
 }
 
+export interface PrimeiroContatoVendedor {
+  vendedorId: string;
+  vendedorNome: string;
+  horas: number;
+  leads: number;
+}
+
 export interface GestaoComercialResumo {
   tempoMedioPrimeiroContatoHoras: number;
+  /** Quantos leads entraram na média (os que já tiveram contato no período). */
+  leadsComPrimeiroContato?: number;
+  primeiroContatoPorVendedor?: PrimeiroContatoVendedor[] | null;
   tempoMedioPorEtapa: TempoMedioEtapa[];
   oportunidadesSemMovimentacao: OportunidadeParada[];
   ranking: RankingComercial[];

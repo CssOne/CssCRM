@@ -10,7 +10,9 @@ public record VendedorResumoDto(
     int? LimiteDiarioLeads = null,
     int LeadsRecebidosHoje = 0,
     bool Ativo = true,
-    bool RecebeLeads = true);
+    bool RecebeLeads = true,
+    /// <summary>Leads de tráfego pago (Notion + sistema novo) que chegaram para o vendedor no mês.</summary>
+    int LeadsTrafegoNoMes = 0);
 
 public record AtualizarLimiteMensalRequest(int? Limite);
 
@@ -36,7 +38,8 @@ public record ConsultorDesempenhoDto(
     int LeadsRecebidosNoMes,
     decimal MetaValor,
     decimal RealizadoValor,
-    decimal PercentualMeta);
+    decimal PercentualMeta,
+    int LeadsTrafegoNoMes = 0);
 
 public record RankingComercialDto(
     Guid VendedorId,
@@ -72,4 +75,10 @@ public record GestaoComercialResumoDto(
     IReadOnlyList<TempoMedioEtapaDto> TempoMedioPorEtapa,
     IReadOnlyList<OportunidadeParadaDto> OportunidadesSemMovimentacao,
     IReadOnlyList<RankingComercialDto> Ranking,
-    IReadOnlyList<MotivoPerdaResumoDto> MotivosPerda);
+    IReadOnlyList<MotivoPerdaResumoDto> MotivosPerda,
+    /// <summary>Quantos leads entraram na média de primeiro contato (os que já tiveram contato no período).</summary>
+    int LeadsComPrimeiroContato = 0,
+    IReadOnlyList<PrimeiroContatoVendedorDto>? PrimeiroContatoPorVendedor = null);
+
+/// <summary>Tempo médio até o primeiro contato de um vendedor.</summary>
+public record PrimeiroContatoVendedorDto(Guid VendedorId, string VendedorNome, double Horas, int Leads);
