@@ -10,7 +10,9 @@ public record VendedorResumoDto(
     int? LimiteDiarioLeads = null,
     int LeadsRecebidosHoje = 0,
     bool Ativo = true,
-    bool RecebeLeads = true);
+    bool RecebeLeads = true,
+    /// <summary>Leads de tráfego pago (Notion + sistema novo) que chegaram para o vendedor no mês.</summary>
+    int LeadsTrafegoNoMes = 0);
 
 public record AtualizarLimiteMensalRequest(int? Limite);
 
@@ -36,7 +38,8 @@ public record ConsultorDesempenhoDto(
     int LeadsRecebidosNoMes,
     decimal MetaValor,
     decimal RealizadoValor,
-    decimal PercentualMeta);
+    decimal PercentualMeta,
+    int LeadsTrafegoNoMes = 0);
 
 public record RankingComercialDto(
     Guid VendedorId,

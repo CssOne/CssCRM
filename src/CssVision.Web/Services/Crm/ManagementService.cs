@@ -80,7 +80,8 @@ public sealed class ManagementService(
             var doTrafego = db.CrmLeads.Where(OrigemLead.VeioDoTrafegoPago).Where(l => l.ResponsavelId == v.Id);
             var recebidosNoMes = await doTrafego.CountAsync(l => l.CriadoEm >= inicioMes, ct);
             var recebidosHoje = await doTrafego.CountAsync(l => (l.ResponsavelAtribuidoEm ?? l.CriadoEm) >= inicioDia, ct);
-            resultado.Add(new VendedorResumoDto(v.Id, v.NomeCompleto, leadsAtivos, abertas, v.LimiteMensalLeads, recebidosNoMes, v.LimiteDiarioLeads, recebidosHoje, v.Ativo, v.RecebeLeads));
+            var trafegoNoMes = await LeadsDeTrafegoNoMesAsync(v.Id, ct);
+            resultado.Add(new VendedorResumoDto(v.Id, v.NomeCompleto, leadsAtivos, abertas, v.LimiteMensalLeads, recebidosNoMes, v.LimiteDiarioLeads, recebidosHoje, v.Ativo, v.RecebeLeads, trafegoNoMes));
         }
 
         return resultado;
@@ -133,7 +134,7 @@ public sealed class ManagementService(
             resultado.Add(new ConsultorDesempenhoDto(
                 c.Id, c.NomeCompleto, c.Email!, c.PhoneNumber, c.Regional?.Nome, c.Ativo,
                 leadsAtivos, abertas, valorPipeline, ganhas, valorGanho, taxa,
-                c.LimiteMensalLeads, recebidosNoMes, metaValor, valorGanho, percentualMeta));
+                c.LimiteMensalLeads, recebidosNoMes, metaValor, valorGanho, percentualMeta, await LeadsDeTrafegoNoMesAsync(c.Id, ct)));
         }
 
         return resultado.OrderByDescending(r => r.ValorGanho).ToList();
@@ -219,6 +220,18 @@ public sealed class ManagementService(
     }
 
     // --- auxiliares ---
+
+    /// <summary>
+    /// Leads de tráfego pago (Notion + sistema novo) que chegaram para o vendedor no mês corrente,
+    /// pela data de chegada do lead (horário de Brasília).
+    /// </summary>
+    private Task<int> LeadsDeTrafegoNoMesAsync(Guid vendedorId, CancellationToken ct)
+    {
+        var agoraBrasilia = DateTime.UtcNow.AddHours(-3);
+        var inicioMes = new DateTimeOffset(new DateTime(agoraBrasilia.Year, agoraBrasilia.Month, 1), TimeSpan.Zero).AddHours(3);
+        return db.CrmLeads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion)
+            .CountAsync(l => l.ResponsavelId == vendedorId && !l.Arquivado && l.CriadoEm >= inicioMes, ct);
+    }
 
     private void ExigirGestaoComercial()
     {

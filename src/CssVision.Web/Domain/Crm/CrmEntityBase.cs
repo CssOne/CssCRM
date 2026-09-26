@@ -9,7 +9,12 @@ public abstract class CrmEntityBase
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
-    public DateTimeOffset CriadoEm { get; set; } = DateTimeOffset.UtcNow;
+    /// <summary>
+    /// Quando o registro surgiu. Preenchido ao salvar (ApplicationDbContext.AplicarAuditoria) se
+    /// ninguém informou — quem importa de outro sistema (ex.: "Data de chegada" do card do Notion)
+    /// informa a data original, que é mantida.
+    /// </summary>
+    public DateTimeOffset CriadoEm { get; set; }
 
     public Guid? CriadoPorId { get; set; }
 

@@ -175,8 +175,12 @@ export function ConsultoresPage() {
                   <p className="text-xs text-[var(--fg-muted)]">Taxa de conversão</p>
                   <p className="font-semibold text-[var(--fg)]">{formatarPercentual(c.taxaConversao)}</p>
                 </div>
+                <div title="Leads de tráfego pago (Notion e sistema novo) que chegaram neste mês">
+                  <p className="text-xs text-[var(--fg-muted)]">Leads de tráfego (mês)</p>
+                  <p className="font-semibold text-[var(--brand)]">{(c.leadsTrafegoNoMes ?? 0).toLocaleString("pt-BR")}</p>
+                </div>
                 <div>
-                  <p className="text-xs text-[var(--fg-muted)]">Leads recebidos (mês)</p>
+                  <p className="text-xs text-[var(--fg-muted)]">Recebidos no rodízio (mês)</p>
                   <p className="font-semibold text-[var(--fg)]">
                     {c.leadsRecebidosNoMes}
                     {c.limiteMensalLeads != null && ` / ${c.limiteMensalLeads}`}

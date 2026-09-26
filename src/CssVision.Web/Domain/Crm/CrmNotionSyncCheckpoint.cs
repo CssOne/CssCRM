@@ -33,4 +33,10 @@ public class CrmNotionSyncCheckpoint
     /// trazidas para o CRM, uma oportunidade por card. Nulo = importação de vendas pendente.
     /// </summary>
     public DateTimeOffset? ImportacaoVendasConcluidaEm { get; set; }
+
+    /// <summary>
+    /// Quando a "Data de chegada" de todos os cards da base foi gravada nos leads ligados a eles
+    /// (antes a importação gravava a data da migração). Nulo = correção pendente.
+    /// </summary>
+    public DateTimeOffset? DataChegadaCorrigidaEm { get; set; }
 }

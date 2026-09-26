@@ -182,6 +182,10 @@ export function ManagementPage() {
                   <p className="text-xs text-[var(--fg-muted)]">
                     {v.leadsAtivos.toLocaleString("pt-BR")} leads · {v.oportunidadesAbertas} oportunidades
                   </p>
+                  <p className="mt-1 text-xs" title="Leads de tráfego pago (Notion e sistema novo) que chegaram para o vendedor neste mês">
+                    <span className="font-semibold text-[var(--brand)]">{(v.leadsTrafegoNoMes ?? 0).toLocaleString("pt-BR")}</span>{" "}
+                    <span className="text-[var(--fg-muted)]">leads de tráfego pago no mês</span>
+                  </p>
                 </div>
                 <div className="space-y-1.5 border-t border-[var(--border)] pt-2">
                   <LimiteInput tipo="mensal" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />

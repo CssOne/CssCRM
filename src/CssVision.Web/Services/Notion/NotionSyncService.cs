@@ -59,7 +59,7 @@ public sealed class NotionSyncService(
         var relatorios = new List<string>();
         // Primeiro o incremental de todas as bases (cards novos/editados não esperam as passadas
         // longas); depois, a reimportação dos consultores ativos e a importação das vendas pendentes.
-        foreach (var passada in new[] { Passada.Normal, Passada.ReimportacaoAtivos, Passada.ImportacaoVendas })
+        foreach (var passada in new[] { Passada.Normal, Passada.ReimportacaoAtivos, Passada.ImportacaoVendas, Passada.CorrecaoDataChegada })
         {
             foreach (var spec in DataSources)
             {
@@ -80,7 +80,7 @@ public sealed class NotionSyncService(
         return string.Join(" | ", relatorios);
     }
 
-    private enum Passada { Normal, ReimportacaoAtivos, ImportacaoVendas }
+    private enum Passada { Normal, ReimportacaoAtivos, ImportacaoVendas, CorrecaoDataChegada }
 
     /// <param name="passada">
     /// Normal: realinhamento (se pendente) ou incremental. ReimportacaoAtivos / ImportacaoVendas: só
@@ -90,6 +90,12 @@ public sealed class NotionSyncService(
     {
         var inicioDaExecucao = DateTimeOffset.UtcNow;
         var checkpoint = await db.CrmNotionSyncCheckpoints.FindAsync([dataSourceId], ct);
+
+        if (passada == Passada.CorrecaoDataChegada)
+        {
+            if (checkpoint is not { RealinhamentoConcluidoEm: not null, DataChegadaCorrigidaEm: null }) return null;
+            return await CorrigirDataDeChegadaAsync(notion, dataSourceId, regionalNome, inicioDaExecucao, ct);
+        }
 
         // Realinhamento (uma vez por base): relê todos os cards desde a data mínima para colocar cada
         // lead na coluna do Status atual do Notion — inclusive os que ficaram em "Sem etapa" porque a
@@ -217,6 +223,68 @@ public sealed class NotionSyncService(
 
         var modo = realinhar ? " (realinhamento)" : reimportarAtivos ? " (reimportação dos consultores ativos)" : importarVendas ? " (importação das vendas)" : "";
         return $"{regionalNome}: {processados} processados, {criados} criados, {atualizados} atualizados, {devolvidos} devolvidos ao vendedor do card, {erros} erros, {semNome} sem nome, {ignorados} ignorados{modo}";
+    }
+
+    /// <summary>
+    /// Grava a "Data de chegada" de cada card (created_time) no lead ligado a ele. Só atualiza a
+    /// data — em lote, direto no banco —, então é rápida mesmo relendo a base inteira.
+    /// </summary>
+    private async Task<string> CorrigirDataDeChegadaAsync(NotionClient notion, string dataSourceId, string regionalNome, DateTimeOffset inicio, CancellationToken ct)
+    {
+        int lidos = 0, atualizados = 0, ligados = 0, erros = 0;
+
+        await foreach (var page in PaginasCriadasDesdeAsync(notion, dataSourceId, InicioHistoricoNotion, ct))
+        {
+            lidos++;
+            if (ParseUtc(page.CreatedTime("Data de chegada")) is not { } chegada) continue;
+            var pageId = page.PageId();
+            try
+            {
+                // Lead já ligado ao card: só a data, direto no banco (rápido).
+                var n = await db.CrmLeads.Where(l => l.NotionPageId == pageId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(l => l.CriadoEm, chegada), ct);
+                if (n > 0)
+                {
+                    atualizados += n;
+                    continue;
+                }
+
+                // Lead da migração antiga ainda sem vínculo: acha pelo CPF, e-mail, telefone ou nome
+                // (mesma busca da sincronização), liga ao card e corrige a data.
+                var (lead, arquivado) = await EncontrarLeadAsync(IdentificarCard(page, regionalNome), ct);
+                if (lead is null || arquivado || lead.NotionPageId is not null) continue;
+                if (lead.ConsentimentoOrigem is not (OrigemLead.MarcadorMigracaoNotion or OrigemLead.MarcadorSincronizacaoNotion)) continue;
+                lead.NotionPageId = pageId;
+                lead.CriadoEm = chegada;
+                await db.SaveChangesAsync(ct);
+                ligados++;
+            }
+            catch (Exception ex)
+            {
+                erros++;
+                logger.LogWarning(ex, "Erro corrigindo a data de chegada da pagina {PageId} ({Regional})", pageId, regionalNome);
+            }
+            finally
+            {
+                db.ChangeTracker.Clear();
+            }
+        }
+
+        var checkpoint = await db.CrmNotionSyncCheckpoints.FindAsync([dataSourceId], ct);
+        checkpoint!.DataChegadaCorrigidaEm = inicio;
+        await db.SaveChangesAsync(ct);
+        if (atualizados + ligados > 0) eventos?.PublicarQuadroAtualizado("notion");
+        return $"{regionalNome}: {lidos} cards lidos, {atualizados} datas de chegada gravadas, {ligados} leads antigos ligados ao card, {erros} erros (correção da data de chegada)";
+    }
+
+    /// <summary>Dados do card usados para achar o lead (ver EncontrarLeadAsync).</summary>
+    private static IdentificacaoNotion IdentificarCard(JsonElement page, string regionalNome)
+    {
+        var nome = page.Text("Name") ?? PrimeiroTexto(page, "WhatsApp", "[META] Phone Number", "E-mail", "[META] Email") ?? "Sem nome (Notion)";
+        var (documento, documentoSemZero) = NormalizarCpfNotion(page.Text("CPF") ?? page.Number("CPF")?.ToString("F0", System.Globalization.CultureInfo.InvariantCulture));
+        var email = DocumentValidation.NormalizarEmail(page.Text("E-mail", "[META] Email"));
+        var telefone = DocumentValidation.NormalizarTelefone(PrimeiroTexto(page, "WhatsApp", "[META] Phone Number"));
+        return new IdentificacaoNotion(page.PageId(), nome.Trim(), regionalNome, documento, documentoSemZero, email, telefone);
     }
 
     private async Task CarregarUsuariosAtivosAsync(CancellationToken ct)
