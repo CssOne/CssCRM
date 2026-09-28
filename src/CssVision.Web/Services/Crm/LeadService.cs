@@ -27,6 +27,13 @@ public sealed class LeadService(
     /// <summary>Nome da etapa "veículo fora do que a CSS Brasil atende" do quadro de leads — ver CrmSeeder.cs.</summary>
     private const string EtapaLeadNaoFazemos = "Não fazemos";
 
+    /// <summary>
+    /// Prefixo das etapas "Venda concluída (Leads)"/"Venda concluída (Indicação)" — é quando o
+    /// evento de conversão pro Meta deve carregar o valor pago de verdade (pagamento de adesão);
+    /// etapas antes disso (ex: Cotação) ainda não tiveram pagamento confirmado.
+    /// </summary>
+    private const string EtapaLeadVendaConcluida = "Venda concluída";
+
     /// <summary>Etapa "Cotação" do quadro de leads — só entra com o valor da adesão preenchido.</summary>
     private const string EtapaLeadCotacao = "Cotação";
 
@@ -481,10 +488,28 @@ public sealed class LeadService(
         // Gerenciador de Anúncios, não aqui. Nunca deve bloquear a resposta desse endpoint.
         if (novaEtapa is not null)
         {
-            await conversion.EnviarEventoEtapaAsync(lead, novaEtapa.Id, novaEtapa.Nome, ct);
+            var valorConversao = novaEtapa.Nome.StartsWith(EtapaLeadVendaConcluida, StringComparison.OrdinalIgnoreCase)
+                ? await ObterPagamentoAdesaoAsync(lead.Id, ct)
+                : null;
+            await conversion.EnviarEventoEtapaAsync(lead, novaEtapa.Id, novaEtapa.Nome, ct, valorConversao);
         }
 
         return await ObterPorIdAsync(lead.Id, ct);
+    }
+
+    /// <summary>
+    /// Pagamento de adesão da oportunidade mais recente do lead (não arquivada) — o valor real que
+    /// já entrou, usado como valor do evento de conversão "venda concluída" pro Meta. Um lead pode
+    /// ter mais de uma oportunidade (raro); pega a mais recente por ser a mais provável de ser a
+    /// que motivou essa mudança de etapa.
+    /// </summary>
+    private async Task<decimal?> ObterPagamentoAdesaoAsync(Guid leadId, CancellationToken ct)
+    {
+        return await db.CrmOpportunities.AsNoTracking()
+            .Where(o => o.LeadId == leadId && !o.Arquivado)
+            .OrderByDescending(o => o.CriadoEm)
+            .Select(o => o.PagamentoAdesao)
+            .FirstOrDefaultAsync(ct);
     }
 
     public async Task<int> AtribuirEmLoteAsync(LeadBulkAssignRequest request, CancellationToken ct)

@@ -17,8 +17,10 @@ public interface IMetaConversionService
     /// <summary>
     /// Envia um evento customizado (nomeado com a própria etapa) pra qualquer mudança de etapa
     /// do lead no quadro. Não lança, mesma lógica de falha silenciosa da conversão de venda.
+    /// <paramref name="valor"/>: só passar quando o dinheiro já entrou de verdade nessa etapa
+    /// (ex: pagamento de adesão confirmado) — ver <see cref="MetaConversionEventBuilder.BuildEtapaEventPayload"/>.
     /// </summary>
-    Task<bool> EnviarEventoEtapaAsync(CrmLead lead, Guid etapaId, string etapaNome, CancellationToken ct);
+    Task<bool> EnviarEventoEtapaAsync(CrmLead lead, Guid etapaId, string etapaNome, CancellationToken ct, decimal? valor = null);
 }
 
 public sealed class MetaConversionService(
@@ -35,12 +37,12 @@ public sealed class MetaConversionService(
         return await EnviarAsync(payload, opts, $"conversão de venda (oportunidade {opportunity.Id})", ct);
     }
 
-    public async Task<bool> EnviarEventoEtapaAsync(CrmLead lead, Guid etapaId, string etapaNome, CancellationToken ct)
+    public async Task<bool> EnviarEventoEtapaAsync(CrmLead lead, Guid etapaId, string etapaNome, CancellationToken ct, decimal? valor = null)
     {
         var opts = options.Value;
         if (!TemCredenciais(opts, $"lead {lead.Id} -> etapa \"{etapaNome}\"")) return false;
 
-        var payload = MetaConversionEventBuilder.BuildEtapaEventPayload(lead, etapaId, etapaNome, opts);
+        var payload = MetaConversionEventBuilder.BuildEtapaEventPayload(lead, etapaId, etapaNome, opts, valor);
         return await EnviarAsync(payload, opts, $"etapa \"{etapaNome}\" (lead {lead.Id})", ct);
     }
 

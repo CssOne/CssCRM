@@ -55,8 +55,11 @@ public static partial class MetaConversionEventBuilder
     /// nome do evento é o próprio nome da etapa (ex: "Cotação", "Venda concluída"). Manda pra
     /// todas as etapas de propósito: qual delas efetivamente vira otimização de campanha é
     /// escolhido no Gerenciador de Anúncios (Conversões Personalizadas), não aqui no código.
+    /// <paramref name="valor"/> só deve vir preenchido pra etapas onde o dinheiro já entrou de
+    /// verdade (ex: pagamento de adesão confirmado) — em etapas anteriores (ex: Cotação, ainda
+    /// sem pagamento) mandar valor faria a Meta otimizar em cima de receita que não aconteceu.
     /// </summary>
-    public static MetaCapiPayload BuildEtapaEventPayload(CrmLead lead, Guid etapaId, string etapaNome, MetaCapiOptions options)
+    public static MetaCapiPayload BuildEtapaEventPayload(CrmLead lead, Guid etapaId, string etapaNome, MetaCapiOptions options, decimal? valor = null)
     {
         var userData = BuildUserData(lead);
         var evento = new MetaCapiEvent(
@@ -65,7 +68,7 @@ public static partial class MetaConversionEventBuilder
             ActionSource,
             $"etapa_{lead.Id}_{etapaId}",
             userData,
-            new MetaCapiCustomData(options.EventSourceLabel, options.EventSourceLabel, null, null));
+            new MetaCapiCustomData(options.EventSourceLabel, options.EventSourceLabel, valor, valor is null ? null : DefaultCurrency));
 
         return new MetaCapiPayload([evento]);
     }

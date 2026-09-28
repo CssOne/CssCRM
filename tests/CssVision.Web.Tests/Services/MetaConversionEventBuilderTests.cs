@@ -117,6 +117,19 @@ public class MetaConversionEventBuilderTests
     }
 
     [Fact]
+    public void BuildEtapaEventPayload_DeveIncluirValor_QuandoInformado()
+    {
+        var lead = new CrmLead { Id = Guid.NewGuid(), NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica };
+        var options = new MetaCapiOptions { PixelId = "123", AccessToken = "token" };
+
+        var payload = MetaConversionEventBuilder.BuildEtapaEventPayload(lead, Guid.NewGuid(), "Venda concluída (Leads)", options, valor: 150.00m);
+
+        var evento = Assert.Single(payload.Data);
+        Assert.Equal(150.00m, evento.CustomData.Value);
+        Assert.Equal("BRL", evento.CustomData.Currency);
+    }
+
+    [Fact]
     public void BuildEtapaEventPayload_DeveGerarEventIdEstavel_ParaMesmaEtapaEMesmoLead()
     {
         var lead = new CrmLead { Id = Guid.NewGuid(), NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica };
