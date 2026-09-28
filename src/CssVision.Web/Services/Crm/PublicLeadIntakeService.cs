@@ -100,16 +100,21 @@ public sealed class PublicLeadIntakeService(
     /// Um contato antigo (ex: migrado do Notion) pode mandar um lead novo de verdade pelo tráfego
     /// pago hoje — sem isso, o card ficava com a classificação antiga e sumia do filtro "Tráfego
     /// pago" do quadro, escondendo do time que chegou uma oportunidade nova pra esse contato.
+    /// Também vincula o Meta Lead ID mesmo quando a classificação já estava certa: sem isso, a
+    /// reconciliação (Worker) nunca conseguia confirmar por GET /by-meta-lead-id que aquele lead
+    /// específico já tinha chegado, e ficava reenviando ele pra sempre.
     /// </summary>
     private async Task GarantirClassificacaoTrafegoPagoAsync(CrmLead existente, string? metaLeadId, CancellationToken ct)
     {
-        if (OrigemLead.VeioDoTrafegoPago.Compile()(existente)) return;
+        var jaClassificado = OrigemLead.VeioDoTrafegoPago.Compile()(existente);
+        var precisaVincularMetaLeadId = existente.MetaLeadId is null && metaLeadId is not null;
+        if (jaClassificado && !precisaVincularMetaLeadId) return;
 
-        existente.ConsentimentoOrigem = OrigemLead.MarcadorFormularioSite;
+        if (!jaClassificado) existente.ConsentimentoOrigem = OrigemLead.MarcadorFormularioSite;
         existente.MetaLeadId ??= metaLeadId;
         await db.SaveChangesAsync(ct);
         eventos?.PublicarQuadroAtualizado("site");
-        logger.LogInformation("Lead {LeadId} reclassificado como tráfego pago (contato antigo recebeu lead novo)", existente.Id);
+        logger.LogInformation("Lead {LeadId} atualizado pelo intake público (classificação e/ou vínculo do Meta Lead ID)", existente.Id);
     }
 
     /// <summary>
