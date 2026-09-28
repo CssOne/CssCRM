@@ -13,7 +13,8 @@ public interface ILeadAssignmentService
     /// nesse caso o lead fica sem responsável, do mesmo jeito que fica sem etapa.
     /// </summary>
     /// <param name="oQue">"O que?" do lead (ProdutoInteresse): consultores com RecebeSomenteOQue só
-    /// entram no rodízio de leads com um desses valores — e, nesses leads, têm a preferência.</param>
+    /// entram no rodízio de leads com um desses valores, em pé de igualdade com os demais (no empate,
+    /// o especialista vem primeiro).</param>
     Task<Guid?> ProximoResponsavelAsync(string? oQue, CancellationToken ct);
 
     /// <summary>

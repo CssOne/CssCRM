@@ -34,16 +34,18 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
             .Join(db.Users.Where(u => u.Ativo && u.RecebeLeads), id => id, u => u.Id, (_, u) => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.RecebeSomenteOQue })
             .ToListAsync(ct);
 
-        // Especialistas (ex.: só AGV TRUCK) ficam fora do rodízio geral; nos leads da especialidade
-        // deles, têm a preferência — os demais só recebem se nenhum especialista estiver disponível.
-        var especialistas = todos.Where(v => FiltroOQue.Aceita(v.RecebeSomenteOQue, oQue) && v.RecebeSomenteOQue is not null).ToList();
-        var gerais = todos.Where(v => v.RecebeSomenteOQue is null).ToList();
-
-        return await EscolherAsync(especialistas.Select(v => (v.Id, v.NomeCompleto, v.LimiteMensalLeads, v.LimiteDiarioLeads)).ToList(), ct)
-            ?? await EscolherAsync(gerais.Select(v => (v.Id, v.NomeCompleto, v.LimiteMensalLeads, v.LimiteDiarioLeads)).ToList(), ct);
+        // "Recebe somente leads de..." só RESTRINGE: quem tem a restrição entra no rodízio apenas dos
+        // leads daqueles tipos, em pé de igualdade com os demais (recebe quem pegou menos no mês).
+        // Antes o especialista tinha preferência, e quem tinha "AGV" levava todos os leads de AGV.
+        var aptos = todos
+            .Where(v => FiltroOQue.Aceita(v.RecebeSomenteOQue, oQue))
+            .Select(v => (v.Id, v.NomeCompleto, v.LimiteMensalLeads, v.LimiteDiarioLeads, Especialista: v.RecebeSomenteOQue is not null))
+            .ToList();
+        return await EscolherAsync(aptos, ct);
     }
 
-    private async Task<Guid?> EscolherAsync(List<(Guid Id, string NomeCompleto, int? LimiteMensalLeads, int? LimiteDiarioLeads)> vendedores, CancellationToken ct)
+    private async Task<Guid?> EscolherAsync(
+        List<(Guid Id, string NomeCompleto, int? LimiteMensalLeads, int? LimiteDiarioLeads, bool Especialista)> vendedores, CancellationToken ct)
     {
         if (vendedores.Count == 0) return null;
 
@@ -62,10 +64,12 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
             .ToDictionaryAsync(x => x.ResponsavelId, x => x.Quantidade, ct);
 
         return vendedores
-            .Select(v => new { v.Id, v.NomeCompleto, v.LimiteMensalLeads, v.LimiteDiarioLeads, Recebidos = recebidosNoMes.GetValueOrDefault(v.Id), Hoje = recebidosHoje.GetValueOrDefault(v.Id) })
+            .Select(v => new { v.Id, v.NomeCompleto, v.LimiteMensalLeads, v.LimiteDiarioLeads, v.Especialista, Recebidos = recebidosNoMes.GetValueOrDefault(v.Id), Hoje = recebidosHoje.GetValueOrDefault(v.Id) })
             .Where(v => v.LimiteMensalLeads is null || v.Recebidos < v.LimiteMensalLeads)
             .Where(v => v.LimiteDiarioLeads is null || v.Hoje < v.LimiteDiarioLeads)
             .OrderBy(v => v.Recebidos)
+            // Empate: o especialista (que só pode receber esse tipo) vem primeiro.
+            .ThenByDescending(v => v.Especialista)
             .ThenBy(v => v.NomeCompleto, StringComparer.OrdinalIgnoreCase)
             .Select(v => (Guid?)v.Id)
             .FirstOrDefault();
