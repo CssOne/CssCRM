@@ -29,7 +29,7 @@ public sealed class PublicLeadIntakeService(
         var existente = await EncontrarLeadExistenteAsync(emailNormalizado, telefoneNormalizado, ct);
         if (existente is not null)
         {
-            await GarantirClassificacaoTrafegoPagoAsync(existente, request.MetaLeadId, ct);
+            await AtualizarContatoExistenteAsync(existente, request, telefoneNormalizado, ct);
             logger.LogInformation(
                 "Lead do site (projeto {Projeto}) associado ao contato já existente {LeadId}", request.Projeto, existente.Id);
             return await MontarResultadoAsync(existente.Id, existente.ResponsavelId, ct);
@@ -97,21 +97,66 @@ public sealed class PublicLeadIntakeService(
     }
 
     /// <summary>
-    /// Um contato antigo (ex: migrado do Notion) pode mandar um lead novo de verdade pelo tráfego
-    /// pago hoje — sem isso, o card ficava com a classificação antiga e sumia do filtro "Tráfego
-    /// pago" do quadro, escondendo do time que chegou uma oportunidade nova pra esse contato.
-    /// Também vincula o Meta Lead ID mesmo quando a classificação já estava certa: sem isso, a
-    /// reconciliação (Worker) nunca conseguia confirmar por GET /by-meta-lead-id que aquele lead
-    /// específico já tinha chegado, e ficava reenviando ele pra sempre.
+    /// Atualiza um contato já existente com o que essa nova submissão trouxe de novidade — nunca
+    /// sobrescreve o que já está preenchido (o consultor pode ter corrigido/completado algo na
+    /// tela), só preenche o que estava vazio:
+    /// (1) contato: sem isso, um lead que dedupa pra um registro sem telefone/WhatsApp (ex: card
+    ///     criado por engano sem esse dado) ficava pra sempre sem jeito de contato nenhum — o
+    ///     consultor via o nome mas não conseguia ligar/chamar no WhatsApp;
+    /// (2) classificação de tráfego pago: um contato antigo (ex: migrado do Notion) pode mandar um
+    ///     lead novo de verdade hoje — sem isso, o card ficava preso à classificação antiga e sumia
+    ///     do filtro "Tráfego pago" do quadro;
+    /// (3) Meta Lead ID: sem vincular, a reconciliação (Worker) nunca confirmava por
+    ///     GET /by-meta-lead-id que aquele lead específico já tinha chegado, e ficava reenviando ele
+    ///     pra sempre.
     /// </summary>
-    private async Task GarantirClassificacaoTrafegoPagoAsync(CrmLead existente, string? metaLeadId, CancellationToken ct)
+    private async Task AtualizarContatoExistenteAsync(CrmLead existente, PublicLeadCreateRequest request, string? telefoneNormalizado, CancellationToken ct)
     {
-        var jaClassificado = OrigemLead.VeioDoTrafegoPago.Compile()(existente);
-        var precisaVincularMetaLeadId = existente.MetaLeadId is null && metaLeadId is not null;
-        if (jaClassificado && !precisaVincularMetaLeadId) return;
+        var mudou = false;
 
-        if (!jaClassificado) existente.ConsentimentoOrigem = OrigemLead.MarcadorFormularioSite;
-        existente.MetaLeadId ??= metaLeadId;
+        if (string.IsNullOrWhiteSpace(existente.WhatsApp) && !string.IsNullOrWhiteSpace(request.WhatsApp))
+        {
+            existente.Telefone = request.WhatsApp;
+            existente.TelefoneNormalizado = telefoneNormalizado;
+            existente.WhatsApp = request.WhatsApp;
+            mudou = true;
+        }
+        if (string.IsNullOrWhiteSpace(existente.Telefone2) && !string.IsNullOrWhiteSpace(request.Telefone2))
+        {
+            existente.Telefone2 = request.Telefone2;
+            existente.Telefone2Normalizado = DocumentValidation.NormalizarTelefone(request.Telefone2);
+            mudou = true;
+        }
+        if (string.IsNullOrWhiteSpace(existente.Estado) && !string.IsNullOrWhiteSpace(request.Estado))
+        {
+            existente.Estado = request.Estado.ToUpperInvariant();
+            mudou = true;
+        }
+        if (string.IsNullOrWhiteSpace(existente.Placa) && request.Placa?.Trim().ToUpperInvariant() is { Length: > 0 and <= 10 } placaValida)
+        {
+            existente.Placa = placaValida;
+            mudou = true;
+        }
+        if (string.IsNullOrWhiteSpace(existente.UtilidadeVeiculo) && !string.IsNullOrWhiteSpace(request.UtilidadeVeiculo))
+        {
+            existente.UtilidadeVeiculo = request.UtilidadeVeiculo;
+            mudou = true;
+        }
+
+        var jaClassificado = OrigemLead.VeioDoTrafegoPago.Compile()(existente);
+        var precisaVincularMetaLeadId = existente.MetaLeadId is null && request.MetaLeadId is not null;
+        if (!jaClassificado)
+        {
+            existente.ConsentimentoOrigem = OrigemLead.MarcadorFormularioSite;
+            mudou = true;
+        }
+        if (precisaVincularMetaLeadId)
+        {
+            existente.MetaLeadId = request.MetaLeadId;
+            mudou = true;
+        }
+
+        if (!mudou) return;
 
         try
         {
@@ -124,14 +169,14 @@ public sealed class PublicLeadIntakeService(
             // bate no índice único e não pode derrubar a criação/atualização do lead por causa
             // disso. NÃO dá pra rodar mais nada nesse DbContext depois daqui (a transação do
             // Postgres já foi abortada pelo erro — até um Reload() simples lançaria de novo); só
-            // loga e sai. A classificação de tráfego pago, se aplicável, é perdida nesse caso raro,
-            // mas o lead em si não pode falhar por causa disso.
-            logger.LogWarning(ex, "Não foi possível vincular o Meta Lead ID {MetaLeadId} ao lead {LeadId} (provável duplicata de e-mail/telefone com outro registro que já tem esse vínculo)", metaLeadId, existente.Id);
+            // loga e sai. As outras atualizações desse lote (contato/classificação) também são
+            // perdidas nesse caso raro — mas o lead em si não pode falhar por causa disso.
+            logger.LogWarning(ex, "Não foi possível atualizar o lead {LeadId} (provável duplicata de e-mail/telefone com outro registro que já tem o Meta Lead ID {MetaLeadId})", existente.Id, request.MetaLeadId);
             return;
         }
 
         eventos?.PublicarQuadroAtualizado("site");
-        logger.LogInformation("Lead {LeadId} atualizado pelo intake público (classificação e/ou vínculo do Meta Lead ID)", existente.Id);
+        logger.LogInformation("Lead {LeadId} atualizado pelo intake público (contato preenchido e/ou classificação/vínculo do Meta Lead ID)", existente.Id);
     }
 
     /// <summary>
