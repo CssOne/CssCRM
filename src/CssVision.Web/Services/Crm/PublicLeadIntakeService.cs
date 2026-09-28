@@ -112,7 +112,23 @@ public sealed class PublicLeadIntakeService(
 
         if (!jaClassificado) existente.ConsentimentoOrigem = OrigemLead.MarcadorFormularioSite;
         existente.MetaLeadId ??= metaLeadId;
-        await db.SaveChangesAsync(ct);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex)
+        {
+            // Existem contatos duplicados na base (mesmo e-mail em duas linhas, herança da migração
+            // do Notion) — se ESTE registro não for o que já guarda o Meta Lead ID, vincular aqui
+            // bate no índice único e não pode derrubar a criação/atualização do lead por causa
+            // disso. Desfaz só essa mudança e segue (a classificação de tráfego pago, se aplicável,
+            // é perdida nesse caso raro — mas o lead em si não pode falhar).
+            db.Entry(existente).Reload();
+            logger.LogWarning(ex, "Não foi possível vincular o Meta Lead ID {MetaLeadId} ao lead {LeadId} (provável duplicata de e-mail/telefone com outro registro que já tem esse vínculo)", metaLeadId, existente.Id);
+            return;
+        }
+
         eventos?.PublicarQuadroAtualizado("site");
         logger.LogInformation("Lead {LeadId} atualizado pelo intake público (classificação e/ou vínculo do Meta Lead ID)", existente.Id);
     }
