@@ -142,6 +142,31 @@ public sealed class PublicLeadIntakeService(
             existente.UtilidadeVeiculo = request.UtilidadeVeiculo;
             mudou = true;
         }
+        if (string.IsNullOrWhiteSpace(existente.UtmSource) && !string.IsNullOrWhiteSpace(request.UtmSource))
+        {
+            existente.UtmSource = request.UtmSource;
+            mudou = true;
+        }
+        if (string.IsNullOrWhiteSpace(existente.UtmMedium) && !string.IsNullOrWhiteSpace(request.UtmMedium))
+        {
+            existente.UtmMedium = request.UtmMedium;
+            mudou = true;
+        }
+        if (string.IsNullOrWhiteSpace(existente.UtmTerm) && !string.IsNullOrWhiteSpace(request.UtmTerm))
+        {
+            existente.UtmTerm = request.UtmTerm;
+            mudou = true;
+        }
+        if (string.IsNullOrWhiteSpace(existente.Gclid) && !string.IsNullOrWhiteSpace(request.Gclid))
+        {
+            existente.Gclid = request.Gclid;
+            mudou = true;
+        }
+        if (string.IsNullOrWhiteSpace(existente.MetaClickId) && !string.IsNullOrWhiteSpace(request.ClickId))
+        {
+            existente.MetaClickId = request.ClickId;
+            mudou = true;
+        }
 
         var jaClassificado = OrigemLead.VeioDoTrafegoPago.Compile()(existente);
         var precisaVincularMetaLeadId = existente.MetaLeadId is null && request.MetaLeadId is not null;
