@@ -619,6 +619,7 @@ public sealed class NotionSyncService(
         lead.Gclid = Cortar(page.Text("GCLID"), 200) ?? lead.Gclid;
         lead.UtmSource = Cortar(page.Text("UTM SOURCE"), 120) ?? lead.UtmSource;
         lead.UtmMedium = Cortar(page.Text("UTM MEDIUM"), 120) ?? lead.UtmMedium;
+        lead.UtmCampaign = Cortar(page.Text("UTM CAMPAING"), 200) ?? lead.UtmCampaign;
         lead.UtmTerm = Cortar(page.Text("UTM TERM"), 120) ?? lead.UtmTerm;
         lead.MetaClickId = Cortar(page.Text("[META] Click ID"), 200) ?? lead.MetaClickId;
         lead.MetaFormId = Cortar(page.Text("[META] Form"), 120) ?? lead.MetaFormId;

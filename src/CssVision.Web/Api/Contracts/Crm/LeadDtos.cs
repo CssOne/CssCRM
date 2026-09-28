@@ -98,7 +98,8 @@ public record LeadDetailDto(
     uint RowVersion,
     bool Arquivado,
     /// <summary>Valor da adesão informado na "Cotação" — pré-preenche Oportunidade e Venda concluída.</summary>
-    decimal? ValorAdesao = null);
+    decimal? ValorAdesao = null,
+    string? UtmCampaign = null);
 
 public record LeadOpportunitySummaryDto(
     Guid Id,
@@ -170,7 +171,8 @@ public record LeadCreateRequest(
     string? Observacoes,
     bool ConsentimentoContato,
     string? ConsentimentoOrigem,
-    bool IgnorarDuplicidade = false);
+    bool IgnorarDuplicidade = false,
+    string? UtmCampaign = null);
 
 public record LeadUpdateRequest(
     string NomeOuRazaoSocial,
@@ -203,7 +205,8 @@ public record LeadUpdateRequest(
     string? Observacoes,
     bool ConsentimentoContato,
     string? ConsentimentoOrigem,
-    uint RowVersion);
+    uint RowVersion,
+    string? UtmCampaign = null);
 
 public record LeadAssignRequest(Guid ResponsavelId, string? Motivo);
 

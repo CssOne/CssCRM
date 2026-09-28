@@ -264,6 +264,7 @@ public sealed class LeadService(
             Gclid = request.Gclid,
             UtmMedium = request.UtmMedium,
             UtmSource = request.UtmSource,
+            UtmCampaign = request.UtmCampaign,
             UtmTerm = request.UtmTerm,
             MetaClickId = request.MetaClickId,
             MetaFormId = request.MetaFormId,
@@ -348,6 +349,7 @@ public sealed class LeadService(
         lead.Gclid = request.Gclid;
         lead.UtmMedium = request.UtmMedium;
         lead.UtmSource = request.UtmSource;
+        lead.UtmCampaign = request.UtmCampaign;
         lead.UtmTerm = request.UtmTerm;
         lead.MetaClickId = request.MetaClickId;
         lead.MetaFormId = request.MetaFormId;
@@ -972,5 +974,6 @@ public sealed class LeadService(
         lead.AtualizadoEm,
         lead.RowVersion,
         lead.Arquivado,
-        lead.ValorAdesao);
+        lead.ValorAdesao,
+        lead.UtmCampaign);
 }

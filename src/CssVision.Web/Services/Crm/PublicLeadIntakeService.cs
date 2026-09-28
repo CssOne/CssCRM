@@ -65,6 +65,7 @@ public sealed class PublicLeadIntakeService(
             Gclid = request.Gclid,
             UtmSource = request.UtmSource,
             UtmMedium = request.UtmMedium,
+            UtmCampaign = request.UtmCampaign,
             UtmTerm = request.UtmTerm,
             MetaClickId = request.ClickId,
             MetaFormId = request.Projeto,
@@ -155,6 +156,11 @@ public sealed class PublicLeadIntakeService(
         if (string.IsNullOrWhiteSpace(existente.UtmTerm) && !string.IsNullOrWhiteSpace(request.UtmTerm))
         {
             existente.UtmTerm = request.UtmTerm;
+            mudou = true;
+        }
+        if (string.IsNullOrWhiteSpace(existente.UtmCampaign) && !string.IsNullOrWhiteSpace(request.UtmCampaign))
+        {
+            existente.UtmCampaign = request.UtmCampaign;
             mudou = true;
         }
         if (string.IsNullOrWhiteSpace(existente.Gclid) && !string.IsNullOrWhiteSpace(request.Gclid))

@@ -56,6 +56,7 @@ public class CrmLead : CrmArchivableEntity
     public string? Gclid { get; set; }
     public string? UtmMedium { get; set; }
     public string? UtmSource { get; set; }
+    public string? UtmCampaign { get; set; }
     public string? UtmTerm { get; set; }
 
     /// <summary>Identificadores do lead ad (Meta/Facebook Lead Ads) que originou este cadastro.</summary>

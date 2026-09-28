@@ -29,6 +29,7 @@ public class CrmLeadConfiguration : IEntityTypeConfiguration<CrmLead>
         builder.Property(e => e.UtmMedium).HasMaxLength(120);
         builder.Property(e => e.UtmSource).HasMaxLength(120);
         builder.Property(e => e.UtmTerm).HasMaxLength(120);
+        builder.Property(e => e.UtmCampaign).HasMaxLength(200);
         builder.Property(e => e.MetaClickId).HasMaxLength(200);
         builder.Property(e => e.MetaFormId).HasMaxLength(120);
         builder.Property(e => e.MetaLeadId).HasMaxLength(120);

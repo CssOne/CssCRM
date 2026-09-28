@@ -23,7 +23,8 @@ public record PublicLeadCreateRequest(
     string? Telefone2 = null,
     string? UtmSource = null,
     string? UtmMedium = null,
-    string? UtmTerm = null);
+    string? UtmTerm = null,
+    string? UtmCampaign = null);
 
 /// <summary>Devolvido ao formulário pra montar a página de obrigado com foto + WhatsApp do consultor sorteado.</summary>
 public record PublicLeadResultDto(

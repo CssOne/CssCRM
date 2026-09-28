@@ -27,6 +27,7 @@ export interface LeadFormValues {
   gclid: string;
   utmMedium: string;
   utmSource: string;
+  utmCampaign: string;
   utmTerm: string;
   metaClickId: string;
   metaFormId: string;
@@ -59,6 +60,7 @@ export const leadFormVazio: LeadFormValues = {
   gclid: "",
   utmMedium: "",
   utmSource: "",
+  utmCampaign: "",
   utmTerm: "",
   metaClickId: "",
   metaFormId: "",
@@ -92,6 +94,7 @@ export function paraLeadCreateRequest(v: LeadFormValues): LeadCreateRequest {
     gclid: v.gclid || null,
     utmMedium: v.utmMedium || null,
     utmSource: v.utmSource || null,
+    utmCampaign: v.utmCampaign || null,
     utmTerm: v.utmTerm || null,
     metaClickId: v.metaClickId || null,
     metaFormId: v.metaFormId || null,
@@ -336,6 +339,10 @@ export function LeadForm({
             <div>
               <Label htmlFor={`${idPrefix}-utm-medium`}>UTM Medium</Label>
               <Input id={`${idPrefix}-utm-medium`} value={valores.utmMedium} onChange={(e) => set("utmMedium", e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor={`${idPrefix}-utm-campaign`}>UTM Campaign</Label>
+              <Input id={`${idPrefix}-utm-campaign`} value={valores.utmCampaign} onChange={(e) => set("utmCampaign", e.target.value)} />
             </div>
             <div>
               <Label htmlFor={`${idPrefix}-utm-term`}>UTM Term</Label>

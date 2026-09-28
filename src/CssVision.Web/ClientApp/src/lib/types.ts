@@ -203,6 +203,7 @@ export interface LeadDetail {
   gclid?: string | null;
   utmMedium?: string | null;
   utmSource?: string | null;
+  utmCampaign?: string | null;
   utmTerm?: string | null;
   metaClickId?: string | null;
   metaFormId?: string | null;
@@ -255,6 +256,7 @@ export interface LeadCreateRequest {
   gclid?: string | null;
   utmMedium?: string | null;
   utmSource?: string | null;
+  utmCampaign?: string | null;
   utmTerm?: string | null;
   metaClickId?: string | null;
   metaFormId?: string | null;
