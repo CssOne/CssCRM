@@ -72,6 +72,26 @@ public class RecebeSomenteOQueTests
     }
 
     [Fact]
+    public async Task Restricao_NaoDaPreferencia_RecebeQuemPegouMenos()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var geral = await factory.CriarUsuarioAsync(db, "Zeca Geral");
+        var anaLuiza = await factory.CriarUsuarioAsync(db, "Ana Luiza");
+        await factory.AtribuirPapelAsync(db, geral, Roles.Comercial);
+        await factory.AtribuirPapelAsync(db, anaLuiza, Roles.Comercial);
+        anaLuiza.RecebeSomenteOQue = "AGV,AGV ELÉTRICO";
+        // Ana Luiza já recebeu 2 leads no mês; o vendedor geral, nenhum.
+        db.CrmLeads.AddRange(
+            new CrmLead { NomeOuRazaoSocial = "L1", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = anaLuiza.Id, MetaLeadId = "x1" },
+            new CrmLead { NomeOuRazaoSocial = "L2", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = anaLuiza.Id, MetaLeadId = "x2" });
+        await db.SaveChangesAsync();
+
+        // Antes, a restrição dava preferência e a Ana Luiza levava todo lead de AGV.
+        Assert.Equal(geral.Id, await new LeadAssignmentService(db).ProximoResponsavelAsync("AGV", CancellationToken.None));
+    }
+
+    [Fact]
     public void FiltroOQue_JuntaESeparaSemRepetir()
     {
         Assert.Equal("AGV TRUCK,AGV ELÉTRICO", FiltroOQue.Juntar([" AGV TRUCK ", "agv truck", "AGV ELÉTRICO", ""]));
