@@ -122,9 +122,10 @@ public sealed class PublicLeadIntakeService(
             // Existem contatos duplicados na base (mesmo e-mail em duas linhas, herança da migração
             // do Notion) — se ESTE registro não for o que já guarda o Meta Lead ID, vincular aqui
             // bate no índice único e não pode derrubar a criação/atualização do lead por causa
-            // disso. Desfaz só essa mudança e segue (a classificação de tráfego pago, se aplicável,
-            // é perdida nesse caso raro — mas o lead em si não pode falhar).
-            db.Entry(existente).Reload();
+            // disso. NÃO dá pra rodar mais nada nesse DbContext depois daqui (a transação do
+            // Postgres já foi abortada pelo erro — até um Reload() simples lançaria de novo); só
+            // loga e sai. A classificação de tráfego pago, se aplicável, é perdida nesse caso raro,
+            // mas o lead em si não pode falhar por causa disso.
             logger.LogWarning(ex, "Não foi possível vincular o Meta Lead ID {MetaLeadId} ao lead {LeadId} (provável duplicata de e-mail/telefone com outro registro que já tem esse vínculo)", metaLeadId, existente.Id);
             return;
         }
