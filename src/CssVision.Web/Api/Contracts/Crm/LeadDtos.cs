@@ -109,9 +109,11 @@ public record LeadDetailDto(
 /// <summary>
 /// Cria cards para outros veículos do mesmo cliente. EtapaId = coluna onde os cards novos entram
 /// (nulo = a do card original, ou "Em atendimento" se ele já fechou — ver LeadService);
-/// Quantidade = quantos veículos a mais (1 a 10).
+/// Quantidade = quantos veículos a mais (1 a 10). VendaConcluida = o card nasce direto em
+/// "Venda concluída" (Leads/Indicação, pela etiqueta do cliente) — é o caso do formulário "Outro
+/// veículo", que já registra a venda do veículo novo.
 /// </summary>
-public record LeadVeiculosAdicionaisRequest(Guid? EtapaId, int Quantidade = 1);
+public record LeadVeiculosAdicionaisRequest(Guid? EtapaId, int Quantidade = 1, bool VendaConcluida = false);
 
 public record LeadOpportunitySummaryDto(
     Guid Id,

@@ -132,6 +132,30 @@ public class IndicacaoLeadEVeiculosAdicionaisTests
         Assert.Equal(emAtendimentoLeads.Id, (await db.CrmLeads.AsNoTracking().SingleAsync(l => l.Id == ids[0])).EtapaId);
     }
 
+    [Theory]
+    [InlineData("Lead", "Venda concluída (Leads)")]
+    [InlineData("Indicação Lead", "Venda concluída (Indicação)")]
+    [InlineData("Pessoal", "Venda concluída (Indicação)")]
+    public async Task OutroVeiculo_ComVendaConcluida_CardNasceEmVendaConcluidaDaMesmaEtiqueta(string tipo, string colunaEsperada)
+    {
+        using var factory = new TestDbContextFactory();
+        var db0 = factory.CreateContext();
+        var emAtendimento = await factory.ObterOuCriarEtapaLeadAsync(db0, "Em atendimento (Leads)", 1);
+        await factory.ObterOuCriarEtapaLeadAsync(db0, "Venda concluída (Leads)", 5);
+        await factory.ObterOuCriarEtapaLeadAsync(db0, "Venda concluída (Indicação)", 6);
+        var (db, usuario, lead) = await PrepararAsync(factory, tipo, emAtendimento);
+
+        var ids = await LeadService(db, usuario).CriarVeiculosAdicionaisAsync(
+            lead.Id, new LeadVeiculosAdicionaisRequest(null, 1, VendaConcluida: true), CancellationToken.None);
+
+        db.ChangeTracker.Clear();
+        var novo = await db.CrmLeads.AsNoTracking().Include(l => l.Etapa).SingleAsync(l => l.Id == ids[0]);
+        Assert.Equal(colunaEsperada, novo.Etapa!.Nome);
+        Assert.Equal(lead.Id, novo.VeiculoAdicionalDeLeadId);
+        // O card do cliente não muda de coluna.
+        Assert.Equal(emAtendimento.Id, (await db.CrmLeads.AsNoTracking().SingleAsync(l => l.Id == lead.Id)).EtapaId);
+    }
+
     [Fact]
     public async Task VeiculosAdicionais_APartirDeOutroAdicional_ApontaParaOCardOriginal()
     {

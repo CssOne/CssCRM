@@ -173,6 +173,8 @@ export function LeadsKanbanPage() {
   const [salvandoNovo, setSalvandoNovo] = useState(false);
   const [duplicidade, setDuplicidade] = useState<LeadDuplicateWarning | null>(null);
 
+  /** Formulários de venda dos outros veículos do cliente, um por vez (ver concluirVenda). */
+  const [outroVeiculo, setOutroVeiculo] = useState<{ leadId: string; atual: number; total: number } | null>(null);
   const [pendenciaVenda, setPendenciaVenda] = useState<{ cartao: LeadKanbanCard; etapaId: string; indicacaoLead?: boolean } | null>(null);
   const [pendenciaPerda, setPendenciaPerda] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
   const [pendenciaNaoFazemos, setPendenciaNaoFazemos] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
@@ -331,7 +333,7 @@ export function LeadsKanbanPage() {
   // Tempo real: quando o quadro muda (sincronização com o Notion ou outro usuário), recarrega sem
   // piscar. Se a pessoa estiver arrastando um cartão ou com um diálogo de etapa aberto, espera ela
   // terminar para não mexer no quadro debaixo dela.
-  const ocupado = !!cartaoArrastando || !!pendenciaVenda || !!pendenciaPerda || !!pendenciaNaoFazemos || !!pendenciaCotacao || enviando;
+  const ocupado = !!cartaoArrastando || !!pendenciaVenda || !!outroVeiculo || !!pendenciaPerda || !!pendenciaNaoFazemos || !!pendenciaCotacao || enviando;
   const ocupadoRef = useRef(ocupado);
   ocupadoRef.current = ocupado;
   const recargaPendenteRef = useRef(false);
@@ -436,23 +438,14 @@ export function LeadsKanbanPage() {
    * para "Venda concluída (Indicação)" — o servidor põe a etiqueta "Indicação Lead".
    */
   async function concluirVenda(cartao: LeadKanbanCard, etapaId: string, resultado?: ResultadoVendaConcluida) {
-    if (resultado && resultado.veiculosAdicionais > 0) {
-      try {
-        await api.post(`/crm/leads/${cartao.leadId}/veiculos-adicionais`, { quantidade: resultado.veiculosAdicionais });
-        notificar(
-          "success",
-          resultado.veiculosAdicionais === 1
-            ? "Criado 1 card novo para o outro veículo do cliente."
-            : `Criados ${resultado.veiculosAdicionais} cards novos para os outros veículos do cliente.`
-        );
-      } catch (e) {
-        notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível criar os cards dos outros veículos.");
-      }
-    }
-
     const colunaIndicacao = colunasVendaConcluida[1]?.etapa.id;
     const destino = resultado?.indicacao && classificarCartao(cartao) === "lead" && colunaIndicacao ? colunaIndicacao : etapaId;
-    moverPara(cartao, destino);
+    await moverPara(cartao, destino);
+    // Cliente fechou mais de um veículo: abre a venda de cada um — cada venda vira um card novo em
+    // "Venda concluída" (depois de mover, pra o card novo herdar a etiqueta já atualizada).
+    if (resultado && resultado.veiculosAdicionais > 0) {
+      setOutroVeiculo({ leadId: cartao.leadId, atual: 1, total: resultado.veiculosAdicionais });
+    }
   }
 
   async function excluirLead() {
@@ -933,6 +926,29 @@ export function LeadsKanbanPage() {
         onConcluido={(resultado) => {
           if (pendenciaVenda) concluirVenda(pendenciaVenda.cartao, pendenciaVenda.etapaId, resultado);
           setPendenciaVenda(null);
+        }}
+      />
+
+      <VendaConcluidaDialog
+        key={outroVeiculo ? `${outroVeiculo.leadId}-${outroVeiculo.atual}` : "outro-veiculo"}
+        open={!!outroVeiculo}
+        novoVeiculo
+        tituloExtra={outroVeiculo && outroVeiculo.total > 1 ? `veículo ${outroVeiculo.atual + 1} de ${outroVeiculo.total + 1}` : undefined}
+        leadId={outroVeiculo?.leadId ?? null}
+        pipelineGanhoEtapaId={etapaGanhoPipelineId ?? undefined}
+        etapaNome={ETAPA_VENDA_CONCLUIDA}
+        valorEstimado={0}
+        onCancel={() => {
+          if (outroVeiculo && outroVeiculo.atual < outroVeiculo.total) {
+            notificar("info", "Os outros veículos podem ser lançados depois pelo botão \"Outro veículo\" na página do cliente.");
+          }
+          setOutroVeiculo(null);
+          carregar(undefined, true);
+        }}
+        onConcluido={() => {
+          notificar("success", "Venda do outro veículo registrada — card novo em \"Venda concluída\".");
+          setOutroVeiculo((atual) => (atual && atual.atual < atual.total ? { ...atual, atual: atual.atual + 1 } : null));
+          carregar(undefined, true);
         }}
       />
 

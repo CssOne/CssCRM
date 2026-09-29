@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { OPCOES_TIPO_INDICACAO, TIPO_INDICACAO_LEAD } from "../../lib/opcoesLead";
 import { Paperclip } from "lucide-react";
 import { api, ApiRequestError, uploadFile } from "../../lib/api";
-import type { ChangeStageRequest, LeadDetail, Opportunity, OpportunityCreateRequest, OpportunityUpdateRequest } from "../../lib/types";
+import { TipoEtapaPipeline, type ChangeStageRequest, type LeadDetail, type Opportunity, type OpportunityCreateRequest, type OpportunityUpdateRequest, type PipelineBoard } from "../../lib/types";
 import { ESTADOS_BRASIL } from "../../lib/estados";
 import { formatarData } from "../../lib/format";
 import { Button, Checkbox, CpfInput, Input, Label, Modal, MoneyInput, Select, useToast } from "../ui";
@@ -15,6 +15,8 @@ export interface ResultadoVendaConcluida {
   indicacao: boolean;
   /** Quantos veículos a mais o cliente fechou (cada um vira um card novo). */
   veiculosAdicionais: number;
+  /** Modo "Outro veículo": o card novo criado em "Venda concluída". */
+  novoLeadId?: string;
 }
 
 const MAXIMO_VEICULOS_ADICIONAIS = 10;
@@ -101,6 +103,8 @@ export function VendaConcluidaDialog({
   modo = "venda",
   indicacaoLead = false,
   permitirVeiculosAdicionais = false,
+  novoVeiculo = false,
+  tituloExtra,
   onConfirm,
   onConcluido,
   onCancel,
@@ -122,6 +126,14 @@ export function VendaConcluidaDialog({
   indicacaoLead?: boolean;
   /** Mostra a opção "o cliente fechou mais de um veículo" (quadro de leads). */
   permitirVeiculosAdicionais?: boolean;
+  /**
+   * "Outro veículo" do cliente `leadId`: o formulário é a venda do veículo novo (dados do cliente
+   * pré-preenchidos, veículo em branco) e, ao confirmar, cria um card NOVO já em "Venda concluída"
+   * com essa venda — o card do cliente e a venda dele não mudam.
+   */
+  novoVeiculo?: boolean;
+  /** Complemento do título (ex.: "veículo 2 de 3"). */
+  tituloExtra?: string;
   onConfirm?: (dados: DadosVendaConcluida) => void;
   onConcluido?: (resultado?: ResultadoVendaConcluida) => void;
   onCancel: () => void;
@@ -144,6 +156,8 @@ export function VendaConcluidaDialog({
   const [veiculosAdicionais, setVeiculosAdicionais] = useState(1);
   /** Carro zero ainda não tem placa: a venda registra o chassi no lugar dela. */
   const [carroZero, setCarroZero] = useState(false);
+  /** Card do veículo novo já criado (se algo falhar depois, confirmar de novo não cria outro). */
+  const [novoLeadCriadoId, setNovoLeadCriadoId] = useState<string | null>(null);
   const ehVenda = modo === "venda";
 
   /** Venda de card "Lead" em "Venda concluída (Indicação)": já marcada como indicação "Indicação Lead". */
@@ -163,6 +177,7 @@ export function VendaConcluidaDialog({
     setMaisVeiculos(false);
     setVeiculosAdicionais(1);
     setCarroZero(!!oportunidadeEditar?.veiculo?.chassi && !oportunidadeEditar?.veiculo?.placa);
+    setNovoLeadCriadoId(null);
 
     if (oportunidadeEditar) {
       setValores({
@@ -222,12 +237,13 @@ export function VendaConcluidaDialog({
             cpf: lead.documento ?? lead.veiculoAdicionalDeDocumento ?? "",
             estado: lead.estado ?? "",
             tipoIndicacao: lead.tipoIndicacao ?? "",
-            pagamentoAdesao: v.pagamentoAdesao ?? lead.valorAdesao ?? null,
-            veiculo: { ...v.veiculo, placa: lead.placa ?? "" },
+            // Outro veículo: a adesão e a placa são do veículo novo, não do card do cliente.
+            pagamentoAdesao: novoVeiculo ? v.pagamentoAdesao : v.pagamentoAdesao ?? lead.valorAdesao ?? null,
+            veiculo: { ...v.veiculo, placa: novoVeiculo ? "" : lead.placa ?? "" },
           })
         );
         setResponsavelIdLead(lead.responsavelId ?? null);
-        if (!ehVenda) return;
+        if (!ehVenda || novoVeiculo) return;
 
         // Venda concluída: se o lead já tem uma oportunidade, o que já foi preenchido nela vem pronto.
         const idExistente = opportunityId ?? lead.oportunidades.find((o) => o.ativa)?.id ?? null;
@@ -358,7 +374,9 @@ export function VendaConcluidaDialog({
     if (precisaTermo || precisaPagamento) return;
     setEnviandoArquivos(true);
 
-    let idOportunidade = oportunidadeResolvidaId;
+    let idOportunidade = novoVeiculo ? null : oportunidadeResolvidaId;
+    let leadDaVenda = leadId;
+    let etapaGanho = pipelineGanhoEtapaId;
     // Cada upload de anexo (e a criação da oportunidade, quando é o caso) salva a oportunidade
     // (SaveChanges), o que avança o RowVersion — por isso sempre repassamos o valor mais recente
     // devolvido por cada chamada em vez do capturado quando o quadro foi carregado, senão o
@@ -366,6 +384,17 @@ export function VendaConcluidaDialog({
     let rowVersionAtual = valores.rowVersion;
 
     try {
+      if (novoVeiculo) {
+        // Card novo do veículo, já em "Venda concluída" (Leads/Indicação pela etiqueta do cliente).
+        leadDaVenda =
+          novoLeadCriadoId ??
+          (await api.post<string[]>(`/crm/leads/${leadId}/veiculos-adicionais`, { quantidade: 1, vendaConcluida: true }))[0];
+        setNovoLeadCriadoId(leadDaVenda);
+        if (!etapaGanho) {
+          const pipeline = await api.get<PipelineBoard>("/crm/pipeline");
+          etapaGanho = pipeline.colunas.find((c) => c.etapa.tipo === TipoEtapaPipeline.Ganho)?.etapa.id;
+        }
+      }
       if (!idOportunidade) {
         if (!responsavelIdLead) {
           notificar("error", "Este lead não tem um responsável definido. Atribua um consultor antes de concluir a venda.");
@@ -373,7 +402,7 @@ export function VendaConcluidaDialog({
           return;
         }
         const nova = await api.post<Opportunity>("/crm/opportunities", {
-          leadId,
+          leadId: leadDaVenda,
           titulo: "Venda concluída",
           responsavelId: responsavelIdLead,
           valorEstimado: valores.valorFinal ?? 0,
@@ -458,7 +487,7 @@ export function VendaConcluidaDialog({
       dataPagamentoAdesaoPrevista: valores.dataPagamentoAdesaoPrevista || null,
     };
 
-    if (opportunityId) {
+    if (opportunityId && !novoVeiculo) {
       // Modo Pipeline: quem muda a etapa é o chamador.
       setEnviandoArquivos(false);
       onConfirm?.(dadosFinais);
@@ -467,18 +496,30 @@ export function VendaConcluidaDialog({
 
     // Modo Quadro de leads: o diálogo já conclui a venda sozinho.
     try {
-      await api.post(`/crm/opportunities/${idOportunidade}/change-stage`, { novaEtapaId: pipelineGanhoEtapaId, ...dadosFinais });
+      await api.post(`/crm/opportunities/${idOportunidade}/change-stage`, { novaEtapaId: etapaGanho, ...dadosFinais });
     } catch (e) {
       notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível concluir a venda.");
       setEnviandoArquivos(false);
       return;
     }
     setEnviandoArquivos(false);
-    onConcluido?.({ indicacao: !!valores.indicacao, veiculosAdicionais: permitirVeiculosAdicionais && maisVeiculos ? veiculosAdicionais : 0 });
+    onConcluido?.({
+      indicacao: !!valores.indicacao,
+      veiculosAdicionais: permitirVeiculosAdicionais && maisVeiculos ? veiculosAdicionais : 0,
+      novoLeadId: novoVeiculo ? leadDaVenda ?? undefined : undefined,
+    });
   }
 
   return (
-    <Modal open={open} onClose={onCancel} title={!ehVenda ? "Nova oportunidade" : oportunidadeEditar ? "Editar venda concluída" : `Concluir venda — mover para "${etapaNome}"`} size="lg">
+    <Modal open={open} onClose={onCancel} title={
+        !ehVenda
+          ? "Nova oportunidade"
+          : oportunidadeEditar
+            ? "Editar venda concluída"
+            : novoVeiculo
+              ? `Outro veículo de ${nomeCliente || "cliente"}${tituloExtra ? ` (${tituloExtra})` : ""} — venda concluída`
+              : `Concluir venda — mover para "${etapaNome}"`
+      } size="lg">
       <div className="space-y-5">
         <div>
           <h3 className="mb-3 text-sm font-semibold text-[var(--fg)]">{ehVenda ? "Dados da venda" : "Dados da oportunidade"}</h3>
@@ -653,7 +694,7 @@ export function VendaConcluidaDialog({
             </div>
           </div>
 
-          {permitirVeiculosAdicionais && ehVenda && !oportunidadeEditar && (
+          {permitirVeiculosAdicionais && ehVenda && !oportunidadeEditar && !novoVeiculo && (
             <div className="mt-4 rounded-lg border border-dashed border-[var(--border)] p-3">
               <Checkbox label="O cliente fechou mais de um veículo" checked={maisVeiculos} onChange={(e) => setMaisVeiculos(e.target.checked)} />
               {maisVeiculos && (
@@ -672,7 +713,7 @@ export function VendaConcluidaDialog({
                     />
                   </div>
                   <p className="max-w-sm text-xs text-[var(--fg-muted)]">
-                    Este formulário é do veículo acima. Cada veículo a mais vira um card novo deste cliente, com o mesmo consultor, para preencher a venda dele.
+                    Este formulário é do veículo acima. Ao confirmar, abre o formulário de cada veículo a mais — cada um vira um card novo em "Venda concluída".
                   </p>
                 </div>
               )}
@@ -769,7 +810,7 @@ export function VendaConcluidaDialog({
             Cancelar
           </Button>
           <Button loading={enviandoArquivos || enviando} disabled={!podeConfirmar} onClick={confirmar}>
-            {!ehVenda ? "Criar oportunidade" : oportunidadeEditar ? "Salvar alterações" : "Confirmar e mover"}
+            {!ehVenda ? "Criar oportunidade" : oportunidadeEditar ? "Salvar alterações" : novoVeiculo ? "Registrar venda do veículo" : "Confirmar e mover"}
           </Button>
         </div>
       </div>
