@@ -2,6 +2,7 @@ using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace CssVision.Web.Services.Crm;
 
@@ -11,18 +12,26 @@ namespace CssVision.Web.Services.Crm;
 /// o total dela, contado no banco; "Ver mais" busca a próxima página de uma coluna
 /// (<see cref="ObterCartoesAsync"/>). Os cartões são projetados direto em SQL — só os campos exibidos.
 /// </summary>
-public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialService equipe) : ILeadKanbanService
+public sealed class LeadKanbanService(
+    ApplicationDbContext db, IEquipeComercialService equipe, IMemoryCache? cache = null, ICrmEventHub? eventos = null) : ILeadKanbanService
 {
     private const int MaxCartoesPorPagina = 200;
 
     public async Task<LeadKanbanBoardDto> ObterBoardAsync(LeadKanbanFilterRequest filtro, CancellationToken ct)
+    {
+        var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
+        return await RespostaEmCache.ObterAsync(cache, eventos, "quadro", new { escopo = RespostaEmCache.Escopo(visiveis), filtro },
+            () => CalcularBoardAsync(filtro, visiveis, ct));
+    }
+
+    private async Task<LeadKanbanBoardDto> CalcularBoardAsync(LeadKanbanFilterRequest filtro, List<Guid>? visiveis, CancellationToken ct)
     {
         var etapas = await db.CrmLeadStages.AsNoTracking()
             .Where(s => s.Ativa)
             .OrderBy(s => s.Ordem)
             .ToListAsync(ct);
 
-        var (query, podeVerOrigem) = await FiltrarAsync(filtro, ct);
+        var (query, podeVerOrigem) = Filtrar(filtro, visiveis);
         var porPagina = Math.Clamp(filtro.CartoesPorColuna, 1, MaxCartoesPorPagina);
 
         var totais = await query
@@ -53,9 +62,14 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
 
     public async Task<IReadOnlyList<LeadKanbanCardDto>> ObterCartoesAsync(LeadKanbanColunaRequest request, CancellationToken ct)
     {
-        var (query, podeVerOrigem) = await FiltrarAsync(request, ct);
-        var quantidade = Math.Clamp(request.Quantidade, 1, MaxCartoesPorPagina);
-        return await PaginaAsync(query, request.EtapaId, Math.Max(0, request.Pular), quantidade, podeVerOrigem, ct);
+        var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
+        return await RespostaEmCache.ObterAsync(cache, eventos, "quadro-coluna", new { escopo = RespostaEmCache.Escopo(visiveis), request },
+            async () =>
+            {
+                var (query, podeVerOrigem) = Filtrar(request, visiveis);
+                var quantidade = Math.Clamp(request.Quantidade, 1, MaxCartoesPorPagina);
+                return await PaginaAsync(query, request.EtapaId, Math.Max(0, request.Pular), quantidade, podeVerOrigem, ct);
+            });
     }
 
     /// <summary>Uma página de cartões de uma coluna (EtapaId nulo = "Sem etapa"), dos mais recentes para os mais antigos.</summary>
@@ -98,14 +112,13 @@ public sealed class LeadKanbanService(ApplicationDbContext db, IEquipeComercialS
             l.Arquivado, l.RowVersion, l.ProdutoInteresse, l.ValorAdesao, l.ResponsavelFotoUrl)).ToList();
     }
 
-    private async Task<(IQueryable<CrmLead> Query, bool PodeVerOrigem)> FiltrarAsync(LeadKanbanFilterRequest filtro, CancellationToken ct)
+    private (IQueryable<CrmLead> Query, bool PodeVerOrigem) Filtrar(LeadKanbanFilterRequest filtro, List<Guid>? visiveis)
     {
         var query = db.CrmLeads.AsNoTracking();
 
         if (!filtro.IncluirArquivados) query = query.Where(l => !l.Arquivado);
         if (filtro.CriadoManualmente.HasValue) query = query.Where(l => l.CriadoManualmente == filtro.CriadoManualmente.Value);
 
-        var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
         if (visiveis is not null)
         {
             query = query.Where(l => l.ResponsavelId != null && visiveis.Contains(l.ResponsavelId.Value));

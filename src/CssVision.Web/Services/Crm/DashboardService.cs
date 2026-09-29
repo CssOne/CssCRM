@@ -2,6 +2,7 @@ using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace CssVision.Web.Services.Crm;
 
@@ -9,12 +10,18 @@ public sealed class DashboardService(
     ApplicationDbContext db,
     IEquipeComercialService equipe,
     IActivityService activityService,
-    ICurrentUserService currentUser) : IDashboardService
+    ICurrentUserService currentUser,
+    IMemoryCache? cache = null,
+    ICrmEventHub? eventos = null) : IDashboardService
 {
     /// <summary>Leads sem nenhum contato há mais de N dias entram no alerta de "parados".</summary>
     private const int DiasSemContatoAlerta = 5;
 
-    public async Task<DashboardDto> ObterAsync(DashboardFilterRequest filtro, CancellationToken ct)
+    // Por usuário: as atividades do dia e a meta regional dependem de quem está vendo.
+    public Task<DashboardDto> ObterAsync(DashboardFilterRequest filtro, CancellationToken ct) =>
+        RespostaEmCache.ObterAsync(cache, eventos, "painel", new { usuario = currentUser.UserId, filtro }, () => CalcularAsync(filtro, ct));
+
+    private async Task<DashboardDto> CalcularAsync(DashboardFilterRequest filtro, CancellationToken ct)
     {
         var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
         var inicioPeriodo = filtro.DataInicio ?? new DateOnly(hoje.Year, hoje.Month, 1);
@@ -163,28 +170,30 @@ public sealed class DashboardService(
         if (visiveis is not null) vendedoresQuery = vendedoresQuery.Where(u => visiveis.Contains(u.Id));
 
         var vendedores = await vendedoresQuery.Select(u => new { u.Id, u.NomeCompleto }).ToListAsync(ct);
-        var resultado = new List<DesempenhoVendedorDto>();
 
-        foreach (var vendedor in vendedores)
+        // Tudo agrupado por vendedor no banco — antes eram 7 consultas por vendedor (~560 por tela).
+        var leadsQuery = db.CrmLeads.AsNoTracking().Where(l => !l.Arquivado);
+        var oportunidades = db.CrmOpportunities.AsNoTracking().Where(o => !o.Arquivado);
+        if (visiveis is not null)
         {
-            var leads = await db.CrmLeads.AsNoTracking().CountAsync(l => l.ResponsavelId == vendedor.Id && !l.Arquivado, ct);
-            var oportunidades = db.CrmOpportunities.AsNoTracking().Where(o => o.ResponsavelId == vendedor.Id && !o.Arquivado);
-            var abertas = await oportunidades.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Aberta).CountAsync(ct);
-            var valorPipeline = await oportunidades.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Aberta).SumAsync(o => (decimal?)o.ValorEstimado, ct) ?? 0m;
-
-            var fechadasPeriodo = oportunidades.Where(o => o.Etapa.Tipo != TipoEtapaPipeline.Aberta &&
-                o.DataEfetivaFechamento >= inicioUtc && o.DataEfetivaFechamento <= fimUtc);
-            var ganhas = await fechadasPeriodo.CountAsync(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho, ct);
-            var perdidas = await fechadasPeriodo.CountAsync(o => o.Etapa.Tipo == TipoEtapaPipeline.Perdido, ct);
-            var ganhasQuery = fechadasPeriodo.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho);
-            var valorGanho = await ganhasQuery.SumAsync(o => (decimal?)(o.ValorFinal ?? o.ValorEstimado), ct) ?? 0m;
-            var valorAdesao = await ganhasQuery.SumAsync(o => (decimal?)o.PagamentoAdesao, ct) ?? 0m;
-            var taxa = (ganhas + perdidas) == 0 ? 0m : Math.Round(100m * ganhas / (ganhas + perdidas), 1);
-
-            resultado.Add(new DesempenhoVendedorDto(vendedor.Id, vendedor.NomeCompleto, leads, abertas, valorPipeline, ganhas, valorGanho, taxa, valorAdesao));
+            leadsQuery = leadsQuery.Where(l => l.ResponsavelId != null && visiveis.Contains(l.ResponsavelId.Value));
+            oportunidades = oportunidades.Where(o => visiveis.Contains(o.ResponsavelId));
         }
+        var leads = await ContagensPorVendedor.ContarLeadsAsync(leadsQuery, ct);
+        var abertas = await ContagensPorVendedor.AbertasAsync(oportunidades, ct);
+        var fechadas = await ContagensPorVendedor.FechadasAsync(
+            oportunidades.Where(o => o.DataEfetivaFechamento >= inicioUtc && o.DataEfetivaFechamento <= fimUtc), ct);
 
-        return resultado.OrderByDescending(d => d.ValorGanho).ToList();
+        return vendedores
+            .Select(v =>
+            {
+                abertas.TryGetValue(v.Id, out var aberta);
+                fechadas.TryGetValue(v.Id, out var fechada);
+                return new DesempenhoVendedorDto(v.Id, v.NomeCompleto, leads.GetValueOrDefault(v.Id), aberta.Quantidade, aberta.Valor,
+                    fechada?.Ganhas ?? 0, fechada?.ValorGanho ?? 0m, ContagensPorVendedor.TaxaConversao(fechada), fechada?.ValorAdesao ?? 0m);
+            })
+            .OrderByDescending(d => d.ValorGanho)
+            .ToList();
     }
 
     private static async Task<List<AlertaLeadParadoDto>> ObterLeadsParadosAsync(IQueryable<CrmLead> leadsQuery, DateTimeOffset agora, CancellationToken ct)
