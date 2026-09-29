@@ -33,5 +33,9 @@ resource "aws_db_instance" "this" {
   final_snapshot_identifier = "${var.project_name}-db-final"
   deletion_protection       = true
 
+  # Mudanças de classe/configuração valem assim que o apply roda (o banco reinicia por alguns
+  # minutos), em vez de esperar a janela de manutenção semanal da AWS. Rode o apply fora do horário comercial.
+  apply_immediately = true
+
   tags = { Name = "${var.project_name}-db" }
 }
