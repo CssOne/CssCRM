@@ -69,6 +69,63 @@ public class MarketingServiceTests
     }
 
     [Fact]
+    public async Task UltimosLeads_VemPaginados_DoMaisRecente()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var agora = DateTimeOffset.UtcNow;
+        for (var i = 0; i < 25; i++)
+        {
+            var lead = Lead("AGV", $"m{i}");
+            lead.NomeOuRazaoSocial = $"Lead {i:00}";
+            lead.CriadoEm = agora.AddMinutes(-i);
+            db.CrmLeads.Add(lead);
+        }
+        await db.SaveChangesAsync();
+        var service = new MarketingService(db);
+
+        var pagina1 = await service.ListarLeadsAsync(new MarketingFilterRequest(), 1, 10, CancellationToken.None);
+        var pagina3 = await service.ListarLeadsAsync(new MarketingFilterRequest(), 3, 10, CancellationToken.None);
+
+        Assert.Equal(25, pagina1.TotalRegistros);
+        Assert.Equal(3, pagina1.TotalPaginas);
+        Assert.Equal("Lead 00", pagina1.Itens[0].NomeOuRazaoSocial);
+        Assert.Equal(["Lead 20", "Lead 21", "Lead 22", "Lead 23", "Lead 24"], pagina3.Itens.Select(l => l.NomeOuRazaoSocial));
+
+        var painel = await service.ObterAsync(new MarketingFilterRequest(), CancellationToken.None);
+        Assert.Equal(25, painel.TotalLeadsLista);
+    }
+
+    [Fact]
+    public async Task LeadsPorConsultor_SeparadosPorMes()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var vendedor = await factory.CriarUsuarioAsync(db, "Consultora");
+        var venda = await factory.ObterOuCriarEtapaLeadAsync(db, "Venda concluída (Leads)", 5);
+        CrmLead Em(DateTimeOffset quando, Guid? etapa = null)
+        {
+            var l = Lead("AGV", Guid.NewGuid().ToString(), responsavel: vendedor.Id, etapa: etapa);
+            l.CriadoEm = quando;
+            return l;
+        }
+        // Meio-dia em Brasília (15h UTC), longe da virada do dia.
+        db.CrmLeads.AddRange(
+            Em(new DateTimeOffset(2026, 8, 10, 15, 0, 0, TimeSpan.Zero)),
+            Em(new DateTimeOffset(2026, 8, 20, 15, 0, 0, TimeSpan.Zero), venda.Id),
+            Em(new DateTimeOffset(2026, 9, 5, 15, 0, 0, TimeSpan.Zero)));
+        await db.SaveChangesAsync();
+
+        var painel = await new MarketingService(db).ObterAsync(
+            new MarketingFilterRequest { DataInicio = new DateOnly(2026, 8, 1), DataFim = new DateOnly(2026, 9, 30) }, CancellationToken.None);
+
+        var mensal = painel.PorConsultorMensal!.Where(c => c.Id == vendedor.Id).ToDictionary(c => c.Mes);
+        Assert.Equal(2, mensal["2026-08"].Leads);
+        Assert.Equal(1, mensal["2026-08"].Ganhos);
+        Assert.Equal(1, mensal["2026-09"].Leads);
+    }
+
+    [Fact]
     public async Task ContaVendasPerdidosEEtapaAtual()
     {
         using var factory = new TestDbContextFactory();

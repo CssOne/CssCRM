@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using CssVision.Web.Api.Contracts.Common;
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
@@ -35,6 +36,35 @@ public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cach
     public Task<MarketingDashboardDto> ObterAsync(MarketingFilterRequest filtro, CancellationToken ct) =>
         RespostaEmCache.ObterAsync(cache, eventos, "trafego", filtro, () => CalcularAsync(filtro, ct));
 
+    /// <summary>Lista "Últimos leads" paginada (mais recentes primeiro), com os mesmos filtros do painel.</summary>
+    public async Task<PagedResult<MarketingLeadItemDto>> ListarLeadsAsync(MarketingFilterRequest filtro, int pagina, int tamanhoPagina, CancellationToken ct)
+    {
+        pagina = Math.Max(1, pagina);
+        tamanhoPagina = Math.Clamp(tamanhoPagina, 5, 100);
+        var carga = await CarregarAsync(filtro, ct);
+        return new PagedResult<MarketingLeadItemDto>
+        {
+            Itens = carga.Leads
+                .OrderByDescending(l => l.CriadoEm)
+                .Skip((pagina - 1) * tamanhoPagina)
+                .Take(tamanhoPagina)
+                .Select(l => new MarketingLeadItemDto(l.Id, l.Nome, l.Telefone, l.Origem, l.Campanha, l.UtmSource, l.UtmMedium,
+                    l.SemEtapaMarcada ? null : l.EtapaNome, l.ResponsavelNome, l.CriadoEm, l.OQue, l.Estado, l.Canal))
+                .ToList(),
+            Pagina = pagina,
+            TamanhoPagina = tamanhoPagina,
+            TotalRegistros = carga.Leads.Count,
+        };
+    }
+
+    /// <summary>Leads do período (já filtrados), do período anterior e as opções dos filtros.</summary>
+    private sealed record Carga(
+        DateOnly Inicio, DateOnly Fim, int Dias, List<Linha> Leads, List<Linha> Anteriores, MarketingOpcoesDto Opcoes);
+
+    /// <summary>Compartilhada entre o painel e a lista paginada — trocar de página não recarrega a base.</summary>
+    private Task<Carga> CarregarAsync(MarketingFilterRequest filtro, CancellationToken ct) =>
+        RespostaEmCache.ObterAsync(cache, eventos, "trafego-base", filtro, () => CarregarSemCacheAsync(filtro, ct));
+
     private sealed record Linha(
         Guid Id, string Nome, string? Telefone, bool SemContato, string? Origem, string? Campanha, string? UtmSource, string? UtmMedium,
         string OQue, string? Estado, string Canal, string EtapaNome, string? EtapaCor, int EtapaOrdem, Guid? ResponsavelId, string? ResponsavelNome,
@@ -47,7 +77,7 @@ public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cach
         public bool EmAndamento => !Ganho && !Perdido && !NaoFazemos && !SemEtapaMarcada;
     }
 
-    private async Task<MarketingDashboardDto> CalcularAsync(MarketingFilterRequest filtro, CancellationToken ct)
+    private async Task<Carga> CarregarSemCacheAsync(MarketingFilterRequest filtro, CancellationToken ct)
     {
         var hoje = DateOnly.FromDateTime(DateTime.UtcNow.Add(Brasilia));
         var inicioPeriodo = filtro.DataInicio ?? hoje.AddDays(-29);
@@ -100,8 +130,15 @@ public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cach
         var opcoes = MontarOpcoes(doPeriodo);
 
         var filtradas = Filtrar(todas, filtro);
-        var leads = filtradas.Where(l => l.CriadoEm >= inicioUtc).ToList();
-        var anteriores = filtradas.Where(l => l.CriadoEm < inicioUtc).ToList();
+        return new Carga(inicioPeriodo, fimPeriodo, dias,
+            filtradas.Where(l => l.CriadoEm >= inicioUtc).ToList(),
+            filtradas.Where(l => l.CriadoEm < inicioUtc).ToList(),
+            opcoes);
+    }
+
+    private async Task<MarketingDashboardDto> CalcularAsync(MarketingFilterRequest filtro, CancellationToken ct)
+    {
+        var (inicioPeriodo, fimPeriodo, dias, leads, anteriores, opcoes) = await CarregarAsync(filtro, ct);
 
         var ids = leads.Select(l => l.Id).ToList();
         var (tempoMedio, tempoPorConsultor) = await TempoPrimeiroContatoAsync(leads, ct);
@@ -170,6 +207,12 @@ public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cach
             .OrderByDescending(c => c.TotalLeads)
             .ToList();
 
+        var porConsultorMensal = leads
+            .GroupBy(l => new { l.ResponsavelId, Nome = l.ResponsavelNome ?? "Sem responsável", Mes = MesBrasilia(l.CriadoEm) })
+            .Select(g => new MarketingConsultorMesDto(g.Key.ResponsavelId, g.Key.Nome, g.Key.Mes, g.Count(), g.Count(l => l.Ganho)))
+            .OrderBy(c => c.Mes)
+            .ToList();
+
         var funil = leads
             .GroupBy(l => new { l.EtapaNome, l.EtapaCor, l.EtapaOrdem })
             .OrderBy(g => g.Key.EtapaOrdem)
@@ -193,12 +236,8 @@ public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cach
             .Select(g => new MarketingOrigemDto(g.Nome, g.TotalLeads, g.Ganhos, g.TaxaConversao))
             .ToList();
 
-        var ultimos = leads
-            .OrderByDescending(l => l.CriadoEm)
-            .Take(100)
-            .Select(l => new MarketingLeadItemDto(l.Id, l.Nome, l.Telefone, l.Origem, l.Campanha, l.UtmSource, l.UtmMedium,
-                l.SemEtapaMarcada ? null : l.EtapaNome, l.ResponsavelNome, l.CriadoEm, l.OQue, l.Estado, l.Canal))
-            .ToList();
+        // A lista "Últimos leads" vem paginada por ListarLeadsAsync (/api/marketing/leads).
+        IReadOnlyList<MarketingLeadItemDto> ultimos = [];
 
         return new MarketingDashboardDto(
             indicadores, porOrigem, porCampanha, evolucao, opcoes.Origens, ultimos,
@@ -207,7 +246,8 @@ public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cach
             Agrupar(leads, l => l.Canal),
             Agrupar(leads, l => l.Estado ?? NaoInformado),
             porConsultor, funil, porHorario, motivos, opcoes,
-            inicioPeriodo.ToString("yyyy-MM-dd"), fimPeriodo.ToString("yyyy-MM-dd"));
+            inicioPeriodo.ToString("yyyy-MM-dd"), fimPeriodo.ToString("yyyy-MM-dd"),
+            porConsultorMensal, leads.Count);
     }
 
     private static List<Linha> Filtrar(List<Linha> linhas, MarketingFilterRequest filtro)
@@ -335,6 +375,9 @@ public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cach
     private static DateTimeOffset InicioDoDia(DateOnly dia) => new DateTimeOffset(dia.ToDateTime(TimeOnly.MinValue), Brasilia).ToUniversalTime();
 
     private static DateOnly DiaBrasilia(DateTimeOffset instante) => DateOnly.FromDateTime(instante.ToOffset(Brasilia).DateTime);
+
+    /// <summary>"2026-09" — mês da chegada no horário de Brasília.</summary>
+    private static string MesBrasilia(DateTimeOffset instante) => instante.ToOffset(Brasilia).ToString("yyyy-MM");
 
     private static string? Vazio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
 

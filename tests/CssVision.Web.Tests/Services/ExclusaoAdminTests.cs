@@ -96,14 +96,48 @@ public class ExclusaoAdminTests
     }
 
     [Fact]
-    public async Task Consultor_NaoExcluiCardDoPipeline()
+    public async Task Consultor_ExcluiSuaPropriaOportunidade()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
         var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor");
         var (_, oportunidade) = await CriarLeadComOportunidadeAsync(factory, db, vendedor.Id);
 
+        await OpportunityService(db, TestDbContextFactory.MockCurrentUser(vendedor.Id).Object).ExcluirAsync(oportunidade.Id, CancellationToken.None);
+
+        db.ChangeTracker.Clear();
+        Assert.True((await db.CrmOpportunities.SingleAsync(o => o.Id == oportunidade.Id)).Arquivado);
+    }
+
+    [Fact]
+    public async Task OportunidadeExcluida_SaiDaPaginaDoLead()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor");
+        var (lead, oportunidade) = await CriarLeadComOportunidadeAsync(factory, db, vendedor.Id);
+        var usuario = TestDbContextFactory.MockCurrentUser(vendedor.Id).Object;
+
+        await OpportunityService(db, usuario).ExcluirAsync(oportunidade.Id, CancellationToken.None);
+
+        db.ChangeTracker.Clear();
+        var detalhe = await LeadService(db, usuario).ObterPorIdAsync(lead.Id, CancellationToken.None);
+        Assert.Empty(detalhe.Oportunidades);
+    }
+
+    [Fact]
+    public async Task Consultor_NaoExcluiOportunidadeDeOutroConsultor()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var dono = await factory.CriarUsuarioAsync(db, "Dono");
+        var outro = await factory.CriarUsuarioAsync(db, "Outro");
+        var (_, oportunidade) = await CriarLeadComOportunidadeAsync(factory, db, dono.Id);
+
         await Assert.ThrowsAsync<CrmForbiddenException>(() =>
-            OpportunityService(db, TestDbContextFactory.MockCurrentUser(vendedor.Id).Object).ExcluirAsync(oportunidade.Id, CancellationToken.None));
+            OpportunityService(db, TestDbContextFactory.MockCurrentUser(outro.Id).Object).ExcluirAsync(oportunidade.Id, CancellationToken.None));
+
+        db.ChangeTracker.Clear();
+        Assert.False((await db.CrmOpportunities.SingleAsync(o => o.Id == oportunidade.Id)).Arquivado);
     }
 }

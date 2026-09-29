@@ -13,7 +13,7 @@ import {
   type LeadTimelineItem,
   type Opportunity,
 } from "../../lib/types";
-import { Badge, Button, Card, ErrorState, Modal, Skeleton, Textarea, useToast } from "../../components/ui";
+import { Badge, Button, Card, ConfirmDialog, ErrorState, Modal, Skeleton, Textarea, useToast } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { LeadForm, type LeadFormValues } from "../../components/crm/LeadForm";
 import { ActivityForm, type ActivityFormValues } from "../../components/crm/ActivityForm";
@@ -77,13 +77,18 @@ export function LeadDetailPage() {
   const [oportunidadeEditando, setOportunidadeEditando] = useState<Opportunity | null>(null);
   const [carregandoOportunidade, setCarregandoOportunidade] = useState(false);
   // Excluir lead é só para Admin/GestorMaster (ver LeadService.ExcluirAsync no back-end).
-  const { temPapel } = useAuth();
+  const { temPapel, sessao } = useAuth();
+  // Admin/gestores excluem qualquer oportunidade que enxergam; consultores, só as próprias.
+  const podeExcluirOportunidade = (op: LeadOpportunitySummary) =>
+    temPapel("Admin", "GestorMaster", "GestorComercial") || (!!sessao && op.responsavelId === sessao.id);
   const podeExcluir = temPapel("Admin", "GestorMaster");
   const podeTrocarResponsavel = temPapel("Admin", "GestorMaster", "GestorComercial");
   const [trocandoResponsavel, setTrocandoResponsavel] = useState(false);
   // Origem do lead: só administradores veem (em forma de tag) — o servidor nem a envia aos demais.
   const podeVerOrigem = temPapel("Admin", "GestorMaster");
   const [modalExcluir, setModalExcluir] = useState(false);
+  const [oportunidadeExcluindo, setOportunidadeExcluindo] = useState<LeadOpportunitySummary | null>(null);
+  const [excluindoOportunidade, setExcluindoOportunidade] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
   const [modalVeiculos, setModalVeiculos] = useState(false);
 
@@ -214,6 +219,21 @@ export function LeadDetailPage() {
       notificar("error", "Não foi possível salvar a anotação.");
     } finally {
       setSalvando(false);
+    }
+  }
+
+  async function excluirOportunidade() {
+    if (!oportunidadeExcluindo) return;
+    setExcluindoOportunidade(true);
+    try {
+      await api.del(`/crm/opportunities/${oportunidadeExcluindo.id}`);
+      notificar("success", "Oportunidade excluída.");
+      setOportunidadeExcluindo(null);
+      carregar();
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível excluir a oportunidade.");
+    } finally {
+      setExcluindoOportunidade(false);
     }
   }
 
@@ -367,6 +387,17 @@ export function LeadDetailPage() {
                             </Button>
                           )}
                           <Badge variant={op.ativa ? "brand" : "neutral"}>{formatarMoeda(op.valorEstimado)}</Badge>
+                          {podeExcluirOportunidade(op) && (
+                            <button
+                              type="button"
+                              title="Excluir oportunidade"
+                              aria-label={`Excluir oportunidade ${op.titulo}`}
+                              onClick={() => setOportunidadeExcluindo(op)}
+                              className="focus-ring cursor-pointer rounded-md p-1.5 text-[var(--fg-muted)] hover:bg-[var(--surface)] hover:text-[var(--danger)]"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -504,6 +535,23 @@ export function LeadDetailPage() {
           notificar("success", "Venda do outro veículo registrada — card novo em \"Venda concluída\".");
           if (resultado?.novoLeadId) navigate(`/app/crm/leads/${resultado.novoLeadId}`);
         }}
+      />
+
+      <ConfirmDialog
+        open={!!oportunidadeExcluindo}
+        title="Excluir oportunidade"
+        danger
+        confirmLabel="Excluir"
+        loading={excluindoOportunidade}
+        message={
+          <>
+            Tem certeza que deseja excluir a oportunidade <strong className="text-[var(--fg)]">{oportunidadeExcluindo?.titulo}</strong> (
+            {oportunidadeExcluindo?.etapaNome}) de <strong className="text-[var(--fg)]">{lead.nomeOuRazaoSocial}</strong>? Ela sai do Pipeline,
+            do painel e das metas; o lead continua no quadro de leads.
+          </>
+        }
+        onConfirm={excluirOportunidade}
+        onCancel={() => setOportunidadeExcluindo(null)}
       />
 
       <Modal open={modalExcluir} onClose={() => setModalExcluir(false)} title="Excluir lead" size="sm">

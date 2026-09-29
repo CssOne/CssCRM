@@ -21,8 +21,8 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarDataHora, formatarMoeda, formatarPercentual, formatarTelefone } from "../../lib/format";
-import type { MarketingDashboard } from "../../lib/types";
-import { Badge, Button, Card, ErrorState, Input, Select, Skeleton } from "../../components/ui";
+import type { MarketingDashboard, MarketingLeadItem, PagedResult } from "../../lib/types";
+import { Badge, Button, Card, ErrorState, Input, Pagination, Select, Skeleton } from "../../components/ui";
 import { StatCard } from "../../components/crm/StatCard";
 import { MultiSelect } from "../../components/MultiSelect";
 import { useCrmEventos } from "../../lib/useCrmEventos";
@@ -140,6 +140,17 @@ function horas(h: number | null | undefined): string {
   return `${(h / 24).toFixed(1).replace(".", ",")} dias`;
 }
 
+const LEADS_POR_PAGINA = 20;
+const CONSULTORES_POR_PAGINA = 10;
+const CONSULTORES_POR_PAGINA_GRAFICO = 8;
+const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+/** "2026-09" → "set/26". */
+function rotuloMes(mes: string) {
+  const [ano, m] = mes.split("-");
+  return `${MESES[Number(m) - 1] ?? m}/${ano.slice(2)}`;
+}
+
 function Secao({ titulo, icone, acao, children, className = "" }: { titulo: string; icone?: ReactNode; acao?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <Card className={`p-4 ${className}`}>
@@ -173,6 +184,12 @@ export function TrafegoPagoPage() {
   const [salvos, setSalvos] = useState<{ nome: string; filtros: Filtros }[]>(() => lerJson(CHAVE_SALVOS, []));
   const [nomeNovoFiltro, setNomeNovoFiltro] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [paginaConsultores, setPaginaConsultores] = useState(1);
+  const [paginaGrafico, setPaginaGrafico] = useState(1);
+  const [metricaMensal, setMetricaMensal] = useState<"leads" | "ganhos">("leads");
+  const [paginaLeads, setPaginaLeads] = useState(1);
+  const [listaLeads, setListaLeads] = useState<PagedResult<MarketingLeadItem> | null>(null);
+  const [carregandoLeads, setCarregandoLeads] = useState(false);
 
   useEffect(() => gravarJson(CHAVE_FILTROS, filtros), [filtros]);
 
@@ -196,6 +213,33 @@ export function TrafegoPagoPage() {
       });
     return () => controller.abort();
   }, [consulta, recarregar]);
+
+  // Filtro novo volta todas as listas para a primeira página.
+  useEffect(() => {
+    setPaginaLeads(1);
+    setPaginaConsultores(1);
+    setPaginaGrafico(1);
+  }, [consulta]);
+
+  // "Últimos leads" paginado no servidor (o período pode ter milhares de leads).
+  useEffect(() => {
+    const controller = new AbortController();
+    setCarregandoLeads(true);
+    const separador = consulta ? "&" : "?";
+    api
+      .get<PagedResult<MarketingLeadItem>>(
+        `/marketing/leads${consulta}${separador}pagina=${paginaLeads}&tamanhoPagina=${LEADS_POR_PAGINA}`,
+        controller.signal
+      )
+      .then(setListaLeads)
+      .catch((e) => {
+        if (!isAbortError(e)) setListaLeads(null);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCarregandoLeads(false);
+      });
+    return () => controller.abort();
+  }, [consulta, paginaLeads, recarregar]);
 
   // Lead novo chegando ou mudando de etapa atualiza o painel sozinho.
   useCrmEventos(() => setRecarregar((n) => n + 1), 1500);
@@ -248,8 +292,26 @@ export function TrafegoPagoPage() {
   const { indicadores: ind, opcoes } = dados;
   const oQueTags = Array.from(new Set([...TAGS_O_QUE, ...opcoes.oQue.filter((o) => o !== "Não informado")]));
   const periodoTexto = `${dados.periodoInicio.split("-").reverse().join("/")} a ${dados.periodoFim.split("-").reverse().join("/")}`;
-  const consultores = dados.porConsultor.slice(0, 15);
   const estados = dados.porEstado.slice(0, 12);
+
+  // Tabela de consultores, paginada.
+  const totalPaginasConsultores = Math.max(1, Math.ceil(dados.porConsultor.length / CONSULTORES_POR_PAGINA));
+  const consultoresDaPagina = dados.porConsultor.slice(
+    (paginaConsultores - 1) * CONSULTORES_POR_PAGINA,
+    paginaConsultores * CONSULTORES_POR_PAGINA
+  );
+
+  // Gráfico mês a mês: uma série por mês do período, consultores (mais leads primeiro) paginados.
+  const meses = Array.from(new Set(dados.porConsultorMensal.map((c) => c.mes))).sort();
+  const totalPaginasGrafico = Math.max(1, Math.ceil(dados.porConsultor.length / CONSULTORES_POR_PAGINA_GRAFICO));
+  const consultoresGrafico = dados.porConsultor.slice(
+    (paginaGrafico - 1) * CONSULTORES_POR_PAGINA_GRAFICO,
+    paginaGrafico * CONSULTORES_POR_PAGINA_GRAFICO
+  );
+  const valorMensal = (id: string | null | undefined, nome: string, mes: string) => {
+    const linha = dados.porConsultorMensal.find((c) => (c.id ?? null) === (id ?? null) && c.nome === nome && c.mes === mes);
+    return linha ? linha[metricaMensal] : 0;
+  };
 
   return (
     <div className={`space-y-5 transition-opacity ${carregando ? "opacity-60" : ""}`}>
@@ -487,14 +549,35 @@ export function TrafegoPagoPage() {
 
       {/* Consultores + estados */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <Secao titulo="Leads e vendas por consultor" className="lg:col-span-2">
+        <Secao
+          titulo={`${metricaMensal === "leads" ? "Leads" : "Vendas"} por consultor, mês a mês`}
+          className="lg:col-span-2"
+          acao={
+            <div className="flex gap-1 rounded-lg border border-[var(--border)] p-0.5">
+              {(["leads", "ganhos"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMetricaMensal(m)}
+                  className={`cursor-pointer rounded-md px-2 py-0.5 text-xs font-medium ${
+                    metricaMensal === m ? "bg-[var(--brand)] text-white" : "text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                  }`}
+                >
+                  {m === "leads" ? "Leads" : "Vendas"}
+                </button>
+              ))}
+            </div>
+          }
+        >
           <BarrasHorizontaisChart
-            categorias={consultores.map((c) => c.nome)}
-            series={[
-              { nome: "Leads", valores: consultores.map((c) => c.totalLeads) },
-              { nome: "Vendas", valores: consultores.map((c) => c.ganhos) },
-            ]}
+            categorias={consultoresGrafico.map((c) => c.nome)}
+            series={meses.map((mes) => ({
+              nome: rotuloMes(mes),
+              valores: consultoresGrafico.map((c) => valorMensal(c.id, c.nome, mes)),
+            }))}
+            sufixo={metricaMensal === "leads" ? " lead(s)" : " venda(s)"}
           />
+          <Pagination pagina={paginaGrafico} totalPaginas={totalPaginasGrafico} onChange={setPaginaGrafico} />
         </Secao>
         <Secao titulo="Por estado">
           <BarrasHorizontaisChart
@@ -507,7 +590,10 @@ export function TrafegoPagoPage() {
         </Secao>
       </div>
 
-      <Secao titulo="Desempenho por consultor">
+      <Secao
+        titulo="Desempenho por consultor"
+        acao={<span className="text-xs text-[var(--fg-muted)]">{dados.porConsultor.length} consultor(es)</span>}
+      >
         <div className="overflow-x-auto">
           <table className="w-full min-w-[820px] text-sm">
             <thead>
@@ -524,7 +610,7 @@ export function TrafegoPagoPage() {
               </tr>
             </thead>
             <tbody>
-              {dados.porConsultor.map((c) => (
+              {consultoresDaPagina.map((c) => (
                 <tr key={c.id ?? "sem"} className="border-b border-[var(--border)] last:border-0">
                   <td className="py-2 font-medium text-[var(--fg)]">{c.nome}</td>
                   <td className="py-2 text-right text-[var(--fg)]">{c.totalLeads}</td>
@@ -540,6 +626,7 @@ export function TrafegoPagoPage() {
             </tbody>
           </table>
         </div>
+        <Pagination pagina={paginaConsultores} totalPaginas={totalPaginasConsultores} onChange={setPaginaConsultores} />
       </Secao>
 
       <Secao
@@ -591,8 +678,16 @@ export function TrafegoPagoPage() {
         )}
       </Secao>
 
-      <Secao titulo={`Últimos leads (${Math.min(dados.leads.length, 100)} mais recentes)`}>
-        {dados.leads.length === 0 ? (
+      <Secao
+        titulo="Últimos leads"
+        acao={
+          <span className="text-xs text-[var(--fg-muted)]">
+            {(listaLeads?.totalRegistros ?? dados.totalLeadsLista).toLocaleString("pt-BR")} lead(s) no período
+          </span>
+        }
+        className={carregandoLeads ? "opacity-70" : ""}
+      >
+        {!listaLeads || listaLeads.itens.length === 0 ? (
           <p className="text-sm text-[var(--fg-muted)]">Nenhum lead no período.</p>
         ) : (
           <div className="overflow-x-auto">
@@ -611,7 +706,7 @@ export function TrafegoPagoPage() {
                 </tr>
               </thead>
               <tbody>
-                {dados.leads.map((l) => (
+                {listaLeads.itens.map((l) => (
                   <tr key={l.id} className="border-b border-[var(--border)] last:border-0">
                     <td className="py-2 font-medium">
                       <Link to={`/app/crm/leads/${l.id}`} className="text-[var(--fg)] hover:text-[var(--brand)] hover:underline">
@@ -635,6 +730,9 @@ export function TrafegoPagoPage() {
               </tbody>
             </table>
           </div>
+        )}
+        {listaLeads && (
+          <Pagination pagina={listaLeads.pagina} totalPaginas={listaLeads.totalPaginas} onChange={setPaginaLeads} />
         )}
       </Secao>
     </div>

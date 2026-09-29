@@ -170,6 +170,8 @@ export interface LeadOpportunitySummary {
   comprovanteIndicacaoArquivoUrl?: string | null;
   comprovanteVistoriaArquivoUrl?: string | null;
   dataPagamentoAdesaoPrevista?: string | null;
+  /** Consultor dono da oportunidade — consultores só excluem as próprias. */
+  responsavelId?: string | null;
 }
 
 export interface LeadOpportunityVeiculoSummary {
@@ -774,6 +776,15 @@ export interface MarketingConsultor {
   tempoMedioPrimeiroContatoHoras?: number | null;
 }
 
+/** Leads e vendas de um consultor num mês ("2026-09"). */
+export interface MarketingConsultorMes {
+  id?: string | null;
+  nome: string;
+  mes: string;
+  leads: number;
+  ganhos: number;
+}
+
 export interface MarketingEvolucao {
   data: string;
   quantidade: number;
@@ -847,6 +858,9 @@ export interface MarketingDashboard {
   opcoes: MarketingOpcoes;
   periodoInicio: string;
   periodoFim: string;
+  porConsultorMensal: MarketingConsultorMes[];
+  /** Total de leads do período — a lista vem paginada por /marketing/leads. */
+  totalLeadsLista: number;
 }
 
 // --- Metas ---

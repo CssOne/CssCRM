@@ -38,8 +38,8 @@ public class CrmOpportunitiesController(IOpportunityService opportunityService) 
     public async Task<ActionResult<OpportunityDto>> MudarEtapa(Guid id, ChangeStageRequest request, CancellationToken ct) =>
         Ok(await opportunityService.MudarEtapaAsync(id, request, ct));
 
+    /// <summary>Admin/gestores excluem as da equipe; consultores, só as próprias (ver OpportunityService.ExcluirAsync).</summary>
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = PolicyNames.VisaoTotalComercial)]
     public async Task<IActionResult> Excluir(Guid id, CancellationToken ct)
     {
         await opportunityService.ExcluirAsync(id, ct);
