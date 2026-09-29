@@ -292,10 +292,18 @@ export function LeadsPage() {
           <div className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-[var(--warning-soft)] px-3 py-2 text-sm text-[var(--warning)]">
             <span>
               Já existe um lead com o mesmo {duplicidade.campoDuplicado}: <strong>{duplicidade.nomeExistente}</strong>.
+              {duplicidade.campoDuplicado !== "telefone" && " Se o cliente fechou outro carro, registre como outro veículo dele."}
             </span>
-            <Link to={`/app/crm/leads/${duplicidade.leadExistenteId}`} className="underline shrink-0">
-              Abrir cadastro
-            </Link>
+            <div className="flex shrink-0 items-center gap-3">
+              {duplicidade.campoDuplicado !== "telefone" && (
+                <Link to={`/app/crm/leads/${duplicidade.leadExistenteId}?outroVeiculo=1`} className="font-semibold underline">
+                  Outro veículo deste cliente
+                </Link>
+              )}
+              <Link to={`/app/crm/leads/${duplicidade.leadExistenteId}`} className="underline">
+                Abrir cadastro
+              </Link>
+            </div>
           </div>
         )}
         <LeadForm valoresIniciais={leadFormVazio} salvando={salvando} onSubmit={(v) => criarLead(v)} onCancel={() => setModalNovo(false)} idPrefix="novo" />

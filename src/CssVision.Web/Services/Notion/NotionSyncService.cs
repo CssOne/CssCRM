@@ -904,11 +904,17 @@ public sealed class NotionSyncService(
         if (id.Documento is not null)
         {
             var semZero = id.DocumentoSemZero ?? id.Documento;
-            lead = await db.CrmLeads.FirstOrDefaultAsync(
-                l => (l.DocumentoNormalizado == id.Documento || l.DocumentoNormalizado == semZero) && !l.Arquivado, ct);
+            // Card principal do cliente: os veículos adicionais repetem CPF/e-mail e não são do Notion.
+            lead = await db.CrmLeads
+                .Where(l => (l.DocumentoNormalizado == id.Documento || l.DocumentoNormalizado == semZero) && !l.Arquivado)
+                .OrderBy(l => l.VeiculoAdicionalDeLeadId != null)
+                .FirstOrDefaultAsync(ct);
         }
         lead ??= id.Email is not null
-            ? await db.CrmLeads.FirstOrDefaultAsync(l => l.EmailNormalizado == id.Email && !l.Arquivado, ct)
+            ? await db.CrmLeads
+                .Where(l => l.EmailNormalizado == id.Email && !l.Arquivado)
+                .OrderBy(l => l.VeiculoAdicionalDeLeadId != null)
+                .FirstOrDefaultAsync(ct)
             : null;
         lead ??= id.Telefone is not null
             ? await db.CrmLeads.FirstOrDefaultAsync(l => l.TelefoneNormalizado == id.Telefone && !l.Arquivado, ct)

@@ -287,13 +287,20 @@ public sealed class PublicLeadIntakeService(
     {
         if (!string.IsNullOrEmpty(emailNormalizado))
         {
-            var porEmail = await db.CrmLeads.FirstOrDefaultAsync(l => l.EmailNormalizado == emailNormalizado && !l.Arquivado, ct);
+            // Card principal primeiro (os veículos adicionais do cliente repetem o e-mail).
+            var porEmail = await db.CrmLeads
+                .Where(l => l.EmailNormalizado == emailNormalizado && !l.Arquivado)
+                .OrderBy(l => l.VeiculoAdicionalDeLeadId != null)
+                .FirstOrDefaultAsync(ct);
             if (porEmail is not null) return porEmail;
         }
 
         if (!string.IsNullOrEmpty(telefoneNormalizado))
         {
-            return await db.CrmLeads.FirstOrDefaultAsync(l => l.TelefoneNormalizado == telefoneNormalizado && !l.Arquivado, ct);
+            return await db.CrmLeads
+                .Where(l => l.TelefoneNormalizado == telefoneNormalizado && !l.Arquivado)
+                .OrderBy(l => l.VeiculoAdicionalDeLeadId != null)
+                .FirstOrDefaultAsync(ct);
         }
 
         return null;

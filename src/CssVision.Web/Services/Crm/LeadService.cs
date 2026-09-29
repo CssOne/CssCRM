@@ -326,7 +326,7 @@ public sealed class LeadService(
             var duplicidade = await DetectarDuplicidadeAsync(
                 documentoNormalizado == lead.DocumentoNormalizado ? null : documentoNormalizado,
                 emailNormalizado == lead.EmailNormalizado ? null : emailNormalizado,
-                null, true, ct, ignorarLeadId: lead.Id);
+                null, true, ct, ignorarLeadId: lead.VeiculoAdicionalDeLeadId ?? lead.Id);
             if (duplicidade is not null)
             {
                 throw new CrmBusinessException(
@@ -411,14 +411,17 @@ public sealed class LeadService(
         var novos = new List<CrmLead>();
         for (var i = 0; i < request.Quantidade; i++)
         {
-            // Dados do cliente, sem os de rastreio do anúncio (não é um lead novo do tráfego: não conta
-            // nos limites nem nos números de tráfego pago) e sem CPF/e-mail, que são únicos por lead
-            // ativo — a venda deste card usa o CPF do card original.
+            // Dados do cliente (inclusive CPF/CNPJ e e-mail — um cliente pode ter vários veículos),
+            // sem os de rastreio do anúncio (não é um lead novo do tráfego: não conta nos limites nem
+            // nos números de tráfego pago) e sem a placa, que é do outro veículo.
             var novo = new CrmLead
             {
                 EtapaId = etapaId,
                 NomeOuRazaoSocial = principal.NomeOuRazaoSocial,
                 TipoPessoa = principal.TipoPessoa,
+                DocumentoNormalizado = principal.DocumentoNormalizado,
+                Email = principal.Email,
+                EmailNormalizado = principal.EmailNormalizado,
                 Telefone = principal.Telefone,
                 TelefoneNormalizado = principal.TelefoneNormalizado,
                 Telefone2 = principal.Telefone2,
@@ -963,15 +966,24 @@ public sealed class LeadService(
         return desc ? query.OrderByDescending(chave) : query.OrderBy(chave);
     }
 
+    /// <param name="ignorarLeadId">
+    /// Card principal do cliente que está sendo editado: ele e os veículos adicionais dele não contam
+    /// como duplicata (todos têm o mesmo CPF/e-mail).
+    /// </param>
     private async Task<LeadDuplicateWarningDto?> DetectarDuplicidadeAsync(
         string? documentoNormalizado, string? emailNormalizado, string? telefoneNormalizado, bool ignorarDuplicidade,
         CancellationToken ct, Guid? ignorarLeadId = null)
     {
+        var outros = db.CrmLeads.AsNoTracking()
+            .Where(l => !l.Arquivado && l.Id != ignorarLeadId && (ignorarLeadId == null || l.VeiculoAdicionalDeLeadId != ignorarLeadId))
+            // O aviso aponta para o card principal do cliente (é nele que se lança "Outro veículo").
+            .OrderBy(l => l.VeiculoAdicionalDeLeadId != null);
+
         if (!string.IsNullOrEmpty(documentoNormalizado))
         {
-            var existente = await db.CrmLeads.AsNoTracking()
-                .Where(l => l.DocumentoNormalizado == documentoNormalizado && !l.Arquivado && l.Id != ignorarLeadId)
-                .Select(l => new { l.Id, l.NomeOuRazaoSocial })
+            var existente = await outros
+                .Where(l => l.DocumentoNormalizado == documentoNormalizado)
+                .Select(l => new { Id = l.VeiculoAdicionalDeLeadId ?? l.Id, l.NomeOuRazaoSocial })
                 .FirstOrDefaultAsync(ct);
             if (existente is not null)
             {
@@ -981,9 +993,9 @@ public sealed class LeadService(
 
         if (!string.IsNullOrEmpty(emailNormalizado))
         {
-            var existente = await db.CrmLeads.AsNoTracking()
-                .Where(l => l.EmailNormalizado == emailNormalizado && !l.Arquivado && l.Id != ignorarLeadId)
-                .Select(l => new { l.Id, l.NomeOuRazaoSocial })
+            var existente = await outros
+                .Where(l => l.EmailNormalizado == emailNormalizado)
+                .Select(l => new { Id = l.VeiculoAdicionalDeLeadId ?? l.Id, l.NomeOuRazaoSocial })
                 .FirstOrDefaultAsync(ct);
             if (existente is not null)
             {
@@ -993,9 +1005,9 @@ public sealed class LeadService(
 
         if (!ignorarDuplicidade && !string.IsNullOrEmpty(telefoneNormalizado))
         {
-            var existente = await db.CrmLeads.AsNoTracking()
-                .Where(l => l.TelefoneNormalizado == telefoneNormalizado && !l.Arquivado && l.Id != ignorarLeadId)
-                .Select(l => new { l.Id, l.NomeOuRazaoSocial })
+            var existente = await outros
+                .Where(l => l.TelefoneNormalizado == telefoneNormalizado)
+                .Select(l => new { Id = l.VeiculoAdicionalDeLeadId ?? l.Id, l.NomeOuRazaoSocial })
                 .FirstOrDefaultAsync(ct);
             if (existente is not null)
             {

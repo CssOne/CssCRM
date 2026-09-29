@@ -1,4 +1,4 @@
-import { ArrowRightLeft, List, Plus, Save, Trash2, X } from "lucide-react";
+import { ArrowRightLeft, List, Plus, Save, Trash2, X, Car } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
@@ -903,10 +903,25 @@ export function LeadsKanbanPage() {
           <div className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-[var(--warning-soft)] px-3 py-2 text-sm text-[var(--warning)]">
             <span>
               Já existe um lead com o mesmo {duplicidade.campoDuplicado}: <strong>{duplicidade.nomeExistente}</strong>.
+              {duplicidade.campoDuplicado !== "telefone" && " Se o cliente fechou outro carro, registre como outro veículo dele."}
             </span>
-            <Link to={`/app/crm/leads/${duplicidade.leadExistenteId}`} className="underline shrink-0">
-              Abrir cadastro
-            </Link>
+            <div className="flex shrink-0 items-center gap-3">
+              {duplicidade.campoDuplicado !== "telefone" && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const clienteId = duplicidade.leadExistenteId;
+                    fecharModalNovo();
+                    setOutroVeiculo({ leadId: clienteId, atual: 1, total: 1 });
+                  }}
+                >
+                  <Car className="size-4" /> Outro veículo deste cliente
+                </Button>
+              )}
+              <Link to={`/app/crm/leads/${duplicidade.leadExistenteId}`} className="underline">
+                Abrir cadastro
+              </Link>
+            </div>
           </div>
         )}
         <LeadForm valoresIniciais={leadFormVazio} salvando={salvandoNovo} onSubmit={(v) => criarLead(v)} onCancel={fecharModalNovo} idPrefix="kanban-novo" />

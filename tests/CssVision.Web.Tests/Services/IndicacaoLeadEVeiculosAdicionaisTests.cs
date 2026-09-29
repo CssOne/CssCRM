@@ -83,7 +83,7 @@ public class IndicacaoLeadEVeiculosAdicionaisTests
         Assert.Equal(esperado, TipoIndicacaoLead.ManterIndicacaoLead(atual, doNotion));
 
     [Fact]
-    public async Task VeiculosAdicionais_CriaUmCardPorVeiculo_ComDadosDoClienteSemCpfEmailNemRastreio()
+    public async Task VeiculosAdicionais_CriaUmCardPorVeiculo_ComDadosECpfDoClienteSemPlacaNemRastreio()
     {
         using var factory = new TestDbContextFactory();
         var db0 = factory.CreateContext();
@@ -103,8 +103,10 @@ public class IndicacaoLeadEVeiculosAdicionaisTests
             Assert.Equal("5531999990000", n.TelefoneNormalizado);
             Assert.Equal("Lead", n.TipoIndicacao);
             Assert.Equal(emAtendimento.Id, n.EtapaId);
-            Assert.Null(n.DocumentoNormalizado);
-            Assert.Null(n.EmailNormalizado);
+            // Mesmo CPF/CNPJ e e-mail do cliente (um card por veículo), sem a placa do outro veículo.
+            Assert.Equal("52998224725", n.DocumentoNormalizado);
+            Assert.Equal("frota@exemplo.com", n.EmailNormalizado);
+            Assert.Null(n.Placa);
             Assert.Null(n.MetaLeadId);
         });
 
@@ -168,6 +170,42 @@ public class IndicacaoLeadEVeiculosAdicionaisTests
 
         db.ChangeTracker.Clear();
         Assert.Equal(lead.Id, (await db.CrmLeads.AsNoTracking().SingleAsync(l => l.Id == segundo)).VeiculoAdicionalDeLeadId);
+    }
+
+    [Fact]
+    public async Task CardDeOutroVeiculo_PodeSerEditadoComOMesmoCpfDoCliente()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, usuario, lead) = await PrepararAsync(factory);
+        var service = LeadService(db, usuario);
+        var adicionalId = (await service.CriarVeiculosAdicionaisAsync(lead.Id, new LeadVeiculosAdicionaisRequest(null), CancellationToken.None))[0];
+        db.ChangeTracker.Clear();
+        var adicional = await db.CrmLeads.AsNoTracking().SingleAsync(l => l.Id == adicionalId);
+
+        var salvo = await service.AtualizarAsync(adicionalId, new LeadUpdateRequest(
+            "Cliente Frota", TipoPessoa.Fisica, "529.982.247-25", "(31) 99999-0000", null, null, "frota@exemplo.com", null, null, "MG", null,
+            null, null, null, "ABC1D23", null, null, null, null, null, null, null, null, null, null, "Lead", null,
+            null, false, null, adicional.RowVersion), CancellationToken.None);
+
+        Assert.Equal("529.982.247-25", salvo.Documento);
+        Assert.Equal("ABC1D23", salvo.Placa);
+    }
+
+    [Fact]
+    public async Task NovoClienteComCpfJaCadastrado_AvisaApontandoParaOCardPrincipal()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, usuario, lead) = await PrepararAsync(factory);
+        var service = LeadService(db, usuario);
+        await service.CriarVeiculosAdicionaisAsync(lead.Id, new LeadVeiculosAdicionaisRequest(null, 2), CancellationToken.None);
+
+        var resultado = await service.CriarAsync(new LeadCreateRequest(
+            "Cliente Frota", TipoPessoa.Fisica, "529.982.247-25", null, null, null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, false, null), CancellationToken.None);
+
+        Assert.Null(resultado.Lead);
+        Assert.Equal("CPF/CNPJ", resultado.Duplicidade!.CampoDuplicado);
+        Assert.Equal(lead.Id, resultado.Duplicidade.LeadExistenteId);
     }
 
     [Theory]

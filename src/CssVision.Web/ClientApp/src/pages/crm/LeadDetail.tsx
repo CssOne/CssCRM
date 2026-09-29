@@ -1,6 +1,6 @@
 import { ArrowLeft, Calendar, Car, FileText, Handshake, IdCard, Mail, MapPin, Pencil, Percent, Phone, Plus, ShieldCheck, Trash2, Wallet } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiRequestError, isAbortError } from "../../lib/api";
 import { formatarData, formatarDocumento, formatarMoeda, formatarTelefone } from "../../lib/format";
 import {
@@ -91,6 +91,14 @@ export function LeadDetailPage() {
   const [excluindoOportunidade, setExcluindoOportunidade] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
   const [modalVeiculos, setModalVeiculos] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Vindo do aviso "já existe um lead com o mesmo CPF" (?outroVeiculo=1): abre a venda do outro veículo.
+  useEffect(() => {
+    if (searchParams.get("outroVeiculo") !== "1") return;
+    setModalVeiculos(true);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const carregar = useCallback(
     (signal?: AbortSignal) => {
