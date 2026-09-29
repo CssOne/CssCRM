@@ -36,7 +36,7 @@ const valoresIniciais: DadosVendaConcluida = {
   pagamentoAdesao: null,
   porcentagem: null,
   migracao: false,
-  veiculo: { descricao: "", placa: "", fipe: null, rastreador: null, valorVistoria: null, vistoriadorId: null, dataChegada: "" },
+  veiculo: { descricao: "", placa: "", chassi: "", fipe: null, rastreador: null, valorVistoria: null, vistoriadorId: null, dataChegada: "" },
   dataPagamentoAdesaoPrevista: null,
 };
 
@@ -67,6 +67,7 @@ function mesclarOportunidade(v: DadosVendaConcluida, o: Opportunity): DadosVenda
       ...v.veiculo,
       descricao: o.veiculo?.descricao || v.veiculo?.descricao || "",
       placa: o.veiculo?.placa || v.veiculo?.placa || "",
+      chassi: o.veiculo?.chassi || v.veiculo?.chassi || "",
       fipe: o.veiculo?.fipe ?? v.veiculo?.fipe ?? null,
       rastreador: o.veiculo?.rastreador ?? v.veiculo?.rastreador ?? null,
       valorVistoria: o.veiculo?.valorVistoria ?? v.veiculo?.valorVistoria ?? null,
@@ -141,6 +142,8 @@ export function VendaConcluidaDialog({
   const [leadEraTipoLead, setLeadEraTipoLead] = useState(false);
   const [maisVeiculos, setMaisVeiculos] = useState(false);
   const [veiculosAdicionais, setVeiculosAdicionais] = useState(1);
+  /** Carro zero ainda não tem placa: a venda registra o chassi no lugar dela. */
+  const [carroZero, setCarroZero] = useState(false);
   const ehVenda = modo === "venda";
 
   /** Venda de card "Lead" em "Venda concluída (Indicação)": já marcada como indicação "Indicação Lead". */
@@ -159,6 +162,7 @@ export function VendaConcluidaDialog({
     setLeadEraTipoLead(false);
     setMaisVeiculos(false);
     setVeiculosAdicionais(1);
+    setCarroZero(!!oportunidadeEditar?.veiculo?.chassi && !oportunidadeEditar?.veiculo?.placa);
 
     if (oportunidadeEditar) {
       setValores({
@@ -182,6 +186,7 @@ export function VendaConcluidaDialog({
         veiculo: {
           descricao: oportunidadeEditar.veiculo?.descricao ?? "",
           placa: oportunidadeEditar.veiculo?.placa ?? "",
+          chassi: oportunidadeEditar.veiculo?.chassi ?? "",
           fipe: oportunidadeEditar.veiculo?.fipe ?? null,
           rastreador: oportunidadeEditar.veiculo?.rastreador ?? null,
           valorVistoria: oportunidadeEditar.veiculo?.valorVistoria ?? null,
@@ -234,6 +239,7 @@ export function VendaConcluidaDialog({
             setValores((v) => comIndicacaoLead(mesclarOportunidade(v, o)));
             setTemRastreador((o.veiculo?.rastreador ?? null) != null);
             setTemVistoria((o.veiculo?.valorVistoria ?? null) != null);
+            if (o.veiculo?.chassi && !o.veiculo?.placa) setCarroZero(true);
           })
           .catch(() => {});
       })
@@ -286,7 +292,7 @@ export function VendaConcluidaDialog({
     (valores.total ?? -1) >= 0 &&
     indicacaoPreenchida &&
     !!valores.veiculo?.descricao &&
-    !!valores.veiculo?.placa &&
+    (carroZero ? !!valores.veiculo?.chassi?.trim() : !!valores.veiculo?.placa) &&
     (valores.veiculo?.fipe ?? -1) >= 0 &&
     (!temRastreador || (valores.veiculo?.rastreador ?? -1) >= 0) &&
     (!temVistoria || (valores.veiculo?.valorVistoria ?? -1) >= 0) &&
@@ -304,7 +310,7 @@ export function VendaConcluidaDialog({
     }
     setEnviandoArquivos(true);
     const v = valores.veiculo;
-    const temVeiculo = !!v && [v.descricao, v.placa, v.fipe, v.rastreador, v.valorVistoria, v.vistoriadorId, v.dataChegada].some((x) => x != null && x !== "");
+    const temVeiculo = !!v && [v.descricao, v.placa, v.chassi, v.fipe, v.rastreador, v.valorVistoria, v.vistoriadorId, v.dataChegada].some((x) => x != null && x !== "");
     const request: OpportunityCreateRequest = {
       leadId,
       titulo: nomeCliente.trim(),
@@ -392,7 +398,14 @@ export function VendaConcluidaDialog({
       return;
     }
 
-    const veiculoFinal = valores.veiculo ? { ...valores.veiculo, dataChegada: valores.veiculo.dataChegada || null } : null;
+    const veiculoFinal = valores.veiculo
+      ? {
+          ...valores.veiculo,
+          placa: carroZero ? null : valores.veiculo.placa || null,
+          chassi: carroZero ? valores.veiculo.chassi?.trim() || null : null,
+          dataChegada: valores.veiculo.dataChegada || null,
+        }
+      : null;
 
     if (oportunidadeEditar) {
       // Modo edição: a oportunidade já está em "Venda concluída" — só atualiza os dados salvos.
@@ -573,12 +586,29 @@ export function VendaConcluidaDialog({
               </Label>
               <Input id="venda-veiculo-descricao" value={valores.veiculo?.descricao ?? ""} onChange={(e) => setVeiculo("descricao", e.target.value)} />
             </div>
-            <div>
-              <Label htmlFor="venda-veiculo-placa" required={ehVenda}>
-                Placa
-              </Label>
-              <Input id="venda-veiculo-placa" value={valores.veiculo?.placa ?? ""} onChange={(e) => setVeiculo("placa", e.target.value.toUpperCase())} />
+            <div className="sm:col-span-2">
+              <Checkbox label="Carro zero (ainda sem placa)" checked={carroZero} onChange={(e) => setCarroZero(e.target.checked)} />
             </div>
+            {carroZero ? (
+              <div>
+                <Label htmlFor="venda-veiculo-chassi" required={ehVenda}>
+                  Chassi
+                </Label>
+                <Input
+                  id="venda-veiculo-chassi"
+                  maxLength={30}
+                  value={valores.veiculo?.chassi ?? ""}
+                  onChange={(e) => setVeiculo("chassi", e.target.value.toUpperCase().replace(/\s/g, ""))}
+                />
+              </div>
+            ) : (
+              <div>
+                <Label htmlFor="venda-veiculo-placa" required={ehVenda}>
+                  Placa
+                </Label>
+                <Input id="venda-veiculo-placa" value={valores.veiculo?.placa ?? ""} onChange={(e) => setVeiculo("placa", e.target.value.toUpperCase())} />
+              </div>
+            )}
             <div>
               <Label htmlFor="venda-veiculo-fipe" required={ehVenda}>
                 Valor FIPE (R$)

@@ -69,7 +69,9 @@ public record VeiculoDto(
     decimal? ValorVistoria,
     Guid? VistoriadorId,
     string? VistoriadorNome,
-    DateTimeOffset? DataChegada);
+    DateTimeOffset? DataChegada,
+    /// <summary>Carro zero: chassi no lugar da placa.</summary>
+    string? Chassi = null);
 
 public record VeiculoUpsertRequest(
     string? Descricao,
@@ -78,7 +80,9 @@ public record VeiculoUpsertRequest(
     decimal? Rastreador,
     decimal? ValorVistoria,
     Guid? VistoriadorId,
-    DateTimeOffset? DataChegada);
+    DateTimeOffset? DataChegada,
+    /// <summary>Carro zero: chassi no lugar da placa.</summary>
+    string? Chassi = null);
 
 public record OpportunityFilterRequest : PagedRequest
 {

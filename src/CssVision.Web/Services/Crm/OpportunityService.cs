@@ -284,6 +284,7 @@ public sealed class OpportunityService(
                 var veiculo = veiculoExistente ?? new CrmVeiculo();
                 veiculo.Descricao = request.Veiculo.Descricao;
                 veiculo.Placa = request.Veiculo.Placa?.Trim().ToUpperInvariant();
+                veiculo.Chassi = NormalizarChassi(request.Veiculo.Chassi);
                 veiculo.Fipe = request.Veiculo.Fipe;
                 veiculo.Rastreador = request.Veiculo.Rastreador;
                 veiculo.ValorVistoria = request.Veiculo.ValorVistoria;
@@ -408,6 +409,7 @@ public sealed class OpportunityService(
         var veiculo = existente ?? new CrmVeiculo();
         veiculo.Descricao = request.Descricao;
         veiculo.Placa = request.Placa?.Trim().ToUpperInvariant();
+        veiculo.Chassi = NormalizarChassi(request.Chassi);
         veiculo.Fipe = request.Fipe;
         veiculo.Rastreador = request.Rastreador;
         veiculo.ValorVistoria = request.ValorVistoria;
@@ -428,9 +430,17 @@ public sealed class OpportunityService(
     private static DateTimeOffset? NormalizarParaUtc(DateTimeOffset? valor) =>
         valor is null ? null : new DateTimeOffset(valor.Value.Date, TimeSpan.Zero);
 
+    /// <summary>Chassi em maiúsculas e sem espaços (ex.: "9bw zzz377vt004251" → "9BWZZZ377VT004251").</summary>
+    private static string? NormalizarChassi(string? chassi)
+    {
+        if (string.IsNullOrWhiteSpace(chassi)) return null;
+        var normalizado = string.Concat(chassi.Where(c => !char.IsWhiteSpace(c))).ToUpperInvariant();
+        return normalizado.Length <= 30 ? normalizado : normalizado[..30];
+    }
+
     private static VeiculoDto? ParaVeiculoDto(CrmVeiculo? v) => v is null
         ? null
-        : new VeiculoDto(v.Id, v.Descricao, v.Placa, v.Fipe, v.Rastreador, v.ValorVistoria, v.VistoriadorId, v.Vistoriador?.NomeCompleto, v.DataChegada);
+        : new VeiculoDto(v.Id, v.Descricao, v.Placa, v.Fipe, v.Rastreador, v.ValorVistoria, v.VistoriadorId, v.Vistoriador?.NomeCompleto, v.DataChegada, v.Chassi);
 
     private static OpportunityDto ParaDto(CrmOpportunity o, DateOnly hoje) => new(
         o.Id,

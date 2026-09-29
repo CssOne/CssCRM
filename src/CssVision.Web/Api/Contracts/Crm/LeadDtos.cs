@@ -148,7 +148,8 @@ public record LeadOpportunityVeiculoSummaryDto(
     decimal? Fipe,
     decimal? Rastreador,
     decimal? ValorVistoria,
-    DateTimeOffset? DataChegada);
+    DateTimeOffset? DataChegada,
+    string? Chassi = null);
 
 public record LeadCreateRequest(
     string NomeOuRazaoSocial,

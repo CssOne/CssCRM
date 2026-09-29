@@ -175,6 +175,8 @@ export interface LeadOpportunitySummary {
 export interface LeadOpportunityVeiculoSummary {
   descricao?: string | null;
   placa?: string | null;
+  /** Carro zero: chassi no lugar da placa. */
+  chassi?: string | null;
   fipe?: number | null;
   rastreador?: number | null;
   valorVistoria?: number | null;
@@ -435,6 +437,8 @@ export interface Veiculo {
   id: string;
   descricao?: string | null;
   placa?: string | null;
+  /** Carro zero: chassi no lugar da placa. */
+  chassi?: string | null;
   fipe?: number | null;
   rastreador?: number | null;
   valorVistoria?: number | null;
@@ -446,6 +450,8 @@ export interface Veiculo {
 export interface VeiculoUpsertRequest {
   descricao?: string | null;
   placa?: string | null;
+  /** Carro zero: chassi no lugar da placa. */
+  chassi?: string | null;
   fipe?: number | null;
   rastreador?: number | null;
   valorVistoria?: number | null;

@@ -363,7 +363,7 @@ export function LeadDetailPage() {
                 {lead.oportunidades.map((op) => {
                   const temDadosVenda =
                     op.cpf || op.estado || op.ativoEm || op.porcentagem != null || op.mensalidade != null ||
-                    op.total != null || op.veiculo?.descricao || op.veiculo?.placa;
+                    op.total != null || op.veiculo?.descricao || op.veiculo?.placa || op.veiculo?.chassi;
                   return (
                     <li key={op.id} className="rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm">
                       <div className="flex items-center justify-between">
@@ -408,6 +408,7 @@ export function LeadDetailPage() {
                           )}
                           {op.veiculo?.descricao && <InfoItem icone={Car} label="Veículo" valor={op.veiculo.descricao} />}
                           {op.veiculo?.placa && <InfoItem icone={Car} label="Placa" valor={op.veiculo.placa} />}
+                          {op.veiculo?.chassi && <InfoItem icone={Car} label="Chassi (carro zero)" valor={op.veiculo.chassi} />}
                           {op.veiculo?.fipe != null && <InfoItem icone={Wallet} label="Valor FIPE" valor={formatarMoeda(op.veiculo.fipe)} />}
                           {op.veiculo?.rastreador != null && <InfoItem icone={Wallet} label="Custo do rastreador" valor={formatarMoeda(op.veiculo.rastreador)} />}
                           {op.veiculo?.valorVistoria != null && (
