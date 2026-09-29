@@ -109,11 +109,20 @@ public sealed class PublicLeadIntakeService(
     ///     do filtro "Tráfego pago" do quadro;
     /// (3) Meta Lead ID: sem vincular, a reconciliação (Worker) nunca confirmava por
     ///     GET /by-meta-lead-id que aquele lead específico já tinha chegado, e ficava reenviando ele
-    ///     pra sempre.
+    ///     pra sempre;
+    /// (4) responsável: um registro duplicado pode ter ficado sem ninguém atribuído (ex: criado por
+    ///     um caminho que não passa pelo rodízio) — sem isso, o lead ficava pra sempre sem dono
+    ///     nenhum, mesmo recebendo submissões novas.
     /// </summary>
     private async Task AtualizarContatoExistenteAsync(CrmLead existente, PublicLeadCreateRequest request, string? telefoneNormalizado, CancellationToken ct)
     {
         var mudou = false;
+
+        if (existente.ResponsavelId is null)
+        {
+            existente.ResponsavelId = await ResolverResponsavelAsync(request.Projeto, request.Oque, ct);
+            mudou = true;
+        }
 
         if (string.IsNullOrWhiteSpace(existente.WhatsApp) && !string.IsNullOrWhiteSpace(request.WhatsApp))
         {
