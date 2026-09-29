@@ -4,9 +4,9 @@ import { useTheme } from "../../context/ThemeContext";
 import { formatarMoeda } from "../../lib/format";
 import type { EvolucaoVendas, FunilEtapa, MarketingEvolucao, OrigemLead } from "../../lib/types";
 
-const paleta = ["#2563eb", "#0ea5e9", "#8b5cf6", "#22c55e", "#f59e0b", "#f97316", "#ef4444", "#64748b"];
+export const paleta = ["#2563eb", "#0ea5e9", "#8b5cf6", "#22c55e", "#f59e0b", "#f97316", "#ef4444", "#64748b"];
 
-function baseOptions(modoEscuro: boolean): ApexOptions {
+export function baseOptions(modoEscuro: boolean): ApexOptions {
   return {
     chart: { toolbar: { show: false }, foreColor: modoEscuro ? "#9aa4b2" : "#5b6472", fontFamily: "inherit", background: "transparent" },
     grid: { borderColor: modoEscuro ? "#2a2f3a" : "#e2e5e9" },
@@ -90,6 +90,6 @@ export function LeadsEvolucaoChart({ dados }: { dados: MarketingEvolucao[] }) {
   return <Chart type="bar" height={260} options={options} series={[{ name: "Leads", data: dados.map((d) => d.quantidade) }]} />;
 }
 
-function SemDados() {
+export function SemDados() {
   return <p className="flex h-40 items-center justify-center text-sm text-[var(--fg-muted)]">Sem dados no período.</p>;
 }

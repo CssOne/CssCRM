@@ -11,9 +11,8 @@ namespace CssVision.Web.Api.Controllers;
 [Authorize(Policy = PolicyNames.AreaMarketing)]
 public class MarketingController(IMarketingService marketingService) : ControllerBase
 {
+    /// <summary>Painel da aba Tráfego pago — filtros de lista aceitam vários valores (?oQue=AGV&amp;oQue=AGV TRUCK).</summary>
     [HttpGet("dashboard")]
-    public async Task<ActionResult<MarketingDashboardDto>> ObterDashboard(
-        [FromQuery] DateOnly? dataInicio, [FromQuery] DateOnly? dataFim, [FromQuery] string? origem, [FromQuery] string? campanha,
-        CancellationToken ct) =>
-        Ok(await marketingService.ObterAsync(new MarketingFilterRequest(dataInicio, dataFim, origem, campanha), ct));
+    public async Task<ActionResult<MarketingDashboardDto>> ObterDashboard([FromQuery] MarketingFilterRequest filtro, CancellationToken ct) =>
+        Ok(await marketingService.ObterAsync(filtro, ct));
 }
