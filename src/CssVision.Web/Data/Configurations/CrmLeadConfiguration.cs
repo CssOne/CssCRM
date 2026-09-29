@@ -48,13 +48,15 @@ public class CrmLeadConfiguration : IEntityTypeConfiguration<CrmLead>
             .IsUnique();
         builder.Property(e => e.CriadoManualmente).HasDefaultValue(true);
 
-        // Deduplicação: únicos apenas entre leads não arquivados, ignorando nulos.
+        // Deduplicação: únicos apenas entre leads não arquivados, ignorando nulos — e só entre os cards
+        // principais: um cliente com vários veículos tem um card por veículo com o mesmo CPF/e-mail
+        // (os adicionais apontam para o principal em VeiculoAdicionalDeLeadId).
         builder.HasIndex(e => e.DocumentoNormalizado)
-            .HasFilter("\"DocumentoNormalizado\" IS NOT NULL AND \"Arquivado\" = false")
+            .HasFilter("\"DocumentoNormalizado\" IS NOT NULL AND \"Arquivado\" = false AND \"VeiculoAdicionalDeLeadId\" IS NULL")
             .IsUnique();
 
         builder.HasIndex(e => e.EmailNormalizado)
-            .HasFilter("\"EmailNormalizado\" IS NOT NULL AND \"Arquivado\" = false")
+            .HasFilter("\"EmailNormalizado\" IS NOT NULL AND \"Arquivado\" = false AND \"VeiculoAdicionalDeLeadId\" IS NULL")
             .IsUnique();
 
         builder.HasIndex(e => e.TelefoneNormalizado);

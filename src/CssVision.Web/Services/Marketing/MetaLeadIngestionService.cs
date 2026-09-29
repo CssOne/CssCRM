@@ -92,8 +92,11 @@ public sealed class MetaLeadIngestionService(
     {
         if (!string.IsNullOrEmpty(emailNormalizado))
         {
+            // Card principal primeiro (os veículos adicionais do cliente repetem o e-mail).
             var porEmail = await db.CrmLeads.Include(l => l.LeadTags)
-                .FirstOrDefaultAsync(l => l.EmailNormalizado == emailNormalizado && !l.Arquivado, ct);
+                .Where(l => l.EmailNormalizado == emailNormalizado && !l.Arquivado)
+                .OrderBy(l => l.VeiculoAdicionalDeLeadId != null)
+                .FirstOrDefaultAsync(ct);
             if (porEmail is not null) return porEmail;
         }
 
