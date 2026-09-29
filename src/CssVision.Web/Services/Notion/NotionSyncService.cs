@@ -679,7 +679,7 @@ public sealed class NotionSyncService(
         if (nomeEtapa == NotionEtapaLead.Perdido)
         {
             var descricao = string.IsNullOrWhiteSpace(motivoPerdaNotion) ? NotionEtapaLead.MotivoPerdaPadrao(statusNotion) : motivoPerdaNotion.Trim();
-            lead.MotivoPerdaId = (await ObterOuCriarMotivoPerdaAsync(descricao, ct)).Id;
+            lead.MotivoPerdaId = descricao is null ? null : (await ObterOuCriarMotivoPerdaAsync(descricao, ct)).Id;
             lead.MotivoPerdaObservacao = null;
             lead.VeiculoNaoAtendido = null;
         }

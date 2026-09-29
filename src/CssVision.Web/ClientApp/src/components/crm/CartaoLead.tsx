@@ -1,4 +1,4 @@
-import { ArrowRightLeft, Clock, Mail, Phone, Trash2, UserCog } from "lucide-react";
+import { ArrowRightLeft, Clock, Mail, Phone, Trash2, UserCog, XCircle } from "lucide-react";
 import type { DragEvent, MouseEvent, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { diasRelativos, formatarDataHora, formatarTelefone } from "../../lib/format";
@@ -164,6 +164,19 @@ export function CartaoLead({
       {podeGerir && cartao.campanha && (
         <p className="mt-2 truncate text-[11px] text-[var(--fg-muted)]" title="Campanha">
           Campanha: {cartao.campanha}
+        </p>
+      )}
+
+      {cartao.motivoPerda && (
+        <p
+          className="mt-1.5 flex items-start gap-1 text-[11px] font-medium text-[var(--danger)]"
+          title={cartao.motivoPerdaObservacao ? `${cartao.motivoPerda}: ${cartao.motivoPerdaObservacao}` : "Motivo da perda"}
+        >
+          <XCircle className="mt-px size-3 shrink-0" aria-hidden />
+          <span className="line-clamp-2">
+            Motivo: {cartao.motivoPerda}
+            {cartao.motivoPerdaObservacao && <span className="font-normal text-[var(--fg-muted)]"> — {cartao.motivoPerdaObservacao}</span>}
+          </span>
         </p>
       )}
 

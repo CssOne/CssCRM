@@ -60,6 +60,8 @@ interface FiltrosQuadro {
   dataChegadaFim: string;
   dataVendaInicio: string;
   dataVendaFim: string;
+  /** Filtro da coluna "Perdido" por motivo da perda ("" = sem motivo informado no servidor: Guid vazio). */
+  motivoPerdaId: string[];
 }
 
 interface FiltroSalvo {
@@ -81,9 +83,10 @@ const FILTROS_VAZIOS: FiltrosQuadro = {
   dataChegadaFim: "",
   dataVendaInicio: "",
   dataVendaFim: "",
+  motivoPerdaId: [],
 };
 
-const CAMPOS_MULTIPLOS = ["responsavelId", "regional", "origem", "categoria", "fonte", "tipoIndicacao"] as const;
+const CAMPOS_MULTIPLOS = ["responsavelId", "regional", "origem", "categoria", "fonte", "tipoIndicacao", "motivoPerdaId"] as const;
 
 /** Completa e corrige filtros guardados — os salvos antes da múltipla escolha tinham um valor só (texto). */
 function normalizarFiltros(bruto: unknown): FiltrosQuadro {
@@ -153,6 +156,7 @@ export function LeadsKanbanPage() {
   const [dataChegadaFim, setDataChegadaFim] = useState(filtrosIniciais.dataChegadaFim);
   const [dataVendaInicio, setDataVendaInicio] = useState(filtrosIniciais.dataVendaInicio);
   const [dataVendaFim, setDataVendaFim] = useState(filtrosIniciais.dataVendaFim);
+  const [motivoPerdaId, setMotivoPerdaId] = useState(filtrosIniciais.motivoPerdaId);
   const [filtrosSalvos, setFiltrosSalvos] = useState<FiltroSalvo[]>(() => lerFiltrosSalvos(chaveFiltrosSalvos));
   const [filtroSalvoAtual, setFiltroSalvoAtual] = useState("");
   const [salvandoFiltro, setSalvandoFiltro] = useState(false);
@@ -219,6 +223,7 @@ export function LeadsKanbanPage() {
       dataChegadaFim: dataChegadaFim || undefined,
       dataVendaInicio: dataVendaInicio || undefined,
       dataVendaFim: dataVendaFim || undefined,
+      motivoPerdaId,
     }),
     [
       busca,
@@ -233,6 +238,7 @@ export function LeadsKanbanPage() {
       dataChegadaFim,
       dataVendaInicio,
       dataVendaFim,
+      motivoPerdaId,
     ]
   );
 
@@ -251,8 +257,9 @@ export function LeadsKanbanPage() {
       dataChegadaFim,
       dataVendaInicio,
       dataVendaFim,
+      motivoPerdaId,
     }),
-    [busca, responsavelId, regional, origem, incluirArquivados, categoria, fonte, tipoIndicacao, vendedoresInativos, dataChegadaInicio, dataChegadaFim, dataVendaInicio, dataVendaFim]
+    [busca, responsavelId, regional, origem, incluirArquivados, categoria, fonte, tipoIndicacao, vendedoresInativos, dataChegadaInicio, dataChegadaFim, dataVendaInicio, dataVendaFim, motivoPerdaId]
   );
 
   // Mantém os filtros ao abrir um card e voltar, ou ao recarregar a página.
@@ -274,6 +281,7 @@ export function LeadsKanbanPage() {
     setDataChegadaFim(f.dataChegadaFim);
     setDataVendaInicio(f.dataVendaInicio);
     setDataVendaFim(f.dataVendaFim);
+    setMotivoPerdaId(f.motivoPerdaId);
   }
 
   function escolherFiltroSalvo(nome: string) {
@@ -577,7 +585,8 @@ export function LeadsKanbanPage() {
     dataChegadaInicio ||
     dataChegadaFim ||
     dataVendaInicio ||
-    dataVendaFim
+    dataVendaFim ||
+    motivoPerdaId.length
   );
 
   const colunasExibidas = board?.colunas;
@@ -839,6 +848,18 @@ export function LeadsKanbanPage() {
                       {coluna.total.toLocaleString("pt-BR")}
                     </span>
                   </div>
+                  {coluna.etapa.nome === ETAPA_PERDIDO && (
+                    <div className="border-b border-[var(--border)] px-3 py-2">
+                      {/* Filtro só desta coluna: soma-se aos filtros de cima (as quantidades já os respeitam). */}
+                      <MultiSelect
+                        ariaLabel="Filtrar perdidos por motivo"
+                        rotuloTodos="Todos os motivos"
+                        opcoes={(coluna.motivosPerda ?? []).map((m) => ({ valor: m.id, rotulo: `${m.descricao} (${m.quantidade.toLocaleString("pt-BR")})` }))}
+                        valores={motivoPerdaId}
+                        onChange={setMotivoPerdaId}
+                      />
+                    </div>
+                  )}
                 </header>
 
                 <div className="max-h-[calc(100vh-22rem)] min-h-24 space-y-2.5 overflow-y-auto p-2.5">

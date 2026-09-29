@@ -331,12 +331,24 @@ export interface LeadKanbanCard {
   responsavelFotoUrl?: string | null;
   /** Card de outro veículo de um cliente que já tem card. */
   veiculoAdicional?: boolean;
+  /** Motivo da perda (cartões em "Perdido") e a explicação do consultor. */
+  motivoPerda?: string | null;
+  motivoPerdaObservacao?: string | null;
+}
+
+/** Opção do filtro por motivo da coluna "Perdido" (id vazio = sem motivo informado). */
+export interface LeadKanbanMotivoPerda {
+  id: string;
+  descricao: string;
+  quantidade: number;
 }
 
 export interface LeadKanbanColumn {
   etapa: LeadStage;
   /** Só as páginas já carregadas (os mais recentes); o restante vem por "Ver mais". */
   cartoes: LeadKanbanCard[];
+  /** Só na coluna "Perdido": motivos dos cartões dela, com os filtros de cima. */
+  motivosPerda?: LeadKanbanMotivoPerda[] | null;
   /** Quantidade de leads da coluna inteira. */
   total: number;
 }
