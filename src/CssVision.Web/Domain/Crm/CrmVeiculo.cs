@@ -14,6 +14,9 @@ public class CrmVeiculo : CrmEntityBase
     public string? Descricao { get; set; }
     public string? Placa { get; set; }
 
+    /// <summary>Chassi — carro zero ainda não tem placa, então a venda registra o chassi no lugar dela.</summary>
+    public string? Chassi { get; set; }
+
     /// <summary>Valor de referência FIPE do veículo. Precisão: numeric(14,2).</summary>
     public decimal? Fipe { get; set; }
 

@@ -7,6 +7,7 @@ using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
 using CssVision.Web.Domain.Identity;
 using CssVision.Web.Services.Marketing;
+using CssVision.Web.Services.Notion;
 using Microsoft.EntityFrameworkCore;
 
 namespace CssVision.Web.Services.Crm;
@@ -36,6 +37,12 @@ public sealed class LeadService(
 
     /// <summary>Etapa "Cotação" do quadro de leads — só entra com o valor da adesão preenchido.</summary>
     private const string EtapaLeadCotacao = "Cotação";
+
+    /// <summary>Coluna das vendas de indicação — ver <see cref="TipoIndicacaoLead.IndicacaoLead"/>.</summary>
+    private const string EtapaLeadVendaConcluidaIndicacao = "Venda concluída (Indicação)";
+
+    /// <summary>Máximo de cards criados de uma vez para outros veículos do mesmo cliente.</summary>
+    private const int MaximoVeiculosAdicionais = 10;
 
     /// <summary>
     /// O campo Origem (de onde veio o lead) é informação só de administrador (Admin/GestorMaster):
@@ -381,6 +388,89 @@ public sealed class LeadService(
         return await ObterPorIdAsync(lead.Id, ct);
     }
 
+    public async Task<IReadOnlyList<Guid>> CriarVeiculosAdicionaisAsync(Guid id, LeadVeiculosAdicionaisRequest request, CancellationToken ct)
+    {
+        if (request.Quantidade is < 1 or > MaximoVeiculosAdicionais)
+        {
+            throw new CrmBusinessException($"Informe de 1 a {MaximoVeiculosAdicionais} veículos a mais.", "quantidade_invalida");
+        }
+
+        var original = await CarregarComEscopoAsync(id, ct);
+        if (request.EtapaId is { } etapaInformada && !await db.CrmLeadStages.AnyAsync(s => s.Id == etapaInformada, ct))
+        {
+            throw new CrmNotFoundException("Etapa de lead", etapaInformada);
+        }
+        var etapaId = request.EtapaId ?? await EtapaDoVeiculoAdicionalAsync(original, ct);
+
+        // Sempre aponta para o primeiro card do cliente, mesmo quando criado a partir de outro adicional.
+        var principal = original.VeiculoAdicionalDeLead ?? original;
+        var jaExistentes = await db.CrmLeads.CountAsync(l => l.VeiculoAdicionalDeLeadId == principal.Id && !l.Arquivado, ct);
+
+        var novos = new List<CrmLead>();
+        for (var i = 0; i < request.Quantidade; i++)
+        {
+            // Dados do cliente, sem os de rastreio do anúncio (não é um lead novo do tráfego: não conta
+            // nos limites nem nos números de tráfego pago) e sem CPF/e-mail, que são únicos por lead
+            // ativo — a venda deste card usa o CPF do card original.
+            var novo = new CrmLead
+            {
+                EtapaId = etapaId,
+                NomeOuRazaoSocial = principal.NomeOuRazaoSocial,
+                TipoPessoa = principal.TipoPessoa,
+                Telefone = principal.Telefone,
+                TelefoneNormalizado = principal.TelefoneNormalizado,
+                Telefone2 = principal.Telefone2,
+                Telefone2Normalizado = principal.Telefone2Normalizado,
+                WhatsApp = principal.WhatsApp,
+                DataNascimento = principal.DataNascimento,
+                Cidade = principal.Cidade,
+                Estado = principal.Estado,
+                Regional = principal.Regional,
+                Origem = principal.Origem,
+                ProdutoInteresse = original.ProdutoInteresse,
+                TipoIndicacao = original.TipoIndicacao,
+                IndicadoPorLeadId = principal.IndicadoPorLeadId,
+                CriadoManualmente = original.CriadoManualmente,
+                ResponsavelId = original.ResponsavelId,
+                ResponsavelAtribuidoEm = DateTimeOffset.UtcNow,
+                ConsentimentoContato = principal.ConsentimentoContato,
+                ConsentimentoDataEm = principal.ConsentimentoDataEm,
+                VeiculoAdicionalDeLeadId = principal.Id,
+                Observacoes = $"Veículo adicional nº {jaExistentes + i + 2} do cliente (card original criado em {principal.CriadoEm.ToOffset(TimeSpan.FromHours(-3)):dd/MM/yyyy}).",
+            };
+            foreach (var lt in original.LeadTags) novo.LeadTags.Add(new CrmLeadTag { TagId = lt.TagId });
+            novos.Add(novo);
+        }
+
+        db.CrmLeads.AddRange(novos);
+        await db.SaveChangesAsync(ct);
+
+        foreach (var novo in novos)
+        {
+            await audit.RegistrarAsync("LeadVeiculoAdicionalCriado", nameof(CrmLead), novo.Id, new { LeadOriginalId = principal.Id }, ct);
+        }
+        eventos?.PublicarQuadroAtualizado("crm");
+
+        return novos.Select(n => n.Id).ToList();
+    }
+
+    /// <summary>
+    /// Coluna do card do veículo adicional quando o chamador não informa: a mesma do card original,
+    /// ou — se o original já fechou (Venda concluída, Perdido...) — "Em atendimento" da mesma
+    /// etiqueta (Leads/Indicação), porque a venda deste veículo ainda precisa ser preenchida.
+    /// </summary>
+    private async Task<Guid?> EtapaDoVeiculoAdicionalAsync(CrmLead original, CancellationToken ct)
+    {
+        if (original.Etapa is { Fechada: false } etapaAberta) return etapaAberta.Id;
+
+        var etapasAtivas = await db.CrmLeadStages.AsNoTracking().Where(e => e.Ativa)
+            .Select(e => new { e.Id, e.Nome }).ToListAsync(ct);
+        var porNome = etapasAtivas.GroupBy(e => e.Nome).ToDictionary(g => g.Key, g => g.First().Id);
+        var ehIndicacao = NotionEtapaLead.EhIndicacao(original.CriadoManualmente, original.TipoIndicacao);
+        var (_, emAtendimento, _) = NotionEtapaLead.Resolver("EM ATENDIMENTO", ehIndicacao, porNome);
+        return emAtendimento ?? await ObterEtapaInicialIdAsync(ct);
+    }
+
     public async Task AtribuirAsync(Guid id, LeadAssignRequest request, CancellationToken ct)
     {
         if (!currentUser.PodeGerirComercial)
@@ -424,6 +514,13 @@ public sealed class LeadService(
             novaEtapa = await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Id == request.NovaEtapaId, ct)
                 ?? throw new CrmNotFoundException("Etapa de lead", request.NovaEtapaId.Value);
             lead.EtapaId = novaEtapa.Id;
+
+            // Lead (tráfego) que fechou como indicação: vai pra coluna das indicações com a
+            // etiqueta própria "Indicação Lead", sem perder que começou como lead.
+            if (novaEtapa.Nome == EtapaLeadVendaConcluidaIndicacao && TipoIndicacaoLead.EhLead(lead.TipoIndicacao))
+            {
+                lead.TipoIndicacao = TipoIndicacaoLead.IndicacaoLead;
+            }
 
             if (novaEtapa.Nome == EtapaLeadCotacao)
             {
@@ -789,6 +886,7 @@ public sealed class LeadService(
             .Include(l => l.LeadTags).ThenInclude(lt => lt.Tag)
             .Include(l => l.Responsavel)
             .Include(l => l.IndicadoPorLead)
+            .Include(l => l.VeiculoAdicionalDeLead)
             .Include(l => l.Etapa)
             .Include(l => l.MotivoPerda)
             .Include(l => l.Oportunidades).ThenInclude(o => o.Etapa)
@@ -968,7 +1066,7 @@ public sealed class LeadService(
                 o.Id, o.Titulo, o.Etapa.Nome, o.Etapa.Tipo, o.ValorEstimado, o.DataPrevistaFechamento, o.Etapa.Tipo == TipoEtapaPipeline.Aberta, o.Migracao, o.Indicacao,
                 o.Cpf, o.Estado, o.AtivoEm, o.Porcentagem, o.Mensalidade, o.MensalidadeComDesconto, o.MensalidadeComCupom, o.PagamentoAdesao, o.Total,
                 o.TipoIndicacao, o.ValorIndicacao,
-                o.Veiculo == null ? null : new LeadOpportunityVeiculoSummaryDto(o.Veiculo.Descricao, o.Veiculo.Placa, o.Veiculo.Fipe, o.Veiculo.Rastreador, o.Veiculo.ValorVistoria, o.Veiculo.DataChegada),
+                o.Veiculo == null ? null : new LeadOpportunityVeiculoSummaryDto(o.Veiculo.Descricao, o.Veiculo.Placa, o.Veiculo.Fipe, o.Veiculo.Rastreador, o.Veiculo.ValorVistoria, o.Veiculo.DataChegada, o.Veiculo.Chassi),
                 o.TermoAdesaoArquivoUrl, o.PagamentoAdesaoArquivoUrl, o.ComprovanteIndicacaoArquivoUrl, o.ComprovanteVistoriaArquivoUrl,
                 o.DataPagamentoAdesaoPrevista))
             .ToList(),
@@ -977,5 +1075,8 @@ public sealed class LeadService(
         lead.RowVersion,
         lead.Arquivado,
         lead.ValorAdesao,
-        lead.UtmCampaign);
+        lead.UtmCampaign,
+        lead.VeiculoAdicionalDeLeadId,
+        lead.VeiculoAdicionalDeLead?.NomeOuRazaoSocial,
+        DocumentValidation.FormatarDocumento(lead.VeiculoAdicionalDeLead?.DocumentoNormalizado));
 }

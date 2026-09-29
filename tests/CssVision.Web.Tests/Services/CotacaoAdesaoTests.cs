@@ -89,4 +89,21 @@ public class CotacaoAdesaoTests
         Assert.Equal("Concorrente X", salva.Concorrente);
         Assert.Equal(new DateOnly(2026, 10, 15), salva.DataPrevistaFechamento);
     }
+
+    [Fact]
+    public async Task CarroZero_GuardaOChassiNoLugarDaPlaca()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, usuario, lead, _) = await PrepararAsync(factory);
+        var etapa = await factory.CriarEtapaAsync(db, "Novo lead", 1);
+        var service = new OpportunityService(db, usuario, new EquipeComercialService(db, usuario), new NoOpMetaConversionService(), new NoOpAuditSink(), new FakeFileStorageService());
+
+        var criada = await service.CriarAsync(new OpportunityCreateRequest(
+            lead.Id, "Cliente", lead.ResponsavelId!.Value, etapa.Id, null, 0m, null, null, null, null,
+            null, 150m, null, null, 350m, null, false, false,
+            new VeiculoUpsertRequest("Onix 0km", null, 90000m, null, null, null, null, Chassi: " 9bw zzz377vt004251 ")), CancellationToken.None);
+
+        Assert.Equal("9BWZZZ377VT004251", criada.Veiculo!.Chassi);
+        Assert.Null(criada.Veiculo.Placa);
+    }
 }

@@ -52,6 +52,11 @@ public class CrmLeadsController(ILeadService leadService, ILeadKanbanService kan
     public async Task<ActionResult<LeadDetailDto>> MudarEtapa(Guid id, ChangeLeadStageRequest request, CancellationToken ct) =>
         Ok(await leadService.MudarEtapaAsync(id, request, ct));
 
+    /// <summary>Cliente fechou mais de um veículo: cada veículo a mais vira um card novo.</summary>
+    [HttpPost("{id:guid}/veiculos-adicionais")]
+    public async Task<ActionResult<IReadOnlyList<Guid>>> CriarVeiculosAdicionais(Guid id, LeadVeiculosAdicionaisRequest request, CancellationToken ct) =>
+        Ok(await leadService.CriarVeiculosAdicionaisAsync(id, request, ct));
+
     [HttpPost("{id:guid}/assign")]
     [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<IActionResult> Atribuir(Guid id, LeadAssignRequest request, CancellationToken ct)

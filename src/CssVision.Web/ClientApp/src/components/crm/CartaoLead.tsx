@@ -3,6 +3,7 @@ import type { DragEvent, MouseEvent, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { diasRelativos, formatarDataHora, formatarTelefone } from "../../lib/format";
 import type { LeadKanbanCard } from "../../lib/types";
+import { TIPO_INDICACAO_LEAD } from "../../lib/opcoesLead";
 import { Avatar, Badge } from "../ui";
 
 /** Lead ou indicação — mesma regra das colunas "(Leads)"/"(Indicação)" do quadro. */
@@ -106,7 +107,8 @@ export function CartaoLead({
       <div className="mt-2 flex flex-wrap gap-1">
         {cartao.oQue && <Badge variant="info">{cartao.oQue}</Badge>}
         {rotuloTipo && <Badge variant={classe === "lead" ? "info" : "brand"}>{rotuloTipo}</Badge>}
-        {cartao.indicacao && rotuloTipo !== "Indicação" && <Badge variant="brand">Indicação</Badge>}
+        {cartao.indicacao && rotuloTipo !== "Indicação" && rotuloTipo !== TIPO_INDICACAO_LEAD && <Badge variant="brand">Indicação</Badge>}
+        {cartao.veiculoAdicional && <Badge variant="neutral">Veículo adicional</Badge>}
         {cartao.migracao && <Badge variant="neutral">Migração</Badge>}
         {podeVerOrigem && cartao.origem && <Badge variant="neutral">{cartao.origem}</Badge>}
         {cartao.temSeguro === true && <Badge variant="warning">Tem seguro</Badge>}
