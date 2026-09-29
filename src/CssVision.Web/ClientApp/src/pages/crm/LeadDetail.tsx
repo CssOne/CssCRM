@@ -13,7 +13,7 @@ import {
   type LeadTimelineItem,
   type Opportunity,
 } from "../../lib/types";
-import { Badge, Button, Card, ErrorState, Input, Label, Modal, Skeleton, Textarea, useToast } from "../../components/ui";
+import { Badge, Button, Card, ErrorState, Modal, Skeleton, Textarea, useToast } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { LeadForm, type LeadFormValues } from "../../components/crm/LeadForm";
 import { ActivityForm, type ActivityFormValues } from "../../components/crm/ActivityForm";
