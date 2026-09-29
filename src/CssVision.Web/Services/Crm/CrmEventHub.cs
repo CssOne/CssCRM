@@ -12,6 +12,12 @@ public interface ICrmEventHub
 {
     void PublicarQuadroAtualizado(string origem);
 
+    /// <summary>
+    /// Sobe a cada mudança no quadro. Respostas guardadas em cache (quadro, painel, gestão) usam a
+    /// versão na chave, então qualquer mudança as invalida na hora — ver RespostaEmCache.
+    /// </summary>
+    long Versao { get; }
+
     /// <summary>Registra um assinante (uma aba aberta). Descartar a assinatura remove o assinante.</summary>
     CrmEventoAssinatura Assinar();
 }
@@ -28,9 +34,13 @@ public sealed class CrmEventoAssinatura(ChannelReader<CrmEvento> leitor, Action 
 public sealed class CrmEventHub : ICrmEventHub
 {
     private readonly ConcurrentDictionary<Guid, Channel<CrmEvento>> _assinantes = new();
+    private long _versao;
+
+    public long Versao => Interlocked.Read(ref _versao);
 
     public void PublicarQuadroAtualizado(string origem)
     {
+        Interlocked.Increment(ref _versao);
         var evento = new CrmEvento("quadro-atualizado", origem, DateTimeOffset.UtcNow);
         foreach (var canal in _assinantes.Values)
         {

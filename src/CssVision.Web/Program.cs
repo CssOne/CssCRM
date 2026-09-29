@@ -87,7 +87,18 @@ app.UseSerilogRequestLogging();
 app.UseStaticFiles();
 if (!app.Environment.IsDevelopment())
 {
-    app.UseSpaStaticFiles();
+    // JS/CSS do build têm hash no nome (mudam de nome a cada versão): o navegador pode guardá-los por
+    // um ano sem perguntar de novo. O index.html sempre revalida, para pegar a versão nova do site.
+    app.UseSpaStaticFiles(new StaticFileOptions
+    {
+        OnPrepareResponse = ctx =>
+        {
+            var caminho = ctx.Context.Request.Path.Value ?? "";
+            ctx.Context.Response.Headers.CacheControl = caminho.StartsWith("/assets/", StringComparison.OrdinalIgnoreCase)
+                ? "public, max-age=31536000, immutable"
+                : "no-cache";
+        },
+    });
 }
 
 app.UseRouting();

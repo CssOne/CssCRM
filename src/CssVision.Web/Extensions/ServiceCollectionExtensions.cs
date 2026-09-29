@@ -18,6 +18,9 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddCrmDataAccess(this IServiceCollection services, IConfiguration configuration)
     {
+        // Cache das respostas pesadas de leitura (ver RespostaEmCache); cada resposta expira em 60 s.
+        services.AddMemoryCache();
+
         services.AddDbContext<ApplicationDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("Default"),
                 npgsql => npgsql.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)));

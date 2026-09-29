@@ -145,6 +145,7 @@ public sealed class OpportunityService(
 
         await db.SaveChangesAsync(ct);
         await audit.RegistrarAsync("OportunidadeCriada", nameof(CrmOpportunity), opportunity.Id, new { opportunity.Titulo }, ct);
+        eventos?.PublicarQuadroAtualizado("crm");
 
         return await ObterPorIdAsync(opportunity.Id, ct);
     }

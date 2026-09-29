@@ -6,6 +6,7 @@ using CssVision.Web.Domain.Crm;
 using CssVision.Web.Domain.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace CssVision.Web.Services.Crm;
 
@@ -13,7 +14,9 @@ public sealed class ManagementService(
     ApplicationDbContext db,
     ICurrentUserService currentUser,
     IEquipeComercialService equipe,
-    UserManager<ApplicationUser> userManager) : IManagementService
+    UserManager<ApplicationUser> userManager,
+    IMemoryCache? cache = null,
+    ICrmEventHub? eventos = null) : IManagementService
 {
     /// <summary>Oportunidades abertas sem troca de etapa há mais de N dias entram no alerta de estagnação.</summary>
     private const int DiasSemMovimentacaoAlerta = 10;
@@ -21,7 +24,13 @@ public sealed class ManagementService(
     public async Task<GestaoComercialResumoDto> ObterResumoAsync(DateOnly? dataInicio, DateOnly? dataFim, CancellationToken ct)
     {
         ExigirGestaoComercial();
+        var escopo = RespostaEmCache.Escopo(await equipe.ObterVendedoresVisiveisAsync(ct));
+        return await RespostaEmCache.ObterAsync(cache, eventos, "gestao-resumo", new { escopo, dataInicio, dataFim },
+            () => CalcularResumoAsync(dataInicio, dataFim, ct));
+    }
 
+    private async Task<GestaoComercialResumoDto> CalcularResumoAsync(DateOnly? dataInicio, DateOnly? dataFim, CancellationToken ct)
+    {
         var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
         var inicio = (dataInicio ?? hoje.AddMonths(-1)).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
         var fim = (dataFim ?? hoje).ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
@@ -50,7 +59,13 @@ public sealed class ManagementService(
     public async Task<IReadOnlyList<VendedorResumoDto>> ObterVendedoresAsync(CancellationToken ct, bool incluirInativos = false)
     {
         ExigirGestaoComercial();
+        var escopo = RespostaEmCache.Escopo(await equipe.ObterVendedoresVisiveisAsync(ct));
+        return await RespostaEmCache.ObterAsync(cache, eventos, "gestao-vendedores", new { escopo, incluirInativos },
+            () => CalcularVendedoresAsync(incluirInativos, ct));
+    }
 
+    private async Task<IReadOnlyList<VendedorResumoDto>> CalcularVendedoresAsync(bool incluirInativos, CancellationToken ct)
+    {
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
         var query = db.Users.AsNoTracking();
         if (incluirInativos)
@@ -69,23 +84,26 @@ public sealed class ManagementService(
             .OrderByDescending(u => u.Ativo).ThenBy(u => u.NomeCompleto)
             .Select(u => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.Ativo, u.RecebeLeads })
             .ToListAsync(ct);
-        var resultado = new List<VendedorResumoDto>();
         var inicioMes = new DateTimeOffset(new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1), TimeSpan.Zero);
         var inicioDia = LeadAssignmentService.InicioDoDia();
+        var ids = vendedores.Select(v => (Guid?)v.Id).ToList();
+        var idsOportunidade = vendedores.Select(v => v.Id).ToList();
 
-        foreach (var v in vendedores)
-        {
-            var leadsAtivos = await db.CrmLeads.CountAsync(l => l.ResponsavelId == v.Id && !l.Arquivado, ct);
-            var abertas = await db.CrmOpportunities.CountAsync(o => o.ResponsavelId == v.Id && !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Aberta, ct);
-            // Mesma contagem dos limites: só leads do tráfego pago (ver LeadAssignmentService).
-            var doTrafego = db.CrmLeads.Where(OrigemLead.VeioDoTrafegoPago).Where(l => l.ResponsavelId == v.Id);
-            var recebidosNoMes = await doTrafego.CountAsync(l => l.CriadoEm >= inicioMes, ct);
-            var recebidosHoje = await doTrafego.CountAsync(l => (l.ResponsavelAtribuidoEm ?? l.CriadoEm) >= inicioDia, ct);
-            var trafegoNoMes = await LeadsDeTrafegoNoMesAsync(v.Id, ct);
-            resultado.Add(new VendedorResumoDto(v.Id, v.NomeCompleto, leadsAtivos, abertas, v.LimiteMensalLeads, recebidosNoMes, v.LimiteDiarioLeads, recebidosHoje, v.Ativo, v.RecebeLeads, trafegoNoMes));
-        }
+        // Agrupado por vendedor no banco — antes eram 5 consultas por vendedor.
+        var leadsDosVendedores = db.CrmLeads.AsNoTracking().Where(l => ids.Contains(l.ResponsavelId));
+        var leadsAtivos = await ContagensPorVendedor.ContarLeadsAsync(leadsDosVendedores.Where(l => !l.Arquivado), ct);
+        var abertas = await ContagensPorVendedor.AbertasAsync(
+            db.CrmOpportunities.AsNoTracking().Where(o => !o.Arquivado && idsOportunidade.Contains(o.ResponsavelId)), ct);
+        // Mesma contagem dos limites: só leads do tráfego pago (ver LeadAssignmentService).
+        var doTrafego = leadsDosVendedores.Where(OrigemLead.VeioDoTrafegoPago);
+        var recebidosNoMes = await ContagensPorVendedor.ContarLeadsAsync(doTrafego.Where(l => l.CriadoEm >= inicioMes), ct);
+        var recebidosHoje = await ContagensPorVendedor.ContarLeadsAsync(doTrafego.Where(l => (l.ResponsavelAtribuidoEm ?? l.CriadoEm) >= inicioDia), ct);
+        var trafegoNoMes = await LeadsDeTrafegoNoMesAsync(leadsDosVendedores, ct);
 
-        return resultado;
+        return vendedores.Select(v => new VendedorResumoDto(
+            v.Id, v.NomeCompleto, leadsAtivos.GetValueOrDefault(v.Id), abertas.GetValueOrDefault(v.Id).Quantidade,
+            v.LimiteMensalLeads, recebidosNoMes.GetValueOrDefault(v.Id), v.LimiteDiarioLeads, recebidosHoje.GetValueOrDefault(v.Id),
+            v.Ativo, v.RecebeLeads, trafegoNoMes.GetValueOrDefault(v.Id))).ToList();
     }
 
     public async Task<IReadOnlyList<ConsultorDesempenhoDto>> ObterDesempenhoConsultoresAsync(DateOnly? mesReferencia, CancellationToken ct)
@@ -109,36 +127,37 @@ public sealed class ManagementService(
             .Where(g => g.MesReferencia == mes)
             .ToDictionaryAsync(g => g.VendedorId, ct);
 
-        var resultado = new List<ConsultorDesempenhoDto>();
-        foreach (var c in consultores)
-        {
-            var leadsAtivos = await db.CrmLeads.CountAsync(l => l.ResponsavelId == c.Id && !l.Arquivado, ct);
-            var oportunidades = db.CrmOpportunities.AsNoTracking().Where(o => o.ResponsavelId == c.Id && !o.Arquivado);
+        var ids = consultores.Select(c => (Guid?)c.Id).ToList();
+        var idsOportunidade = consultores.Select(c => c.Id).ToList();
+        var leadsDosConsultores = db.CrmLeads.AsNoTracking().Where(l => ids.Contains(l.ResponsavelId));
+        var oportunidades = db.CrmOpportunities.AsNoTracking().Where(o => !o.Arquivado && idsOportunidade.Contains(o.ResponsavelId));
 
-            var abertas = await oportunidades.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Aberta).CountAsync(ct);
-            var valorPipeline = await oportunidades.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Aberta).SumAsync(o => (decimal?)o.ValorEstimado, ct) ?? 0m;
+        // Agrupado por consultor no banco — antes eram 8 consultas por consultor.
+        var leadsAtivos = await ContagensPorVendedor.ContarLeadsAsync(leadsDosConsultores.Where(l => !l.Arquivado), ct);
+        var abertas = await ContagensPorVendedor.AbertasAsync(oportunidades, ct);
+        var fechadas = await ContagensPorVendedor.FechadasAsync(
+            oportunidades.Where(o => o.DataEfetivaFechamento >= inicioMes && o.DataEfetivaFechamento < fimMes), ct);
+        var recebidos = await ContagensPorVendedor.ContarLeadsAsync(
+            leadsDosConsultores.Where(OrigemLead.VeioDoTrafegoPago).Where(l => l.CriadoEm >= inicioMes), ct);
+        var trafegoNoMes = await LeadsDeTrafegoNoMesAsync(leadsDosConsultores, ct);
 
-            var fechadasNoMes = oportunidades.Where(o =>
-                o.Etapa.Tipo != TipoEtapaPipeline.Aberta && o.DataEfetivaFechamento >= inicioMes && o.DataEfetivaFechamento < fimMes);
-            var ganhas = await fechadasNoMes.CountAsync(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho, ct);
-            var perdidas = await fechadasNoMes.CountAsync(o => o.Etapa.Tipo == TipoEtapaPipeline.Perdido, ct);
-            var valorGanho = await fechadasNoMes.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho)
-                .SumAsync(o => (decimal?)(o.ValorFinal ?? o.ValorEstimado), ct) ?? 0m;
-            var taxa = (ganhas + perdidas) == 0 ? 0m : Math.Round(100m * ganhas / (ganhas + perdidas), 1);
-
-            var recebidosNoMes = await db.CrmLeads.Where(OrigemLead.VeioDoTrafegoPago).CountAsync(l => l.ResponsavelId == c.Id && l.CriadoEm >= inicioMes, ct);
-
-            metas.TryGetValue(c.Id, out var meta);
-            var metaValor = meta?.MetaValor ?? 0m;
-            var percentualMeta = metaValor == 0 ? 0m : Math.Round(100m * valorGanho / metaValor, 1);
-
-            resultado.Add(new ConsultorDesempenhoDto(
-                c.Id, c.NomeCompleto, c.Email!, c.PhoneNumber, c.Regional?.Nome, c.Ativo,
-                leadsAtivos, abertas, valorPipeline, ganhas, valorGanho, taxa,
-                c.LimiteMensalLeads, recebidosNoMes, metaValor, valorGanho, percentualMeta, await LeadsDeTrafegoNoMesAsync(c.Id, ct)));
-        }
-
-        return resultado.OrderByDescending(r => r.ValorGanho).ToList();
+        return consultores
+            .Select(c =>
+            {
+                abertas.TryGetValue(c.Id, out var aberta);
+                fechadas.TryGetValue(c.Id, out var fechada);
+                var valorGanho = fechada?.ValorGanho ?? 0m;
+                metas.TryGetValue(c.Id, out var meta);
+                var metaValor = meta?.MetaValor ?? 0m;
+                var percentualMeta = metaValor == 0 ? 0m : Math.Round(100m * valorGanho / metaValor, 1);
+                return new ConsultorDesempenhoDto(
+                    c.Id, c.NomeCompleto, c.Email!, c.PhoneNumber, c.Regional?.Nome, c.Ativo,
+                    leadsAtivos.GetValueOrDefault(c.Id), aberta.Quantidade, aberta.Valor, fechada?.Ganhas ?? 0, valorGanho,
+                    ContagensPorVendedor.TaxaConversao(fechada),
+                    c.LimiteMensalLeads, recebidos.GetValueOrDefault(c.Id), metaValor, valorGanho, percentualMeta, trafegoNoMes.GetValueOrDefault(c.Id));
+            })
+            .OrderByDescending(r => r.ValorGanho)
+            .ToList();
     }
 
     public async Task<IReadOnlyList<RedistribuicaoHistoricoDto>> ObterHistoricoRedistribuicoesAsync(CancellationToken ct)
@@ -181,6 +200,7 @@ public sealed class ManagementService(
 
         vendedor.LimiteMensalLeads = request.Limite;
         await db.SaveChangesAsync(ct);
+        eventos?.PublicarQuadroAtualizado("gestao");
     }
 
     public async Task AtualizarLimiteDiarioAsync(Guid vendedorId, AtualizarLimiteDiarioRequest request, CancellationToken ct)
@@ -202,6 +222,7 @@ public sealed class ManagementService(
 
         vendedor.LimiteDiarioLeads = request.Limite;
         await db.SaveChangesAsync(ct);
+        eventos?.PublicarQuadroAtualizado("gestao");
     }
 
     public async Task AtualizarRecebeLeadsAsync(Guid vendedorId, AtualizarRecebeLeadsRequest request, CancellationToken ct)
@@ -218,6 +239,7 @@ public sealed class ManagementService(
 
         vendedor.RecebeLeads = request.RecebeLeads;
         await db.SaveChangesAsync(ct);
+        eventos?.PublicarQuadroAtualizado("gestao");
     }
 
     // --- auxiliares ---
@@ -226,12 +248,12 @@ public sealed class ManagementService(
     /// Leads de tráfego pago (Notion + sistema novo) que chegaram para o vendedor no mês corrente,
     /// pela data de chegada do lead (horário de Brasília).
     /// </summary>
-    private Task<int> LeadsDeTrafegoNoMesAsync(Guid vendedorId, CancellationToken ct)
+    private static Task<Dictionary<Guid, int>> LeadsDeTrafegoNoMesAsync(IQueryable<CrmLead> leads, CancellationToken ct)
     {
         var agoraBrasilia = DateTime.UtcNow.AddHours(-3);
         var inicioMes = new DateTimeOffset(new DateTime(agoraBrasilia.Year, agoraBrasilia.Month, 1), TimeSpan.Zero).AddHours(3);
-        return db.CrmLeads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion)
-            .CountAsync(l => l.ResponsavelId == vendedorId && !l.Arquivado && l.CriadoEm >= inicioMes, ct);
+        return ContagensPorVendedor.ContarLeadsAsync(
+            leads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Where(l => !l.Arquivado && l.CriadoEm >= inicioMes), ct);
     }
 
     private void ExigirGestaoComercial()
@@ -301,9 +323,6 @@ public sealed class ManagementService(
 
     private static async Task<List<TempoMedioEtapaDto>> ObterTempoMedioPorEtapaAsync(IQueryable<CrmOpportunity> oportunidadesQuery, CancellationToken ct)
     {
-        var opportunityIds = await oportunidadesQuery.Select(o => o.Id).ToListAsync(ct);
-        if (opportunityIds.Count == 0) return [];
-
         var historico = await oportunidadesQuery
             .SelectMany(o => o.HistoricoEtapas)
             .Select(h => new { h.OpportunityId, h.EtapaNova.Nome, h.AlteradoEm })
@@ -352,22 +371,19 @@ public sealed class ManagementService(
         var vendedoresQuery = db.Users.AsNoTracking().Where(u => u.Ativo);
         if (visiveis is not null) vendedoresQuery = vendedoresQuery.Where(u => visiveis.Contains(u.Id));
         var vendedores = await vendedoresQuery.Select(u => new { u.Id, u.NomeCompleto }).ToListAsync(ct);
+        var ids = vendedores.Select(v => v.Id).ToList();
 
-        var resultado = new List<RankingComercialDto>();
-        foreach (var v in vendedores)
-        {
-            var fechadas = db.CrmOpportunities.AsNoTracking().Where(o => o.ResponsavelId == v.Id && !o.Arquivado &&
-                o.Etapa.Tipo != TipoEtapaPipeline.Aberta && o.DataEfetivaFechamento >= inicio && o.DataEfetivaFechamento <= fim);
-            var ganhas = await fechadas.CountAsync(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho, ct);
-            var perdidas = await fechadas.CountAsync(o => o.Etapa.Tipo == TipoEtapaPipeline.Perdido, ct);
-            var valorGanho = await fechadas.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho)
-                .SumAsync(o => (decimal?)(o.ValorFinal ?? o.ValorEstimado), ct) ?? 0m;
-            var taxa = (ganhas + perdidas) == 0 ? 0m : Math.Round(100m * ganhas / (ganhas + perdidas), 1);
+        var fechadas = await ContagensPorVendedor.FechadasAsync(db.CrmOpportunities.AsNoTracking()
+            .Where(o => !o.Arquivado && ids.Contains(o.ResponsavelId) && o.DataEfetivaFechamento >= inicio && o.DataEfetivaFechamento <= fim), ct);
 
-            resultado.Add(new RankingComercialDto(v.Id, v.NomeCompleto, 0, valorGanho, ganhas, taxa));
-        }
-
-        var ordenado = resultado.OrderByDescending(r => r.ValorGanho).ToList();
+        var ordenado = vendedores
+            .Select(v =>
+            {
+                fechadas.TryGetValue(v.Id, out var f);
+                return new RankingComercialDto(v.Id, v.NomeCompleto, 0, f?.ValorGanho ?? 0m, f?.Ganhas ?? 0, ContagensPorVendedor.TaxaConversao(f));
+            })
+            .OrderByDescending(r => r.ValorGanho)
+            .ToList();
         return ordenado.Select((r, i) => r with { Posicao = i + 1 }).ToList();
     }
 

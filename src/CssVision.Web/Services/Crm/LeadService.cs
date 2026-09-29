@@ -376,6 +376,7 @@ public sealed class LeadService(
         }
 
         await audit.RegistrarAsync("LeadAtualizado", nameof(CrmLead), lead.Id, null, ct);
+        eventos?.PublicarQuadroAtualizado("crm");
 
         return await ObterPorIdAsync(lead.Id, ct);
     }
@@ -705,6 +706,7 @@ public sealed class LeadService(
 
         await db.SaveChangesAsync(ct);
         await audit.RegistrarAsync("LeadsImportados", nameof(CrmLead), null, new { importados, duplicados, erros = erros.Count }, ct);
+        eventos?.PublicarQuadroAtualizado("crm");
 
         return new LeadImportResultDto(linhas.Count, importados, duplicados, erros.Count, erros);
     }
