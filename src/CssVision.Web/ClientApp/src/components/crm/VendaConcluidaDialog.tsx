@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { OPCOES_TIPO_INDICACAO } from "../../lib/opcoesLead";
+import { OPCOES_TIPO_INDICACAO, TIPO_INDICACAO_LEAD } from "../../lib/opcoesLead";
 import { Paperclip } from "lucide-react";
 import { api, ApiRequestError, uploadFile } from "../../lib/api";
 import type { ChangeStageRequest, LeadDetail, Opportunity, OpportunityCreateRequest, OpportunityUpdateRequest } from "../../lib/types";
@@ -8,6 +8,16 @@ import { formatarData } from "../../lib/format";
 import { Button, Checkbox, CpfInput, Input, Label, Modal, MoneyInput, Select, useToast } from "../ui";
 
 export type DadosVendaConcluida = Omit<ChangeStageRequest, "novaEtapaId" | "motivoPerdaId">;
+
+/** O que o quadro de leads precisa saber depois da venda concluída. */
+export interface ResultadoVendaConcluida {
+  /** A venda teve indicação — card "Lead" vai para "Venda concluída (Indicação)". */
+  indicacao: boolean;
+  /** Quantos veículos a mais o cliente fechou (cada um vira um card novo). */
+  veiculosAdicionais: number;
+}
+
+const MAXIMO_VEICULOS_ADICIONAIS = 10;
 
 const valoresIniciais: DadosVendaConcluida = {
   rowVersion: 0,
@@ -88,6 +98,8 @@ export function VendaConcluidaDialog({
   pipelineGanhoEtapaId,
   oportunidadeEditar = null,
   modo = "venda",
+  indicacaoLead = false,
+  permitirVeiculosAdicionais = false,
   onConfirm,
   onConcluido,
   onCancel,
@@ -105,8 +117,12 @@ export function VendaConcluidaDialog({
   oportunidadeEditar?: Opportunity | null;
   /** "oportunidade": cria uma oportunidade com este mesmo formulário (só o nome do cliente é obrigatório). */
   modo?: "venda" | "oportunidade";
+  /** Card "Lead" solto em "Venda concluída (Indicação)": a venda já vem marcada como indicação "Indicação Lead". */
+  indicacaoLead?: boolean;
+  /** Mostra a opção "o cliente fechou mais de um veículo" (quadro de leads). */
+  permitirVeiculosAdicionais?: boolean;
   onConfirm?: (dados: DadosVendaConcluida) => void;
-  onConcluido?: () => void;
+  onConcluido?: (resultado?: ResultadoVendaConcluida) => void;
   onCancel: () => void;
 }) {
   const { notificar } = useToast();
@@ -122,7 +138,15 @@ export function VendaConcluidaDialog({
   const [nomeCliente, setNomeCliente] = useState("");
   const [concorrente, setConcorrente] = useState("");
   const [previsaoFechamento, setPrevisaoFechamento] = useState("");
+  const [leadEraTipoLead, setLeadEraTipoLead] = useState(false);
+  const [maisVeiculos, setMaisVeiculos] = useState(false);
+  const [veiculosAdicionais, setVeiculosAdicionais] = useState(1);
   const ehVenda = modo === "venda";
+
+  /** Venda de card "Lead" em "Venda concluída (Indicação)": já marcada como indicação "Indicação Lead". */
+  function comIndicacaoLead(v: DadosVendaConcluida): DadosVendaConcluida {
+    return indicacaoLead ? { ...v, indicacao: true, tipoIndicacao: TIPO_INDICACAO_LEAD } : v;
+  }
 
   useEffect(() => {
     if (!open || !leadId) return;
@@ -132,6 +156,9 @@ export function VendaConcluidaDialog({
     setNomeCliente("");
     setConcorrente("");
     setPrevisaoFechamento("");
+    setLeadEraTipoLead(false);
+    setMaisVeiculos(false);
+    setVeiculosAdicionais(1);
 
     if (oportunidadeEditar) {
       setValores({
@@ -180,16 +207,20 @@ export function VendaConcluidaDialog({
       .then((lead) => {
         setDataChegadaLead(lead.criadoEm);
         setNomeCliente(lead.nomeOuRazaoSocial);
+        setLeadEraTipoLead(lead.tipoIndicacao?.trim().toLowerCase() === "lead");
         if (oportunidadeEditar) return;
-        // Dados do cadastro do cliente e o valor da adesão informado na Cotação.
-        setValores((v) => ({
-          ...v,
-          cpf: lead.documento ?? "",
-          estado: lead.estado ?? "",
-          tipoIndicacao: lead.tipoIndicacao ?? "",
-          pagamentoAdesao: v.pagamentoAdesao ?? lead.valorAdesao ?? null,
-          veiculo: { ...v.veiculo, placa: lead.placa ?? "" },
-        }));
+        // Dados do cadastro do cliente e o valor da adesão informado na Cotação. Card de outro
+        // veículo do mesmo cliente não guarda CPF: vem do card original.
+        setValores((v) =>
+          comIndicacaoLead({
+            ...v,
+            cpf: lead.documento ?? lead.veiculoAdicionalDeDocumento ?? "",
+            estado: lead.estado ?? "",
+            tipoIndicacao: lead.tipoIndicacao ?? "",
+            pagamentoAdesao: v.pagamentoAdesao ?? lead.valorAdesao ?? null,
+            veiculo: { ...v.veiculo, placa: lead.placa ?? "" },
+          })
+        );
         setResponsavelIdLead(lead.responsavelId ?? null);
         if (!ehVenda) return;
 
@@ -200,7 +231,7 @@ export function VendaConcluidaDialog({
         api
           .get<Opportunity>(`/crm/opportunities/${idExistente}`, controller.signal)
           .then((o) => {
-            setValores((v) => mesclarOportunidade(v, o));
+            setValores((v) => comIndicacaoLead(mesclarOportunidade(v, o)));
             setTemRastreador((o.veiculo?.rastreador ?? null) != null);
             setTemVistoria((o.veiculo?.valorVistoria ?? null) != null);
           })
@@ -236,6 +267,7 @@ export function VendaConcluidaDialog({
     setValores((v) => ({ ...v, veiculo: { ...v.veiculo, [campo]: valor } }));
   }
 
+  const quantidadeVeiculosValida = !maisVeiculos || (veiculosAdicionais >= 1 && veiculosAdicionais <= MAXIMO_VEICULOS_ADICIONAIS);
   const indicacaoPreenchida = !valores.indicacao || (!!valores.tipoIndicacao && (valores.valorIndicacao ?? -1) >= 0);
   // Adesão paga depois: com a data do pagamento marcada, o comprovante deixa de ser obrigatório.
   const pagamentoAgendado = !!valores.dataPagamentoAdesaoPrevista;
@@ -260,6 +292,7 @@ export function VendaConcluidaDialog({
     (!temVistoria || (valores.veiculo?.valorVistoria ?? -1) >= 0) &&
     (!!termoArquivo || !!oportunidadeEditar?.termoAdesaoArquivoUrl) &&
     (temComprovantePagamento || pagamentoAgendado) &&
+    quantidadeVeiculosValida &&
     !enviandoArquivos &&
     !enviando;
 
@@ -428,7 +461,7 @@ export function VendaConcluidaDialog({
       return;
     }
     setEnviandoArquivos(false);
-    onConcluido?.();
+    onConcluido?.({ indicacao: !!valores.indicacao, veiculosAdicionais: permitirVeiculosAdicionais && maisVeiculos ? veiculosAdicionais : 0 });
   }
 
   return (
@@ -491,7 +524,19 @@ export function VendaConcluidaDialog({
 
           <div className="mt-4 flex flex-wrap items-end gap-4">
             <Checkbox label="É uma migração" checked={valores.migracao ?? false} onChange={(e) => set("migracao", e.target.checked)} />
-            <Checkbox label="Teve indicação" checked={valores.indicacao ?? false} onChange={(e) => set("indicacao", e.target.checked)} />
+            <Checkbox
+              label="Teve indicação"
+              checked={valores.indicacao ?? false}
+              onChange={(e) => {
+                const marcado = e.target.checked;
+                // Lead que fechou por indicação: o tipo já vem como "Indicação Lead".
+                setValores((v) => ({
+                  ...v,
+                  indicacao: marcado,
+                  tipoIndicacao: marcado && leadEraTipoLead && (!v.tipoIndicacao || v.tipoIndicacao === "Lead") ? TIPO_INDICACAO_LEAD : v.tipoIndicacao,
+                }));
+              }}
+            />
             {valores.indicacao && (
               <>
                 <div className="w-48">
@@ -577,6 +622,32 @@ export function VendaConcluidaDialog({
               )}
             </div>
           </div>
+
+          {permitirVeiculosAdicionais && ehVenda && !oportunidadeEditar && (
+            <div className="mt-4 rounded-lg border border-dashed border-[var(--border)] p-3">
+              <Checkbox label="O cliente fechou mais de um veículo" checked={maisVeiculos} onChange={(e) => setMaisVeiculos(e.target.checked)} />
+              {maisVeiculos && (
+                <div className="mt-3 flex flex-wrap items-end gap-3">
+                  <div className="w-44">
+                    <Label htmlFor="venda-veiculos-adicionais" required>
+                      Quantos veículos a mais?
+                    </Label>
+                    <Input
+                      id="venda-veiculos-adicionais"
+                      type="number"
+                      min={1}
+                      max={MAXIMO_VEICULOS_ADICIONAIS}
+                      value={veiculosAdicionais}
+                      onChange={(e) => setVeiculosAdicionais(Math.trunc(Number(e.target.value) || 0))}
+                    />
+                  </div>
+                  <p className="max-w-sm text-xs text-[var(--fg-muted)]">
+                    Este formulário é do veículo acima. Cada veículo a mais vira um card novo deste cliente, com o mesmo consultor, para preencher a venda dele.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="border-t border-[var(--border)] pt-4">

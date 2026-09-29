@@ -15,7 +15,7 @@ import {
 } from "../../lib/types";
 import { Button, ConfirmDialog, EmptyState, ErrorState, Input, Modal, Select, Skeleton, useToast } from "../../components/ui";
 import { LeadForm, leadFormVazio, paraLeadCreateRequest, type LeadFormValues } from "../../components/crm/LeadForm";
-import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog";
+import { VendaConcluidaDialog, type ResultadoVendaConcluida } from "../../components/crm/VendaConcluidaDialog";
 import { StageChangeDialog } from "../../components/crm/StageChangeDialog";
 import { VeiculoNaoFazemosDialog } from "../../components/crm/VeiculoNaoFazemosDialog";
 import { AdesaoCotacaoDialog } from "../../components/crm/AdesaoCotacaoDialog";
@@ -173,7 +173,7 @@ export function LeadsKanbanPage() {
   const [salvandoNovo, setSalvandoNovo] = useState(false);
   const [duplicidade, setDuplicidade] = useState<LeadDuplicateWarning | null>(null);
 
-  const [pendenciaVenda, setPendenciaVenda] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
+  const [pendenciaVenda, setPendenciaVenda] = useState<{ cartao: LeadKanbanCard; etapaId: string; indicacaoLead?: boolean } | null>(null);
   const [pendenciaPerda, setPendenciaPerda] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
   const [pendenciaNaoFazemos, setPendenciaNaoFazemos] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
   const [pendenciaCotacao, setPendenciaCotacao] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
@@ -430,6 +430,31 @@ export function LeadsKanbanPage() {
     }
   }
 
+  /**
+   * Depois do formulário de venda: cria os cards dos outros veículos do cliente (antes de mover, pra
+   * eles entrarem na coluna onde o card estava) e move o card. "Lead" cuja venda teve indicação vai
+   * para "Venda concluída (Indicação)" — o servidor põe a etiqueta "Indicação Lead".
+   */
+  async function concluirVenda(cartao: LeadKanbanCard, etapaId: string, resultado?: ResultadoVendaConcluida) {
+    if (resultado && resultado.veiculosAdicionais > 0) {
+      try {
+        await api.post(`/crm/leads/${cartao.leadId}/veiculos-adicionais`, { quantidade: resultado.veiculosAdicionais });
+        notificar(
+          "success",
+          resultado.veiculosAdicionais === 1
+            ? "Criado 1 card novo para o outro veículo do cliente."
+            : `Criados ${resultado.veiculosAdicionais} cards novos para os outros veículos do cliente.`
+        );
+      } catch (e) {
+        notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível criar os cards dos outros veículos.");
+      }
+    }
+
+    const colunaIndicacao = colunasVendaConcluida[1]?.etapa.id;
+    const destino = resultado?.indicacao && classificarCartao(cartao) === "lead" && colunaIndicacao ? colunaIndicacao : etapaId;
+    moverPara(cartao, destino);
+  }
+
   async function excluirLead() {
     if (!leadExcluindo) return;
     const leadId = leadExcluindo.leadId;
@@ -467,6 +492,17 @@ export function LeadsKanbanPage() {
       const classificacao = classificarCartao(cartao);
       if (indiceColuna === 0 && classificacao === "indicacao") {
         notificar("error", `Esta coluna "${etapa!.nome}" aceita só cartões com a etiqueta "Lead".`);
+        return;
+      }
+      // Exceção: "Lead" pode ir para "Venda concluída (Indicação)" — é uma venda por indicação de
+      // um lead e ganha a etiqueta "Indicação Lead" (o formulário da venda já vem com a indicação marcada).
+      if (indiceColuna === 1 && classificacao === "lead" && grupoColunasDuplicadas === colunasVendaConcluida) {
+        if (!etapaGanhoPipelineId) {
+          notificar("error", "Não foi possível carregar as etapas do pipeline. Recarregue a página e tente novamente.");
+          return;
+        }
+        setModalMobile(null);
+        setPendenciaVenda({ cartao, etapaId: etapaId!, indicacaoLead: true });
         return;
       }
       if (indiceColuna === 1 && classificacao === "lead") {
@@ -891,9 +927,11 @@ export function LeadsKanbanPage() {
         pipelineGanhoEtapaId={etapaGanhoPipelineId ?? undefined}
         etapaNome={colunasExibidas?.find((c) => c.etapa.id === pendenciaVenda?.etapaId)?.etapa.nome ?? ETAPA_VENDA_CONCLUIDA}
         valorEstimado={0}
+        indicacaoLead={pendenciaVenda?.indicacaoLead}
+        permitirVeiculosAdicionais
         onCancel={() => setPendenciaVenda(null)}
-        onConcluido={() => {
-          if (pendenciaVenda) moverPara(pendenciaVenda.cartao, pendenciaVenda.etapaId);
+        onConcluido={(resultado) => {
+          if (pendenciaVenda) concluirVenda(pendenciaVenda.cartao, pendenciaVenda.etapaId, resultado);
           setPendenciaVenda(null);
         }}
       />

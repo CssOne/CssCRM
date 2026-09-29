@@ -99,7 +99,19 @@ public record LeadDetailDto(
     bool Arquivado,
     /// <summary>Valor da adesão informado na "Cotação" — pré-preenche Oportunidade e Venda concluída.</summary>
     decimal? ValorAdesao = null,
-    string? UtmCampaign = null);
+    string? UtmCampaign = null,
+    /// <summary>Card de outro veículo do mesmo cliente: o card original (ver CrmLead.VeiculoAdicionalDeLeadId).</summary>
+    Guid? VeiculoAdicionalDeLeadId = null,
+    string? VeiculoAdicionalDeLeadNome = null,
+    /// <summary>CPF/CNPJ do card original — a venda do veículo adicional usa o mesmo documento.</summary>
+    string? VeiculoAdicionalDeDocumento = null);
+
+/// <summary>
+/// Cria cards para outros veículos do mesmo cliente. EtapaId = coluna onde os cards novos entram
+/// (nulo = a do card original, ou "Em atendimento" se ele já fechou — ver LeadService);
+/// Quantidade = quantos veículos a mais (1 a 10).
+/// </summary>
+public record LeadVeiculosAdicionaisRequest(Guid? EtapaId, int Quantidade = 1);
 
 public record LeadOpportunitySummaryDto(
     Guid Id,

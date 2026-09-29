@@ -14,6 +14,7 @@ public interface ILeadService
     Task<LeadDetailDto> AtualizarAsync(Guid id, LeadUpdateRequest request, CancellationToken ct);
     Task AtribuirAsync(Guid id, LeadAssignRequest request, CancellationToken ct);
     Task<LeadDetailDto> MudarEtapaAsync(Guid id, ChangeLeadStageRequest request, CancellationToken ct);
+    Task<IReadOnlyList<Guid>> CriarVeiculosAdicionaisAsync(Guid id, LeadVeiculosAdicionaisRequest request, CancellationToken ct);
     Task<int> AtribuirEmLoteAsync(LeadBulkAssignRequest request, CancellationToken ct);
     Task<LeadImportResultDto> ImportarAsync(Stream planilha, CancellationToken ct);
     Task<byte[]> ExportarAsync(LeadFilterRequest filtro, CancellationToken ct);

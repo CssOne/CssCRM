@@ -83,6 +83,11 @@ public class CrmLeadConfiguration : IEntityTypeConfiguration<CrmLead>
             .HasForeignKey(e => e.IndicadoPorLeadId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne(e => e.VeiculoAdicionalDeLead)
+            .WithMany()
+            .HasForeignKey(e => e.VeiculoAdicionalDeLeadId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasOne(e => e.Etapa)
             .WithMany(s => s.Leads)
             .HasForeignKey(e => e.EtapaId)

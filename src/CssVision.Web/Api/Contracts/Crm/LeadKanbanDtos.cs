@@ -31,7 +31,9 @@ public record LeadKanbanCardDto(
     string? OQue = null,
     decimal? ValorAdesao = null,
     /// <summary>Foto do consultor responsável (mostrada em círculo no rodapé do cartão).</summary>
-    string? ResponsavelFotoUrl = null);
+    string? ResponsavelFotoUrl = null,
+    /// <summary>Card de outro veículo de um cliente que já tem card (ver CrmLead.VeiculoAdicionalDeLeadId).</summary>
+    bool VeiculoAdicional = false);
 
 /// <summary>
 /// Coluna do quadro. <see cref="Cartoes"/> traz só a primeira página (os mais recentes);

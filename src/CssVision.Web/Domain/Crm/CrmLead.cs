@@ -70,6 +70,14 @@ public class CrmLead : CrmArchivableEntity
     public string? TipoIndicacao { get; set; }
 
     /// <summary>
+    /// Card criado para outro veículo do mesmo cliente (cada veículo fechado vira um card): aponta
+    /// para o card original. CPF e e-mail ficam só no original (são únicos entre leads ativos); a
+    /// venda deste card usa o CPF do original.
+    /// </summary>
+    public Guid? VeiculoAdicionalDeLeadId { get; set; }
+    public CrmLead? VeiculoAdicionalDeLead { get; set; }
+
+    /// <summary>
     /// Etapa do lead no quadro (kanban). Fica nula de propósito em leads novos — sem etapa marcada
     /// é como a vendedora enxerga "ninguém pegou ainda"; ela mesma arrasta pra uma etapa real
     /// (ex: "Em atendimento") quando começa a trabalhar o lead.

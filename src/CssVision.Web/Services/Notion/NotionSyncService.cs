@@ -327,7 +327,7 @@ public sealed class NotionSyncService(
         if (lead.ConsentimentoOrigem is OrigemLead.MarcadorMigracaoNotion or OrigemLead.MarcadorSincronizacaoNotion)
         {
             var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
-            lead.TipoIndicacao = TipoIndicacaoDoCard(page, page.Select("O que"));
+            lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, TipoIndicacaoDoCard(page, page.Select("O que")));
             lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
             if (etapasPorNome is not null && eraIndicacao != NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao)
                 && TrocarColunaLeadIndicacao(lead, etapasPorNome))
@@ -370,7 +370,7 @@ public sealed class NotionSyncService(
     public static string NormalizarTipoIndicacao(string tipo)
     {
         var t = tipo.Trim();
-        var conhecido = new[] { "Lead", "Indicação", "Pessoal", "Contemplando Sonhos" }
+        var conhecido = new[] { "Lead", "Indicação", TipoIndicacaoLead.IndicacaoLead, "Pessoal", "Contemplando Sonhos" }
             .FirstOrDefault(o => string.Equals(RemoverAcentos(o), RemoverAcentos(t), StringComparison.OrdinalIgnoreCase));
         if (conhecido is not null) return conhecido;
         var titulo = System.Globalization.CultureInfo.GetCultureInfo("pt-BR").TextInfo.ToTitleCase(t.ToLowerInvariant());
@@ -608,8 +608,8 @@ public sealed class NotionSyncService(
         }
         lead.ProdutoInteresse = Cortar(oQue, 120) ?? lead.ProdutoInteresse;
         var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
-        lead.TipoIndicacao = tipoIndicacao;
-        lead.CriadoManualmente = !EhTipoLead(tipoIndicacao);
+        lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, tipoIndicacao);
+        lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
         if (!criadoAgora && eraIndicacao != NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao)
             && TrocarColunaLeadIndicacao(lead, etapasPorNome))
         {

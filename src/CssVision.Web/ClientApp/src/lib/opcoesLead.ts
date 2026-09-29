@@ -1,11 +1,17 @@
 /** Tags do campo "O que?" (produto de interesse do lead) — mesmas opções do campo "O que" no Notion. */
 export const OPCOES_O_QUE = ["AGV", "AGV ELÉTRICO", "AGV TRUCK"];
 
+/**
+ * "Indicação Lead": lead (chegou pelo tráfego) cuja venda foi uma indicação — fica na coluna
+ * "Venda concluída (Indicação)" com essa etiqueta própria (ver TipoIndicacaoLead.cs).
+ */
+export const TIPO_INDICACAO_LEAD = "Indicação Lead";
+
 /** Tipo de indicação escolhido no cadastro do lead e na venda. */
-export const OPCOES_TIPO_INDICACAO = ["Lead", "Pessoal", "Contemplando Sonhos"];
+export const OPCOES_TIPO_INDICACAO = ["Lead", TIPO_INDICACAO_LEAD, "Pessoal", "Contemplando Sonhos"];
 
 /** Filtro "Tipo de indicação" do quadro: inclui "Indicação", o valor que vem do Notion. */
-export const OPCOES_FILTRO_TIPO_INDICACAO = ["Lead", "Indicação", "Pessoal", "Contemplando Sonhos"];
+export const OPCOES_FILTRO_TIPO_INDICACAO = ["Lead", "Indicação", TIPO_INDICACAO_LEAD, "Pessoal", "Contemplando Sonhos"];
 
 /**
  * Tags do campo Origem (visível só para administradores) — mesmas opções de campanha usadas no

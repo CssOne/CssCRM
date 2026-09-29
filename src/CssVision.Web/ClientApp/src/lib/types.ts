@@ -233,6 +233,11 @@ export interface LeadDetail {
   arquivado: boolean;
   /** Valor da adesão informado ao mover para "Cotação". */
   valorAdesao?: number | null;
+  /** Card de outro veículo do mesmo cliente: o card original. */
+  veiculoAdicionalDeLeadId?: string | null;
+  veiculoAdicionalDeLeadNome?: string | null;
+  /** CPF/CNPJ do card original — a venda do veículo adicional usa o mesmo documento. */
+  veiculoAdicionalDeDocumento?: string | null;
 }
 
 export interface LeadCreateRequest {
@@ -322,6 +327,8 @@ export interface LeadKanbanCard {
   valorAdesao?: number | null;
   /** Foto do consultor responsável. */
   responsavelFotoUrl?: string | null;
+  /** Card de outro veículo de um cliente que já tem card. */
+  veiculoAdicional?: boolean;
 }
 
 export interface LeadKanbanColumn {
