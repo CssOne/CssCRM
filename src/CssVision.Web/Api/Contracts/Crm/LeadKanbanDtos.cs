@@ -33,13 +33,22 @@ public record LeadKanbanCardDto(
     /// <summary>Foto do consultor responsável (mostrada em círculo no rodapé do cartão).</summary>
     string? ResponsavelFotoUrl = null,
     /// <summary>Card de outro veículo de um cliente que já tem card (ver CrmLead.VeiculoAdicionalDeLeadId).</summary>
-    bool VeiculoAdicional = false);
+    bool VeiculoAdicional = false,
+    /// <summary>Motivo da perda (cartões em "Perdido") e a explicação do consultor.</summary>
+    string? MotivoPerda = null,
+    string? MotivoPerdaObservacao = null);
+
+/// <summary>Opção do filtro por motivo da coluna "Perdido" (Id vazio = sem motivo informado), com a quantidade.</summary>
+public record LeadKanbanMotivoPerdaDto(Guid Id, string Descricao, int Quantidade);
 
 /// <summary>
 /// Coluna do quadro. <see cref="Cartoes"/> traz só a primeira página (os mais recentes);
 /// <see cref="Total"/> é a quantidade de leads da coluna inteira — o restante vem por "Ver mais".
 /// </summary>
-public record LeadKanbanColumnDto(LeadStageDto Etapa, IReadOnlyList<LeadKanbanCardDto> Cartoes, int Total);
+public record LeadKanbanColumnDto(
+    LeadStageDto Etapa, IReadOnlyList<LeadKanbanCardDto> Cartoes, int Total,
+    /// <summary>Só na coluna "Perdido": motivos dos cartões dela com os filtros de cima (para o filtro da coluna).</summary>
+    IReadOnlyList<LeadKanbanMotivoPerdaDto>? MotivosPerda = null);
 
 public record LeadKanbanBoardDto(IReadOnlyList<LeadKanbanColumnDto> Colunas);
 
@@ -81,6 +90,12 @@ public record LeadKanbanFilterRequest
 
     /// <summary>Quantos cartões cada coluna traz na carga do quadro (os mais recentes). Máximo 200.</summary>
     public int CartoesPorColuna { get; init; } = 30;
+
+    /// <summary>
+    /// Filtro da coluna "Perdido" por motivo da perda (Guid.Empty = sem motivo informado). Vale só para
+    /// essa coluna — as outras não têm motivo — e soma-se aos filtros de cima.
+    /// </summary>
+    public Guid[]? MotivoPerdaId { get; init; }
 }
 
 /// <summary>"Ver mais" de uma coluna: os mesmos filtros do quadro + a coluna (EtapaId nulo = "Sem etapa") e a página.</summary>

@@ -65,11 +65,15 @@ public static class NotionEtapaLead
         return etapasAtivasPorNome.TryGetValue(coluna, out var id) ? (true, id, coluna) : (false, null, null);
     }
 
-    /// <summary>Motivo de perda quando o card do Notion não tem "Motivo da perda" preenchido.</summary>
-    public static string MotivoPerdaPadrao(string? statusNotion) => Normalizar(statusNotion) switch
+    /// <summary>
+    /// Motivo de perda quando o card do Notion não tem "Motivo da perda" preenchido: o próprio status
+    /// quando ele já diz o motivo; senão nenhum (o lead fica "sem motivo informado" — não existe mais
+    /// a opção "Não informado no Notion").
+    /// </summary>
+    public static string? MotivoPerdaPadrao(string? statusNotion) => Normalizar(statusNotion) switch
     {
         "RECUSA/INATIVA" => "Recusa/Inativa",
         "JÁ TEM SEGURO" => "Já tem seguro",
-        _ => "Não informado no Notion",
+        _ => null,
     };
 }

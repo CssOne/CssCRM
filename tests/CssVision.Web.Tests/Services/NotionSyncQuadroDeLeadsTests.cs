@@ -139,8 +139,23 @@ public class NotionSyncQuadroDeLeadsTests
         Assert.Null(lead.VeiculoNaoAtendido);
     }
 
+    [Fact]
+    public async Task Perdido_SemMotivoNoNotion_FicaSemMotivo()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, service, etapas) = await PrepararAsync(factory);
+        var lead = NovoLead();
+        db.CrmLeads.Add(lead);
+
+        await service.AplicarStatusDoNotionAsync(lead, "PERDIDO", null, null, etapas, CancellationToken.None);
+        await db.SaveChangesAsync();
+
+        Assert.Equal(etapas["Perdido"], lead.EtapaId);
+        Assert.Null(lead.MotivoPerdaId);
+        Assert.False(await db.CrmLossReasons.AnyAsync(m => m.Descricao == "Não informado no Notion"));
+    }
+
     [Theory]
-    [InlineData("PERDIDO", "Não informado no Notion")]
     [InlineData("RECUSA/INATIVA", "Recusa/Inativa")]
     [InlineData("JÁ TEM SEGURO", "Já tem seguro")]
     public async Task Perdido_SemMotivoNoNotion_RecebeMotivoPadrao(string status, string motivoEsperado)
