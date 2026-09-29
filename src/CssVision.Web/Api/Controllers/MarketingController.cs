@@ -15,4 +15,10 @@ public class MarketingController(IMarketingService marketingService) : Controlle
     [HttpGet("dashboard")]
     public async Task<ActionResult<MarketingDashboardDto>> ObterDashboard([FromQuery] MarketingFilterRequest filtro, CancellationToken ct) =>
         Ok(await marketingService.ObterAsync(filtro, ct));
+
+    /// <summary>"Últimos leads" da aba, paginado, com os mesmos filtros do painel.</summary>
+    [HttpGet("leads")]
+    public async Task<ActionResult> ListarLeads(
+        [FromQuery] MarketingFilterRequest filtro, [FromQuery] int pagina = 1, [FromQuery] int tamanhoPagina = 20, CancellationToken ct = default) =>
+        Ok(await marketingService.ListarLeadsAsync(filtro, pagina, tamanhoPagina, ct));
 }

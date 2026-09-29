@@ -73,6 +73,9 @@ public record MarketingConsultorDto(
     Guid? Id, string Nome, int TotalLeads, int SemEtapa, int EmAndamento, int Ganhos, int Perdidos, decimal TaxaConversao,
     int SemContato, double? TempoMedioPrimeiroContatoHoras);
 
+/// <summary>Leads e vendas de um consultor num mês ("2026-09", mês da chegada em Brasília).</summary>
+public record MarketingConsultorMesDto(Guid? Id, string Nome, string Mes, int Leads, int Ganhos);
+
 public record MarketingEvolucaoDto(string Data, int Quantidade, int Ganhos = 0);
 
 /// <summary>Série do gráfico de leads por dia, uma por "O que?" (valores alinhados com Evolucao).</summary>
@@ -128,4 +131,7 @@ public record MarketingDashboardDto(
     IReadOnlyList<MarketingMotivoPerdaDto>? MotivosPerda = null,
     MarketingOpcoesDto? Opcoes = null,
     string? PeriodoInicio = null,
-    string? PeriodoFim = null);
+    string? PeriodoFim = null,
+    IReadOnlyList<MarketingConsultorMesDto>? PorConsultorMensal = null,
+    /// <summary>Total de leads do período (a lista em si vem paginada por /api/marketing/leads).</summary>
+    int TotalLeadsLista = 0);
