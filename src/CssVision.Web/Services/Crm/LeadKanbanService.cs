@@ -17,6 +17,9 @@ public sealed class LeadKanbanService(
 {
     private const int MaxCartoesPorPagina = 200;
 
+    /// <summary>Coluna do quadro que tem o filtro por motivo — ver CrmSeeder.cs.</summary>
+    private const string EtapaPerdido = "Perdido";
+
     public async Task<LeadKanbanBoardDto> ObterBoardAsync(LeadKanbanFilterRequest filtro, CancellationToken ct)
     {
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
@@ -51,13 +54,52 @@ public sealed class LeadKanbanService(
 
         foreach (var etapa in etapas)
         {
+            var dto = new LeadStageDto(etapa.Id, etapa.Nome, etapa.Ordem, etapa.Cor, etapa.Fechada, etapa.Ativa);
+            if (etapa.Nome == EtapaPerdido)
+            {
+                colunas.Add(await ColunaPerdidoAsync(dto, query, filtro.MotivoPerdaId, porPagina, podeVerOrigem, ct));
+                continue;
+            }
+
             var total = Total(etapa.Id);
             var cartoes = total == 0 ? [] : await PaginaAsync(query, etapa.Id, 0, porPagina, podeVerOrigem, ct);
-            colunas.Add(new LeadKanbanColumnDto(
-                new LeadStageDto(etapa.Id, etapa.Nome, etapa.Ordem, etapa.Cor, etapa.Fechada, etapa.Ativa), cartoes, total));
+            colunas.Add(new LeadKanbanColumnDto(dto, cartoes, total));
         }
 
         return new LeadKanbanBoardDto(colunas);
+    }
+
+    /// <summary>
+    /// Coluna "Perdido": os motivos dos cartões dela (com os filtros de cima) para o filtro da coluna,
+    /// e os cartões/total já filtrados pelos motivos escolhidos.
+    /// </summary>
+    private async Task<LeadKanbanColumnDto> ColunaPerdidoAsync(
+        LeadStageDto etapa, IQueryable<CrmLead> query, Guid[]? motivos, int porPagina, bool podeVerOrigem, CancellationToken ct)
+    {
+        var porMotivo = await query
+            .Where(l => l.EtapaId == etapa.Id)
+            .GroupBy(l => new { l.MotivoPerdaId, Descricao = l.MotivoPerda != null ? l.MotivoPerda.Descricao : null })
+            .Select(g => new { g.Key.MotivoPerdaId, g.Key.Descricao, Quantidade = g.Count() })
+            .ToListAsync(ct);
+        var opcoes = porMotivo
+            .Select(m => new LeadKanbanMotivoPerdaDto(m.MotivoPerdaId ?? Guid.Empty, m.Descricao ?? "Sem motivo informado", m.Quantidade))
+            .OrderByDescending(m => m.Quantidade)
+            .ToList();
+
+        var filtrada = FiltrarMotivo(query, motivos);
+        var total = motivos is { Length: > 0 }
+            ? opcoes.Where(o => motivos.Contains(o.Id)).Sum(o => o.Quantidade)
+            : opcoes.Sum(o => o.Quantidade);
+        var cartoes = total == 0 ? [] : await PaginaAsync(filtrada, etapa.Id, 0, porPagina, podeVerOrigem, ct);
+        return new LeadKanbanColumnDto(etapa, cartoes, total, opcoes);
+    }
+
+    private static IQueryable<CrmLead> FiltrarMotivo(IQueryable<CrmLead> query, Guid[]? motivos)
+    {
+        if (motivos is not { Length: > 0 }) return query;
+        var ids = motivos.Where(m => m != Guid.Empty).Select(m => (Guid?)m).ToList();
+        var semMotivo = motivos.Contains(Guid.Empty);
+        return query.Where(l => (l.MotivoPerdaId != null && ids.Contains(l.MotivoPerdaId)) || (semMotivo && l.MotivoPerdaId == null));
     }
 
     public async Task<IReadOnlyList<LeadKanbanCardDto>> ObterCartoesAsync(LeadKanbanColunaRequest request, CancellationToken ct)
@@ -67,6 +109,12 @@ public sealed class LeadKanbanService(
             async () =>
             {
                 var (query, podeVerOrigem) = Filtrar(request, visiveis);
+                // "Ver mais" da coluna Perdido respeita o filtro por motivo dela.
+                if (request.MotivoPerdaId is { Length: > 0 } && request.EtapaId is { } etapaId
+                    && await db.CrmLeadStages.AnyAsync(s => s.Id == etapaId && s.Nome == EtapaPerdido, ct))
+                {
+                    query = FiltrarMotivo(query, request.MotivoPerdaId);
+                }
                 var quantidade = Math.Clamp(request.Quantidade, 1, MaxCartoesPorPagina);
                 return await PaginaAsync(query, request.EtapaId, Math.Max(0, request.Pular), quantidade, podeVerOrigem, ct);
             });
@@ -92,6 +140,8 @@ public sealed class LeadKanbanService(
                 Tags = l.LeadTags.Select(lt => lt.Tag.Nome).ToList(),
                 l.CriadoEm, l.UltimoContatoEm, l.Arquivado, l.RowVersion, l.ProdutoInteresse, l.ValorAdesao,
                 VeiculoAdicional = l.VeiculoAdicionalDeLeadId != null,
+                MotivoPerda = l.MotivoPerda != null ? l.MotivoPerda.Descricao : null,
+                l.MotivoPerdaObservacao,
                 // A oportunidade mais recente é a fonte dos selos Migração/Indicação — normalmente é a
                 // que fechou a venda (o lead só chega na coluna "Venda concluída" depois disso).
                 Oportunidade = l.Oportunidades
@@ -110,7 +160,8 @@ public sealed class LeadKanbanService(
             // "Sem contato" reflete se o lead tem ALGUM telefone cadastrado — some sozinho assim que
             // um telefone é preenchido.
             l.CriadoEm, l.UltimoContatoEm, string.IsNullOrWhiteSpace(l.Telefone) && string.IsNullOrWhiteSpace(l.Telefone2),
-            l.Arquivado, l.RowVersion, l.ProdutoInteresse, l.ValorAdesao, l.ResponsavelFotoUrl, l.VeiculoAdicional)).ToList();
+            l.Arquivado, l.RowVersion, l.ProdutoInteresse, l.ValorAdesao, l.ResponsavelFotoUrl, l.VeiculoAdicional,
+            l.MotivoPerda, l.MotivoPerdaObservacao)).ToList();
     }
 
     private (IQueryable<CrmLead> Query, bool PodeVerOrigem) Filtrar(LeadKanbanFilterRequest filtro, List<Guid>? visiveis)

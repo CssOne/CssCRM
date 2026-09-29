@@ -43,7 +43,9 @@ public static class CrmSeeder
                 new CrmLossReason { Descricao = "Concorrência" },
                 new CrmLossReason { Descricao = "Sem orçamento" },
                 new CrmLossReason { Descricao = "Sem resposta do cliente" },
-                new CrmLossReason { Descricao = "Fora do perfil" }
+                new CrmLossReason { Descricao = "Fora do perfil" },
+                new CrmLossReason { Descricao = "Número não existe" },
+                new CrmLossReason { Descricao = "Fora da tabela de aceitação" }
             );
         }
 

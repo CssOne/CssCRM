@@ -30,10 +30,9 @@ export function StageChangeDialog({
 
   useEffect(() => {
     if (open) {
-      api.get<LossReason[]>("/crm/settings/loss-reasons").then((lista) => {
-        setMotivos(lista);
-        setMotivoPerdaId(lista[0]?.id ?? "");
-      });
+      // Nada vem marcado: o consultor tem que escolher o motivo (antes vinha o primeiro da lista).
+      setMotivoPerdaId("");
+      api.get<LossReason[]>("/crm/settings/loss-reasons").then(setMotivos);
       setObservacao("");
     }
   }, [open]);
@@ -48,12 +47,16 @@ export function StageChangeDialog({
             Motivo da perda
           </Label>
           <Select id="motivo-perda" value={motivoPerdaId} onChange={(e) => setMotivoPerdaId(e.target.value)}>
+            <option value="" disabled>
+              Selecione o motivo...
+            </option>
             {motivos.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.descricao}
               </option>
             ))}
           </Select>
+          {!motivoPerdaId && <p className="mt-1 text-xs text-[var(--fg-muted)]">Obrigatório para mover para "{etapaNome}".</p>}
         </div>
 
         <div>
