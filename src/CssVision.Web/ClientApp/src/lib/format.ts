@@ -15,8 +15,16 @@ export function formatarPercentual(valor: number | null | undefined): string {
   return `${numero.format(valor ?? 0)}%`;
 }
 
+/**
+ * Datas sem hora ("2026-09-29") e as gravadas como meia-noite UTC pelo servidor (Ativo em, data da
+ * venda...) são o dia em si — convertê-las para o fuso de Brasília mostrava o dia anterior.
+ */
+const SO_DATA = /^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00(?:\.0+)?(?:Z|\+00:00))?$/;
+
 export function formatarData(valor: string | null | undefined): string {
   if (!valor) return "-";
+  const soData = SO_DATA.exec(valor);
+  if (soData) return `${soData[3]}/${soData[2]}/${soData[1]}`;
   return dataCurta.format(new Date(valor));
 }
 

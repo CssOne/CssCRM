@@ -400,7 +400,9 @@ public sealed class LeadService(
         {
             throw new CrmNotFoundException("Etapa de lead", etapaInformada);
         }
-        var etapaId = request.EtapaId ?? await EtapaDoVeiculoAdicionalAsync(original, ct);
+        var etapaId = request.VendaConcluida
+            ? await EtapaVendaConcluidaAsync(original, ct)
+            : request.EtapaId ?? await EtapaDoVeiculoAdicionalAsync(original, ct);
 
         // Sempre aponta para o primeiro card do cliente, mesmo quando criado a partir de outro adicional.
         var principal = original.VeiculoAdicionalDeLead ?? original;
@@ -462,13 +464,22 @@ public sealed class LeadService(
     private async Task<Guid?> EtapaDoVeiculoAdicionalAsync(CrmLead original, CancellationToken ct)
     {
         if (original.Etapa is { Fechada: false } etapaAberta) return etapaAberta.Id;
+        return await ColunaDaEtiquetaAsync(original, "EM ATENDIMENTO", ct) ?? await ObterEtapaInicialIdAsync(ct);
+    }
 
+    /// <summary>"Venda concluída (Leads)" ou "(Indicação)", pela etiqueta do cliente.</summary>
+    private async Task<Guid?> EtapaVendaConcluidaAsync(CrmLead original, CancellationToken ct) =>
+        await ColunaDaEtiquetaAsync(original, "VENDA CONCLUIDA", ct)
+        ?? throw new CrmBusinessException("A coluna \"Venda concluída\" não está ativa no quadro de leads.", "etapa_venda_inexistente");
+
+    /// <summary>Coluna Leads/Indicação do status (mesma regra do quadro e do Notion) para a etiqueta do card.</summary>
+    private async Task<Guid?> ColunaDaEtiquetaAsync(CrmLead lead, string status, CancellationToken ct)
+    {
         var etapasAtivas = await db.CrmLeadStages.AsNoTracking().Where(e => e.Ativa)
             .Select(e => new { e.Id, e.Nome }).ToListAsync(ct);
         var porNome = etapasAtivas.GroupBy(e => e.Nome).ToDictionary(g => g.Key, g => g.First().Id);
-        var ehIndicacao = NotionEtapaLead.EhIndicacao(original.CriadoManualmente, original.TipoIndicacao);
-        var (_, emAtendimento, _) = NotionEtapaLead.Resolver("EM ATENDIMENTO", ehIndicacao, porNome);
-        return emAtendimento ?? await ObterEtapaInicialIdAsync(ct);
+        var ehIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
+        return NotionEtapaLead.Resolver(status, ehIndicacao, porNome).EtapaId;
     }
 
     public async Task AtribuirAsync(Guid id, LeadAssignRequest request, CancellationToken ct)

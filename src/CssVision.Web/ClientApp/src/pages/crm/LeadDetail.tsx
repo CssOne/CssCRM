@@ -13,7 +13,7 @@ import {
   type LeadTimelineItem,
   type Opportunity,
 } from "../../lib/types";
-import { Badge, Button, Card, ErrorState, Input, Label, Modal, Skeleton, Textarea, useToast } from "../../components/ui";
+import { Badge, Button, Card, ErrorState, Modal, Skeleton, Textarea, useToast } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { LeadForm, type LeadFormValues } from "../../components/crm/LeadForm";
 import { ActivityForm, type ActivityFormValues } from "../../components/crm/ActivityForm";
@@ -86,8 +86,6 @@ export function LeadDetailPage() {
   const [modalExcluir, setModalExcluir] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
   const [modalVeiculos, setModalVeiculos] = useState(false);
-  const [quantidadeVeiculos, setQuantidadeVeiculos] = useState(1);
-  const [criandoVeiculos, setCriandoVeiculos] = useState(false);
 
   const carregar = useCallback(
     (signal?: AbortSignal) => {
@@ -219,21 +217,6 @@ export function LeadDetailPage() {
     }
   }
 
-  async function criarVeiculosAdicionais() {
-    if (!lead) return;
-    setCriandoVeiculos(true);
-    try {
-      await api.post(`/crm/leads/${lead.id}/veiculos-adicionais`, { quantidade: quantidadeVeiculos });
-      notificar("success", quantidadeVeiculos === 1 ? "Card do outro veículo criado no quadro de leads." : `${quantidadeVeiculos} cards criados no quadro de leads.`);
-      setModalVeiculos(false);
-      setQuantidadeVeiculos(1);
-    } catch (e) {
-      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível criar o card do outro veículo.");
-    } finally {
-      setCriandoVeiculos(false);
-    }
-  }
-
   async function excluirLead() {
     if (!lead) return;
     setExcluindo(true);
@@ -302,7 +285,7 @@ export function LeadDetailPage() {
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
-            <Button variant="secondary" onClick={() => setModalVeiculos(true)} title="O cliente fechou mais de um veículo: cada veículo vira um card">
+            <Button variant="secondary" onClick={() => setModalVeiculos(true)} title="O cliente fechou outro veículo: registra a venda dele num card novo em Venda concluída">
               <Car className="size-4" /> Outro veículo
             </Button>
             {podeExcluir && (
@@ -508,35 +491,20 @@ export function LeadDetailPage() {
         }}
       />
 
-      <Modal open={modalVeiculos} onClose={() => setModalVeiculos(false)} title="Cliente fechou outro veículo" size="sm">
-        <div className="space-y-4">
-          <p className="text-sm text-[var(--fg)]">
-            Cada veículo a mais vira um card novo de <strong>{lead.nomeOuRazaoSocial}</strong>, com os mesmos dados de contato e o mesmo
-            consultor, para preencher a venda dele. O CPF da venda vem deste card.
-          </p>
-          <div className="w-44">
-            <Label htmlFor="quantidade-veiculos" required>
-              Quantos veículos a mais?
-            </Label>
-            <Input
-              id="quantidade-veiculos"
-              type="number"
-              min={1}
-              max={10}
-              value={quantidadeVeiculos}
-              onChange={(e) => setQuantidadeVeiculos(Math.trunc(Number(e.target.value) || 0))}
-            />
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setModalVeiculos(false)} disabled={criandoVeiculos}>
-              Cancelar
-            </Button>
-            <Button loading={criandoVeiculos} disabled={quantidadeVeiculos < 1 || quantidadeVeiculos > 10} onClick={criarVeiculosAdicionais}>
-              Criar {quantidadeVeiculos === 1 ? "card" : "cards"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+      {/* Outro veículo: a venda do veículo novo vira um card novo já em "Venda concluída". */}
+      <VendaConcluidaDialog
+        open={modalVeiculos}
+        novoVeiculo
+        leadId={lead.id}
+        etapaNome={ETAPA_VENDA_CONCLUIDA}
+        valorEstimado={0}
+        onCancel={() => setModalVeiculos(false)}
+        onConcluido={(resultado) => {
+          setModalVeiculos(false);
+          notificar("success", "Venda do outro veículo registrada — card novo em \"Venda concluída\".");
+          if (resultado?.novoLeadId) navigate(`/app/crm/leads/${resultado.novoLeadId}`);
+        }}
+      />
 
       <Modal open={modalExcluir} onClose={() => setModalExcluir(false)} title="Excluir lead" size="sm">
         <div className="space-y-4">
