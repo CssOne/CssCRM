@@ -705,8 +705,29 @@ export interface MarketingIndicadores {
   leadsSemEtapa: number;
   leadsGanhos: number;
   leadsPerdidos: number;
+  /** Vendas sobre os já decididos (vendas + perdidos). */
   taxaConversao: number;
   leadsSemContato: number;
+  leadsEmAndamento: number;
+  leadsNaoFazemos: number;
+  leadsSemResponsavel: number;
+  /** Vendas sobre o total de leads do período. */
+  taxaConversaoGeral: number;
+  valorAdesao: number;
+  mensalidadeMedia: number;
+  tempoMedioPrimeiroContatoHoras?: number | null;
+  totalLeadsPeriodoAnterior: number;
+  leadsGanhosPeriodoAnterior: number;
+  mediaLeadsPorDia: number;
+}
+
+export interface MarketingGrupo {
+  nome: string;
+  totalLeads: number;
+  ganhos: number;
+  perdidos: number;
+  taxaConversao: number;
+  semEtapa: number;
 }
 
 export interface MarketingOrigem {
@@ -723,11 +744,61 @@ export interface MarketingCampanha {
   ganhos: number;
   taxaConversao: number;
   ultimoLeadEm: string;
+  perdidos: number;
+  semEtapa: number;
+  valorAdesao: number;
+}
+
+export interface MarketingConsultor {
+  id?: string | null;
+  nome: string;
+  totalLeads: number;
+  semEtapa: number;
+  emAndamento: number;
+  ganhos: number;
+  perdidos: number;
+  taxaConversao: number;
+  semContato: number;
+  tempoMedioPrimeiroContatoHoras?: number | null;
 }
 
 export interface MarketingEvolucao {
   data: string;
   quantidade: number;
+  ganhos?: number;
+}
+
+export interface MarketingSerie {
+  nome: string;
+  valores: number[];
+}
+
+export interface MarketingFunil {
+  etapa: string;
+  quantidade: number;
+  cor?: string | null;
+}
+
+/** diaSemana: 0 = domingo; hora no horário de Brasília. */
+export interface MarketingHorario {
+  diaSemana: number;
+  hora: number;
+  quantidade: number;
+}
+
+export interface MarketingMotivoPerda {
+  motivo: string;
+  quantidade: number;
+}
+
+export interface MarketingOpcoes {
+  oQue: string[];
+  origens: string[];
+  campanhas: string[];
+  canais: string[];
+  consultores: { id: string; nome: string }[];
+  estados: string[];
+  etapas: string[];
 }
 
 export interface MarketingLeadItem {
@@ -741,6 +812,9 @@ export interface MarketingLeadItem {
   etapaNome?: string | null;
   responsavelNome?: string | null;
   criadoEm: string;
+  oQue?: string | null;
+  estado?: string | null;
+  canal?: string | null;
 }
 
 export interface MarketingDashboard {
@@ -750,6 +824,17 @@ export interface MarketingDashboard {
   evolucao: MarketingEvolucao[];
   origensDisponiveis: string[];
   leads: MarketingLeadItem[];
+  evolucaoPorOQue: MarketingSerie[];
+  porOQue: MarketingGrupo[];
+  porCanal: MarketingGrupo[];
+  porEstado: MarketingGrupo[];
+  porConsultor: MarketingConsultor[];
+  funil: MarketingFunil[];
+  porHorario: MarketingHorario[];
+  motivosPerda: MarketingMotivoPerda[];
+  opcoes: MarketingOpcoes;
+  periodoInicio: string;
+  periodoFim: string;
 }
 
 // --- Metas ---
