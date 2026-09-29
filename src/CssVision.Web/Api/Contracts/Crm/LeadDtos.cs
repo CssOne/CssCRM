@@ -142,7 +142,9 @@ public record LeadOpportunitySummaryDto(
     string? PagamentoAdesaoArquivoUrl = null,
     string? ComprovanteIndicacaoArquivoUrl = null,
     string? ComprovanteVistoriaArquivoUrl = null,
-    DateOnly? DataPagamentoAdesaoPrevista = null);
+    DateOnly? DataPagamentoAdesaoPrevista = null,
+    /// <summary>Consultor dono da oportunidade — consultores só excluem as próprias.</summary>
+    Guid? ResponsavelId = null);
 
 public record LeadOpportunityVeiculoSummaryDto(
     string? Descricao,

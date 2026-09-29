@@ -19,9 +19,10 @@ export function PipelinePage() {
 
   const [cartaoArrastando, setCartaoArrastando] = useState<PipelineCard | null>(null);
   const [modalMobile, setModalMobile] = useState<PipelineCard | null>(null);
-  // Excluir card do Pipeline é só para Admin/GestorMaster (ver OpportunityService.ExcluirAsync no back-end).
-  const { temPapel } = useAuth();
-  const podeExcluir = temPapel("Admin", "GestorMaster");
+  // Admin/gestores excluem qualquer card que enxergam; consultores, só os próprios (ver OpportunityService.ExcluirAsync).
+  const { temPapel, sessao } = useAuth();
+  const ehGestao = temPapel("Admin", "GestorMaster", "GestorComercial");
+  const podeExcluir = (cartao: PipelineCard) => ehGestao || (!!sessao && cartao.responsavelId === sessao.id);
   const [cartaoExcluindo, setCartaoExcluindo] = useState<PipelineCard | null>(null);
   const [excluindoCartao, setExcluindoCartao] = useState(false);
 
@@ -195,7 +196,7 @@ export function PipelinePage() {
                       </Link>
                       <div className="flex shrink-0 items-center gap-1">
                         {cartao.atrasada && <AlertTriangle className="size-4 text-[var(--danger)]" aria-hidden />}
-                        {podeExcluir && (
+                        {podeExcluir(cartao) && (
                           <button
                             type="button"
                             title="Excluir oportunidade"

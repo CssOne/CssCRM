@@ -170,6 +170,8 @@ export interface LeadOpportunitySummary {
   comprovanteIndicacaoArquivoUrl?: string | null;
   comprovanteVistoriaArquivoUrl?: string | null;
   dataPagamentoAdesaoPrevista?: string | null;
+  /** Consultor dono da oportunidade — consultores só excluem as próprias. */
+  responsavelId?: string | null;
 }
 
 export interface LeadOpportunityVeiculoSummary {
