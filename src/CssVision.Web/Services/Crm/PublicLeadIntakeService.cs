@@ -25,6 +25,40 @@ public sealed class PublicLeadIntakeService(
     {
         var emailNormalizado = DocumentValidation.NormalizarEmail(request.Email);
         var telefoneNormalizado = DocumentValidation.NormalizarTelefone(request.WhatsApp);
+        // Texto de formulário externo nunca pode derrubar o lead por estourar o tamanho da coluna
+        // (CrmLeadConfiguration): o estado vira a sigla da UF e o resto é cortado no limite.
+        request = request with
+        {
+            Nome = Cortar(request.Nome, 200) ?? "",
+            Estado = UnidadeFederativa.Sigla(request.Estado),
+            Fonte = Cortar(request.Fonte, 80),
+            Campanha = Cortar(request.Campanha, 120),
+            Oque = Cortar(request.Oque, 120),
+            UtilidadeVeiculo = Cortar(request.UtilidadeVeiculo, 80),
+            Gclid = Cortar(request.Gclid, 200),
+            ClickId = Cortar(request.ClickId, 200),
+            Projeto = Cortar(request.Projeto, 120),
+            UtmSource = Cortar(request.UtmSource, 120),
+            UtmMedium = Cortar(request.UtmMedium, 120),
+            UtmTerm = Cortar(request.UtmTerm, 120),
+            UtmCampaign = Cortar(request.UtmCampaign, 200),
+        };
+
+        // Mesmo Meta Lead ID = mesmo lead, mesmo se já tiver sido excluído (arquivado): o reenvio da
+        // reconciliação não pode criar outro — o índice único do MetaLeadId recusaria e a resposta
+        // seria 500, repetida a cada reenvio.
+        if (!string.IsNullOrWhiteSpace(request.MetaLeadId))
+        {
+            var mesmoMetaLeadId = await db.CrmLeads.AsNoTracking()
+                .Where(l => l.MetaLeadId == request.MetaLeadId)
+                .Select(l => new { l.Id, l.ResponsavelId })
+                .FirstOrDefaultAsync(ct);
+            if (mesmoMetaLeadId is not null)
+            {
+                logger.LogInformation("Lead do site com Meta Lead ID {MetaLeadId} já recebido antes ({LeadId}) — nada a criar", request.MetaLeadId, mesmoMetaLeadId.Id);
+                return await MontarResultadoAsync(mesmoMetaLeadId.Id, mesmoMetaLeadId.ResponsavelId, ct);
+            }
+        }
 
         var existente = await EncontrarLeadExistenteAsync(emailNormalizado, telefoneNormalizado, ct);
         if (existente is not null)
@@ -240,6 +274,13 @@ public sealed class PublicLeadIntakeService(
         }
 
         return await assignment.ProximoResponsavelAsync(oQue, ct);
+    }
+
+    private static string? Cortar(string? texto, int maximo)
+    {
+        if (string.IsNullOrWhiteSpace(texto)) return null;
+        var limpo = texto.Trim();
+        return limpo.Length <= maximo ? limpo : limpo[..maximo];
     }
 
     private async Task<CrmLead?> EncontrarLeadExistenteAsync(string? emailNormalizado, string? telefoneNormalizado, CancellationToken ct)
