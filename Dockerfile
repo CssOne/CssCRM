@@ -20,8 +20,15 @@ RUN dotnet publish src/CssVision.Web/CssVision.Web.csproj -c Release -o /app/pub
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
 
-# curl só é usado pelo healthcheck do docker-compose (docker-compose.prod.yml).
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+# curl: healthcheck do docker-compose (docker-compose.prod.yml).
+# postgresql-client-16: pg_dump do backup do banco (BackupService) — da mesma versão do RDS
+# (PostgreSQL 16), que o Debian da imagem não traz; vem do repositório oficial do PostgreSQL.
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    && . /etc/os-release \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends postgresql-client-16 \
     && rm -rf /var/lib/apt/lists/* \
     && adduser --disabled-password --gecos "" appuser
 COPY --from=build /app/publish .

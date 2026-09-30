@@ -106,6 +106,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILeadKanbanService, LeadKanbanService>();
         services.AddScoped<ILeadAssignmentService, LeadAssignmentService>();
         services.AddHostedService<DistribuicaoLeadsBackgroundService>();
+        // Backup do banco: diário automático + tela de Backups (ver BackupService).
+        services.AddScoped<Services.Backup.IDumpBanco, Services.Backup.PgDumpBanco>();
+        services.AddScoped<Services.Backup.IBackupService, Services.Backup.BackupService>();
+        services.AddHostedService<Services.Backup.BackupDiarioBackgroundService>();
         services.AddScoped<IOpportunityService, OpportunityService>();
         services.AddScoped<IPipelineService, PipelineService>();
         services.AddScoped<IActivityService, ActivityService>();
@@ -140,6 +144,7 @@ public static class ServiceCollectionExtensions
         if (string.IsNullOrWhiteSpace(bucketName))
         {
             services.AddScoped<IFileStorageService, LocalFileStorageService>();
+            services.AddScoped<Services.Backup.IArmazenamentoBackup, Services.Backup.LocalArmazenamentoBackup>();
             return services;
         }
 
@@ -150,6 +155,7 @@ public static class ServiceCollectionExtensions
             return new AmazonS3Client(Amazon.RegionEndpoint.GetBySystemName(options.Region));
         });
         services.AddScoped<IFileStorageService, S3FileStorageService>();
+        services.AddScoped<Services.Backup.IArmazenamentoBackup, Services.Backup.S3ArmazenamentoBackup>();
 
         return services;
     }

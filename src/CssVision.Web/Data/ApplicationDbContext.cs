@@ -36,6 +36,7 @@ public class ApplicationDbContext(
     public DbSet<CrmAnnouncement> CrmAnnouncements => Set<CrmAnnouncement>();
     public DbSet<CrmAuditLog> CrmAuditLogs => Set<CrmAuditLog>();
     public DbSet<CrmNotionSyncCheckpoint> CrmNotionSyncCheckpoints => Set<CrmNotionSyncCheckpoint>();
+    public DbSet<CrmBackup> CrmBackups => Set<CrmBackup>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

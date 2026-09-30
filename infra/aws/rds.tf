@@ -26,9 +26,10 @@ resource "aws_db_instance" "this" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = false
 
-  # 1 dia: contas no plano de suporte básico/free tier não aceitam retenção maior via API
-  # (FreeTierRestrictionError) mesmo fora do free tier de fato — aumente depois se seu plano permitir.
-  backup_retention_period   = 1
+  # 7 dias de backups automáticos (restauração para qualquer momento da semana). Era 1 dia no plano
+  # gratuito da AWS (FreeTierRestrictionError); a conta passou para o plano pago em 30/09/2026.
+  # Além disso, o próprio CRM faz um backup diário fora do RDS (ver BackupService).
+  backup_retention_period   = 7
   skip_final_snapshot       = false
   final_snapshot_identifier = "${var.project_name}-db-final"
   deletion_protection       = true

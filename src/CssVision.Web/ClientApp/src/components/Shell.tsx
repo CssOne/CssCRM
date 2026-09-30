@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CheckSquare,
   ChevronLeft,
+  Database,
   ChevronRight,
   FileText,
   Gauge,
@@ -49,6 +50,7 @@ const iconesPorChave: Record<string, typeof Gauge> = {
   briefcase: Briefcase,
   "id-card": IdCard,
   megaphone: Megaphone,
+  database: Database,
 };
 
 export const PAPEL_LABEL: Record<string, string> = {
