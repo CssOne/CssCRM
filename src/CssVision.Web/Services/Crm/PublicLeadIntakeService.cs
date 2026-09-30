@@ -113,7 +113,44 @@ public sealed class PublicLeadIntakeService(
         };
 
         db.CrmLeads.Add(lead);
-        await db.SaveChangesAsync(ct);
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex)
+        {
+            // Corrida de concorrência: o webhook em tempo real e a reconciliação (Worker) podem
+            // tentar criar o MESMO lead novo quase ao mesmo tempo — ambos acham "não existe ainda"
+            // (EncontrarLeadExistenteAsync não vê a escrita um do outro até algum commitar) e
+            // tentam inserir uma linha nova cada um, com o mesmo Meta Lead ID. A segunda a
+            // commitar bate no índice único e cai aqui. Não é a mesma duplicata antiga de e-mail —
+            // essa é criada NA HORA, pela própria corrida. Em vez de derrubar a submissão, assume
+            // que a outra tentativa venceu, busca o registro que ela acabou de criar e faz o
+            // mesmo tratamento de atualização usado pra contato já existente.
+            logger.LogWarning(ex, "Corrida detectada ao criar lead (projeto {Projeto}, Meta Lead ID {MetaLeadId}) — buscando o registro que a tentativa concorrente criou", request.Projeto, request.MetaLeadId);
+
+            try
+            {
+                var criadoPelaOutraTentativa = await EncontrarLeadExistenteAsync(emailNormalizado, telefoneNormalizado, ct);
+                if (criadoPelaOutraTentativa is null)
+                {
+                    throw ex;
+                }
+
+                await AtualizarContatoExistenteAsync(criadoPelaOutraTentativa, request, telefoneNormalizado, ct);
+                return await MontarResultadoAsync(criadoPelaOutraTentativa.Id, criadoPelaOutraTentativa.ResponsavelId, ct);
+            }
+            catch (Exception recuperacaoEx)
+            {
+                // Se até essa recuperação falhar (ex: o DbContext não sobrevive a uma query depois
+                // do SaveChangesAsync que já deu erro), não insiste mais — loga com o máximo de
+                // contexto possível e deixa subir. Preferível a mascarar um 2º erro dentro do 1º.
+                logger.LogError(recuperacaoEx, "Falha ao recuperar da corrida de criação (projeto {Projeto}, Meta Lead ID {MetaLeadId})", request.Projeto, request.MetaLeadId);
+                throw;
+            }
+        }
+
         eventos?.PublicarQuadroAtualizado("site");
 
         logger.LogInformation("Lead {LeadId} criado via formulário do site (projeto {Projeto})", lead.Id, request.Projeto);
