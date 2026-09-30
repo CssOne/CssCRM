@@ -48,6 +48,7 @@ export enum VisaoAtividade {
   Atrasadas = 4,
   Concluidas = 5,
   Semana = 6,
+  Periodo = 7,
 }
 
 export interface PagedResult<T> {

@@ -51,6 +51,9 @@ public sealed class ActivityService(
             VisaoAtividade.Atrasadas => query.Where(a => a.Status == StatusAtividade.Pendente && a.DataHoraPrevista < agora),
             VisaoAtividade.Concluidas => query.Where(a => a.Status == StatusAtividade.Concluida),
             VisaoAtividade.Semana => query.Where(a => a.DataHoraPrevista >= InicioDaSemana(referencia) && a.DataHoraPrevista < InicioDaSemana(referencia).AddDays(7)),
+            VisaoAtividade.Periodo => query.Where(a =>
+                a.DataHoraPrevista >= InicioDoDiaBrasilia(referencia)
+                && a.DataHoraPrevista < InicioDoDiaBrasilia((filtro.DataFim ?? referencia).AddDays(1))),
             _ => query
         };
 
@@ -238,4 +241,8 @@ public sealed class ActivityService(
         a.ResponsavelId, a.Responsavel.NomeCompleto, a.Tipo, a.Assunto, a.Descricao,
         a.DataHoraPrevista, a.DataHoraConclusao, a.Resultado, a.Status, a.LembreteMinutosAntes,
         a.Status == StatusAtividade.Pendente && a.DataHoraPrevista < agora, a.RowVersion);
+
+    /// <summary>Meia-noite do dia em Brasília (UTC-3), em UTC — atividade das 22h fica no dia certo.</summary>
+    private static DateTimeOffset InicioDoDiaBrasilia(DateOnly dia) =>
+        new DateTimeOffset(dia.ToDateTime(TimeOnly.MinValue), TimeSpan.FromHours(-3)).ToUniversalTime();
 }

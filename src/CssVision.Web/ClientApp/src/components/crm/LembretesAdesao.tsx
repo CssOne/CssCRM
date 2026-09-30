@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BellRing, X } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useAbrirLead } from "../../lib/painelLead";
 import { api } from "../../lib/api";
 import { formatarMoeda } from "../../lib/format";
 import type { LembreteAdesao } from "../../lib/types";
@@ -46,7 +46,7 @@ function gravarMarca(chave: string) {
  * o comprovante é anexado (ou é dispensado até o dia seguinte).
  */
 export function LembretesAdesao() {
-  const navigate = useNavigate();
+  const abrirLead = useAbrirLead();
   const [lembretes, setLembretes] = useState<LembreteAdesao[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -134,7 +134,7 @@ export function LembretesAdesao() {
                   <button
                     type="button"
                     className="cursor-pointer text-[var(--brand)] hover:underline"
-                    onClick={() => navigate(`/app/crm/leads/${l.leadId}`)}
+                    onClick={() => abrirLead(l.leadId)}
                   >
                     Abrir venda
                   </button>

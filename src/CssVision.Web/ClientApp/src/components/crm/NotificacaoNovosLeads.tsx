@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { UserPlus, X } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useAbrirLead } from "../../lib/painelLead";
 import { api } from "../../lib/api";
 import { useCrmEventos } from "../../lib/useCrmEventos";
 
@@ -40,7 +40,7 @@ function gravarCursor(chave: string, valor: string) {
  * fechado são avisados ao abrir.
  */
 export function NotificacaoNovosLeads({ usuarioId }: { usuarioId: string }) {
-  const navigate = useNavigate();
+  const abrirLead = useAbrirLead();
   const [novos, setNovos] = useState<NovoLead[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const cursorRef = useRef<string | null>(null);
@@ -106,7 +106,7 @@ export function NotificacaoNovosLeads({ usuarioId }: { usuarioId: string }) {
                   className="cursor-pointer text-[var(--brand)] hover:underline"
                   onClick={() => {
                     fechar(l.leadId);
-                    navigate(`/app/crm/leads/${l.leadId}`);
+                    abrirLead(l.leadId);
                   }}
                 >
                   Abrir lead

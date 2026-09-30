@@ -1,6 +1,6 @@
 import { ArrowRightLeft, List, Plus, Save, Trash2, X, Car } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
 import {
   TipoEtapaPipeline,
@@ -22,6 +22,7 @@ import { AdesaoCotacaoDialog } from "../../components/crm/AdesaoCotacaoDialog";
 import { AlterarResponsavelDialog } from "../../components/crm/AlterarResponsavelDialog";
 import { CartaoLead, classificarCartao } from "../../components/crm/CartaoLead";
 import { MultiSelect } from "../../components/MultiSelect";
+import { useAbrirLead } from "../../lib/painelLead";
 import { OPCOES_FILTRO_TIPO_INDICACAO } from "../../lib/opcoesLead";
 import { useAuth } from "../../context/AuthContext";
 import { useCrmEventos } from "../../lib/useCrmEventos";
@@ -125,10 +126,10 @@ function gravarJson(chave: string, valor: unknown) {
 }
 
 export function LeadsKanbanPage() {
-  const navigate = useNavigate();
   const { notificar } = useToast();
   const { temPapel, sessao } = useAuth();
   const podeGerir = temPapel("Admin", "GestorMaster", "GestorComercial");
+  const abrirLead = useAbrirLead();
   const chaveFiltros = `quadro-leads-filtros:${sessao?.id ?? ""}`;
   const chaveFiltrosSalvos = `quadro-leads-filtros-salvos:${sessao?.id ?? ""}`;
   const [filtrosIniciais] = useState(() => lerFiltros(chaveFiltros));
@@ -869,7 +870,7 @@ export function LeadsKanbanPage() {
                       podeGerir={podeGerir}
                       podeExcluir={podeExcluir}
                       podeVerOrigem={podeVerOrigem}
-                      onAbrir={() => navigate(`/app/crm/leads/${cartao.leadId}`)}
+                      onAbrir={() => abrirLead(cartao.leadId)}
                       onMover={() => setModalMobile(cartao)}
                       onTrocarResponsavel={() => setTrocandoResponsavel(cartao)}
                       onExcluir={() => setLeadExcluindo(cartao)}

@@ -20,6 +20,7 @@ import { ActivityForm, type ActivityFormValues } from "../../components/crm/Acti
 import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog";
 import { AlterarResponsavelDialog } from "../../components/crm/AlterarResponsavelDialog";
 import { Timeline } from "../../components/crm/Timeline";
+import { useAbrirLead, useFecharPainelLead } from "../../lib/painelLead";
 
 const ETAPA_VENDA_CONCLUIDA = "Venda concluída";
 
@@ -60,7 +61,17 @@ function paraFormValues(lead: LeadDetail): LeadFormValues {
 
 export function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
+  return id ? <LeadDetailConteudo key={id} leadId={id} /> : null;
+}
+
+/**
+ * Conteúdo do lead — na página própria (/app/crm/leads/:id) ou no painel lateral (PainelLead,
+ * `noPainel`): lá não há "Voltar", e excluir fecha o painel em vez de trocar de página.
+ */
+export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: string; noPainel?: boolean }) {
   const navigate = useNavigate();
+  const abrirLead = useAbrirLead();
+  const fecharPainel = useFecharPainelLead();
   const { notificar } = useToast();
 
   const [lead, setLead] = useState<LeadDetail | null>(null);
@@ -97,7 +108,14 @@ export function LeadDetailPage() {
   useEffect(() => {
     if (searchParams.get("outroVeiculo") !== "1") return;
     setModalVeiculos(true);
-    setSearchParams({}, { replace: true });
+    setSearchParams(
+      (atual) => {
+        const novo = new URLSearchParams(atual);
+        novo.delete("outroVeiculo");
+        return novo;
+      },
+      { replace: true }
+    );
   }, [searchParams, setSearchParams]);
 
   const carregar = useCallback(
@@ -251,7 +269,8 @@ export function LeadDetailPage() {
     try {
       await api.del(`/crm/leads/${lead.id}`);
       notificar("success", "Lead excluído.");
-      navigate("/app/crm/leads/kanban");
+      if (noPainel) fecharPainel();
+      else navigate("/app/crm/leads/kanban");
     } catch (e) {
       notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível excluir o lead.");
     } finally {
@@ -275,9 +294,11 @@ export function LeadDetailPage() {
 
   return (
     <div className="space-y-4">
-      <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
-        <ArrowLeft className="size-4" /> Voltar
-      </Button>
+      {!noPainel && (
+        <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
+          <ArrowLeft className="size-4" /> Voltar
+        </Button>
+      )}
 
       <Card className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -289,7 +310,16 @@ export function LeadDetailPage() {
             {lead.veiculoAdicionalDeLeadId && (
               <p className="mt-1 text-sm text-[var(--fg-muted)]">
                 Veículo adicional do cliente —{" "}
-                <Link to={`/app/crm/leads/${lead.veiculoAdicionalDeLeadId}`} className="font-medium text-[var(--brand)] hover:underline">
+                <Link
+                  to={`/app/crm/leads/${lead.veiculoAdicionalDeLeadId}`}
+                  onClick={(e) => {
+                    if (noPainel && lead.veiculoAdicionalDeLeadId) {
+                      e.preventDefault();
+                      abrirLead(lead.veiculoAdicionalDeLeadId);
+                    }
+                  }}
+                  className="font-medium text-[var(--brand)] hover:underline"
+                >
                   ver card original{lead.veiculoAdicionalDeLeadNome ? ` (${lead.veiculoAdicionalDeLeadNome})` : ""}
                 </Link>
               </p>
@@ -541,7 +571,10 @@ export function LeadDetailPage() {
         onConcluido={(resultado) => {
           setModalVeiculos(false);
           notificar("success", "Venda do outro veículo registrada — card novo em \"Venda concluída\".");
-          if (resultado?.novoLeadId) navigate(`/app/crm/leads/${resultado.novoLeadId}`);
+          if (resultado?.novoLeadId) {
+            if (noPainel) abrirLead(resultado.novoLeadId);
+            else navigate(`/app/crm/leads/${resultado.novoLeadId}`);
+          }
         }}
       />
 
