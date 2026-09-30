@@ -8,6 +8,7 @@ import { useAbrirLead } from "../../lib/painelLead";
 import { VisaoAtividade, type Activity, type PagedResult } from "../../lib/types";
 import { IconButton, useToast } from "../ui";
 import { tipoLabel } from "./ActivityForm";
+import { ControleNotificacoesPush } from "./NotificacoesPush";
 
 /** Avisado quando uma atividade muda (concluída, reagendada, criada): o sino e a agenda se atualizam na hora. */
 export const EVENTO_ATIVIDADES_ALTERADAS = "crm:atividades-alteradas";
@@ -174,6 +175,7 @@ export function NotificacoesAtividades() {
               )}
             </div>
           )}
+          <ControleNotificacoesPush />
           <Link
             to="/app/crm/agenda"
             onClick={() => setAberto(false)}

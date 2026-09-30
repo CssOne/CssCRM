@@ -34,6 +34,7 @@ import { LembretesAdesao } from "./crm/LembretesAdesao";
 import { NotificacaoNovosLeads } from "./crm/NotificacaoNovosLeads";
 import { NotificacoesAtividades } from "./crm/NotificacoesAtividades";
 import { PainelLead } from "./crm/PainelLead";
+import { ConviteNotificacoesPush } from "./crm/NotificacoesPush";
 
 const iconesPorChave: Record<string, typeof Gauge> = {
   gauge: Gauge,
@@ -217,6 +218,7 @@ export function Shell({ children }: { children: ReactNode }) {
         {!emPortal && <LembretesAdesao />}
         {!emPortal && <NotificacaoNovosLeads usuarioId={sessao.id} />}
         {!emPortal && <PainelLead />}
+        {!emPortal && <ConviteNotificacoesPush />}
       </div>
     </div>
   );
