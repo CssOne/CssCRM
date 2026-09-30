@@ -293,7 +293,7 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
   }
 
   return (
-    <div className="space-y-4">
+    <div className="@container space-y-4">
       {!noPainel && (
         <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
           <ArrowLeft className="size-4" /> Voltar
@@ -357,7 +357,7 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 border-t border-[var(--border)] pt-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid gap-3 border-t border-[var(--border)] pt-4 @md:grid-cols-2 @4xl:grid-cols-4">
           <InfoItem icone={Phone} label="Telefone" valor={formatarTelefone(lead.telefone)} />
           {lead.telefone2 && <InfoItem icone={Phone} label="Telefone 2" valor={formatarTelefone(lead.telefone2)} />}
           <InfoItem icone={Mail} label="E-mail" valor={lead.email || "-"} />
@@ -388,8 +388,8 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
         </div>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
+      <div className="grid gap-4 @3xl:grid-cols-3">
+        <div className="space-y-4 @3xl:col-span-2">
           <Card className="p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-[var(--fg)]">Oportunidades</h2>
@@ -440,7 +440,7 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
                       </div>
 
                       {temDadosVenda && (
-                        <div className="mt-3 grid gap-3 border-t border-[var(--border)] pt-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="mt-3 grid gap-3 border-t border-[var(--border)] pt-3 @md:grid-cols-2 @4xl:grid-cols-3">
                           {op.cpf && <InfoItem icone={IdCard} label="CPF" valor={formatarDocumento(op.cpf)} />}
                           {op.estado && <InfoItem icone={MapPin} label="Estado" valor={op.estado} />}
                           {op.ativoEm && <InfoItem icone={Calendar} label="Ativo em" valor={formatarData(op.ativoEm)} />}
