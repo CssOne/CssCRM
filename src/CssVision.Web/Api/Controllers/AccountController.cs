@@ -403,6 +403,11 @@ public class AccountController(
             menu.Add(new MenuItemDto("marketing", "Tráfego pago", "megaphone", "/app/marketing"));
         }
 
+        if (papeis.Contains(Roles.Admin))
+        {
+            menu.Add(new MenuItemDto("admin-backups", "Backups", "database", "/app/admin/backups"));
+        }
+
         return new SessionDto(usuario.Id, usuario.Email!, usuario.NomeCompleto, usuario.FotoUrl, papeis.ToList(), areaInicial, menu);
     }
 

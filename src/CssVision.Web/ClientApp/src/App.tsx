@@ -21,6 +21,7 @@ import { PortalClientesPage } from "./pages/portal/Clientes";
 import { PortalPropostasPage } from "./pages/portal/Propostas";
 import { ConfiguracoesPage } from "./pages/portal/Configuracoes";
 import { TrafegoPagoPage } from "./pages/marketing/TrafegoPago";
+import { BackupsPage } from "./pages/admin/Backups";
 
 function CarregandoTelaCheia() {
   return (
@@ -43,6 +44,8 @@ function RotaProtegida({ papeis, children }: { papeis?: string[]; children: Reac
 const PAPEIS_GESTAO = ["Admin", "GestorMaster", "GestorComercial"];
 const PAPEIS_ADMIN = ["Admin", "GestorMaster"];
 const PAPEIS_MARKETING = ["Admin", "Marketing"];
+/** Backups do banco: só administradores (o arquivo é a base inteira). */
+const PAPEIS_SO_ADMIN = ["Admin"];
 
 export default function App() {
   const { sessao, carregando } = useAuth();
@@ -99,6 +102,15 @@ export default function App() {
         element={
           <RotaProtegida papeis={PAPEIS_MARKETING}>
             <TrafegoPagoPage />
+          </RotaProtegida>
+        }
+      />
+
+      <Route
+        path="/app/admin/backups"
+        element={
+          <RotaProtegida papeis={PAPEIS_SO_ADMIN}>
+            <BackupsPage />
           </RotaProtegida>
         }
       />
