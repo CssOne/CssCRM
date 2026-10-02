@@ -110,6 +110,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<Services.Backup.IDumpBanco, Services.Backup.PgDumpBanco>();
         services.AddScoped<Services.Backup.IBackupService, Services.Backup.BackupService>();
         services.AddHostedService<Services.Backup.BackupDiarioBackgroundService>();
+        // Notificação push de lead novo (aparece no sistema mesmo com o CRM fechado).
+        services.AddScoped<IPushService, PushService>();
+        services.AddHostedService<PushNovosLeadsBackgroundService>();
         services.AddScoped<IOpportunityService, OpportunityService>();
         services.AddScoped<IPipelineService, PipelineService>();
         services.AddScoped<IActivityService, ActivityService>();

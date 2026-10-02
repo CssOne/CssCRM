@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { UserPlus, X } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useAbrirLead } from "../../lib/painelLead";
 import { api } from "../../lib/api";
 import { useCrmEventos } from "../../lib/useCrmEventos";
+import { ativarPush, pushAtivoNesteNavegador } from "../../lib/push";
 
 const SOM = "/sounds/novo-lead.mp3";
 
@@ -40,7 +41,7 @@ function gravarCursor(chave: string, valor: string) {
  * fechado são avisados ao abrir.
  */
 export function NotificacaoNovosLeads({ usuarioId }: { usuarioId: string }) {
-  const navigate = useNavigate();
+  const abrirLead = useAbrirLead();
   const [novos, setNovos] = useState<NovoLead[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const cursorRef = useRef<string | null>(null);
@@ -70,7 +71,9 @@ export function NotificacaoNovosLeads({ usuarioId }: { usuarioId: string }) {
           return [...r.leads.filter((l) => !ids.has(l.leadId)), ...atual].slice(0, 5);
         });
         tocar();
-        if ("Notification" in window && Notification.permission === "granted") {
+        // Com o push ativo o servidor já mostra a notificação do sistema (inclusive com o CRM
+        // fechado); sem ele, a própria tela avisa enquanto estiver aberta.
+        if (!pushAtivoNesteNavegador && "Notification" in window && Notification.permission === "granted") {
           new Notification(r.leads.length === 1 ? "Novo lead para você" : `${r.leads.length} novos leads para você`, {
             body: r.leads.map((l) => l.nome).join(", "),
             icon: "/logo-css.png",
@@ -106,7 +109,7 @@ export function NotificacaoNovosLeads({ usuarioId }: { usuarioId: string }) {
                   className="cursor-pointer text-[var(--brand)] hover:underline"
                   onClick={() => {
                     fechar(l.leadId);
-                    navigate(`/app/crm/leads/${l.leadId}`);
+                    abrirLead(l.leadId);
                   }}
                 >
                   Abrir lead
@@ -115,7 +118,7 @@ export function NotificacaoNovosLeads({ usuarioId }: { usuarioId: string }) {
                   <button
                     type="button"
                     className="cursor-pointer text-[var(--fg-muted)] hover:underline"
-                    onClick={() => Notification.requestPermission().then(() => setNovos((a) => [...a]))}
+                    onClick={() => ativarPush().then(() => setNovos((a) => [...a])).catch(() => {})}
                   >
                     Avisar também fora da aba
                   </button>

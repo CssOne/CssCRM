@@ -29,7 +29,9 @@ public enum VisaoAtividade
     Proximas = 3,
     Atrasadas = 4,
     Concluidas = 5,
-    Semana = 6
+    Semana = 6,
+    /// <summary>Todas as atividades entre DataReferencia e DataFim (dias em Brasília) — calendário da Agenda.</summary>
+    Periodo = 7
 }
 
 public record ActivityFilterRequest : PagedRequest
@@ -39,6 +41,8 @@ public record ActivityFilterRequest : PagedRequest
     public TipoAtividade? Tipo { get; init; }
     public Guid? LeadId { get; init; }
     public DateOnly? DataReferencia { get; init; }
+    /// <summary>Último dia (inclusive) da visão Periodo.</summary>
+    public DateOnly? DataFim { get; init; }
 }
 
 public record ActivityCreateRequest(

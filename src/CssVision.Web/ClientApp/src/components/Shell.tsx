@@ -1,5 +1,4 @@
 import {
-  Bell,
   Briefcase,
   CalendarDays,
   CheckSquare,
@@ -28,13 +27,14 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { api } from "../lib/api";
-import { VisaoAtividade, type PagedResult } from "../lib/types";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { Avatar, IconButton, useToast } from "./ui";
 import { LembretesAdesao } from "./crm/LembretesAdesao";
 import { NotificacaoNovosLeads } from "./crm/NotificacaoNovosLeads";
+import { NotificacoesAtividades } from "./crm/NotificacoesAtividades";
+import { PainelLead } from "./crm/PainelLead";
+import { ConviteNotificacoesPush } from "./crm/NotificacoesPush";
 
 const iconesPorChave: Record<string, typeof Gauge> = {
   gauge: Gauge,
@@ -92,7 +92,6 @@ export function Shell({ children }: { children: ReactNode }) {
   const [menuAberto, setMenuAberto] = useState(false);
   const [colapsado, setColapsado] = useState(() => localStorage.getItem("crm-sidebar-colapsado") === "1");
   const [busca, setBusca] = useState("");
-  const [atrasadas, setAtrasadas] = useState(0);
 
   useEffect(() => {
     localStorage.setItem("crm-sidebar-colapsado", colapsado ? "1" : "0");
@@ -101,15 +100,6 @@ export function Shell({ children }: { children: ReactNode }) {
   const emPortal = location.pathname.startsWith("/app/portal");
   const itensNav = emPortal ? PORTAL_NAV : sessao?.menu.map((m) => ({ ...m, icone: iconesPorChave[m.icone] ?? Gauge, divisor: false }));
 
-  useEffect(() => {
-    if (!sessao) return;
-    const controller = new AbortController();
-    api
-      .get<PagedResult<unknown>>(`/crm/activities?visao=${VisaoAtividade.Atrasadas}&tamanhoPagina=1`, controller.signal)
-      .then((res) => setAtrasadas(res.totalRegistros))
-      .catch(() => {});
-    return () => controller.abort();
-  }, [sessao, location.pathname]);
 
   async function handleLogout() {
     await logout();
@@ -214,16 +204,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="flex items-center gap-1.5">
-            <div className="relative">
-              <IconButton label="Atividades atrasadas" onClick={() => navigate("/app/crm/activities")}>
-                <Bell className="size-4" />
-              </IconButton>
-              {atrasadas > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-[var(--danger)] text-[10px] font-bold text-white">
-                  {atrasadas > 9 ? "9+" : atrasadas}
-                </span>
-              )}
-            </div>
+            <NotificacoesAtividades />
             <IconButton label="Mensagens (em breve)" onClick={() => notificar("info", "Chat interno chegando em breve.")}>
               <MessageCircle className="size-4" />
             </IconButton>
@@ -236,6 +217,8 @@ export function Shell({ children }: { children: ReactNode }) {
         <main className="min-w-0 flex-1 p-4 lg:p-6">{children}</main>
         {!emPortal && <LembretesAdesao />}
         {!emPortal && <NotificacaoNovosLeads usuarioId={sessao.id} />}
+        {!emPortal && <PainelLead />}
+        {!emPortal && <ConviteNotificacoesPush />}
       </div>
     </div>
   );

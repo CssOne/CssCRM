@@ -80,4 +80,32 @@ public class ActivityServiceTests
         await Assert.ThrowsAsync<CrmForbiddenException>(() =>
             service2.CriarAsync(new ActivityCreateRequest(lead.Id, null, null, TipoAtividade.Ligacao, "Assunto", null, DateTimeOffset.UtcNow, null), CancellationToken.None));
     }
+
+    [Fact]
+    public async Task VisaoPeriodo_UsaOsDiasDeBrasilia_InclusiveAtividadeDasDezDaNoite()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
+        var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
+        db.CrmLeads.Add(lead);
+        await db.SaveChangesAsync();
+        var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
+        var service = new ActivityService(db, currentUser.Object, new EquipeComercialService(db, currentUser.Object), new NoOpAuditSink());
+        var brasilia = TimeSpan.FromHours(-3);
+        async Task Agendar(string assunto, DateTimeOffset quando) =>
+            await service.CriarAsync(new ActivityCreateRequest(lead.Id, null, vendedor.Id, TipoAtividade.Ligacao, assunto, null, quando, null), CancellationToken.None);
+
+        await Agendar("antes", new DateTimeOffset(2026, 9, 30, 23, 0, 0, brasilia));   // 30/09, fora
+        await Agendar("primeiro dia", new DateTimeOffset(2026, 10, 1, 8, 0, 0, brasilia));
+        await Agendar("ultimo dia 22h", new DateTimeOffset(2026, 10, 31, 22, 0, 0, brasilia)); // 01/11 01:00 UTC
+        await Agendar("depois", new DateTimeOffset(2026, 11, 1, 0, 30, 0, brasilia));
+
+        var outubro = await service.ListarAsync(new ActivityFilterRequest
+        {
+            Visao = VisaoAtividade.Periodo, DataReferencia = new DateOnly(2026, 10, 1), DataFim = new DateOnly(2026, 10, 31), TamanhoPagina = 100,
+        }, CancellationToken.None);
+
+        Assert.Equal(["primeiro dia", "ultimo dia 22h"], outubro.Itens.Select(a => a.Assunto).OrderBy(x => x));
+    }
 }

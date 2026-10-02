@@ -81,7 +81,14 @@ export function CartaoLead({
       <div className="flex items-start justify-between gap-2">
         <Link
           to={`/app/crm/leads/${cartao.leadId}`}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            // Clique normal abre no painel lateral; Ctrl/⌘+clique continua abrindo numa aba nova.
+            if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
+              e.preventDefault();
+              onAbrir();
+            }
+          }}
           className="line-clamp-2 font-semibold leading-snug text-[var(--fg)] hover:text-[var(--brand)]"
         >
           {cartao.nomeOuRazaoSocial}
