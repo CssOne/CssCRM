@@ -1,9 +1,10 @@
+import { usePaginacao } from "../../lib/usePaginacao";
 import { Handshake, Mail, Phone, Search, ShoppingCart, Target, Wallet } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarMoeda, formatarPercentual, formatarTelefone } from "../../lib/format";
 import type { ConsultorDesempenho } from "../../lib/types";
-import { Badge, Card, EmptyState, ErrorState, Input, Skeleton } from "../../components/ui";
+import { Badge, Card, EmptyState, ErrorState, Input, Skeleton, Pagination } from "../../components/ui";
 
 function mesAtualIso(): string {
   const hoje = new Date();
@@ -59,6 +60,8 @@ export function ConsultoresPage() {
     if (!termo) return consultores;
     return consultores.filter((c) => c.nome.toLowerCase().includes(termo) || c.email.toLowerCase().includes(termo));
   }, [consultores, busca]);
+
+  const paginaConsultores = usePaginacao(filtrados, 9);
 
   const totais = useMemo(() => {
     const base = consultores ?? [];
@@ -127,8 +130,9 @@ export function ConsultoresPage() {
       ) : filtrados.length === 0 ? (
         <EmptyState title="Nenhum consultor encontrado" description="Ajuste a busca ou cadastre novos consultores na página Usuários." />
       ) : (
+        <>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtrados.map((c) => (
+          {paginaConsultores.itensDaPagina.map((c) => (
             <Card key={c.id} className="p-5">
               <div className="flex items-start gap-3">
                 <Avatar nome={c.nome} />
@@ -205,6 +209,8 @@ export function ConsultoresPage() {
             </Card>
           ))}
         </div>
+        <Pagination pagina={paginaConsultores.pagina} totalPaginas={paginaConsultores.totalPaginas} onChange={paginaConsultores.setPagina} />
+        </>
       )}
     </div>
   );
