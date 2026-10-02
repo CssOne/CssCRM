@@ -1,10 +1,11 @@
+import { usePaginacao } from "../../lib/usePaginacao";
 import { Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { RegionalGoal, SalesGoal, VendedorResumo } from "../../lib/types";
 import { useAuth } from "../../context/AuthContext";
-import { Badge, Button, Card, EmptyState, ErrorState, Input, Label, Modal, MoneyInput, Select, Skeleton, useToast } from "../../components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Input, Label, Modal, MoneyInput, Select, Skeleton, useToast, Pagination } from "../../components/ui";
 
 function mesAtualIso(): string {
   const hoje = new Date();
@@ -213,6 +214,10 @@ export function GoalsPage() {
     }
   }
 
+  // Paginação: os cartões de meta crescem com o número de consultores/regionais.
+  const paginaMetas = usePaginacao(metas, 10);
+  const paginaRegionais = usePaginacao(metasRegionais, 6);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -241,8 +246,9 @@ export function GoalsPage() {
       ) : !metas || metas.length === 0 ? (
         <EmptyState title="Nenhum consultor encontrado" description="Cadastre consultores para acompanhar a meta de vendas de cada um." />
       ) : (
+        <>
         <div className="grid gap-3 lg:grid-cols-2">
-          {metas.map((meta) => (
+          {paginaMetas.itensDaPagina.map((meta) => (
             <CartaoMeta
               key={meta.vendedorId}
               nome={meta.vendedorNome}
@@ -256,6 +262,8 @@ export function GoalsPage() {
             />
           ))}
         </div>
+        <Pagination pagina={paginaMetas.pagina} totalPaginas={paginaMetas.totalPaginas} onChange={paginaMetas.setPagina} />
+        </>
       )}
 
       {ehAdministrador && (
@@ -278,8 +286,9 @@ export function GoalsPage() {
           ) : !metasRegionais || metasRegionais.length === 0 ? (
             <EmptyState title="Nenhuma regional encontrada" description="Cadastre regionais para definir uma meta geral por mês." />
           ) : (
+            <>
             <div className="grid gap-3 lg:grid-cols-2">
-              {metasRegionais.map((meta) => (
+              {paginaRegionais.itensDaPagina.map((meta) => (
                 <CartaoMeta
                   key={meta.regionalId}
                   nome={meta.regionalNome}
@@ -293,6 +302,8 @@ export function GoalsPage() {
                 />
               ))}
             </div>
+            <Pagination pagina={paginaRegionais.pagina} totalPaginas={paginaRegionais.totalPaginas} onChange={paginaRegionais.setPagina} />
+            </>
           )}
         </div>
       )}

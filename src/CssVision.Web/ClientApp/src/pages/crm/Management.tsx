@@ -1,9 +1,10 @@
+import { usePaginacao } from "../../lib/usePaginacao";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, isAbortError } from "../../lib/api";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { GestaoComercialResumo, RedistribuicaoHistorico, VendedorResumo } from "../../lib/types";
-import { Badge, Card, ErrorState, Skeleton, useToast } from "../../components/ui";
+import { Badge, Card, ErrorState, Skeleton, useToast, Pagination } from "../../components/ui";
 
 function LimiteInput({
   vendedor,
@@ -155,6 +156,13 @@ export function ManagementPage() {
     return () => controller.abort();
   }, [carregar, recarregar]);
 
+  // Paginação das listas (hooks antes dos retornos de carregando/erro).
+  const paginaContato = usePaginacao(resumo?.primeiroContatoPorVendedor, 8);
+  const paginaCarteira = usePaginacao(vendedores, 9);
+  const paginaRanking = usePaginacao(resumo?.ranking, 10);
+  const paginaParadas = usePaginacao(resumo?.oportunidadesSemMovimentacao, 8);
+  const paginaHistorico = usePaginacao(historico, 10);
+
   if (carregando) {
     return (
       <div className="space-y-4">
@@ -194,7 +202,7 @@ export function ManagementPage() {
               </p>
               {(resumo.primeiroContatoPorVendedor?.length ?? 0) > 0 && (
                 <ul className="mt-3 space-y-1.5 border-t border-[var(--border)] pt-3">
-                  {resumo.primeiroContatoPorVendedor!.map((v) => (
+                  {paginaContato.itensDaPagina.map((v) => (
                     <li key={v.vendedorId} className="flex items-center justify-between gap-2 text-xs">
                       <span className="truncate text-[var(--fg)]" title={v.vendedorNome}>
                         {v.vendedorNome}
@@ -206,13 +214,14 @@ export function ManagementPage() {
                   ))}
                 </ul>
               )}
+              <Pagination pagina={paginaContato.pagina} totalPaginas={paginaContato.totalPaginas} onChange={paginaContato.setPagina} />
             </>
           )}
         </Card>
         <Card className="p-4 lg:col-span-2">
           <h2 className="mb-2 text-sm font-semibold text-[var(--fg)]">Carteira por vendedor</h2>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {vendedores.map((v) => (
+            {paginaCarteira.itensDaPagina.map((v) => (
               <div key={v.id} className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface-hover)]/60 p-3 text-sm">
                 <div>
                   <p className="truncate font-semibold text-[var(--fg)]" title={v.nome}>{v.nome}</p>
@@ -232,6 +241,7 @@ export function ManagementPage() {
               </div>
             ))}
           </div>
+          <Pagination pagina={paginaCarteira.pagina} totalPaginas={paginaCarteira.totalPaginas} onChange={paginaCarteira.setPagina} />
         </Card>
       </div>
 
@@ -252,7 +262,7 @@ export function ManagementPage() {
                 </tr>
               </thead>
               <tbody>
-                {resumo.ranking.map((r) => (
+                {paginaRanking.itensDaPagina.map((r) => (
                   <tr key={r.vendedorId} className="border-b border-[var(--border)] last:border-0">
                     <td className="py-2 text-[var(--fg-muted)]">{r.posicao}</td>
                     <td className="py-2 text-[var(--fg)]">{r.vendedorNome}</td>
@@ -264,6 +274,7 @@ export function ManagementPage() {
               </tbody>
             </table>
           )}
+          <Pagination pagina={paginaRanking.pagina} totalPaginas={paginaRanking.totalPaginas} onChange={paginaRanking.setPagina} />
         </Card>
 
         <Card className="p-4">
@@ -291,7 +302,7 @@ export function ManagementPage() {
           <p className="text-sm text-[var(--fg-muted)]">Nenhuma oportunidade estagnada. 🎉</p>
         ) : (
           <ul className="space-y-2">
-            {resumo.oportunidadesSemMovimentacao.map((o) => (
+            {paginaParadas.itensDaPagina.map((o) => (
               <li key={o.opportunityId} className="flex items-center justify-between rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm">
                 <div>
                   <p className="font-medium text-[var(--fg)]">{o.leadNome}</p>
@@ -304,6 +315,7 @@ export function ManagementPage() {
             ))}
           </ul>
         )}
+        <Pagination pagina={paginaParadas.pagina} totalPaginas={paginaParadas.totalPaginas} onChange={paginaParadas.setPagina} />
       </Card>
 
       <Card className="overflow-x-auto p-4">
@@ -322,7 +334,7 @@ export function ManagementPage() {
               </tr>
             </thead>
             <tbody>
-              {historico.map((h, i) => (
+              {paginaHistorico.itensDaPagina.map((h, i) => (
                 <tr key={i} className="border-b border-[var(--border)] last:border-0">
                   <td className="py-2">
                     <Link to={`/app/crm/leads/${h.leadId}`} className="text-[var(--fg)] hover:text-[var(--brand)]">
@@ -338,6 +350,7 @@ export function ManagementPage() {
             </tbody>
           </table>
         )}
+        <Pagination pagina={paginaHistorico.pagina} totalPaginas={paginaHistorico.totalPaginas} onChange={paginaHistorico.setPagina} />
       </Card>
     </div>
   );
