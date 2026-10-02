@@ -50,9 +50,9 @@ variable "db_username" {
 }
 
 variable "db_instance_class" {
-  description = "Classe da instância RDS."
+  description = "Classe da instância RDS. db.t4g.small (2 GB): a db.t3.micro (1 GB) ficava com ~150 MB livres, pouco para o cache do Postgres com vários acessos simultâneos."
   type        = string
-  default     = "db.t3.micro"
+  default     = "db.t4g.small"
 }
 
 variable "db_allocated_storage_gb" {
