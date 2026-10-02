@@ -17,9 +17,12 @@ public sealed class PublicLeadIntakeService(
     ILogger<PublicLeadIntakeService> logger,
     ICrmEventHub? eventos = null) : IPublicLeadIntakeService
 {
-    /// <summary>form_ids do formulário de caminhão (AGV Truck) — não passam pelo rodízio, vão direto pra Samys.</summary>
-    private static readonly HashSet<string> FormsCaminhaoSamys = ["1148948400894957", "2294287594679432", "1101990252362830"];
-    private const string EmailConsultoraCaminhao = "samys.alexandre@gmail.com";
+    /// <summary>
+    /// form_ids do formulário de caminhão: são leads de AGV TRUCK mesmo que o formulário não mande o
+    /// "O que?" — entram no rodízio de quem recebe AGV TRUCK (Samys e Caroline Aguiar).
+    /// </summary>
+    private static readonly HashSet<string> FormsCaminhao = ["1148948400894957", "2294287594679432", "1101990252362830"];
+    private const string AgvTruck = "AGV TRUCK";
 
     public async Task<PublicLeadResultDto> CriarAsync(PublicLeadCreateRequest request, CancellationToken ct)
     {
@@ -291,26 +294,15 @@ public sealed class PublicLeadIntakeService(
     }
 
     /// <summary>
-    /// Leads dos formulários de caminhão vão direto pra Samys, sem passar pelo rodízio normal —
-    /// só cai no rodízio se a conta dela não existir ou estiver inativa (não deixa o lead sem
-    /// responsável só porque a exceção não pôde ser aplicada).
+    /// Leads dos formulários de caminhão vão para o rodízio de AGV TRUCK (quem recebe caminhão divide,
+    /// pela regra normal: recebe quem pegou menos no mês, respeitando os limites). Antes iam fixos
+    /// para a Samys; desde 02/10/2026 a Caroline Aguiar também recebe.
     /// </summary>
     private async Task<Guid?> ResolverResponsavelAsync(string? projeto, string? oQue, CancellationToken ct)
     {
         var formId = projeto?.StartsWith("meta-instant-") == true ? projeto["meta-instant-".Length..] : null;
-        if (formId is not null && FormsCaminhaoSamys.Contains(formId))
-        {
-            var emailNormalizado = EmailConsultoraCaminhao.ToUpperInvariant();
-            var consultoraId = await db.Users.AsNoTracking()
-                .Where(u => u.NormalizedEmail == emailNormalizado && u.Ativo)
-                .Select(u => (Guid?)u.Id)
-                .FirstOrDefaultAsync(ct);
-
-            if (consultoraId is not null) return consultoraId;
-            logger.LogWarning("Lead de caminhão (form {FormId}) não pôde ser atribuído à consultora fixa — caindo no rodízio normal", formId);
-        }
-
-        return await assignment.ProximoResponsavelAsync(oQue, ct);
+        var ehCaminhao = formId is not null && FormsCaminhao.Contains(formId);
+        return await assignment.ProximoResponsavelAsync(ehCaminhao ? AgvTruck : oQue, ct);
     }
 
     private static string? Cortar(string? texto, int maximo)
