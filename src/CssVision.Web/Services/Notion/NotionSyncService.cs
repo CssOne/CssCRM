@@ -28,7 +28,8 @@ public sealed class NotionSyncService(
     private static readonly (string DataSourceId, string RegionalName)[] DataSources =
     [
         ("0f91c248-497e-4369-aad9-1d4266a49db4", "MG132"),
-        ("1a163799-99a8-81e2-82be-000bb2817da0", "MG134"),
+        // MG134 (1a163799-99a8-81e2-82be-000bb2817da0) saiu da sincronização a pedido (04/10/2026): os
+        // leads dela foram arquivados (migration ArquivaLeadsMg134) e novos cards não entram mais.
         ("31763799-99a8-8118-b573-000b24781bfe", "MG134 Consultores Externos"),
         ("31763799-99a8-81b2-b83b-000bfca82506", "CSS Growth Sales"),
     ];
@@ -36,7 +37,10 @@ public sealed class NotionSyncService(
     /// <summary>A partir desta data (Data de chegada do card no Notion), a sincronização periódica
     /// passa a importar/atualizar leads — cards mais antigos deixam de entrar no CRM mesmo que
     /// alguém ainda os edite no Notion.</summary>
-    private static readonly DateOnly DataMinimaImportacao = new(2026, 1, 1);
+    private static readonly DateOnly DataMinimaImportacao = new(2025, 1, 1);
+
+    /// <summary>Fim (exclusivo) da importação única de 2025: de 2026 em diante os cards já entravam.</summary>
+    private static readonly DateOnly FimImportacao2025 = new(2026, 1, 1);
 
     /// <summary>Início da reimportação dos cards dos consultores ativos (antes disso as bases não têm cards).</summary>
     private static readonly DateOnly InicioHistoricoNotion = new(2018, 1, 1);
@@ -59,7 +63,7 @@ public sealed class NotionSyncService(
         var relatorios = new List<string>();
         // Primeiro o incremental de todas as bases (cards novos/editados não esperam as passadas
         // longas); depois, a reimportação dos consultores ativos e a importação das vendas pendentes.
-        foreach (var passada in new[] { Passada.Normal, Passada.ReimportacaoAtivos, Passada.ImportacaoVendas, Passada.CorrecaoDataChegada })
+        foreach (var passada in new[] { Passada.Normal, Passada.ReimportacaoAtivos, Passada.ImportacaoVendas, Passada.Importacao2025, Passada.CorrecaoDataChegada })
         {
             foreach (var spec in DataSources)
             {
@@ -80,7 +84,7 @@ public sealed class NotionSyncService(
         return string.Join(" | ", relatorios);
     }
 
-    private enum Passada { Normal, ReimportacaoAtivos, ImportacaoVendas, CorrecaoDataChegada }
+    private enum Passada { Normal, ReimportacaoAtivos, ImportacaoVendas, Importacao2025, CorrecaoDataChegada }
 
     /// <param name="passada">
     /// Normal: realinhamento (se pendente) ou incremental. ReimportacaoAtivos / ImportacaoVendas: só
@@ -108,12 +112,17 @@ public sealed class NotionSyncService(
         // CONCLUIDA", de qualquer vendedor e data — cada um vira (ou atualiza) a sua oportunidade.
         var importarVendas = passada == Passada.ImportacaoVendas && !realinhar
             && checkpoint!.ReimportacaoAtivosConcluidaEm is not null && checkpoint.ImportacaoVendasConcluidaEm is null;
-        if (passada != Passada.Normal && !reimportarAtivos && !importarVendas) return null;
+        // Importação de 2025 (uma vez por base, depois do realinhamento): cards criados de 01/01/2025
+        // até o fim do ano, que a data mínima anterior (2026) deixava de fora.
+        var importar2025 = passada == Passada.Importacao2025 && !realinhar && checkpoint!.Importacao2025ConcluidaEm is null;
+        if (passada != Passada.Normal && !reimportarAtivos && !importarVendas && !importar2025) return null;
         await CarregarUsuariosAtivosAsync(ct);
         var paginas = realinhar
             ? PaginasCriadasDesdeAsync(notion, dataSourceId, DataMinimaImportacao, ct)
             : importarVendas
                 ? PaginasDeVendaAsync(notion, dataSourceId, ct)
+            : importar2025
+                ? PaginasCriadasDesdeAsync(notion, dataSourceId, DataMinimaImportacao, ct, FimImportacao2025)
             : reimportarAtivos
                 ? PaginasCriadasDesdeAsync(notion, dataSourceId, InicioHistoricoNotion, ct)
                 // Sem filtro de data no Notion: cards antigos de consultores ativos também entram (o
@@ -213,6 +222,7 @@ public sealed class NotionSyncService(
         if (realinhar) checkpoint.RealinhamentoConcluidoEm = inicioDaExecucao;
         if (reimportarAtivos) checkpoint.ReimportacaoAtivosConcluidaEm = inicioDaExecucao;
         if (importarVendas) checkpoint.ImportacaoVendasConcluidaEm = inicioDaExecucao;
+        if (importar2025) checkpoint.Importacao2025ConcluidaEm = inicioDaExecucao;
         await db.SaveChangesAsync(ct);
 
         if (_mudancasNoQuadro > 0)
@@ -221,7 +231,7 @@ public sealed class NotionSyncService(
             _mudancasNoQuadro = 0;
         }
 
-        var modo = realinhar ? " (realinhamento)" : reimportarAtivos ? " (reimportação dos consultores ativos)" : importarVendas ? " (importação das vendas)" : "";
+        var modo = realinhar ? " (realinhamento)" : reimportarAtivos ? " (reimportação dos consultores ativos)" : importarVendas ? " (importação das vendas)" : importar2025 ? " (importação de 2025)" : "";
         return $"{regionalNome}: {processados} processados, {criados} criados, {atualizados} atualizados, {devolvidos} devolvidos ao vendedor do card, {erros} erros, {semNome} sem nome, {ignorados} ignorados{modo}";
     }
 
@@ -730,9 +740,9 @@ public sealed class NotionSyncService(
 
     /// <summary>Todos os cards criados desde <paramref name="desde"/>, em fatias mensais (cada consulta do Notion tem teto de ~10 mil linhas).</summary>
     private static async IAsyncEnumerable<JsonElement> PaginasCriadasDesdeAsync(
-        NotionClient notion, string dataSourceId, DateOnly desde, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        NotionClient notion, string dataSourceId, DateOnly desde, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct, DateOnly? ate = null)
     {
-        var amanha = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
+        var amanha = ate ?? DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
         for (var inicio = desde; inicio < amanha; inicio = inicio.AddMonths(1))
         {
             var fim = inicio.AddMonths(1) < amanha ? inicio.AddMonths(1) : amanha;
