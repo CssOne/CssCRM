@@ -106,7 +106,7 @@ export function ConviteNotificacoesPush() {
   }, [sessao?.id]);
 
   // Só para quem recebe leads (comercial) e ainda não ativou.
-  if (!sessao || dispensado || estado !== "inativo" || !temPapel("Comercial", "GestorComercial", "GestorMaster", "Admin")) return null;
+  if (!sessao || dispensado || estado !== "inativo" || !temPapel("Comercial", "GestorComercial", "GestorMaster", "SupervisorComercial", "Admin")) return null;
 
   function dispensar() {
     try {

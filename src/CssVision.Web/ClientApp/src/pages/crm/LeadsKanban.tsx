@@ -128,15 +128,15 @@ function gravarJson(chave: string, valor: unknown) {
 export function LeadsKanbanPage() {
   const { notificar } = useToast();
   const { temPapel, sessao } = useAuth();
-  const podeGerir = temPapel("Admin", "GestorMaster", "GestorComercial");
+  const podeGerir = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
   const abrirLead = useAbrirLead();
   const chaveFiltros = `quadro-leads-filtros:${sessao?.id ?? ""}`;
   const chaveFiltrosSalvos = `quadro-leads-filtros-salvos:${sessao?.id ?? ""}`;
   const [filtrosIniciais] = useState(() => lerFiltros(chaveFiltros));
   // Origem (filtro e rodapé do cartão) só para administradores — o servidor também não a envia aos demais.
-  const podeVerOrigem = temPapel("Admin", "GestorMaster");
+  const podeVerOrigem = temPapel("Admin", "GestorMaster", "SupervisorComercial");
   // Excluir lead é só para Admin/GestorMaster (ver LeadService.ExcluirAsync no back-end).
-  const podeExcluir = temPapel("Admin", "GestorMaster");
+  const podeExcluir = temPapel("Admin", "GestorMaster", "SupervisorComercial");
 
   const [board, setBoard] = useState<LeadKanbanBoard | null>(null);
   const [carregando, setCarregando] = useState(true);

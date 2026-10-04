@@ -42,11 +42,11 @@ function RotaProtegida({ papeis, children }: { papeis?: string[]; children: Reac
   return <Shell>{children}</Shell>;
 }
 
-const PAPEIS_GESTAO = ["Admin", "GestorMaster", "GestorComercial"];
-const PAPEIS_ADMIN = ["Admin", "GestorMaster"];
+const PAPEIS_GESTAO = ["Admin", "GestorMaster", "SupervisorComercial", "GestorComercial"];
+const PAPEIS_ADMIN = ["Admin", "GestorMaster", "SupervisorComercial"];
 const PAPEIS_MARKETING = ["Admin", "Marketing"];
 /** Backups do banco: só administradores (o arquivo é a base inteira). */
-const PAPEIS_SO_ADMIN = ["Admin"];
+const PAPEIS_SO_ADMIN = ["Admin", "SupervisorComercial"];
 
 export default function App() {
   const { sessao, carregando } = useAuth();

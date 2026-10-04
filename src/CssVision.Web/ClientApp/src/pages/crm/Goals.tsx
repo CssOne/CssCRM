@@ -69,8 +69,8 @@ function CartaoMeta({
 
 export function GoalsPage() {
   const { temPapel } = useAuth();
-  const podeGerir = temPapel("Admin", "GestorMaster", "GestorComercial");
-  const ehAdministrador = temPapel("Admin", "GestorMaster");
+  const podeGerir = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
+  const ehAdministrador = temPapel("Admin", "GestorMaster", "SupervisorComercial");
   const { notificar } = useToast();
 
   const [mesReferencia, setMesReferencia] = useState(mesAtualIso());

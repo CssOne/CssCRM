@@ -24,9 +24,9 @@ import { AssignModal } from "../../components/crm/AssignModal";
 
 export function LeadsPage() {
   const { temPapel } = useAuth();
-  const podeGerir = temPapel("Admin", "GestorMaster", "GestorComercial");
+  const podeGerir = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
   // Filtro por Origem só para administradores (o campo não é enviado aos demais).
-  const podeVerOrigem = temPapel("Admin", "GestorMaster");
+  const podeVerOrigem = temPapel("Admin", "GestorMaster", "SupervisorComercial");
   const { notificar } = useToast();
 
   const [busca, setBusca] = useState("");

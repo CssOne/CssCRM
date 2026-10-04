@@ -59,7 +59,8 @@ const iconesPorChave: Record<string, typeof Gauge> = {
 export const PAPEL_LABEL: Record<string, string> = {
   Admin: "Administrador",
   GestorMaster: "Gestor master",
-  GestorComercial: "Gestor comercial",
+  GestorComercial: "Gestor regional",
+  SupervisorComercial: "Supervisor comercial",
   Comercial: "Consultor",
   Marketing: "Marketing",
 };
@@ -218,7 +219,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </header>
 
         <main className="min-w-0 flex-1 p-4 lg:p-6">
-          {!emPortal && temPapel("Admin", "GestorMaster", "GestorComercial") && <AlertaDistribuicaoLimites />}
+          {!emPortal && temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial") && <AlertaDistribuicaoLimites />}
           {children}
         </main>
         {!emPortal && <LembretesAdesao />}

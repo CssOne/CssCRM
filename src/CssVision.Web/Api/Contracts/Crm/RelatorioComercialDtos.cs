@@ -12,7 +12,8 @@ public record RelatorioComercialDto(
     IReadOnlyList<RelatorioEstadoDto> PorEstado,
     IReadOnlyList<RelatorioFaixaFipeDto> FaixasFipe,
     IReadOnlyList<RelatorioProdutoDto> PorProduto,
-    IReadOnlyList<RelatorioMarketingMesDto> MarketingNotion);
+    IReadOnlyList<RelatorioMarketingMesDto> MarketingNotion,
+    IReadOnlyList<RelatorioEtapaDto> PorEtapa);
 
 public record RelatorioTotaisDto(
     int Leads,
@@ -49,6 +50,9 @@ public record RelatorioVendedorDto(Guid? VendedorId, string Vendedor, int Leads,
 public record RelatorioEstadoDto(string Estado, int Leads, int Vendas);
 
 public record RelatorioFaixaFipeDto(string Faixa, int Vendas);
+
+/// <summary>Leads do período por etapa atual do quadro de leads (EtapaId nulo = "Sem etapa").</summary>
+public record RelatorioEtapaDto(Guid? EtapaId, string Etapa, int Leads);
 
 public record RelatorioProdutoDto(string Produto, int Leads, int Vendas, decimal Adesao);
 

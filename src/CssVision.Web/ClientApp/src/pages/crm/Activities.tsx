@@ -39,7 +39,7 @@ function paraFormValues(a: Activity): ActivityFormValues {
 export function ActivitiesPage() {
   const { notificar } = useToast();
   const { temPapel } = useAuth();
-  const podeGerir = temPapel("Admin", "GestorMaster", "GestorComercial");
+  const podeGerir = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
 
   const [visao, setVisao] = useState<VisaoAtividade>(VisaoAtividade.Minhas);
   const [tipo, setTipo] = useState("");

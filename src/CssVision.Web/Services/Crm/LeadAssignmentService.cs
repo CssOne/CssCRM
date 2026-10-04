@@ -21,9 +21,11 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
     }
 
     /// <summary>Meia-noite de hoje no horário de Brasília (UTC-3, sem horário de verão), em UTC.</summary>
-    public static DateTimeOffset InicioDoDia()
+    public static DateTimeOffset InicioDoDia() => InicioDoDia(DateTimeOffset.UtcNow);
+
+    public static DateTimeOffset InicioDoDia(DateTimeOffset agora)
     {
-        var hojeBrasilia = DateTime.UtcNow.AddHours(-3).Date;
+        var hojeBrasilia = agora.UtcDateTime.AddHours(-3).Date;
         return new DateTimeOffset(hojeBrasilia, TimeSpan.Zero).AddHours(3);
     }
 
@@ -39,10 +41,14 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
             : null;
     }
 
-    public async Task<Guid?> ProximoResponsavelAsync(string? oQue, CancellationToken ct) =>
-        await ProximoAsync(oQue, await ContinuarAteAsync(ct) is not null, ct);
+    public async Task<Guid?> ProximoResponsavelAsync(string? oQue, CancellationToken ct)
+    {
+        // "Continuar distribuindo" do gestor vale para os limites e para o dia/horário de recebimento.
+        var continuar = await ContinuarAteAsync(ct) is not null;
+        return await ProximoAsync(oQue, continuar, continuar, ct);
+    }
 
-    private async Task<Guid?> ProximoAsync(string? oQue, bool ignorarLimites, CancellationToken ct)
+    private async Task<Guid?> ProximoAsync(string? oQue, bool ignorarLimites, bool ignorarHorario, CancellationToken ct)
     {
         var todos = await db.UserRoles
             .Join(db.Roles.Where(r => r.Name == Roles.Comercial), ur => ur.RoleId, r => r.Id, (ur, _) => ur.UserId)
@@ -55,7 +61,7 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
         var agora = Agora;
         var aptos = todos
             // Fora do dia/horário que o gestor definiu para o consultor: não entra no rodízio agora.
-            .Where(v => JanelaRecebimentoLeads.Permite(v.HorarioInicioLeads, v.HorarioFimLeads, v.DiasSemanaLeads, agora))
+            .Where(v => ignorarHorario || JanelaRecebimentoLeads.Permite(v.HorarioInicioLeads, v.HorarioFimLeads, v.DiasSemanaLeads, agora))
             .Where(v => FiltroOQue.Aceita(v.RecebeSomenteOQue, oQue))
             .Select(v => (v.Id, v.NomeCompleto, v.LimiteMensalLeads, v.LimiteDiarioLeads, Especialista: v.RecebeSomenteOQue is not null))
             .ToList();
@@ -100,9 +106,10 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
             .Select(u => new { u.Ativo, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads })
             .FirstOrDefaultAsync(ct);
         if (usuario is null || !usuario.Ativo) return false;
-        if (!JanelaRecebimentoLeads.Permite(usuario.HorarioInicioLeads, usuario.HorarioFimLeads, usuario.DiasSemanaLeads, Agora)) return false;
+        var continuar = await ContinuarAteAsync(ct) is not null;
+        if (!continuar && !JanelaRecebimentoLeads.Permite(usuario.HorarioInicioLeads, usuario.HorarioFimLeads, usuario.DiasSemanaLeads, Agora)) return false;
 
-        if (await ContinuarAteAsync(ct) is not null) return true;
+        if (continuar) return true;
         if (usuario.LimiteMensalLeads is { } mensal
             && await LeadsDoTrafegoNoMes().CountAsync(l => l.ResponsavelId == usuarioId, ct) >= mensal) return false;
         if (usuario.LimiteDiarioLeads is { } diario
@@ -145,16 +152,22 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
             .ToList();
         var semResponsavel = porTipo.Sum(g => g.Count());
 
-        // Parado "por limite": com os limites alguém não receberia o lead, mas sem eles receberia.
-        var bloqueados = 0;
+        // Parado por limite e/ou horário: ninguém recebe o lead hoje, mas receberia se o limite (ou o
+        // horário) fosse ignorado. Se só os dois juntos liberam, conta nos dois motivos.
+        int bloqueados = 0, porLimite = 0, porHorario = 0;
         if (continuarAte is null)
         {
             foreach (var grupo in porTipo)
             {
-                if (await ProximoAsync(grupo.Key, false, ct) is null && await ProximoAsync(grupo.Key, true, ct) is not null)
-                {
-                    bloqueados += grupo.Count();
-                }
+                if (await ProximoAsync(grupo.Key, false, false, ct) is not null) continue;
+                if (await ProximoAsync(grupo.Key, true, true, ct) is null) continue;
+
+                var quantidade = grupo.Count();
+                bloqueados += quantidade;
+                var soLimite = await ProximoAsync(grupo.Key, true, false, ct) is not null;
+                var soHorario = await ProximoAsync(grupo.Key, false, true, ct) is not null;
+                if (soLimite || !soHorario) porLimite += quantidade;
+                if (soHorario || !soLimite) porHorario += quantidade;
             }
         }
 
@@ -164,6 +177,7 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
             .Join(db.Users.Where(u => u.Ativo && u.RecebeLeads), id => id, u => u.Id,
                 (_, u) => new { u.Id, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads })
             .ToListAsync(ct);
+        var totalAtivos = consultores.Count;
         consultores = consultores
             .Where(c => JanelaRecebimentoLeads.Permite(c.HorarioInicioLeads, c.HorarioFimLeads, c.DiasSemanaLeads, agora))
             .ToList();
@@ -175,7 +189,8 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
         var noLimiteDiario = consultores.Count(c => c.LimiteDiarioLeads is { } d && hoje.GetValueOrDefault(c.Id) >= d);
         var noLimiteMensal = consultores.Count(c => c.LimiteMensalLeads is { } m && noMes.GetValueOrDefault(c.Id) >= m);
 
-        return new AlertaDistribuicaoDto(bloqueados > 0, semResponsavel, bloqueados, consultores.Count, noLimiteDiario, noLimiteMensal, continuarAte);
+        return new AlertaDistribuicaoDto(bloqueados > 0, semResponsavel, porLimite, consultores.Count, noLimiteDiario, noLimiteMensal, continuarAte,
+            bloqueados, porHorario, totalAtivos - consultores.Count);
     }
 
     public async Task DefinirContinuarAposLimiteAsync(bool continuar, CancellationToken ct)
@@ -187,8 +202,8 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
         }
         else
         {
-            // Até o fim do dia em Brasília: amanhã o limite diário volta a valer sozinho.
-            var fimDoDia = InicioDoDia().AddDays(1);
+            // Até o fim do dia em Brasília: amanhã os limites e o horário voltam a valer sozinhos.
+            var fimDoDia = InicioDoDia(Agora).AddDays(1);
             var valor = fimDoDia.ToString("O", System.Globalization.CultureInfo.InvariantCulture);
             if (parametro is null) db.CrmParametros.Add(new CrmParametro { Chave = ChaveContinuarAte, Valor = valor });
             else parametro.Valor = valor;

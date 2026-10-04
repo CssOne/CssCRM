@@ -91,12 +91,12 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
   const { temPapel, sessao } = useAuth();
   // Admin/gestores excluem qualquer oportunidade que enxergam; consultores, só as próprias.
   const podeExcluirOportunidade = (op: LeadOpportunitySummary) =>
-    temPapel("Admin", "GestorMaster", "GestorComercial") || (!!sessao && op.responsavelId === sessao.id);
-  const podeExcluir = temPapel("Admin", "GestorMaster");
-  const podeTrocarResponsavel = temPapel("Admin", "GestorMaster", "GestorComercial");
+    temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial") || (!!sessao && op.responsavelId === sessao.id);
+  const podeExcluir = temPapel("Admin", "GestorMaster", "SupervisorComercial");
+  const podeTrocarResponsavel = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
   const [trocandoResponsavel, setTrocandoResponsavel] = useState(false);
   // Origem do lead: só administradores veem (em forma de tag) — o servidor nem a envia aos demais.
-  const podeVerOrigem = temPapel("Admin", "GestorMaster");
+  const podeVerOrigem = temPapel("Admin", "GestorMaster", "SupervisorComercial");
   const [modalExcluir, setModalExcluir] = useState(false);
   const [oportunidadeExcluindo, setOportunidadeExcluindo] = useState<LeadOpportunitySummary | null>(null);
   const [excluindoOportunidade, setExcluindoOportunidade] = useState(false);

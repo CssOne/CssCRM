@@ -32,7 +32,13 @@ public record AlertaDistribuicaoDto(
     int NoLimiteDiario,
     int NoLimiteMensal,
     /// <summary>Se um gestor mandou continuar a distribuição ignorando os limites, até quando (fim do dia, Brasília).</summary>
-    DateTimeOffset? ContinuarAteEm);
+    DateTimeOffset? ContinuarAteEm,
+    /// <summary>Leads sem responsável que ficam parados por limite e/ou horário (cada lead conta uma vez).</summary>
+    int LeadsBloqueados = 0,
+    /// <summary>Leads parados porque os consultores aptos estão fora do dia/horário de recebimento.</summary>
+    int LeadsBloqueadosPorHorario = 0,
+    /// <summary>Consultores ativos que recebem leads mas estão fora do dia/horário agora.</summary>
+    int ConsultoresForaDoHorario = 0);
 
 public record ContinuarDistribuicaoRequest(bool Continuar);
 

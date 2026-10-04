@@ -4,12 +4,14 @@ import type { ApexOptions } from "apexcharts";
 import { api, isAbortError } from "../../lib/api";
 import { formatarMoeda, formatarPercentual } from "../../lib/format";
 import { usePaginacao } from "../../lib/usePaginacao";
-import type { RelatorioComercial } from "../../lib/types";
+import type { LeadStage, RelatorioComercial, VendedorResumo } from "../../lib/types";
 import { useTheme } from "../../context/ThemeContext";
-import { Card, ErrorState, Input, Pagination, Skeleton } from "../../components/ui";
+import { Card, ErrorState, Input, Pagination, Select, Skeleton } from "../../components/ui";
+import { MultiSelect } from "../../components/MultiSelect";
 import { baseOptions, SemDados } from "../../components/crm/Charts";
 import { BarrasHorizontaisChart, DonutChart } from "../../components/marketing/GraficosTrafego";
 
+const EMPTY_GUID = "00000000-0000-0000-0000-000000000000";
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 /** "2025-03" → "mar/25". */
@@ -96,19 +98,32 @@ export function RelatorioComercialPage() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [recarregar, setRecarregar] = useState(0);
+  const [consultorId, setConsultorId] = useState("");
+  const [etapaIds, setEtapaIds] = useState<string[]>([]);
+  const [consultores, setConsultores] = useState<VendedorResumo[]>([]);
+  const [etapas, setEtapas] = useState<LeadStage[]>([]);
+
+  useEffect(() => {
+    api.get<VendedorResumo[]>("/crm/management/vendedores?incluirInativos=true").then(setConsultores).catch(() => setConsultores([]));
+    api.get<LeadStage[]>("/crm/settings/lead-stages").then(setEtapas).catch(() => setEtapas([]));
+  }, []);
 
   useEffect(() => {
     if (!inicio || !fim || fim < inicio) return;
     const controller = new AbortController();
     setCarregando(true);
     setErro(null);
+    const filtros = new URLSearchParams({ dataInicio: inicio, dataFim: fim });
+    if (consultorId) filtros.set("consultorId", consultorId);
+    // "Sem etapa" (id nulo) vai como Guid vazio.
+    etapaIds.forEach((id) => filtros.append("etapaId", id));
     api
-      .get<RelatorioComercial>(`/crm/relatorio-comercial?dataInicio=${inicio}&dataFim=${fim}`, controller.signal)
+      .get<RelatorioComercial>(`/crm/relatorio-comercial?${filtros.toString()}`, controller.signal)
       .then(setDados)
       .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar o relatório."); })
       .finally(() => { if (!controller.signal.aborted) setCarregando(false); });
     return () => controller.abort();
-  }, [inicio, fim, recarregar]);
+  }, [inicio, fim, consultorId, etapaIds, recarregar]);
 
   const paginaVendedores = usePaginacao(dados?.porVendedor, 10);
   const paginaOrigens = usePaginacao(dados?.porOrigem, 8);
@@ -138,6 +153,33 @@ export function RelatorioComercialPage() {
         Até
         <Input type="date" className="mt-0.5 h-8 w-36" value={fim} min={inicio} onChange={(e) => setFim(e.target.value)} />
       </label>
+      <label className="text-xs text-[var(--fg-muted)]">
+        Consultor
+        <Select className="mt-0.5 h-8 w-52" value={consultorId} onChange={(e) => setConsultorId(e.target.value)} aria-label="Consultor">
+          <option value="">Todos</option>
+          {consultores.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.nome}
+              {c.ativo === false ? " (inativo)" : ""}
+            </option>
+          ))}
+        </Select>
+      </label>
+      <div className="w-52 text-xs text-[var(--fg-muted)]">
+        Etapas
+        <div className="mt-0.5">
+          <MultiSelect
+            ariaLabel="Etapas do quadro de leads"
+            rotuloTodos="Todas"
+            opcoes={[
+              ...etapas.filter((e) => e.ativa !== false).map((e) => ({ valor: e.id ?? EMPTY_GUID, rotulo: e.nome })),
+              ...(etapas.some((e) => e.id === null) ? [] : [{ valor: EMPTY_GUID, rotulo: "Sem etapa" }]),
+            ]}
+            valores={etapaIds}
+            onChange={setEtapaIds}
+          />
+        </div>
+      </div>
     </div>
   );
 
@@ -276,6 +318,10 @@ export function RelatorioComercialPage() {
             ]}
           />
         )}
+      </Secao>
+
+      <Secao titulo="Leads por etapa" descricao="Etapa atual, no quadro de leads, dos leads que chegaram no período.">
+        <BarrasHorizontaisChart categorias={dados.porEtapa.map((e) => e.etapa)} series={[{ nome: "Leads", valores: dados.porEtapa.map((e) => e.leads) }]} />
       </Secao>
 
       <div className="grid gap-4 lg:grid-cols-2">

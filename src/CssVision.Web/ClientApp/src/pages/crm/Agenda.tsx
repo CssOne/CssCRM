@@ -102,7 +102,7 @@ function lerPreferencias(): { visao: Visao; mostrarConcluidas: boolean } {
  */
 export function AgendaPage() {
   const { sessao, temPapel } = useAuth();
-  const ehGestao = temPapel("Admin", "GestorMaster", "GestorComercial");
+  const ehGestao = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
   const abrirLead = useAbrirLead();
   const { notificar } = useToast();
 

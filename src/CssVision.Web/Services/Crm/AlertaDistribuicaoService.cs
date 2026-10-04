@@ -1,3 +1,4 @@
+using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Authorization;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
@@ -23,6 +24,24 @@ public sealed class AlertaDistribuicaoService(
 
     /// <summary>Enquanto o problema durar sem decisão, repete o aviso a cada tanto.</summary>
     public static readonly TimeSpan IntervaloReaviso = TimeSpan.FromHours(3);
+
+    /// <summary>Texto do aviso conforme o motivo: limite diário/mensal, horário/dia de recebimento ou os dois.</summary>
+    public static PushMensagem MontarMensagem(AlertaDistribuicaoDto estado)
+    {
+        var porLimite = estado.LeadsBloqueadosPorLimite > 0;
+        var porHorario = estado.LeadsBloqueadosPorHorario > 0;
+        var titulo = porLimite && porHorario ? "Leads parados: limite atingido e consultores fora do horário"
+            : porHorario ? "Leads parados: todos os consultores estão fora do horário"
+            : "Leads parados: todos os consultores atingiram o limite";
+        var motivo = porLimite && porHorario ? "por limite de leads e fora do horário de recebimento"
+            : porHorario ? "porque ninguém está dentro do dia/horário de recebimento"
+            : "porque todos atingiram o limite diário ou mensal";
+        return new PushMensagem(
+            titulo,
+            $"{estado.LeadsBloqueados} lead(s) sem responsável {motivo}. Abra a Gestão comercial para continuar a distribuição mesmo assim.",
+            "/app/crm/gestao",
+            "alerta-limite-distribuicao");
+    }
 
     /// <returns>true se mandou um novo aviso.</returns>
     public async Task<bool> VerificarAsync(CancellationToken ct)
@@ -59,11 +78,7 @@ public sealed class AlertaDistribuicaoService(
             .Distinct()
             .ToListAsync(ct);
 
-        var mensagem = new PushMensagem(
-            "Leads parados: todos os consultores atingiram o limite",
-            $"{estado.LeadsBloqueadosPorLimite} lead(s) sem responsável. Abra a Gestão comercial para continuar a distribuição mesmo com o limite atingido.",
-            "/app/crm/gestao",
-            "alerta-limite-distribuicao");
+        var mensagem = MontarMensagem(estado);
         var enviados = 0;
         foreach (var usuarioId in destinatarios)
         {
@@ -77,8 +92,8 @@ public sealed class AlertaDistribuicaoService(
             }
         }
 
-        logger.LogWarning("Distribuição parada pelo limite: {Leads} lead(s) sem responsável; {Enviados} notificação(ões) enviada(s) a {Gestores} gestor(es).",
-            estado.LeadsBloqueadosPorLimite, enviados, destinatarios.Count);
+        logger.LogWarning("Distribuição parada (limite: {PorLimite}, horário: {PorHorario}): {Leads} lead(s) sem responsável; {Enviados} notificação(ões) enviada(s) a {Gestores} gestor(es).",
+            estado.LeadsBloqueadosPorLimite, estado.LeadsBloqueadosPorHorario, estado.LeadsBloqueados, enviados, destinatarios.Count);
         // Telas abertas de gestores mostram o aviso na hora (AlertaDistribuicaoLimites).
         eventos?.PublicarQuadroAtualizado("distribuicao");
         return true;

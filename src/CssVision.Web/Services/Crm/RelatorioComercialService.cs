@@ -11,7 +11,9 @@ namespace CssVision.Web.Services.Crm;
 
 public interface IRelatorioComercialService
 {
-    Task<RelatorioComercialDto> ObterAsync(DateOnly? dataInicio, DateOnly? dataFim, CancellationToken ct);
+    /// <param name="consultorId">Só leads e vendas deste consultor (responsável).</param>
+    /// <param name="etapaIds">Só leads nestas etapas do quadro de leads (Guid.Empty = "Sem etapa") e as vendas deles.</param>
+    Task<RelatorioComercialDto> ObterAsync(DateOnly? dataInicio, DateOnly? dataFim, Guid? consultorId, IReadOnlyCollection<Guid>? etapaIds, CancellationToken ct);
 }
 
 /// <summary>
@@ -40,7 +42,7 @@ public sealed class RelatorioComercialService(
         (decimal.MaxValue, "Acima de R$ 200 mil"),
     ];
 
-    public async Task<RelatorioComercialDto> ObterAsync(DateOnly? dataInicio, DateOnly? dataFim, CancellationToken ct)
+    public async Task<RelatorioComercialDto> ObterAsync(DateOnly? dataInicio, DateOnly? dataFim, Guid? consultorId, IReadOnlyCollection<Guid>? etapaIds, CancellationToken ct)
     {
         if (!currentUser.PodeGerirComercial)
         {
@@ -56,17 +58,20 @@ public sealed class RelatorioComercialService(
         }
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
-        return await RespostaEmCache.ObterAsync(cache, eventos, "relatorio-comercial", new { escopo = RespostaEmCache.Escopo(visiveis), inicio, fim },
-            () => CalcularAsync(inicio, fim, visiveis, ct));
+        var etapas = etapaIds is { Count: > 0 } ? etapaIds.Distinct().Order().ToList() : null;
+        return await RespostaEmCache.ObterAsync(cache, eventos, "relatorio-comercial",
+            new { escopo = RespostaEmCache.Escopo(visiveis), inicio, fim, consultorId, etapas },
+            () => CalcularAsync(inicio, fim, visiveis, consultorId, etapas, ct));
     }
 
-    private sealed record LeadLinha(DateTimeOffset Chegada, string? Origem, string? Estado, string? Produto, Guid? ResponsavelId, string? Responsavel, bool Perdido);
+    private sealed record LeadLinha(DateTimeOffset Chegada, string? Origem, string? Estado, string? Produto, Guid? ResponsavelId, string? Responsavel, bool Perdido,
+        Guid? EtapaId = null, string? Etapa = null, int EtapaOrdem = int.MaxValue);
 
     private sealed record VendaLinha(
         DateTimeOffset Data, Guid ResponsavelId, string Responsavel, string? Origem, string? Estado, string? Produto,
         decimal Adesao, decimal Mensalidade, decimal Rastreador, decimal Vistoria, decimal Indicacao, bool Indicada, decimal? Fipe);
 
-    private async Task<RelatorioComercialDto> CalcularAsync(DateOnly inicio, DateOnly fim, List<Guid>? visiveis, CancellationToken ct)
+    private async Task<RelatorioComercialDto> CalcularAsync(DateOnly inicio, DateOnly fim, List<Guid>? visiveis, Guid? consultorId, List<Guid>? etapaIds, CancellationToken ct)
     {
         // Datas do relatório em horário de Brasília (UTC-3), como o resto do CRM.
         var inicioUtc = new DateTimeOffset(inicio.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddHours(3);
@@ -84,9 +89,23 @@ public sealed class RelatorioComercialService(
             vendasQuery = vendasQuery.Where(o => visiveis.Contains(o.ResponsavelId));
         }
 
+        if (consultorId is { } consultor)
+        {
+            leadsQuery = leadsQuery.Where(l => l.ResponsavelId == consultor);
+            vendasQuery = vendasQuery.Where(o => o.ResponsavelId == consultor);
+        }
+        if (etapaIds is not null)
+        {
+            var semEtapa = etapaIds.Contains(Guid.Empty);
+            var ids = etapaIds.Where(id => id != Guid.Empty).Select(id => (Guid?)id).ToList();
+            leadsQuery = leadsQuery.Where(l => (l.EtapaId != null && ids.Contains(l.EtapaId)) || (semEtapa && l.EtapaId == null));
+            vendasQuery = vendasQuery.Where(o => (o.Lead.EtapaId != null && ids.Contains(o.Lead.EtapaId)) || (semEtapa && o.Lead.EtapaId == null));
+        }
+
         var leads = await leadsQuery
             .Select(l => new LeadLinha(l.CriadoEm, l.Origem, l.Estado, l.ProdutoInteresse, l.ResponsavelId,
-                l.Responsavel != null ? l.Responsavel.NomeCompleto : null, l.Etapa != null && l.Etapa.Nome == NotionEtapaLead.Perdido))
+                l.Responsavel != null ? l.Responsavel.NomeCompleto : null, l.Etapa != null && l.Etapa.Nome == NotionEtapaLead.Perdido,
+                l.EtapaId, l.Etapa != null ? l.Etapa.Nome : null, l.Etapa != null ? l.Etapa.Ordem : int.MaxValue))
             .ToListAsync(ct);
 
         var vendas = (await vendasQuery
@@ -122,7 +141,8 @@ public sealed class RelatorioComercialService(
             PorEstado(leads, vendas),
             PorFaixaFipe(vendas),
             PorProduto(leads, vendas),
-            await MarketingDoNotionAsync(inicio, fim, ct));
+            await MarketingDoNotionAsync(inicio, fim, ct),
+            PorEtapa(leads));
     }
 
     private static DateTime Brasilia(DateTimeOffset data) => data.UtcDateTime.AddHours(-3);
@@ -218,6 +238,12 @@ public sealed class RelatorioComercialService(
             })
             .ToList();
     }
+
+    private static List<RelatorioEtapaDto> PorEtapa(List<LeadLinha> leads) =>
+        leads.GroupBy(l => new { l.EtapaId, Nome = l.Etapa ?? "Sem etapa", l.EtapaOrdem })
+            .OrderBy(g => g.Key.EtapaOrdem).ThenBy(g => g.Key.Nome)
+            .Select(g => new RelatorioEtapaDto(g.Key.EtapaId, g.Key.Nome, g.Count()))
+            .ToList();
 
     private static List<RelatorioProdutoDto> PorProduto(List<LeadLinha> leads, List<VendaLinha> vendas)
     {

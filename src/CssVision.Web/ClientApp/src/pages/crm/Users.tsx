@@ -50,7 +50,7 @@ function MembroAvatar({ nome, fotoUrl }: { nome: string; fotoUrl?: string | null
 
 export function UsersPage() {
   const { temPapel } = useAuth();
-  const podeGerenciarTudo = temPapel("Admin", "GestorMaster");
+  const podeGerenciarTudo = temPapel("Admin", "GestorMaster", "SupervisorComercial");
   const { notificar } = useToast();
 
   const [aba, setAba] = useState("usuarios");

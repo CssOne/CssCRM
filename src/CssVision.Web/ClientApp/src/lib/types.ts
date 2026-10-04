@@ -1214,6 +1214,13 @@ export interface RelatorioComercial {
   faixasFipe: RelatorioFaixaFipe[];
   porProduto: RelatorioProduto[];
   marketingNotion: RelatorioMarketingMes[];
+  porEtapa: RelatorioEtapa[];
+}
+
+export interface RelatorioEtapa {
+  etapaId: string | null;
+  etapa: string;
+  leads: number;
 }
 
 export interface AlertaDistribuicao {
@@ -1223,6 +1230,11 @@ export interface AlertaDistribuicao {
   consultores: number;
   noLimiteDiario: number;
   noLimiteMensal: number;
-  /** Se um gestor mandou continuar a distribuição ignorando os limites, até quando (fim do dia). */
+  /** Se um gestor mandou continuar a distribuição ignorando os limites e o horário, até quando (fim do dia). */
   continuarAteEm?: string | null;
+  /** Leads parados por limite e/ou horário (cada lead conta uma vez). */
+  leadsBloqueados: number;
+  /** Leads parados porque os consultores aptos estão fora do dia/horário de recebimento. */
+  leadsBloqueadosPorHorario: number;
+  consultoresForaDoHorario: number;
 }

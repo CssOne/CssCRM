@@ -142,7 +142,7 @@ public class JanelaRecebimentoELRelatorioTests
         var usuario = TestDbContextFactory.MockCurrentUser(admin.Id, visaoTotal: true, podeGerir: true).Object;
         var relatorio = new RelatorioComercialService(db, usuario, new EquipeComercialService(db, usuario));
 
-        var r = await relatorio.ObterAsync(new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31), CancellationToken.None);
+        var r = await relatorio.ObterAsync(new DateOnly(2025, 1, 1), new DateOnly(2025, 12, 31), null, null, CancellationToken.None);
 
         Assert.Equal(2, r.Totais.Leads); // o arquivado não conta
         Assert.Equal(1, r.Totais.Vendas);
@@ -159,13 +159,13 @@ public class JanelaRecebimentoELRelatorioTests
         Assert.Equal(1, r.FaixasFipe.Single(f => f.Faixa == "R$ 30 a 50 mil").Vendas);
 
         // Fora do período: nada.
-        var vazio = await relatorio.ObterAsync(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31), CancellationToken.None);
+        var vazio = await relatorio.ObterAsync(new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31), null, null, CancellationToken.None);
         Assert.Equal(0, vazio.Totais.Leads);
         Assert.Equal(0, vazio.Totais.Vendas);
 
         // Sem permissão de gestão: negado.
         var semPermissao = TestDbContextFactory.MockCurrentUser(ana.Id, visaoTotal: false, podeGerir: false).Object;
         var negado = new RelatorioComercialService(db, semPermissao, new EquipeComercialService(db, semPermissao));
-        await Assert.ThrowsAsync<CrmForbiddenException>(() => negado.ObterAsync(null, null, CancellationToken.None));
+        await Assert.ThrowsAsync<CrmForbiddenException>(() => negado.ObterAsync(null, null, null, null, CancellationToken.None));
     }
 }

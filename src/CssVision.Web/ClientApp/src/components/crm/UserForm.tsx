@@ -7,7 +7,8 @@ import { Button, Checkbox, FieldError, Input, Label, Select } from "../ui";
 const PAPEL_LABEL: Record<string, string> = {
   Admin: "Administrador",
   GestorMaster: "Gestor master",
-  GestorComercial: "Gestor comercial",
+  GestorComercial: "Gestor regional",
+  SupervisorComercial: "Supervisor comercial",
   Comercial: "Consultor comercial",
   Marketing: "Marketing",
 };
@@ -238,7 +239,7 @@ export function UserForm({
 
         {podeGerenciarTudo && valores.papel === "Comercial" && (
           <div>
-            <Label htmlFor="user-gestor">Gestor comercial responsável</Label>
+            <Label htmlFor="user-gestor">Gestor regional responsável</Label>
             <Select id="user-gestor" value={valores.gestorComercialId} onChange={(e) => set("gestorComercialId", e.target.value)}>
               <option value="">Nenhum</option>
               {gestores.map((g) => (
