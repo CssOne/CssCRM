@@ -33,6 +33,7 @@ import { useTheme } from "../context/ThemeContext";
 import { Avatar, IconButton, useToast } from "./ui";
 import { LembretesAdesao } from "./crm/LembretesAdesao";
 import { NotificacaoNovosLeads } from "./crm/NotificacaoNovosLeads";
+import { AlertaDistribuicaoLimites } from "./crm/AlertaDistribuicaoLimites";
 import { NotificacoesAtividades } from "./crm/NotificacoesAtividades";
 import { PainelLead } from "./crm/PainelLead";
 import { ConviteNotificacoesPush } from "./crm/NotificacoesPush";
@@ -86,7 +87,7 @@ function Logo({ subtitulo, colapsado = false }: { subtitulo: string; colapsado?:
 }
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { sessao, logout } = useAuth();
+  const { sessao, logout, temPapel } = useAuth();
   const { tema, alternar } = useTheme();
   const { notificar } = useToast();
   const navigate = useNavigate();
@@ -216,7 +217,10 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="min-w-0 flex-1 p-4 lg:p-6">{children}</main>
+        <main className="min-w-0 flex-1 p-4 lg:p-6">
+          {!emPortal && temPapel("Admin", "GestorMaster", "GestorComercial") && <AlertaDistribuicaoLimites />}
+          {children}
+        </main>
         {!emPortal && <LembretesAdesao />}
         {!emPortal && <NotificacaoNovosLeads usuarioId={sessao.id} />}
         {!emPortal && <PainelLead />}

@@ -913,6 +913,8 @@ export interface VendedorResumo {
   horarioFimLeads?: string | null;
   /** Dias em que recebe leads (0 = domingo … 6 = sábado); nulo = todos. */
   diasSemanaLeads?: number[] | null;
+  /** Tipos de lead ("O que?") que o consultor recebe; vazio/nulo = qualquer tipo. */
+  recebeSomenteOQue?: string[] | null;
   /** Leads de tráfego pago (Notion + sistema novo) que chegaram no mês. */
   leadsTrafegoNoMes?: number;
 }
@@ -1212,4 +1214,15 @@ export interface RelatorioComercial {
   faixasFipe: RelatorioFaixaFipe[];
   porProduto: RelatorioProduto[];
   marketingNotion: RelatorioMarketingMes[];
+}
+
+export interface AlertaDistribuicao {
+  bloqueada: boolean;
+  leadsSemResponsavel: number;
+  leadsBloqueadosPorLimite: number;
+  consultores: number;
+  noLimiteDiario: number;
+  noLimiteMensal: number;
+  /** Se um gestor mandou continuar a distribuição ignorando os limites, até quando (fim do dia). */
+  continuarAteEm?: string | null;
 }

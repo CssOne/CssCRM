@@ -17,7 +17,24 @@ public record VendedorResumoDto(
     string? HorarioInicioLeads = null,
     string? HorarioFimLeads = null,
     /// <summary>Dias em que recebe leads (0 = domingo … 6 = sábado); nulo = todos.</summary>
-    int[]? DiasSemanaLeads = null);
+    int[]? DiasSemanaLeads = null,
+    /// <summary>Tipos de lead ("O que?") que o consultor recebe; nulo = qualquer tipo.</summary>
+    IReadOnlyList<string>? RecebeSomenteOQue = null);
+
+public record AtualizarTiposLeadRequest(IReadOnlyList<string>? OQue);
+
+/// <summary>Estado da distribuição automática: leads parados porque todos os consultores bateram o limite diário/mensal.</summary>
+public record AlertaDistribuicaoDto(
+    bool Bloqueada,
+    int LeadsSemResponsavel,
+    int LeadsBloqueadosPorLimite,
+    int Consultores,
+    int NoLimiteDiario,
+    int NoLimiteMensal,
+    /// <summary>Se um gestor mandou continuar a distribuição ignorando os limites, até quando (fim do dia, Brasília).</summary>
+    DateTimeOffset? ContinuarAteEm);
+
+public record ContinuarDistribuicaoRequest(bool Continuar);
 
 public record AtualizarJanelaRecebimentoRequest(string? HorarioInicio, string? HorarioFim, int[]? DiasSemana);
 

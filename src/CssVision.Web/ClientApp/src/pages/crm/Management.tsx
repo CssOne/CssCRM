@@ -5,6 +5,7 @@ import { api, isAbortError } from "../../lib/api";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { GestaoComercialResumo, RedistribuicaoHistorico, VendedorResumo } from "../../lib/types";
 import { Badge, Card, ErrorState, Skeleton, useToast, Pagination } from "../../components/ui";
+import { OPCOES_O_QUE } from "../../lib/opcoesLead";
 
 function LimiteInput({
   vendedor,
@@ -164,6 +165,56 @@ function JanelaRecebimento({ vendedor, onSalvo }: { vendedor: VendedorResumo; on
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Tipos de lead ("O que?") que o consultor recebe — o mesmo campo de Usuários > Editar. Nenhum marcado = qualquer tipo. */
+function TiposLeadSelect({ vendedor, onSalvo }: { vendedor: VendedorResumo; onSalvo: () => void }) {
+  const { notificar } = useToast();
+  const [tipos, setTipos] = useState<string[]>(vendedor.recebeSomenteOQue ?? []);
+  const [salvando, setSalvando] = useState(false);
+
+  async function alternar(tipo: string) {
+    const novos = tipos.includes(tipo) ? tipos.filter((t) => t !== tipo) : [...tipos, tipo];
+    const anteriores = tipos;
+    setTipos(novos);
+    setSalvando(true);
+    try {
+      await api.put(`/crm/management/vendedores/${vendedor.id}/tipos-lead`, { oQue: novos });
+      notificar("success", novos.length === 0 ? `${vendedor.nome} recebe qualquer tipo de lead.` : `${vendedor.nome} recebe só: ${novos.join(", ")}.`);
+      onSalvo();
+    } catch {
+      setTipos(anteriores);
+      notificar("error", "Não foi possível atualizar os tipos de lead.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="space-y-1 border-t border-[var(--border)] pt-2 text-xs">
+      <span className="text-[var(--fg-muted)]" title="Nenhum marcado = recebe qualquer tipo de lead">Recebe somente leads de</span>
+      <div className="flex flex-wrap gap-1" role="group" aria-label="Tipos de lead que o consultor recebe">
+        {OPCOES_O_QUE.map((tipo) => {
+          const ligado = tipos.includes(tipo);
+          return (
+            <button
+              key={tipo}
+              type="button"
+              aria-pressed={ligado}
+              disabled={salvando}
+              onClick={() => alternar(tipo)}
+              className={`focus-ring cursor-pointer rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
+                ligado ? "bg-[var(--brand)] text-white" : "border border-[var(--border)] text-[var(--fg-muted)]"
+              }`}
+            >
+              {tipo}
+            </button>
+          );
+        })}
+      </div>
+      {tipos.length === 0 && <p className="text-[var(--fg-muted)]">Todos os tipos</p>}
     </div>
   );
 }
@@ -334,6 +385,7 @@ export function ManagementPage() {
                   <LimiteInput tipo="mensal" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
                   <LimiteInput tipo="diario" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
                 </div>
+                <TiposLeadSelect key={`${v.id}-${v.recebeSomenteOQue?.join("|")}`} vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
                 <JanelaRecebimento key={`${v.id}-${v.horarioInicioLeads}-${v.horarioFimLeads}-${v.diasSemanaLeads?.join("")}`} vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
                 <RecebeLeadsSwitch vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
               </div>

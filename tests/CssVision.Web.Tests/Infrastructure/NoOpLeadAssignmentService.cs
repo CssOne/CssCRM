@@ -12,6 +12,11 @@ public sealed class NoOpLeadAssignmentService : ILeadAssignmentService
 
     public Task<int> DistribuirPendentesAsync(CancellationToken ct) => Task.FromResult(0);
 
+    public Task<AlertaDistribuicaoDto> ObterEstadoDistribuicaoAsync(CancellationToken ct) =>
+        Task.FromResult(new AlertaDistribuicaoDto(false, 0, 0, 0, 0, 0, null));
+
+    public Task DefinirContinuarAposLimiteAsync(bool continuar, CancellationToken ct) => Task.CompletedTask;
+
     public Task<NovosLeadsDto> NovosLeadsAsync(Guid usuarioId, DateTimeOffset? desde, CancellationToken ct) =>
         Task.FromResult(new NovosLeadsDto(DateTimeOffset.UtcNow, []));
 }

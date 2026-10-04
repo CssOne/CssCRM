@@ -9,7 +9,7 @@ namespace CssVision.Web.Api.Controllers;
 [ApiController]
 [Route("api/crm/management")]
 [Authorize(Policy = PolicyNames.GestaoComercial)]
-public class CrmManagementController(IManagementService managementService) : ControllerBase
+public class CrmManagementController(IManagementService managementService, ILeadAssignmentService distribuicao) : ControllerBase
 {
     [HttpGet("summary")]
     public async Task<ActionResult<GestaoComercialResumoDto>> ObterResumo(
@@ -46,6 +46,25 @@ public class CrmManagementController(IManagementService managementService) : Con
     {
         await managementService.AtualizarJanelaRecebimentoAsync(id, request, ct);
         return NoContent();
+    }
+
+    [HttpPut("vendedores/{id:guid}/tipos-lead")]
+    public async Task<IActionResult> AtualizarTiposLead(Guid id, AtualizarTiposLeadRequest request, CancellationToken ct)
+    {
+        await managementService.AtualizarTiposLeadAsync(id, request, ct);
+        return NoContent();
+    }
+
+    /// <summary>Leads parados porque todos os consultores bateram o limite (e a decisão de continuar mesmo assim).</summary>
+    [HttpGet("alerta-distribuicao")]
+    public async Task<ActionResult<AlertaDistribuicaoDto>> ObterAlertaDistribuicao(CancellationToken ct) =>
+        Ok(await distribuicao.ObterEstadoDistribuicaoAsync(ct));
+
+    [HttpPut("continuar-distribuicao")]
+    public async Task<ActionResult<AlertaDistribuicaoDto>> ContinuarDistribuicao(ContinuarDistribuicaoRequest request, CancellationToken ct)
+    {
+        await distribuicao.DefinirContinuarAposLimiteAsync(request.Continuar, ct);
+        return Ok(await distribuicao.ObterEstadoDistribuicaoAsync(ct));
     }
 
     [HttpGet("consultores")]

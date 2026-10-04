@@ -105,6 +105,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILeadService, LeadService>();
         services.AddScoped<ILeadKanbanService, LeadKanbanService>();
         services.AddScoped<ILeadAssignmentService, LeadAssignmentService>();
+        services.AddScoped<AlertaDistribuicaoService>();
         services.AddHostedService<DistribuicaoLeadsBackgroundService>();
         // Backup do banco: diário automático + tela de Backups (ver BackupService).
         services.AddScoped<Services.Backup.IDumpBanco, Services.Backup.PgDumpBanco>();

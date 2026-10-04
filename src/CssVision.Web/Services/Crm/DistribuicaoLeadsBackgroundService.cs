@@ -24,6 +24,8 @@ public sealed class DistribuicaoLeadsBackgroundService(
                 {
                     logger.LogInformation("{Quantidade} lead(s) do tráfego pago sem responsável distribuído(s).", distribuidos);
                 }
+                // Sobrou lead parado só porque todos bateram o limite? Avisa os gestores.
+                await scope.ServiceProvider.GetRequiredService<AlertaDistribuicaoService>().VerificarAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

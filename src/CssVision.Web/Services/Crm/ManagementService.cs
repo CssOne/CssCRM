@@ -82,7 +82,7 @@ public sealed class ManagementService(
 
         var vendedores = await query
             .OrderByDescending(u => u.Ativo).ThenBy(u => u.NomeCompleto)
-            .Select(u => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.Ativo, u.RecebeLeads, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads })
+            .Select(u => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.Ativo, u.RecebeLeads, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads, u.RecebeSomenteOQue })
             .ToListAsync(ct);
         var inicioMes = new DateTimeOffset(new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1), TimeSpan.Zero);
         var inicioDia = LeadAssignmentService.InicioDoDia();
@@ -104,7 +104,8 @@ public sealed class ManagementService(
             v.Id, v.NomeCompleto, leadsAtivos.GetValueOrDefault(v.Id), abertas.GetValueOrDefault(v.Id).Quantidade,
             v.LimiteMensalLeads, recebidosNoMes.GetValueOrDefault(v.Id), v.LimiteDiarioLeads, recebidosHoje.GetValueOrDefault(v.Id),
             v.Ativo, v.RecebeLeads, trafegoNoMes.GetValueOrDefault(v.Id),
-            v.HorarioInicioLeads?.ToString("HH:mm"), v.HorarioFimLeads?.ToString("HH:mm"), JanelaRecebimentoLeads.MascaraParaDias(v.DiasSemanaLeads))).ToList();
+            v.HorarioInicioLeads?.ToString("HH:mm"), v.HorarioFimLeads?.ToString("HH:mm"), JanelaRecebimentoLeads.MascaraParaDias(v.DiasSemanaLeads),
+            FiltroOQue.Separar(v.RecebeSomenteOQue))).ToList();
     }
 
     public async Task<IReadOnlyList<ConsultorDesempenhoDto>> ObterDesempenhoConsultoresAsync(DateOnly? mesReferencia, CancellationToken ct)
@@ -248,6 +249,23 @@ public sealed class ManagementService(
         vendedor.HorarioInicioLeads = inicio;
         vendedor.HorarioFimLeads = fim;
         vendedor.DiasSemanaLeads = JanelaRecebimentoLeads.DiasParaMascara(request.DiasSemana);
+        await db.SaveChangesAsync(ct);
+        eventos?.PublicarQuadroAtualizado("gestao");
+    }
+
+    public async Task AtualizarTiposLeadAsync(Guid vendedorId, AtualizarTiposLeadRequest request, CancellationToken ct)
+    {
+        ExigirGestaoComercial();
+
+        if (!await equipe.PodeAcessarVendedorAsync(vendedorId, ct))
+        {
+            throw new CrmForbiddenException("Você não pode alterar os tipos de lead deste vendedor.");
+        }
+
+        var vendedor = await db.Users.FirstOrDefaultAsync(u => u.Id == vendedorId, ct)
+            ?? throw new CrmNotFoundException("Vendedor", vendedorId);
+
+        vendedor.RecebeSomenteOQue = FiltroOQue.Juntar(request.OQue);
         await db.SaveChangesAsync(ct);
         eventos?.PublicarQuadroAtualizado("gestao");
     }
