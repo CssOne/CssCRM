@@ -78,8 +78,8 @@ public class AlertaLimiteDistribuicaoTests
         Assert.Equal(2, estado.NoLimiteDiario);
 
         Assert.True(await alerta.VerificarAsync(CancellationToken.None));
-        // Admin e gestor comercial recebem; os consultores não.
-        Assert.Equal(new[] { c.GestorId, c.AdminId }.Order(), push.Enviados.Select(e => e.UsuarioId).Order());
+        // Só quem tem visão total (Admin, Gestor master, Supervisor) recebe: o Gestor regional só vê a própria regional; consultores não.
+        Assert.Equal([c.AdminId], push.Enviados.Select(e => e.UsuarioId).ToArray());
 
         Assert.False(await alerta.VerificarAsync(CancellationToken.None)); // não repete na hora
         relogio.Agora = relogio.Agora.Add(AlertaDistribuicaoService.IntervaloReaviso).AddMinutes(1);
@@ -128,7 +128,7 @@ public class AlertaLimiteDistribuicaoTests
         db.CrmLeads.Add(Trafego("Novo parado", null));
         await db.SaveChangesAsync();
         Assert.True(await alerta.VerificarAsync(CancellationToken.None));
-        Assert.Equal(4, push.Enviados.Count);
+        Assert.Equal(2, push.Enviados.Count);
     }
 
     [Fact]

@@ -186,6 +186,11 @@ public sealed class UserManagementService(
         {
             throw new CrmBusinessException("Você não pode desativar a própria conta.", "auto_desativacao");
         }
+        else if (request.Papel is Roles.Comercial or Roles.GestorComercial && regionalId is null)
+        {
+            // O Gestor regional só enxerga a própria regional: sem regional ele não veria ninguém.
+            throw new CrmBusinessException("Informe a regional deste usuário.", "regional_obrigatoria");
+        }
 
         if (regionalId.HasValue && !await db.CrmRegionais.AnyAsync(r => r.Id == regionalId, ct))
         {

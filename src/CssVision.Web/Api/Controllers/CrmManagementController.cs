@@ -9,7 +9,7 @@ namespace CssVision.Web.Api.Controllers;
 [ApiController]
 [Route("api/crm/management")]
 [Authorize(Policy = PolicyNames.GestaoComercial)]
-public class CrmManagementController(IManagementService managementService, ILeadAssignmentService distribuicao) : ControllerBase
+public class CrmManagementController(IManagementService managementService, ILeadAssignmentService distribuicao, ICurrentUserService currentUser) : ControllerBase
 {
     [HttpGet("summary")]
     public async Task<ActionResult<GestaoComercialResumoDto>> ObterResumo(
@@ -58,11 +58,13 @@ public class CrmManagementController(IManagementService managementService, ILead
     /// <summary>Leads parados porque todos os consultores bateram o limite (e a decisão de continuar mesmo assim).</summary>
     [HttpGet("alerta-distribuicao")]
     public async Task<ActionResult<AlertaDistribuicaoDto>> ObterAlertaDistribuicao(CancellationToken ct) =>
-        Ok(await distribuicao.ObterEstadoDistribuicaoAsync(ct));
+        // A distribuição é de toda a empresa: o Gestor regional (que só vê a própria regional) não enxerga nem decide isso.
+        currentUser.TemVisaoTotal ? Ok(await distribuicao.ObterEstadoDistribuicaoAsync(ct)) : Forbid();
 
     [HttpPut("continuar-distribuicao")]
     public async Task<ActionResult<AlertaDistribuicaoDto>> ContinuarDistribuicao(ContinuarDistribuicaoRequest request, CancellationToken ct)
     {
+        if (!currentUser.TemVisaoTotal) return Forbid();
         await distribuicao.DefinirContinuarAposLimiteAsync(request.Continuar, ct);
         return Ok(await distribuicao.ObterEstadoDistribuicaoAsync(ct));
     }

@@ -141,7 +141,8 @@ public sealed class RelatorioComercialService(
             PorEstado(leads, vendas),
             PorFaixaFipe(vendas),
             PorProduto(leads, vendas),
-            await MarketingDoNotionAsync(inicio, fim, ct),
+            // O gasto em mídia é da empresa toda: Gestor regional (visão só da regional) não vê.
+            visiveis is null ? await MarketingDoNotionAsync(inicio, fim, ct) : [],
             PorEtapa(leads));
     }
 

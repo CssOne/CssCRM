@@ -61,7 +61,7 @@ export function UsersPage() {
         <h1 className="text-xl font-semibold text-[var(--fg)]">Usuários</h1>
         <p className="text-sm text-[var(--fg-muted)]">
           {podeGerenciarTudo
-            ? "Cadastre consultores, gestores comerciais e administradores."
+            ? "Cadastre consultores, gestores regionais, supervisores e administradores."
             : "Cadastre e gerencie os consultores da sua regional."}
         </p>
       </div>
@@ -87,6 +87,7 @@ function UsuariosTab({ podeGerenciarTudo, notificar }: { podeGerenciarTudo: bool
   const [busca, setBusca] = useState("");
   const [papel, setPapel] = useState("");
   const [regionalId, setRegionalId] = useState("");
+  const [ativo, setAtivo] = useState("");
   const [pagina, setPagina] = useState(1);
 
   const [regionais, setRegionais] = useState<Regional[]>([]);
@@ -112,14 +113,14 @@ function UsuariosTab({ podeGerenciarTudo, notificar }: { podeGerenciarTudo: bool
       setCarregando(true);
       setErro(null);
       api
-        .get<PagedResult<UserSummary>>(`/crm/users${toQueryString({ busca, papel, regionalId, pagina, tamanhoPagina: 20 })}`, signal)
+        .get<PagedResult<UserSummary>>(`/crm/users${toQueryString({ busca, papel, regionalId, ativo, pagina, tamanhoPagina: 20 })}`, signal)
         .then(setDados)
         .catch((e) => {
           if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar os usuários.");
         })
         .finally(() => { if (!signal?.aborted) setCarregando(false); });
     },
-    [busca, papel, regionalId, pagina]
+    [busca, papel, regionalId, ativo, pagina]
   );
 
   useEffect(() => {
@@ -194,6 +195,14 @@ function UsuariosTab({ podeGerenciarTudo, notificar }: { podeGerenciarTudo: bool
           <div className="w-56">
             <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Buscar</label>
             <Input placeholder="Nome ou e-mail" value={busca} onChange={(e) => { setBusca(e.target.value); setPagina(1); }} />
+          </div>
+          <div className="w-40">
+            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Situação</label>
+            <Select value={ativo} onChange={(e) => { setAtivo(e.target.value); setPagina(1); }} aria-label="Situação do usuário">
+              <option value="">Todos</option>
+              <option value="true">Ativos</option>
+              <option value="false">Inativos</option>
+            </Select>
           </div>
           {podeGerenciarTudo && (
             <>
