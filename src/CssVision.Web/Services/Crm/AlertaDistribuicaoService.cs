@@ -73,7 +73,7 @@ public sealed class AlertaDistribuicaoService(
         await db.SaveChangesAsync(ct);
 
         var destinatarios = await db.UserRoles
-            .Join(db.Roles.Where(r => Roles.VisaoTotal.Contains(r.Name!)), ur => ur.RoleId, r => r.Id, (ur, _) => ur.UserId)
+            .Join(db.Roles.Where(r => Roles.GestaoComercial.Contains(r.Name!)), ur => ur.RoleId, r => r.Id, (ur, _) => ur.UserId)
             .Join(db.Users.Where(u => u.Ativo), id => id, u => u.Id, (_, u) => u.Id)
             .Distinct()
             .ToListAsync(ct);
