@@ -28,7 +28,7 @@ public sealed class UserManagementService(
             .Include(u => u.Grupo)
             .AsQueryable();
 
-        if (!currentUser.TemVisaoTotal)
+        if (!GerenciaTodasAsRegionais)
         {
             var regionalId = await ObterRegionalAtualAsync(ct);
             query = regionalId is null ? query.Where(u => false) : query.Where(u => u.RegionalId == regionalId);
@@ -90,18 +90,21 @@ public sealed class UserManagementService(
         Guid? regionalId = request.RegionalId;
         Guid? gestorComercialId = request.GestorComercialId;
 
-        if (!currentUser.TemVisaoTotal)
+        if (!GerenciaTodasAsRegionais)
         {
-            if (request.Papel != Roles.Comercial)
+            if (!PapeisQuePodeGerenciar.Contains(request.Papel))
             {
-                throw new CrmForbiddenException("Você só pode cadastrar consultores (papel Comercial).");
+                throw new CrmForbiddenException(EhSomenteSupervisor
+                    ? "Você só pode cadastrar consultores e gestores regionais da sua regional."
+                    : "Você só pode cadastrar consultores (papel Comercial).");
             }
 
             var regionalAtual = await ObterRegionalAtualAsync(ct)
                 ?? throw new CrmBusinessException("Sua conta ainda não está vinculada a uma regional — peça a um administrador para configurá-la antes de cadastrar consultores.", "sem_regional");
 
             regionalId = regionalAtual;
-            gestorComercialId = currentUser.UserId;
+            // O Gestor regional fica como gestor do consultor que cadastra; o Supervisor não é gestor de equipe.
+            gestorComercialId = EhSomenteSupervisor ? null : currentUser.UserId;
         }
         else if (request.Papel is Roles.Comercial or Roles.GestorComercial && regionalId is null)
         {
@@ -164,11 +167,13 @@ public sealed class UserManagementService(
         var regionalId = request.RegionalId;
         var gestorComercialId = request.GestorComercialId;
 
-        if (!currentUser.TemVisaoTotal)
+        if (!GerenciaTodasAsRegionais)
         {
-            if (request.Papel != Roles.Comercial)
+            if (!PapeisQuePodeGerenciar.Contains(request.Papel))
             {
-                throw new CrmForbiddenException("Você só pode gerenciar consultores (papel Comercial).");
+                throw new CrmForbiddenException(EhSomenteSupervisor
+                    ? "Você só pode gerenciar consultores e gestores regionais da sua regional."
+                    : "Você só pode gerenciar consultores (papel Comercial).");
             }
 
             var regionalAtual = await ObterRegionalAtualAsync(ct);
@@ -243,9 +248,9 @@ public sealed class UserManagementService(
     {
         var usuario = await CarregarComEscopoAsync(id, ct);
 
-        if (!currentUser.TemVisaoTotal && !await userManager.IsInRoleAsync(usuario, Roles.Comercial))
+        if (!GerenciaTodasAsRegionais && !await PossuiAlgumPapelAsync(usuario, PapeisQuePodeGerenciar))
         {
-            throw new CrmForbiddenException("Você só pode redefinir a senha de consultores da sua regional.");
+            throw new CrmForbiddenException("Você só pode redefinir a senha de usuários da sua regional (consultores e gestores regionais).");
         }
 
         var token = await userManager.GeneratePasswordResetTokenAsync(usuario);
@@ -272,6 +277,15 @@ public sealed class UserManagementService(
 
         var usuario = await userManager.FindByIdAsync(id.ToString())
             ?? throw new CrmNotFoundException("Usuário", id);
+
+        if (EhSomenteSupervisor)
+        {
+            var regionalAtual = await ObterRegionalAtualAsync(ct);
+            if (regionalAtual is null || usuario.RegionalId != regionalAtual)
+            {
+                throw new CrmForbiddenException("Você só pode excluir usuários da sua própria regional.");
+            }
+        }
 
         var possuiVinculos =
             await db.CrmLeads.AnyAsync(l => l.ResponsavelId == id, ct) ||
@@ -309,6 +323,25 @@ public sealed class UserManagementService(
 
     // --- auxiliares ---
 
+    /// <summary>Supervisor comercial (sem ser Admin/Gestor master): tem as funções do administrador, mas cadastra e edita usuários só da própria regional.</summary>
+    private bool EhSomenteSupervisor =>
+        currentUser.IsInRole(Roles.SupervisorComercial) && !currentUser.IsInRole(Roles.Admin) && !currentUser.IsInRole(Roles.GestorMaster);
+
+    /// <summary>Admin/Gestor master gerenciam usuários de qualquer regional; Gestor regional e Supervisor, só da sua.</summary>
+    private bool GerenciaTodasAsRegionais => currentUser.TemVisaoTotal && !EhSomenteSupervisor;
+
+    /// <summary>Papéis que quem gerencia só a própria regional pode cadastrar/editar: o Gestor regional, consultores; o Supervisor, também gestores regionais.</summary>
+    private string[] PapeisQuePodeGerenciar => EhSomenteSupervisor ? [Roles.Comercial, Roles.GestorComercial] : [Roles.Comercial];
+
+    private async Task<bool> PossuiAlgumPapelAsync(ApplicationUser usuario, IEnumerable<string> papeis)
+    {
+        foreach (var papel in papeis)
+        {
+            if (await userManager.IsInRoleAsync(usuario, papel)) return true;
+        }
+        return false;
+    }
+
     private async Task<Guid?> ObterRegionalAtualAsync(CancellationToken ct) =>
         await db.Users.AsNoTracking().Where(u => u.Id == currentUser.UserId).Select(u => u.RegionalId).FirstOrDefaultAsync(ct);
 
@@ -333,7 +366,7 @@ public sealed class UserManagementService(
             .FirstOrDefaultAsync(u => u.Id == id, ct)
             ?? throw new CrmNotFoundException("Usuário", id);
 
-        if (!currentUser.TemVisaoTotal)
+        if (!GerenciaTodasAsRegionais)
         {
             var regionalAtual = await ObterRegionalAtualAsync(ct);
             if (regionalAtual is null || usuario.RegionalId != regionalAtual)
