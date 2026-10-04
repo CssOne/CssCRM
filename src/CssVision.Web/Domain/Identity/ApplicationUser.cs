@@ -31,6 +31,15 @@ public class ApplicationUser : IdentityUser<Guid>
     /// <summary>Teto de leads do tráfego pago que a distribuição automática atribui a este vendedor por dia (horário de Brasília). Nulo = sem limite.</summary>
     public int? LimiteDiarioLeads { get; set; }
 
+    /// <summary>Início da faixa de horário (Brasília) em que a distribuição automática entrega leads a este vendedor. Nulo (com o fim) = o dia todo.</summary>
+    public TimeOnly? HorarioInicioLeads { get; set; }
+
+    /// <summary>Fim (exclusivo) da faixa de horário de recebimento de leads. Menor que o início = atravessa a meia-noite.</summary>
+    public TimeOnly? HorarioFimLeads { get; set; }
+
+    /// <summary>Dias da semana em que recebe leads, em bitmask (1 &lt;&lt; (int)DayOfWeek; domingo = bit 0). Nulo = todos os dias.</summary>
+    public int? DiasSemanaLeads { get; set; }
+
     /// <summary>
     /// Se o vendedor entra no rodízio da distribuição automática. Desligado na Gestão comercial, ele
     /// para de receber leads novos, mas continua entrando no CRM e trabalhando a própria carteira.

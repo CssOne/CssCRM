@@ -14,6 +14,7 @@ import { ActivitiesPage } from "./pages/crm/Activities";
 import { AgendaPage } from "./pages/crm/Agenda";
 import { GoalsPage } from "./pages/crm/Goals";
 import { ManagementPage } from "./pages/crm/Management";
+import { RelatorioComercialPage } from "./pages/crm/RelatorioComercial";
 import { ConsultoresPage } from "./pages/crm/Consultores";
 import { UsersPage } from "./pages/crm/Users";
 import { PortalDashboardPage } from "./pages/portal/Dashboard";
@@ -72,6 +73,14 @@ export default function App() {
         element={
           <RotaProtegida papeis={PAPEIS_GESTAO}>
             <ManagementPage />
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/app/crm/relatorio-comercial"
+        element={
+          <RotaProtegida papeis={PAPEIS_GESTAO}>
+            <RelatorioComercialPage />
           </RotaProtegida>
         }
       />

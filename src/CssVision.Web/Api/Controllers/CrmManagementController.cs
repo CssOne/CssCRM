@@ -41,6 +41,13 @@ public class CrmManagementController(IManagementService managementService) : Con
         return NoContent();
     }
 
+    [HttpPut("vendedores/{id:guid}/janela-recebimento")]
+    public async Task<IActionResult> AtualizarJanelaRecebimento(Guid id, AtualizarJanelaRecebimentoRequest request, CancellationToken ct)
+    {
+        await managementService.AtualizarJanelaRecebimentoAsync(id, request, ct);
+        return NoContent();
+    }
+
     [HttpGet("consultores")]
     public async Task<ActionResult<IReadOnlyList<ConsultorDesempenhoDto>>> ObterDesempenhoConsultores(
         [FromQuery] DateOnly? mesReferencia, CancellationToken ct) =>

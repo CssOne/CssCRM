@@ -120,6 +120,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IGoalService, GoalService>();
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IManagementService, ManagementService>();
+        services.AddScoped<IRelatorioComercialService, RelatorioComercialService>();
         services.AddScoped<IPublicLeadIntakeService, PublicLeadIntakeService>();
         services.AddScoped<IUserManagementService, UserManagementService>();
         services.AddScoped<IAnnouncementService, AnnouncementService>();

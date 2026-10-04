@@ -1,6 +1,7 @@
 import {
   Briefcase,
   CalendarDays,
+  ChartColumn,
   CheckSquare,
   ChevronLeft,
   Database,
@@ -44,6 +45,7 @@ const iconesPorChave: Record<string, typeof Gauge> = {
   "calendar-days": CalendarDays,
   target: Target,
   "users-round": UsersRound,
+  "chart-column": ChartColumn,
   "layout-dashboard": LayoutDashboard,
   "layout-grid": LayoutGrid,
   "user-cog": UserCog,

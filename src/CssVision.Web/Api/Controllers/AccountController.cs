@@ -394,6 +394,7 @@ public class AccountController(
         if (papeis.Contains(Roles.Admin) || papeis.Contains(Roles.GestorMaster) || papeis.Contains(Roles.GestorComercial))
         {
             menu.Add(new MenuItemDto("crm-management", "Gestão comercial", "users-round", "/app/crm/gestao"));
+            menu.Add(new MenuItemDto("crm-relatorio", "Relatório comercial", "chart-column", "/app/crm/relatorio-comercial"));
             menu.Add(new MenuItemDto("crm-consultores", "Consultores", "id-card", "/app/crm/consultores"));
             menu.Add(new MenuItemDto("crm-users", "Usuários", "user-cog", "/app/crm/usuarios"));
         }

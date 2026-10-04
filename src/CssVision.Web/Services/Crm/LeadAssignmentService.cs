@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CssVision.Web.Services.Crm;
 
-public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub? eventos = null) : ILeadAssignmentService
+public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub? eventos = null, TimeProvider? relogio = null) : ILeadAssignmentService
 {
     /// <summary>Leads que contam no limite mensal: só os do tráfego pago, sem os do Notion.</summary>
     private IQueryable<CrmLead> LeadsDoTrafegoNoMes() =>
@@ -27,17 +27,22 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
         return new DateTimeOffset(hojeBrasilia, TimeSpan.Zero).AddHours(3);
     }
 
+    private DateTimeOffset Agora => (relogio ?? TimeProvider.System).GetUtcNow();
+
     public async Task<Guid?> ProximoResponsavelAsync(string? oQue, CancellationToken ct)
     {
         var todos = await db.UserRoles
             .Join(db.Roles.Where(r => r.Name == Roles.Comercial), ur => ur.RoleId, r => r.Id, (ur, _) => ur.UserId)
-            .Join(db.Users.Where(u => u.Ativo && u.RecebeLeads), id => id, u => u.Id, (_, u) => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.RecebeSomenteOQue })
+            .Join(db.Users.Where(u => u.Ativo && u.RecebeLeads), id => id, u => u.Id, (_, u) => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.RecebeSomenteOQue, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads })
             .ToListAsync(ct);
 
         // "Recebe somente leads de..." só RESTRINGE: quem tem a restrição entra no rodízio apenas dos
         // leads daqueles tipos, em pé de igualdade com os demais (recebe quem pegou menos no mês).
         // Antes o especialista tinha preferência, e quem tinha "AGV" levava todos os leads de AGV.
+        var agora = Agora;
         var aptos = todos
+            // Fora do dia/horário que o gestor definiu para o consultor: não entra no rodízio agora.
+            .Where(v => JanelaRecebimentoLeads.Permite(v.HorarioInicioLeads, v.HorarioFimLeads, v.DiasSemanaLeads, agora))
             .Where(v => FiltroOQue.Aceita(v.RecebeSomenteOQue, oQue))
             .Select(v => (v.Id, v.NomeCompleto, v.LimiteMensalLeads, v.LimiteDiarioLeads, Especialista: v.RecebeSomenteOQue is not null))
             .ToList();
@@ -79,9 +84,10 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
     {
         var usuario = await db.Users.AsNoTracking()
             .Where(u => u.Id == usuarioId)
-            .Select(u => new { u.Ativo, u.LimiteMensalLeads, u.LimiteDiarioLeads })
+            .Select(u => new { u.Ativo, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads })
             .FirstOrDefaultAsync(ct);
         if (usuario is null || !usuario.Ativo) return false;
+        if (!JanelaRecebimentoLeads.Permite(usuario.HorarioInicioLeads, usuario.HorarioFimLeads, usuario.DiasSemanaLeads, Agora)) return false;
 
         if (usuario.LimiteMensalLeads is { } mensal
             && await LeadsDoTrafegoNoMes().CountAsync(l => l.ResponsavelId == usuarioId, ct) >= mensal) return false;

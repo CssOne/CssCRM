@@ -82,7 +82,7 @@ public sealed class ManagementService(
 
         var vendedores = await query
             .OrderByDescending(u => u.Ativo).ThenBy(u => u.NomeCompleto)
-            .Select(u => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.Ativo, u.RecebeLeads })
+            .Select(u => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.Ativo, u.RecebeLeads, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads })
             .ToListAsync(ct);
         var inicioMes = new DateTimeOffset(new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1), TimeSpan.Zero);
         var inicioDia = LeadAssignmentService.InicioDoDia();
@@ -103,7 +103,8 @@ public sealed class ManagementService(
         return vendedores.Select(v => new VendedorResumoDto(
             v.Id, v.NomeCompleto, leadsAtivos.GetValueOrDefault(v.Id), abertas.GetValueOrDefault(v.Id).Quantidade,
             v.LimiteMensalLeads, recebidosNoMes.GetValueOrDefault(v.Id), v.LimiteDiarioLeads, recebidosHoje.GetValueOrDefault(v.Id),
-            v.Ativo, v.RecebeLeads, trafegoNoMes.GetValueOrDefault(v.Id))).ToList();
+            v.Ativo, v.RecebeLeads, trafegoNoMes.GetValueOrDefault(v.Id),
+            v.HorarioInicioLeads?.ToString("HH:mm"), v.HorarioFimLeads?.ToString("HH:mm"), JanelaRecebimentoLeads.MascaraParaDias(v.DiasSemanaLeads))).ToList();
     }
 
     public async Task<IReadOnlyList<ConsultorDesempenhoDto>> ObterDesempenhoConsultoresAsync(DateOnly? mesReferencia, CancellationToken ct)
@@ -221,6 +222,32 @@ public sealed class ManagementService(
             ?? throw new CrmNotFoundException("Vendedor", vendedorId);
 
         vendedor.LimiteDiarioLeads = request.Limite;
+        await db.SaveChangesAsync(ct);
+        eventos?.PublicarQuadroAtualizado("gestao");
+    }
+
+    public async Task AtualizarJanelaRecebimentoAsync(Guid vendedorId, AtualizarJanelaRecebimentoRequest request, CancellationToken ct)
+    {
+        ExigirGestaoComercial();
+
+        if (!await equipe.PodeAcessarVendedorAsync(vendedorId, ct))
+        {
+            throw new CrmForbiddenException("Você não pode alterar o horário deste vendedor.");
+        }
+
+        var inicio = JanelaRecebimentoLeads.ParseHorario(request.HorarioInicio);
+        var fim = JanelaRecebimentoLeads.ParseHorario(request.HorarioFim);
+        if ((inicio is null) != (fim is null))
+        {
+            throw new CrmBusinessException("Informe o horário de início e o de fim (ou deixe os dois vazios).", "horario_incompleto");
+        }
+
+        var vendedor = await db.Users.FirstOrDefaultAsync(u => u.Id == vendedorId, ct)
+            ?? throw new CrmNotFoundException("Vendedor", vendedorId);
+
+        vendedor.HorarioInicioLeads = inicio;
+        vendedor.HorarioFimLeads = fim;
+        vendedor.DiasSemanaLeads = JanelaRecebimentoLeads.DiasParaMascara(request.DiasSemana);
         await db.SaveChangesAsync(ct);
         eventos?.PublicarQuadroAtualizado("gestao");
     }

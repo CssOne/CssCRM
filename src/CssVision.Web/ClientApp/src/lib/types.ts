@@ -908,6 +908,11 @@ export interface VendedorResumo {
   ativo?: boolean;
   /** Entra no rodízio da distribuição automática de leads. */
   recebeLeads?: boolean;
+  /** Faixa de horário (Brasília, "HH:mm") em que recebe leads; nulo = o dia todo. */
+  horarioInicioLeads?: string | null;
+  horarioFimLeads?: string | null;
+  /** Dias em que recebe leads (0 = domingo … 6 = sábado); nulo = todos. */
+  diasSemanaLeads?: number[] | null;
   /** Leads de tráfego pago (Notion + sistema novo) que chegaram no mês. */
   leadsTrafegoNoMes?: number;
 }
@@ -1108,4 +1113,103 @@ export interface Announcement {
   titulo: string;
   descricao: string;
   cor?: string | null;
+}
+
+export interface RelatorioTotais {
+  leads: number;
+  leadsPerdidos: number;
+  vendas: number;
+  taxaConversao: number;
+  adesao: number;
+  mensalidade: number;
+  ticketMensalidade: number;
+  rastreador: number;
+  vistoria: number;
+  indicacao: number;
+  vendasIndicacao: number;
+}
+
+export interface RelatorioMes {
+  mes: string;
+  leads: number;
+  leadsPerdidos: number;
+  vendas: number;
+  adesao: number;
+  mensalidade: number;
+  rastreador: number;
+  vistoria: number;
+  indicacao: number;
+}
+
+export interface RelatorioSemana {
+  inicio: string;
+  leads: number;
+  leadsPerdidos: number;
+  vendas: number;
+  adesao: number;
+}
+
+export interface RelatorioOrigem {
+  origem: string;
+  leads: number;
+  vendas: number;
+  adesao: number;
+}
+
+export interface RelatorioVendedor {
+  vendedorId: string | null;
+  vendedor: string;
+  leads: number;
+  vendas: number;
+  adesao: number;
+  mensalidade: number;
+  taxaConversao: number;
+}
+
+export interface RelatorioEstado {
+  estado: string;
+  leads: number;
+  vendas: number;
+}
+
+export interface RelatorioFaixaFipe {
+  faixa: string;
+  vendas: number;
+}
+
+export interface RelatorioProduto {
+  produto: string;
+  leads: number;
+  vendas: number;
+  adesao: number;
+}
+
+export interface RelatorioMarketingMes {
+  mes: string;
+  leadsGerados: number;
+  vendas: number;
+  facebookAds: number;
+  googleAds: number;
+  ferramentas: number;
+  backlinks: number;
+  totalGastos: number;
+  faturamento: number;
+  metaFaturamento: number;
+  custoPorLead: number | null;
+  roas: number | null;
+  taxaConversao: number | null;
+}
+
+export interface RelatorioComercial {
+  dataInicio: string;
+  dataFim: string;
+  totais: RelatorioTotais;
+  porMes: RelatorioMes[];
+  porSemana: RelatorioSemana[];
+  porOrigem: RelatorioOrigem[];
+  porVendedor: RelatorioVendedor[];
+  porEstado: RelatorioEstado[];
+  faixasFipe: RelatorioFaixaFipe[];
+  porProduto: RelatorioProduto[];
+  marketingNotion: RelatorioMarketingMes[];
 }
