@@ -194,7 +194,9 @@ export function OverviewPage() {
                   <td className="py-2 text-right text-[var(--fg-muted)]">{v.vendasGanhas}</td>
                   <td className="py-2 text-right text-[var(--fg-muted)]">{formatarMoeda(v.valorGanho)}</td>
                   <td className="py-2 text-right text-[var(--fg-muted)]">{formatarMoeda(v.valorAdesao)}</td>
-                  <td className="py-2 text-right text-[var(--fg-muted)]">{formatarPercentual(v.taxaConversao)}</td>
+                  <td className="py-2 text-right text-[var(--fg-muted)]" title={v.leadsAtribuidos === 0 ? "Sem leads novos no mês: as vendas são de leads anteriores" : undefined}>
+                    {v.leadsAtribuidos === 0 ? "—" : formatarPercentual(v.taxaConversao)}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -24,7 +24,9 @@ public class NotionVendedorSemEmailTests
         };
         if (vendedorNotionId is not null)
         {
-            object pessoa = email is null
+            object pessoa = email is null && vendedorNome is null
+                ? new { id = vendedorNotionId, type = tipo }
+                : email is null
                 ? new { id = vendedorNotionId, type = tipo, name = vendedorNome }
                 : new { id = vendedorNotionId, type = tipo, name = vendedorNome, person = new { email } };
             props["Vendedor"] = new { type = "people", people = new[] { pessoa } };
@@ -107,6 +109,51 @@ public class NotionVendedorSemEmailTests
         Assert.Equal("id-novo", nova.NotionUserId);
         Assert.False(nova.Ativo);
         Assert.Equal("id-ana", (await db.Users.SingleAsync(u => u.Id == jaExiste.Id)).NotionUserId);
+    }
+
+    [Fact]
+    public async Task VendedorSemNomeNoNotion_GanhaLoginProvisorio_EOLeadSaiDoPlaceholder()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, service, regional, ganho, placeholder, etapas) = await PrepararAsync(factory);
+        await using var _ = db;
+        var notionId = "56ded1ab-edda-4365-862f-e2d90844933a";
+        // Lead que já estava parado no "não identificado" e é reprocessado.
+        db.CrmLeads.Add(new CrmLead
+        {
+            NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, NotionPageId = "p1", ResponsavelId = placeholder.Id,
+            NotionVendedorEmail = NotionSyncService.SemVendedor, ConsentimentoOrigem = OrigemLead.MarcadorSincronizacaoNotion,
+        });
+        await db.SaveChangesAsync();
+
+        // Pessoa sem nome (a integração do Notion não a enxerga): só o id.
+        await service.ProcessarPaginaAsync(Pagina("p1", "Cliente", notionId, vendedorNome: null), regional, "MG132", etapas, ganho, placeholder.Id, false, CancellationToken.None);
+
+        var vendedor = await db.Users.SingleAsync(u => u.NotionUserId == notionId);
+        Assert.Equal("Vendedor Notion 56ded1ab", vendedor.NomeCompleto);
+        Assert.False(vendedor.Ativo);
+        Assert.Equal(vendedor.Id, (await db.CrmLeads.SingleAsync()).ResponsavelId);
+    }
+
+    [Fact]
+    public async Task PorcentagemDoNotion_EGuardadaEmPontos()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, service, regional, ganho, placeholder, etapas) = await PrepararAsync(factory);
+        await using var _ = db;
+        var props = new Dictionary<string, object>
+        {
+            ["Name"] = new { type = "title", title = new object[] { new { plain_text = "Cliente venda" } } },
+            ["WhatsApp"] = new { type = "rich_text", rich_text = new object[] { new { plain_text = "31988887777" } } },
+            ["Status"] = new { type = "select", select = new { name = "VENDA CONCLUIDA" } },
+            ["Mensalidade"] = new { type = "number", number = 244.99 },
+            ["Porcentagem"] = new { type = "number", number = 0.23 }, // 23% no Notion
+        };
+        var pagina = JsonDocument.Parse(JsonSerializer.Serialize(new { id = "venda-1", properties = props })).RootElement.Clone();
+
+        await service.ProcessarPaginaAsync(pagina, regional, "MG132", etapas, ganho, placeholder.Id, false, CancellationToken.None);
+
+        Assert.Equal(23m, (await db.CrmOpportunities.SingleAsync()).Porcentagem);
     }
 
     [Fact]
