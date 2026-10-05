@@ -21,6 +21,12 @@ public class ApplicationUser : IdentityUser<Guid>
     public Guid? RegionalId { get; set; }
     public CrmRegional? Regional { get; set; }
 
+    /// <summary>
+    /// Regionais ocultas para este usuário (ids separados por vírgula; ver EscopoRegional). Só vale para quem tem visão total
+    /// (Admin/Gestor master/Supervisor): ele deixa de ver os dados dessas regionais. Nulo = vê todas.
+    /// </summary>
+    public string? RegionaisOcultas { get; set; }
+
     /// <summary>Subgrupo do consultor dentro da regional (ex: "Externos", "Internos"). Apenas organizacional.</summary>
     public Guid? GrupoId { get; set; }
     public CrmGrupo? Grupo { get; set; }

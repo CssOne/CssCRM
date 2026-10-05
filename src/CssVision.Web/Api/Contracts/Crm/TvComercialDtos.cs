@@ -34,4 +34,15 @@ public record TvComercialDto(
     IReadOnlyList<TvRegionalDto> RankingRegionais,
     IReadOnlyList<TvEvolucaoDto> EvolucaoMensal,
     IReadOnlyList<TvVendaDto> UltimasVendas,
-    DateTimeOffset AtualizadoEm);
+    DateTimeOffset AtualizadoEm,
+    /// <summary>Indicadores administrativos do Notion; nulo se o Notion não respondeu.</summary>
+    TvAdministrativoDto? Administrativo = null,
+    /// <summary>Quantas das vendas do painel vêm só do Notion (base MG134), já sem as que o CRM também tem.</summary>
+    int VendasSoNoNotion = 0);
+
+public record TvAdministrativoRegistroDto(string Pessoa, string? FotoUrl, string? Cliente, string? Placa, string? TipoEvento, string Data);
+
+public record TvAdministrativoIndicadorDto(string Id, string Rotulo, string Acao, int Total, int Hoje, TvAdministrativoRegistroDto? Ultimo);
+
+/// <summary>Reintegrações, eventos finalizados e rastreadores do mês, direto da base operacional do Notion.</summary>
+public record TvAdministrativoDto(IReadOnlyList<TvAdministrativoIndicadorDto> Indicadores);

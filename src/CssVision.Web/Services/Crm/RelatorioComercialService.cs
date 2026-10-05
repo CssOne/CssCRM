@@ -85,7 +85,7 @@ public sealed class RelatorioComercialService(
                 && o.DataEfetivaFechamento >= inicioUtc && o.DataEfetivaFechamento < fimUtc);
         if (visiveis is not null)
         {
-            leadsQuery = leadsQuery.Where(l => l.ResponsavelId != null && visiveis.Contains(l.ResponsavelId.Value));
+            leadsQuery = leadsQuery.Where(l => visiveis.Contains(l.ResponsavelId ?? Guid.Empty));
             vendasQuery = vendasQuery.Where(o => visiveis.Contains(o.ResponsavelId));
         }
 

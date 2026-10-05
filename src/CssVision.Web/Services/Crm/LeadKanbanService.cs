@@ -174,7 +174,7 @@ public sealed class LeadKanbanService(
 
         if (visiveis is not null)
         {
-            query = query.Where(l => l.ResponsavelId != null && visiveis.Contains(l.ResponsavelId.Value));
+            query = query.Where(l => visiveis.Contains(l.ResponsavelId ?? Guid.Empty));
         }
 
         if (!string.IsNullOrWhiteSpace(filtro.Busca))

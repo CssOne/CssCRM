@@ -19,7 +19,10 @@ public record UserSummaryDto(
     string? FotoUrl,
     DateTimeOffset CriadoEm,
     IReadOnlyList<string>? RecebeSomenteOQue = null,
-    int? LimiteDiarioLeads = null);
+    int? LimiteDiarioLeads = null,
+    /// <summary>Regionais ocultas para este administrador (ele não vê os dados delas).</summary>
+    IReadOnlyList<Guid>? RegionaisOcultasIds = null,
+    IReadOnlyList<string>? RegionaisOcultasNomes = null);
 
 public record UserFilterRequest : PagedRequest
 {
@@ -41,7 +44,8 @@ public record UserCreateRequest(
     Guid? GrupoId,
     int? LimiteMensalLeads,
     IReadOnlyList<string>? RecebeSomenteOQue = null,
-    int? LimiteDiarioLeads = null);
+    int? LimiteDiarioLeads = null,
+    IReadOnlyList<Guid>? RegionaisOcultasIds = null);
 
 public record UserUpdateRequest(
     string NomeCompleto,
@@ -53,7 +57,10 @@ public record UserUpdateRequest(
     int? LimiteMensalLeads,
     bool Ativo,
     IReadOnlyList<string>? RecebeSomenteOQue = null,
-    int? LimiteDiarioLeads = null);
+    int? LimiteDiarioLeads = null,
+    /// <summary>Regionais a ocultar deste administrador; só vale com <see cref="AlterarRegionaisOcultas"/> e vindo de um administrador sem regionais ocultas.</summary>
+    IReadOnlyList<Guid>? RegionaisOcultasIds = null,
+    bool AlterarRegionaisOcultas = false);
 
 public record ResetPasswordRequest(string NovaSenha);
 

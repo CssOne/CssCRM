@@ -4,7 +4,7 @@ import { Button, DocumentoInput, FieldError, Input, Label, Select, Textarea } fr
 import { LeadPicker } from "./LeadPicker";
 import { useAuth } from "../../context/AuthContext";
 import { ESTADOS_BRASIL } from "../../lib/estados";
-import { OPCOES_O_QUE, OPCOES_ORIGEM, OPCOES_TIPO_INDICACAO } from "../../lib/opcoesLead";
+import { OPCOES_ORIGEM, OPCOES_TIPO_INDICACAO } from "../../lib/opcoesLead";
 import { TagSelect } from "./TagSelect";
 
 export interface LeadFormValues {
@@ -20,6 +20,7 @@ export interface LeadFormValues {
   regional: string;
   origem: string;
   campanha: string;
+  /** "O que?" do lead: não é mais pedido no formulário, mas o valor já salvo no lead segue preservado ao editar. */
   produtoInteresse: string;
   placa: string;
   temSeguro: string;
@@ -219,17 +220,6 @@ export function LeadForm({
         <div>
           <Label htmlFor={`${idPrefix}-regional`}>Regional</Label>
           <Input id={`${idPrefix}-regional`} value={valores.regional} onChange={(e) => set("regional", e.target.value)} />
-        </div>
-
-        <div>
-          <Label htmlFor={`${idPrefix}-o-que`}>O que?</Label>
-          <TagSelect
-            id={`${idPrefix}-o-que`}
-            rotulo="O que?"
-            opcoes={OPCOES_O_QUE}
-            valor={valores.produtoInteresse}
-            onChange={(v) => set("produtoInteresse", v)}
-          />
         </div>
 
         {podeVerOrigem && (

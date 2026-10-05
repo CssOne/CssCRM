@@ -37,6 +37,11 @@ public sealed class UserManagementService(
             var regionalId = await ObterRegionalAtualAsync(ct);
             query = regionalId is null ? query.Where(u => false) : query.Where(u => u.RegionalId == regionalId);
         }
+        else if (await EscopoRegional.OcultasAsync(db, currentUser, ct) is { Count: > 0 } ocultas)
+        {
+            // Administrador com regionais ocultas não lista quem é delas (quem não tem regional continua aparecendo).
+            query = query.Where(u => u.RegionalId == null || !ocultas.Contains(u.RegionalId.Value));
+        }
 
         // "Vendedor Notion ..." (vendedores que o Notion não identifica) ficam fora do sistema por enquanto: só aparecem
         // se alguém procurar o nome deles de propósito, para a revisão futura.
@@ -134,6 +139,7 @@ public sealed class UserManagementService(
             }
         }
 
+        await ExigirRegionalVisivelAsync(regionalId, ct);
         var grupoId = await ValidarGrupoAsync(request.GrupoId, regionalId, ct);
 
         var usuario = new ApplicationUser
@@ -144,6 +150,7 @@ public sealed class UserManagementService(
             NomeCompleto = request.NomeCompleto.Trim(),
             PhoneNumber = DocumentValidation.NormalizarTelefone(request.Telefone),
             RegionalId = regionalId,
+            RegionaisOcultas = await ValidarOcultasAsync(request.RegionaisOcultasIds, request.Papel, ct),
             GestorComercialId = gestorComercialId,
             GrupoId = grupoId,
             LimiteMensalLeads = request.Papel == Roles.Comercial ? request.LimiteMensalLeads : null,
@@ -225,6 +232,7 @@ public sealed class UserManagementService(
             }
         }
 
+        await ExigirRegionalVisivelAsync(regionalId, ct);
         var grupoId = await ValidarGrupoAsync(request.GrupoId, regionalId, ct);
 
         usuario.NomeCompleto = request.NomeCompleto.Trim();
@@ -232,6 +240,9 @@ public sealed class UserManagementService(
         usuario.RegionalId = regionalId;
         usuario.GestorComercialId = gestorComercialId;
         usuario.GrupoId = grupoId;
+        // Papel sem visão total nunca fica com regionais ocultas; a lista só muda quando o chamador a manda.
+        if (request.Papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial)) usuario.RegionaisOcultas = null;
+        else if (request.AlterarRegionaisOcultas) usuario.RegionaisOcultas = await ValidarOcultasAsync(request.RegionaisOcultasIds, request.Papel, ct, alterando: true);
         usuario.LimiteMensalLeads = request.Papel == Roles.Comercial ? request.LimiteMensalLeads : null;
         usuario.LimiteDiarioLeads = request.Papel == Roles.Comercial ? request.LimiteDiarioLeads : null;
         // Só quando vier (lista vazia limpa): outras telas que editam o usuário não mandam o campo.
@@ -368,11 +379,43 @@ public sealed class UserManagementService(
         return grupoId;
     }
 
+    /// <summary>
+    /// Regionais ocultas de um administrador. Só quem não tem regionais ocultas define isso (senão ele se liberaria), e só para quem
+    /// tem visão total (Admin/Gestor master/Supervisor); para os demais papéis, e para uma lista vazia, não há regional oculta.
+    /// </summary>
+    private async Task<string?> ValidarOcultasAsync(IReadOnlyList<Guid>? ids, string papel, CancellationToken ct, bool alterando = false)
+    {
+        var lista = (ids ?? []).Where(i => i != Guid.Empty).Distinct().ToList();
+        if (papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial)) return null;
+        if (lista.Count == 0 && !alterando) return null;
+        if (!GerenciaTodasAsRegionais || (await EscopoRegional.OcultasAsync(db, currentUser, ct)).Count > 0)
+        {
+            throw new CrmForbiddenException("Apenas um administrador sem regionais ocultas pode ocultar regionais de outro administrador.");
+        }
+        var existentes = await db.CrmRegionais.AsNoTracking().Where(r => lista.Contains(r.Id)).Select(r => r.Id).ToListAsync(ct);
+        if (existentes.Count != lista.Count) throw new CrmNotFoundException("Regional", lista.First(i => !existentes.Contains(i)));
+        return EscopoRegional.Gravar(lista);
+    }
+
+    /// <summary>Quem tem regionais ocultas não cadastra nem edita usuário de uma delas.</summary>
+    private async Task ExigirRegionalVisivelAsync(Guid? regionalId, CancellationToken ct)
+    {
+        if (regionalId is { } r && (await EscopoRegional.OcultasAsync(db, currentUser, ct)).Contains(r))
+        {
+            throw new CrmForbiddenException("Esta regional está oculta para você.");
+        }
+    }
+
     private async Task<ApplicationUser> CarregarComEscopoAsync(Guid id, CancellationToken ct)
     {
         var usuario = await db.Users.Include(u => u.Regional).Include(u => u.GestorComercial).Include(u => u.Grupo)
             .FirstOrDefaultAsync(u => u.Id == id, ct)
             ?? throw new CrmNotFoundException("Usuário", id);
+
+        if (usuario.RegionalId is { } regionalDoUsuario && (await EscopoRegional.OcultasAsync(db, currentUser, ct)).Contains(regionalDoUsuario))
+        {
+            throw new CrmForbiddenException("Você não tem permissão para acessar este usuário.");
+        }
 
         if (!GerenciaTodasAsRegionais)
         {
@@ -394,6 +437,14 @@ public sealed class UserManagementService(
             papeis.ToList(), usuario.RegionalId, usuario.Regional?.Nome,
             usuario.GestorComercialId, usuario.GestorComercial?.NomeCompleto,
             usuario.GrupoId, usuario.Grupo?.Nome,
-            usuario.Ativo, usuario.LimiteMensalLeads, usuario.FotoUrl, usuario.CriadoEm, FiltroOQue.Separar(usuario.RecebeSomenteOQue), usuario.LimiteDiarioLeads);
+            usuario.Ativo, usuario.LimiteMensalLeads, usuario.FotoUrl, usuario.CriadoEm, FiltroOQue.Separar(usuario.RecebeSomenteOQue), usuario.LimiteDiarioLeads,
+            [.. EscopoRegional.Ler(usuario.RegionaisOcultas)],
+            await NomesDasOcultasAsync(usuario.RegionaisOcultas, ct));
+    }
+
+    private async Task<IReadOnlyList<string>> NomesDasOcultasAsync(string? ocultas, CancellationToken ct)
+    {
+        var ids = EscopoRegional.Ler(ocultas);
+        return ids.Count == 0 ? [] : await db.CrmRegionais.AsNoTracking().Where(r => ids.Contains(r.Id)).OrderBy(r => r.Nome).Select(r => r.Nome).ToListAsync(ct);
     }
 }

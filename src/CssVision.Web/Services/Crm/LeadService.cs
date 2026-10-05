@@ -695,7 +695,7 @@ public sealed class LeadService(
         var query = db.CrmLeads.Where(l => request.LeadIds.Contains(l.Id) && !l.Arquivado);
         if (visiveis is not null)
         {
-            query = query.Where(l => l.ResponsavelId != null && visiveis.Contains(l.ResponsavelId.Value));
+            query = query.Where(l => visiveis.Contains(l.ResponsavelId ?? Guid.Empty));
         }
 
         var leads = await query.ToListAsync(ct);
@@ -976,7 +976,7 @@ public sealed class LeadService(
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
         if (visiveis is not null)
         {
-            query = query.Where(l => l.ResponsavelId != null && visiveis.Contains(l.ResponsavelId.Value));
+            query = query.Where(l => visiveis.Contains(l.ResponsavelId ?? Guid.Empty));
         }
 
         return query;

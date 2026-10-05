@@ -205,6 +205,24 @@ export interface TvEvolucao {
   valorAcumulado: number;
 }
 
+export interface TvAdministrativoRegistro {
+  pessoa: string;
+  fotoUrl?: string | null;
+  cliente?: string | null;
+  placa?: string | null;
+  tipoEvento?: string | null;
+  data: string;
+}
+
+export interface TvAdministrativoIndicador {
+  id: "reintegration" | "claim" | "tracker" | string;
+  rotulo: string;
+  acao: string;
+  total: number;
+  hoje: number;
+  ultimo?: TvAdministrativoRegistro | null;
+}
+
 export interface TvComercial {
   periodo: { mes: number; ano: number };
   resumo: { vendasHoje: number; vendasNoMes: number; valorHoje: number; valorNoMes: number; percentualMetaGeral?: number | null };
@@ -215,6 +233,10 @@ export interface TvComercial {
   evolucaoMensal: TvEvolucao[];
   ultimasVendas: TvVenda[];
   atualizadoEm: string;
+  /** Reintegrações, eventos finalizados e rastreadores (Notion); nulo se o Notion não respondeu. */
+  administrativo?: { indicadores: TvAdministrativoIndicador[] } | null;
+  /** Vendas do painel que existem só no Notion (base MG134), já sem as que o CRM também tem. */
+  vendasSoNoNotion?: number;
 }
 
 export interface LeadTotais {
@@ -952,6 +974,21 @@ export interface MarketingMotivoPerda {
   quantidade: number;
 }
 
+/** Números de uma regional no Tráfego pago (MG132, MG134...). */
+export interface MarketingRegional {
+  regional: string;
+  totalLeads: number;
+  semEtapa: number;
+  emAndamento: number;
+  ganhos: number;
+  perdidos: number;
+  naoFazemos: number;
+  taxaConversao: number;
+  semContato: number;
+  semResponsavel: number;
+  participacaoPercentual: number;
+}
+
 export interface MarketingOpcoes {
   oQue: string[];
   origens: string[];
@@ -960,6 +997,7 @@ export interface MarketingOpcoes {
   consultores: { id: string; nome: string }[];
   estados: string[];
   etapas: string[];
+  regionais?: string[];
 }
 
 export interface MarketingLeadItem {
@@ -999,6 +1037,8 @@ export interface MarketingDashboard {
   porConsultorMensal: MarketingConsultorMes[];
   /** Total de leads do período — a lista vem paginada por /marketing/leads. */
   totalLeadsLista: number;
+  /** Leads por regional, com todos os filtros menos o de regional (para comparar lado a lado). */
+  porRegional?: MarketingRegional[];
 }
 
 // --- Metas ---
@@ -1176,6 +1216,9 @@ export interface UserSummary {
   /** Distribuição automática: só recebe leads com estes "O que?". Nulo = qualquer lead. */
   recebeSomenteOQue?: string[] | null;
   limiteDiarioLeads?: number | null;
+  /** Regionais ocultas para este administrador (ele não vê os dados delas). */
+  regionaisOcultasIds?: string[] | null;
+  regionaisOcultasNomes?: string[] | null;
 }
 
 export interface UserFilterRequest {
@@ -1200,6 +1243,7 @@ export interface UserCreateRequest {
   limiteMensalLeads?: number | null;
   recebeSomenteOQue?: string[] | null;
   limiteDiarioLeads?: number | null;
+  regionaisOcultasIds?: string[] | null;
 }
 
 export interface UserUpdateRequest {
@@ -1213,6 +1257,9 @@ export interface UserUpdateRequest {
   ativo: boolean;
   recebeSomenteOQue?: string[] | null;
   limiteDiarioLeads?: number | null;
+  regionaisOcultasIds?: string[] | null;
+  /** Verdadeiro quando a lista acima foi mexida (lista vazia + verdadeiro = mostra todas de novo). */
+  alterarRegionaisOcultas?: boolean;
 }
 
 export interface GrupoMembro {

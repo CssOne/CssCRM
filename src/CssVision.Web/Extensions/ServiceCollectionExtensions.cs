@@ -119,6 +119,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IActivityService, ActivityService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<ITvComercialService, TvComercialService>();
+        services.AddSingleton<ITvNotionFonte, TvNotionFonte>();
         services.AddScoped<IGoalService, GoalService>();
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IManagementService, ManagementService>();

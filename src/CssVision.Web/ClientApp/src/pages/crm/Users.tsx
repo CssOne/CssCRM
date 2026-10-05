@@ -285,6 +285,7 @@ function UsuariosTab({
                   <p className="truncate text-xs text-[var(--fg-muted)]">
                     {usuario.email} · {formatarTelefone(usuario.telefone)}
                     {usuario.regionalNome && ` · ${usuario.regionalNome}`}
+                    {(usuario.regionaisOcultasNomes?.length ?? 0) > 0 && ` · oculta: ${usuario.regionaisOcultasNomes?.join(", ")}`}
                     {usuario.grupoNome && ` · ${usuario.grupoNome}`}
                     {usuario.gestorComercialNome && ` · gestor: ${usuario.gestorComercialNome}`}
                   </p>
