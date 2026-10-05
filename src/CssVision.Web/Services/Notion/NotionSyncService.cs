@@ -544,11 +544,11 @@ public sealed class NotionSyncService(
     private static bool IndicacaoMarcada(JsonElement page) =>
         string.Equals(page.SelectPorNomeAproximado("Indicação?"), "SIM", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>"PESSOAL" → "Pessoal", "CONTEMPLANDO SONHOS" → "Contemplando Sonhos" (mesma grafia das opções do CRM).</summary>
+    /// <summary>"PESSOAL" → "Pessoal", "AÇÃO EXTERNA" → "Ação Externa", "CSS" → "CSS" (mesma grafia das opções do CRM).</summary>
     public static string NormalizarTipoIndicacao(string tipo)
     {
         var t = tipo.Trim();
-        var conhecido = new[] { "Lead", "Indicação", TipoIndicacaoLead.IndicacaoLead, "Pessoal", "Contemplando Sonhos" }
+        var conhecido = new[] { "Lead", "Indicação", TipoIndicacaoLead.IndicacaoLead, "Pessoal", "Contemplando Sonhos", "Parceria", "Ação Externa", "CSS" }
             .FirstOrDefault(o => string.Equals(RemoverAcentos(o), RemoverAcentos(t), StringComparison.OrdinalIgnoreCase));
         if (conhecido is not null) return conhecido;
         var titulo = System.Globalization.CultureInfo.GetCultureInfo("pt-BR").TextInfo.ToTitleCase(t.ToLowerInvariant());
