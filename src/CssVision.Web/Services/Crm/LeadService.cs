@@ -425,14 +425,25 @@ public sealed class LeadService(
             throw new CrmBusinessException($"Informe de 1 a {MaximoVeiculosAdicionais} veículos a mais.", "quantidade_invalida");
         }
 
-        var original = await CarregarComEscopoAsync(id, ct);
+        var original = await CarregarSemEscopoAsync(id, ct);
+        // Cliente que já é atendido por OUTRO consultor (a duplicidade de CPF/e-mail vale para todo o sistema): quem fechou
+        // o outro veículo registra a venda no próprio nome. O card novo é dele e só leva o nome (que o aviso de duplicidade já
+        // mostra); CPF, telefone, e-mail e demais dados ficam no card do outro consultor — o CPF da venda é o que quem
+        // registra digita no formulário.
+        var deOutroConsultor = !await equipe.PodeAcessarVendedorAsync(original.ResponsavelId ?? Guid.Empty, ct);
+        if (deOutroConsultor) await ResponsavelAtivo.GarantirAsync(db, currentUser.UserId, ct);
         if (request.EtapaId is { } etapaInformada && !await db.CrmLeadStages.AnyAsync(s => s.Id == etapaInformada, ct))
         {
             throw new CrmNotFoundException("Etapa de lead", etapaInformada);
         }
+        // Para a coluna Leads/Indicação, o card novo é cadastro manual de quem registra (não herda a etiqueta do outro).
+        var referenciaDeEtapa = deOutroConsultor ? new CrmLead { CriadoManualmente = true } : original;
         var etapaId = request.VendaConcluida
-            ? await EtapaVendaConcluidaAsync(original, ct)
-            : request.EtapaId ?? await EtapaDoVeiculoAdicionalAsync(original, ct);
+            ? await EtapaVendaConcluidaAsync(referenciaDeEtapa, ct)
+            : request.EtapaId ?? (deOutroConsultor ? await ObterEtapaInicialIdAsync(ct) : await EtapaDoVeiculoAdicionalAsync(original, ct));
+        var regionalDoCriador = deOutroConsultor
+            ? await db.Users.AsNoTracking().Where(u => u.Id == currentUser.UserId).Select(u => u.Regional != null ? u.Regional.Nome : null).FirstOrDefaultAsync(ct)
+            : null;
 
         // Sempre aponta para o primeiro card do cliente, mesmo quando criado a partir de outro adicional.
         var principal = original.VeiculoAdicionalDeLead ?? original;
@@ -444,7 +455,18 @@ public sealed class LeadService(
             // Dados do cliente (inclusive CPF/CNPJ e e-mail — um cliente pode ter vários veículos),
             // sem os de rastreio do anúncio (não é um lead novo do tráfego: não conta nos limites nem
             // nos números de tráfego pago) e sem a placa, que é do outro veículo.
-            var novo = new CrmLead
+            var novo = deOutroConsultor ? new CrmLead
+            {
+                EtapaId = etapaId,
+                NomeOuRazaoSocial = principal.NomeOuRazaoSocial,
+                TipoPessoa = principal.TipoPessoa,
+                Regional = regionalDoCriador,
+                CriadoManualmente = true,
+                ResponsavelId = currentUser.UserId,
+                ResponsavelAtribuidoEm = DateTimeOffset.UtcNow,
+                VeiculoAdicionalDeLeadId = principal.Id,
+                Observacoes = $"Outro veículo de cliente já atendido por outro consultor (card original criado em {principal.CriadoEm.ToOffset(TimeSpan.FromHours(-3)):dd/MM/yyyy}).",
+            } : new CrmLead
             {
                 EtapaId = etapaId,
                 NomeOuRazaoSocial = principal.NomeOuRazaoSocial,
@@ -473,7 +495,7 @@ public sealed class LeadService(
                 VeiculoAdicionalDeLeadId = principal.Id,
                 Observacoes = $"Veículo adicional nº {jaExistentes + i + 2} do cliente (card original criado em {principal.CriadoEm.ToOffset(TimeSpan.FromHours(-3)):dd/MM/yyyy}).",
             };
-            foreach (var lt in original.LeadTags) novo.LeadTags.Add(new CrmLeadTag { TagId = lt.TagId });
+            if (!deOutroConsultor) foreach (var lt in original.LeadTags) novo.LeadTags.Add(new CrmLeadTag { TagId = lt.TagId });
             novos.Add(novo);
         }
 
@@ -482,7 +504,7 @@ public sealed class LeadService(
 
         foreach (var novo in novos)
         {
-            await audit.RegistrarAsync("LeadVeiculoAdicionalCriado", nameof(CrmLead), novo.Id, new { LeadOriginalId = principal.Id }, ct);
+            await audit.RegistrarAsync("LeadVeiculoAdicionalCriado", nameof(CrmLead), novo.Id, new { LeadOriginalId = principal.Id, DeOutroConsultor = deOutroConsultor, ResponsavelOriginalId = original.ResponsavelId }, ct);
         }
         eventos?.PublicarQuadroAtualizado("crm");
 
@@ -959,6 +981,15 @@ public sealed class LeadService(
 
         return query;
     }
+
+    /// <summary>Lead sem checar de quem é a carteira (quem chama decide o que fazer com o dado — ver CriarVeiculosAdicionaisAsync).</summary>
+    private async Task<CrmLead> CarregarSemEscopoAsync(Guid id, CancellationToken ct) =>
+        await db.CrmLeads
+            .Include(l => l.LeadTags).ThenInclude(lt => lt.Tag)
+            .Include(l => l.VeiculoAdicionalDeLead)
+            .Include(l => l.Etapa)
+            .FirstOrDefaultAsync(l => l.Id == id && !l.Arquivado, ct)
+            ?? throw new CrmNotFoundException("Lead", id);
 
     private async Task<CrmLead> CarregarComEscopoAsync(Guid id, CancellationToken ct)
     {

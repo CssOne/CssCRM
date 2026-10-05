@@ -185,7 +185,8 @@ export function LeadsKanbanPage() {
   const [duplicidade, setDuplicidade] = useState<LeadDuplicateWarning | null>(null);
 
   /** Formulários de venda dos outros veículos do cliente, um por vez (ver concluirVenda). */
-  const [outroVeiculo, setOutroVeiculo] = useState<{ leadId: string; atual: number; total: number } | null>(null);
+  const [outroVeiculo, setOutroVeiculo] = useState<{ leadId: string; atual: number; total: number; cliente?: { nome: string; documento: string } } | null>(null);
+  const ultimoCadastroTentado = useRef<{ documento: string }>({ documento: "" });
   const [pendenciaVenda, setPendenciaVenda] = useState<{ cartao: LeadKanbanCard; etapaId: string; indicacaoLead?: boolean } | null>(null);
   const [pendenciaPerda, setPendenciaPerda] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
   const [pendenciaNaoFazemos, setPendenciaNaoFazemos] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
@@ -560,6 +561,7 @@ export function LeadsKanbanPage() {
   async function criarLead(valores: LeadFormValues, ignorarDuplicidade = false) {
     setSalvandoNovo(true);
     setDuplicidade(null);
+    ultimoCadastroTentado.current = { documento: valores.documento };
     try {
       // Lead cadastrado à mão pelo consultor vai direto pra coluna "Em atendimento" que só aceita
       // a etiqueta "Indicação" (a segunda das duas colunas de mesmo nome — ver colunasEmAtendimento).
@@ -939,7 +941,7 @@ export function LeadsKanbanPage() {
                   onClick={() => {
                     const clienteId = duplicidade.leadExistenteId;
                     fecharModalNovo();
-                    setOutroVeiculo({ leadId: clienteId, atual: 1, total: 1 });
+                    setOutroVeiculo({ leadId: clienteId, atual: 1, total: 1, cliente: { nome: duplicidade.nomeExistente, documento: ultimoCadastroTentado.current.documento } });
                   }}
                 >
                   <Car className="size-4" /> Outro veículo deste cliente
@@ -996,6 +998,7 @@ export function LeadsKanbanPage() {
         key={outroVeiculo ? `${outroVeiculo.leadId}-${outroVeiculo.atual}` : "outro-veiculo"}
         open={!!outroVeiculo}
         novoVeiculo
+        clienteInicial={outroVeiculo?.cliente ?? null}
         tituloExtra={outroVeiculo && outroVeiculo.total > 1 ? `veículo ${outroVeiculo.atual + 1} de ${outroVeiculo.total + 1}` : undefined}
         leadId={outroVeiculo?.leadId ?? null}
         pipelineGanhoEtapaId={etapaGanhoPipelineId ?? undefined}
