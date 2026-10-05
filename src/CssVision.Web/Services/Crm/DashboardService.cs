@@ -23,11 +23,12 @@ public sealed class DashboardService(
 
     private async Task<DashboardDto> CalcularAsync(DashboardFilterRequest filtro, CancellationToken ct)
     {
-        var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
-        var inicioPeriodo = filtro.DataInicio ?? new DateOnly(hoje.Year, hoje.Month, 1);
+        // Mês e dia de hoje no horário de Brasília: o painel passa para o mês novo à meia-noite daqui.
+        var hoje = HorarioBrasilia.Hoje;
+        var inicioPeriodo = filtro.DataInicio ?? HorarioBrasilia.PrimeiroDiaDoMes(hoje);
         var fimPeriodo = filtro.DataFim ?? hoje;
-        var inicioUtc = inicioPeriodo.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var fimUtc = fimPeriodo.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+        var inicioUtc = HorarioBrasilia.Inicio(inicioPeriodo);
+        var fimUtc = HorarioBrasilia.Fim(fimPeriodo);
         var agora = DateTimeOffset.UtcNow;
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
@@ -49,8 +50,8 @@ public sealed class DashboardService(
         var atividadesQuery = db.CrmActivities.AsNoTracking().Where(a => !a.Arquivado);
         if (visiveis is not null) atividadesQuery = atividadesQuery.Where(a => visiveis.Contains(a.ResponsavelId));
 
-        var inicioHoje = hoje.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var fimHoje = hoje.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+        var inicioHoje = HorarioBrasilia.Inicio(hoje);
+        var fimHoje = HorarioBrasilia.Fim(hoje);
 
         var novosLeads = await leadsQuery.CountAsync(l => l.CriadoEm >= inicioUtc && l.CriadoEm <= fimUtc, ct);
         var leadsSemContato = await leadsQuery.CountAsync(l => l.UltimoContatoEm == null, ct);
@@ -79,7 +80,7 @@ public sealed class DashboardService(
             oportunidadesAbertas, valorPipeline, taxaConversao, ticketMedio, valorGanho, qtdGanhas, valorAdesao);
 
         // Meta comercial do mês corrente para os vendedores visíveis.
-        var mesReferencia = new DateOnly(hoje.Year, hoje.Month, 1);
+        var mesReferencia = HorarioBrasilia.PrimeiroDiaDoMes(hoje);
         var metaQuery = db.CrmSalesGoals.AsNoTracking().Where(g => g.MesReferencia == mesReferencia);
         if (visiveis is not null) metaQuery = metaQuery.Where(g => visiveis.Contains(g.VendedorId));
         var metaValor = await metaQuery.SumAsync(g => (decimal?)g.MetaValor, ct) ?? 0m;
@@ -102,7 +103,7 @@ public sealed class DashboardService(
         metaQuantidade += await metaRegionalQuery.SumAsync(g => (int?)g.MetaQuantidadeVendas, ct) ?? 0;
 
         var ganhasDoMes = oportunidadesQuery.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho &&
-            o.DataEfetivaFechamento >= mesReferencia.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            o.DataEfetivaFechamento >= HorarioBrasilia.Inicio(mesReferencia));
         var realizadoMes = await ganhasDoMes.SumAsync(o => (decimal?)(o.ValorFinal ?? o.ValorEstimado), ct) ?? 0m;
         var realizadoQuantidadeMes = await ganhasDoMes.CountAsync(ct);
         var meta = new MetaResultadoDto(
@@ -145,7 +146,7 @@ public sealed class DashboardService(
     private static async Task<List<EvolucaoVendasDto>> ObterEvolucaoVendasAsync(IQueryable<CrmOpportunity> oportunidadesQuery, DateOnly hoje, CancellationToken ct)
     {
         var inicioJanela = new DateOnly(hoje.Year, hoje.Month, 1).AddMonths(-5);
-        var inicioJanelaUtc = inicioJanela.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var inicioJanelaUtc = HorarioBrasilia.Inicio(inicioJanela);
 
         var fechamentos = await oportunidadesQuery
             .Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho && o.DataEfetivaFechamento >= inicioJanelaUtc)
@@ -156,7 +157,7 @@ public sealed class DashboardService(
         for (var i = 5; i >= 0; i--)
         {
             var mes = new DateOnly(hoje.Year, hoje.Month, 1).AddMonths(-i);
-            var doMes = fechamentos.Where(f => f.DataEfetivaFechamento!.Value.Year == mes.Year && f.DataEfetivaFechamento.Value.Month == mes.Month).ToList();
+            var doMes = fechamentos.Where(f => HorarioBrasilia.Dia(f.DataEfetivaFechamento!.Value) is var dia && dia.Year == mes.Year && dia.Month == mes.Month).ToList();
             resultado.Add(new EvolucaoVendasDto(mes.ToString("MM/yyyy"), doMes.Sum(f => f.Valor), doMes.Count));
         }
 

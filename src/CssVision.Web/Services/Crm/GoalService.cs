@@ -22,7 +22,7 @@ public sealed class GoalService(
     /// </summary>
     public async Task<IReadOnlyList<SalesGoalDto>> ListarAsync(DateOnly? mesReferencia, CancellationToken ct)
     {
-        var mes = NormalizarMes(mesReferencia ?? DateOnly.FromDateTime(DateTime.UtcNow));
+        var mes = NormalizarMes(mesReferencia ?? HorarioBrasilia.Hoje);
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
 
         var consultores = (await userManager.GetUsersInRoleAsync(Roles.Comercial))
@@ -113,7 +113,7 @@ public sealed class GoalService(
             throw new CrmForbiddenException("Apenas administradores podem ver as metas gerais por regional.");
         }
 
-        var mes = NormalizarMes(mesReferencia ?? DateOnly.FromDateTime(DateTime.UtcNow));
+        var mes = NormalizarMes(mesReferencia ?? HorarioBrasilia.Hoje);
 
         var regionais = await db.CrmRegionais.AsNoTracking()
             .Where(r => r.Ativa)
