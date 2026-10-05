@@ -67,7 +67,7 @@ public sealed class NotionSyncService(
         var relatorios = new List<string>();
         // Primeiro o incremental de todas as bases (cards novos/editados não esperam as passadas
         // longas); depois, a reimportação dos consultores ativos e a importação das vendas pendentes.
-        foreach (var passada in new[] { Passada.Normal, Passada.ReimportacaoAtivos, Passada.ImportacaoVendas, Passada.Importacao2025, Passada.CorrecaoDataChegada })
+        foreach (var passada in new[] { Passada.Normal, Passada.ReimportacaoAtivos, Passada.ImportacaoVendas, Passada.Importacao2025, Passada.ImportacaoCompleta, Passada.CorrecaoDataChegada })
         {
             foreach (var spec in DataSources)
             {
@@ -98,7 +98,7 @@ public sealed class NotionSyncService(
         return string.Join(" | ", relatorios);
     }
 
-    private enum Passada { Normal, ReimportacaoAtivos, ImportacaoVendas, Importacao2025, CorrecaoDataChegada }
+    private enum Passada { Normal, ReimportacaoAtivos, ImportacaoVendas, Importacao2025, ImportacaoCompleta, CorrecaoDataChegada }
 
     /// <param name="passada">
     /// Normal: realinhamento (se pendente) ou incremental. ReimportacaoAtivos / ImportacaoVendas: só
@@ -129,12 +129,18 @@ public sealed class NotionSyncService(
         // Importação de 2025 (uma vez por base, depois do realinhamento): cards criados de 01/01/2025
         // até o fim do ano, que a data mínima anterior (2026) deixava de fora.
         var importar2025 = passada == Passada.Importacao2025 && !realinhar && checkpoint!.Importacao2025ConcluidaEm is null;
-        if (passada != Passada.Normal && !reimportarAtivos && !importarVendas && !importar2025) return null;
+        // Importação completa (uma vez por base): TODOS os cards criados desde a data mínima que ainda não
+        // têm lead no CRM — os que nunca foram editados depois da migração inicial não entravam pelo
+        // incremental. Cada card já ligado a um lead (inclusive arquivado) é pulado.
+        var importarCompleta = passada == Passada.ImportacaoCompleta && !realinhar && checkpoint!.ImportacaoCompletaConcluidaEm is null;
+        if (passada != Passada.Normal && !reimportarAtivos && !importarVendas && !importar2025 && !importarCompleta) return null;
         await CarregarUsuariosAtivosAsync(ct);
         var paginas = realinhar
             ? PaginasCriadasDesdeAsync(notion, dataSourceId, DataMinimaImportacao, ct)
             : importarVendas
                 ? PaginasDeVendaAsync(notion, dataSourceId, ct)
+            : importarCompleta
+                ? PaginasCriadasDesdeAsync(notion, dataSourceId, DataMinimaImportacao, ct)
             : importar2025
                 ? PaginasCriadasDesdeAsync(notion, dataSourceId, DataMinimaImportacao, ct, FimImportacao2025)
             : reimportarAtivos
@@ -158,9 +164,20 @@ public sealed class NotionSyncService(
         var placeholderVendedorId = await ObterOuCriarVendedorPlaceholderAsync(regional.Id, baseNome, ct);
 
         int processados = 0, criados = 0, atualizados = 0, erros = 0, semNome = 0, ignorados = 0, devolvidos = 0;
+        var amostraErros = new List<string>();
+        // Cards que já têm lead (ids em memória: ~50 mil textos curtos), para a importação completa pular.
+        var jaLigados = importarCompleta
+            ? (await db.CrmLeads.AsNoTracking().Where(l => l.NotionPageId != null).Select(l => l.NotionPageId!).ToListAsync(ct)).ToHashSet()
+            : null;
 
         await foreach (var page in paginas)
         {
+            if (jaLigados is not null && jaLigados.Contains(page.PageId()))
+            {
+                ignorados++;
+                continue;
+            }
+
             var doConsultorAtivo = DeConsultorAtivo(page);
 
             // Reimportação, card de outro vendedor (inativo, fora do CRM ou sem vendedor): não traz
@@ -185,7 +202,7 @@ public sealed class NotionSyncService(
             }
 
             // Incremental: cards anteriores à data mínima só entram se forem de um consultor ativo.
-            if (!realinhar && !reimportarAtivos && !importarVendas && !doConsultorAtivo && CriadoAntesDaDataMinima(page))
+            if (!realinhar && !reimportarAtivos && !importarVendas && !importarCompleta && !doConsultorAtivo && CriadoAntesDaDataMinima(page))
             {
                 ignorados++;
                 continue;
@@ -210,6 +227,7 @@ public sealed class NotionSyncService(
             catch (Exception ex)
             {
                 erros++;
+                if (amostraErros.Count < 5) amostraErros.Add($"{page.PageId()}: {ex.GetBaseException().Message}");
                 logger.LogWarning(ex, "Erro sincronizando pagina {PageId} ({Regional})", page.PageId(), regionalNome);
             }
             finally
@@ -238,6 +256,7 @@ public sealed class NotionSyncService(
         if (reimportarAtivos) checkpoint.ReimportacaoAtivosConcluidaEm = inicioDaExecucao;
         if (importarVendas) checkpoint.ImportacaoVendasConcluidaEm = inicioDaExecucao;
         if (importar2025) checkpoint.Importacao2025ConcluidaEm = inicioDaExecucao;
+        if (importarCompleta) checkpoint.ImportacaoCompletaConcluidaEm = inicioDaExecucao;
         await db.SaveChangesAsync(ct);
 
         if (_mudancasNoQuadro > 0)
@@ -246,8 +265,15 @@ public sealed class NotionSyncService(
             _mudancasNoQuadro = 0;
         }
 
-        var modo = realinhar ? " (realinhamento)" : reimportarAtivos ? " (reimportação dos consultores ativos)" : importarVendas ? " (importação das vendas)" : importar2025 ? " (importação de 2025)" : "";
-        return $"{baseNome}: {processados} processados, {criados} criados, {atualizados} atualizados, {devolvidos} devolvidos ao vendedor do card, {erros} erros, {semNome} sem nome, {ignorados} ignorados{modo}";
+        var modo = realinhar ? " (realinhamento)" : reimportarAtivos ? " (reimportação dos consultores ativos)" : importarVendas ? " (importação das vendas)" : importar2025 ? " (importação de 2025)" : importarCompleta ? " (importação completa desde 01/01/2025)" : "";
+        var relatorio = $"{baseNome}: {processados} processados, {criados} criados, {atualizados} atualizados, {devolvidos} devolvidos ao vendedor do card, {erros} erros, {semNome} sem nome, {ignorados} ignorados{modo}";
+        if (importarCompleta)
+        {
+            // Fica guardado (Gestão comercial > /api/crm/management/sincronizacao-notion) para conferir o que entrou e o que falhou.
+            if (amostraErros.Count > 0) relatorio += $" | amostra de erros: {string.Join("; ", amostraErros)}";
+            await GuardarResumoAsync($"importacao-completa:{baseNome}", relatorio, ct);
+        }
+        return relatorio;
     }
 
     /// <summary>
@@ -300,6 +326,20 @@ public sealed class NotionSyncService(
         await db.SaveChangesAsync(ct);
         if (atualizados + ligados > 0) eventos?.PublicarQuadroAtualizado("notion");
         return $"{baseNome}: {lidos} cards lidos, {atualizados} datas de chegada gravadas, {ligados} leads antigos ligados ao card, {erros} erros (correção da data de chegada)";
+    }
+
+    /// <summary>Último ciclo da sincronização (resumo por base), para a tela/consulta de diagnóstico.</summary>
+    public Task GuardarResumoDoCicloAsync(string resumo, CancellationToken ct) => GuardarResumoAsync("ultimo-ciclo", resumo, ct);
+
+    /// <summary>Guarda o último resumo de uma passada (CrmParametros, chave "notion:..."), com a hora, para consulta pela API.</summary>
+    private async Task GuardarResumoAsync(string nome, string resumo, CancellationToken ct)
+    {
+        var chave = $"notion:{nome}";
+        var valor = $"{DateTimeOffset.UtcNow:O} | {resumo}";
+        var parametro = await db.CrmParametros.FirstOrDefaultAsync(p => p.Chave == chave, ct);
+        if (parametro is null) db.CrmParametros.Add(new CrmParametro { Chave = chave, Valor = valor });
+        else parametro.Valor = valor;
+        await db.SaveChangesAsync(ct);
     }
 
     private const string ControleMarketingDataSourceId = "542e7eaf-ab1b-46d0-a391-a36200eac604";

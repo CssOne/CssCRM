@@ -40,6 +40,8 @@ public record AlertaDistribuicaoDto(
     /// <summary>Consultores ativos que recebem leads mas estão fora do dia/horário agora.</summary>
     int ConsultoresForaDoHorario = 0);
 
+public record ResumoSincronizacaoDto(string Nome, string Resumo);
+
 public record ContinuarDistribuicaoRequest(bool Continuar);
 
 public record AtualizarJanelaRecebimentoRequest(string? HorarioInicio, string? HorarioFim, int[]? DiasSemana);

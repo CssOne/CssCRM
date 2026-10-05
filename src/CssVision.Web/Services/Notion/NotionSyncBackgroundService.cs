@@ -26,6 +26,7 @@ public sealed class NotionSyncBackgroundService(
                 var syncService = scope.ServiceProvider.GetRequiredService<NotionSyncService>();
                 var resumo = await syncService.SincronizarTudoAsync(config.Token, stoppingToken);
                 logger.LogInformation("Sincronização com o Notion concluída: {Resumo}", resumo);
+                await syncService.GuardarResumoDoCicloAsync(resumo, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
