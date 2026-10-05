@@ -40,6 +40,10 @@ public class NotionSyncTipoIndicacaoTests
     [InlineData("PESSOAL", true, "AGV", "Pessoal")]
     [InlineData("LEAD", true, "AGV", "Lead")]
     [InlineData("CONTEMPLANDO SONHOS", false, "AGV", "Contemplando Sonhos")]
+    [InlineData("PARCERIA", true, "AGV", "Parceria")]
+    [InlineData("AÇÃO EXTERNA", true, "AGV", "Ação Externa")]
+    [InlineData("ACAO EXTERNA", true, "AGV", "Ação Externa")]
+    [InlineData("css", true, "AGV", "CSS")]
     [InlineData(null, true, "AGV", "Indicação")]
     [InlineData(null, false, "AGV", "Lead")]       // sem os campos: regra antiga pelo "O que"
     [InlineData(null, false, null, "Indicação")]
@@ -109,5 +113,21 @@ public class NotionSyncTipoIndicacaoTests
         var lead = await db.CrmLeads.SingleAsync();
         Assert.Equal("Pessoal", lead.TipoIndicacao);
         Assert.Equal(etapas["Venda concluída (Indicação)"], lead.EtapaId);
+    }
+}
+
+/// <summary>Parceria, Ação Externa e CSS são tipos de indicação: viram etiqueta no cartão e saem do tipo "Lead".</summary>
+public class NovosTiposDeIndicacaoTests
+{
+    [Theory]
+    [InlineData("Parceria")]
+    [InlineData("Ação Externa")]
+    [InlineData("CSS")]
+    public void NovoTipo_ContaComoIndicacao_NaoComoLead(string tipo)
+    {
+        Assert.True(NotionEtapaLead.EhIndicacao(criadoManualmente: false, tipoIndicacao: tipo));
+        Assert.False(TipoIndicacaoLead.EhLead(tipo));
+        // O tipo mantém a grafia escolhida (a etiqueta do cartão mostra exatamente este texto).
+        Assert.Equal(tipo, NotionSyncService.NormalizarTipoIndicacao(tipo.ToUpperInvariant()));
     }
 }
