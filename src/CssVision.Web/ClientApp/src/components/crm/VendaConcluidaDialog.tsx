@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { OPCOES_TIPO_INDICACAO, TIPO_INDICACAO_LEAD } from "../../lib/opcoesLead";
 import { Paperclip } from "lucide-react";
-import { api, ApiRequestError, uploadFile } from "../../lib/api";
+import { api, ApiRequestError, isAbortError, uploadFile } from "../../lib/api";
 import { TipoEtapaPipeline, type ChangeStageRequest, type LeadDetail, type Opportunity, type OpportunityCreateRequest, type OpportunityUpdateRequest, type PipelineBoard } from "../../lib/types";
 import { ESTADOS_BRASIL } from "../../lib/estados";
 import { formatarData } from "../../lib/format";
 import { Button, Checkbox, CpfInput, Input, Label, Modal, MoneyInput, Select, useToast } from "../ui";
+import { useAuth } from "../../context/AuthContext";
 
 export type DadosVendaConcluida = Omit<ChangeStageRequest, "novaEtapaId" | "motivoPerdaId">;
 
@@ -104,6 +105,7 @@ export function VendaConcluidaDialog({
   indicacaoLead = false,
   permitirVeiculosAdicionais = false,
   novoVeiculo = false,
+  clienteInicial,
   tituloExtra,
   onConfirm,
   onConcluido,
@@ -132,6 +134,11 @@ export function VendaConcluidaDialog({
    * com essa venda — o card do cliente e a venda dele não mudam.
    */
   novoVeiculo?: boolean;
+  /**
+   * Nome e documento do cliente, para o "outro veículo" de um cliente que é de OUTRO consultor: o card original
+   * não abre para quem não é dono dele, então os dados vêm do que a pessoa acabou de digitar no cadastro.
+   */
+  clienteInicial?: { nome: string; documento: string } | null;
   /** Complemento do título (ex.: "veículo 2 de 3"). */
   tituloExtra?: string;
   onConfirm?: (dados: DadosVendaConcluida) => void;
@@ -139,6 +146,7 @@ export function VendaConcluidaDialog({
   onCancel: () => void;
 }) {
   const { notificar } = useToast();
+  const { sessao } = useAuth();
   const [valores, setValores] = useState<DadosVendaConcluida>(valoresIniciais);
   const [termoArquivo, setTermoArquivo] = useState<File | null>(null);
   const [pagamentoArquivo, setPagamentoArquivo] = useState<File | null>(null);
@@ -259,7 +267,16 @@ export function VendaConcluidaDialog({
           })
           .catch(() => {});
       })
-      .catch(() => {});
+      .catch((e) => {
+        if (isAbortError(e) || !novoVeiculo || oportunidadeEditar) return;
+        // Cliente de outro consultor: o card dele não abre para mim. O servidor cria o card novo no meu nome,
+        // então a venda é minha e o formulário parte do que digitei no cadastro.
+        setResponsavelIdLead(sessao?.id ?? null);
+        if (clienteInicial) {
+          setNomeCliente(clienteInicial.nome);
+          setValores((v) => comIndicacaoLead({ ...v, cpf: clienteInicial.documento }));
+        }
+      });
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, leadId, oportunidadeEditar]);
