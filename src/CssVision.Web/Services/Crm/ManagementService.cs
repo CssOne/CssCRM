@@ -31,9 +31,11 @@ public sealed class ManagementService(
 
     private async Task<GestaoComercialResumoDto> CalcularResumoAsync(DateOnly? dataInicio, DateOnly? dataFim, CancellationToken ct)
     {
-        var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
-        var inicio = (dataInicio ?? hoje.AddMonths(-1)).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var fim = (dataFim ?? hoje).ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+        // Sem período informado, o ranking e as métricas são do mês atual (Brasília) — antes eram os
+        // "últimos 30 dias", que depois da virada do mês ainda mostravam o mês anterior.
+        var hoje = HorarioBrasilia.Hoje;
+        var inicio = HorarioBrasilia.Inicio(dataInicio ?? HorarioBrasilia.PrimeiroDiaDoMes(hoje));
+        var fim = HorarioBrasilia.Fim(dataFim ?? hoje);
         var agora = DateTimeOffset.UtcNow;
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
@@ -84,7 +86,7 @@ public sealed class ManagementService(
             .OrderByDescending(u => u.Ativo).ThenBy(u => u.NomeCompleto)
             .Select(u => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.Ativo, u.RecebeLeads, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads, u.RecebeSomenteOQue })
             .ToListAsync(ct);
-        var inicioMes = new DateTimeOffset(new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1), TimeSpan.Zero);
+        var inicioMes = HorarioBrasilia.Inicio(HorarioBrasilia.PrimeiroDiaDoMes(HorarioBrasilia.Hoje));
         var inicioDia = LeadAssignmentService.InicioDoDia();
         var ids = vendedores.Select(v => (Guid?)v.Id).ToList();
         var idsOportunidade = vendedores.Select(v => v.Id).ToList();
@@ -112,10 +114,10 @@ public sealed class ManagementService(
     {
         ExigirGestaoComercial();
 
-        var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
-        var mes = new DateOnly((mesReferencia ?? hoje).Year, (mesReferencia ?? hoje).Month, 1);
-        var inicioMes = mes.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var fimMes = mes.AddMonths(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var hoje = HorarioBrasilia.Hoje;
+        var mes = HorarioBrasilia.PrimeiroDiaDoMes(mesReferencia ?? hoje);
+        var inicioMes = HorarioBrasilia.Inicio(mes);
+        var fimMes = HorarioBrasilia.Inicio(mes.AddMonths(1));
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
         var idsComPapelComercial = (await userManager.GetUsersInRoleAsync(Roles.Comercial)).Select(u => u.Id).ToHashSet();
@@ -316,10 +318,10 @@ public sealed class ManagementService(
     /// Notion foram trabalhados lá) que chegaram no período.
     /// </summary>
     private async Task<(double Horas, int Leads, IReadOnlyList<PrimeiroContatoVendedorDto> PorVendedor)> ObterTempoMedioPrimeiroContatoAsync(
-        IQueryable<CrmLead> leadsQuery, DateTime inicio, DateTime fim, CancellationToken ct)
+        IQueryable<CrmLead> leadsQuery, DateTimeOffset inicio, DateTimeOffset fim, CancellationToken ct)
     {
-        var inicioUtc = new DateTimeOffset(inicio, TimeSpan.Zero);
-        var fimUtc = new DateTimeOffset(fim, TimeSpan.Zero);
+        var inicioUtc = inicio;
+        var fimUtc = fim;
         var leads = await leadsQuery
             .Where(l => l.ResponsavelId != null
                 && l.ConsentimentoOrigem != OrigemLead.MarcadorMigracaoNotion

@@ -1,6 +1,7 @@
 import { usePaginacao } from "../../lib/usePaginacao";
 import { Plus } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useAtualizarAoVivo, mesAtualIso as mesAtualDoRelogio } from "../../lib/useAoVivo";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { RegionalGoal, SalesGoal, VendedorResumo } from "../../lib/types";
@@ -69,11 +70,18 @@ function CartaoMeta({
 
 export function GoalsPage() {
   const { temPapel } = useAuth();
+  // Tempo real: o realizado das metas acompanha as vendas e, na virada do mês, a tela passa para o mês novo.
+  useAtualizarAoVivo(() => {
+    setMesReferencia((atual) => (atual === mesAtualRef.current ? mesAtualDoRelogio() : atual));
+    mesAtualRef.current = mesAtualDoRelogio();
+    setRecarregar((n) => n + 1);
+  });
   const podeGerir = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
   const ehAdministrador = temPapel("Admin", "GestorMaster", "SupervisorComercial");
   const { notificar } = useToast();
 
   const [mesReferencia, setMesReferencia] = useState(mesAtualIso());
+  const mesAtualRef = useRef(mesAtualIso());
   const [metas, setMetas] = useState<SalesGoal[] | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -235,13 +243,13 @@ export function GoalsPage() {
         </div>
       </div>
 
-      {carregando ? (
+      {carregando && !metas ? (
         <div className="space-y-2">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-20" />
           ))}
         </div>
-      ) : erro ? (
+      ) : erro && !metas ? (
         <ErrorState message={erro} onRetry={() => setRecarregar((n) => n + 1)} />
       ) : !metas || metas.length === 0 ? (
         <EmptyState title="Nenhum consultor encontrado" description="Cadastre consultores para acompanhar a meta de vendas de cada um." />

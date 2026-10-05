@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Authorization;
 using CssVision.Web.Services.Crm;
@@ -66,6 +67,12 @@ public class CrmManagementController(IManagementService managementService, ILead
         await distribuicao.DefinirContinuarAposLimiteAsync(request.Continuar, ct);
         return Ok(await distribuicao.ObterEstadoDistribuicaoAsync(ct));
     }
+
+    /// <summary>Resumos guardados da sincronização com o Notion: último ciclo e importação completa por base.</summary>
+    [HttpGet("sincronizacao-notion")]
+    public async Task<ActionResult<IReadOnlyList<ResumoSincronizacaoDto>>> ObterResumosSincronizacao([FromServices] Data.ApplicationDbContext db, CancellationToken ct) =>
+        Ok(await db.CrmParametros.AsNoTracking().Where(p => p.Chave.StartsWith("notion:")).OrderBy(p => p.Chave)
+            .Select(p => new ResumoSincronizacaoDto(p.Chave.Substring(7), p.Valor)).ToListAsync(ct));
 
     [HttpGet("consultores")]
     public async Task<ActionResult<IReadOnlyList<ConsultorDesempenhoDto>>> ObterDesempenhoConsultores(

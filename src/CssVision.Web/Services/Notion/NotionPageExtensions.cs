@@ -147,7 +147,7 @@ public static partial class NotionPageExtensions
         return null;
     }
 
-    public record VendedorInfo(string Nome, string? Email);
+    public record VendedorInfo(string Nome, string? Email, string? Id = null, bool EhBot = false);
 
     /// <summary>Primeiro vendedor da propriedade "Vendedor" (people) — a maioria das linhas tem só um.</summary>
     public static VendedorInfo? PrimeiroVendedor(this JsonElement page, params string[] nomes)
@@ -166,6 +166,8 @@ public static partial class NotionPageExtensions
         {
             email = e.GetString();
         }
-        return new VendedorInfo(nome.Trim(), email);
+        var id = pessoa.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+        var bot = pessoa.TryGetProperty("type", out var tipo) && tipo.GetString() == "bot";
+        return new VendedorInfo(nome.Trim(), email, id, bot);
     }
 }

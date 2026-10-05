@@ -1,6 +1,7 @@
 import { usePaginacao } from "../../lib/usePaginacao";
 import { Handshake, Mail, Phone, Search, ShoppingCart, Target, Wallet } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAtualizarAoVivo, mesAtualIso as mesAtualDoRelogio } from "../../lib/useAoVivo";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarMoeda, formatarPercentual, formatarTelefone } from "../../lib/format";
 import type { ConsultorDesempenho } from "../../lib/types";
@@ -27,6 +28,7 @@ function Avatar({ nome }: { nome: string }) {
 
 export function ConsultoresPage() {
   const [mesReferencia, setMesReferencia] = useState(mesAtualIso());
+  const mesAtualRef = useRef(mesAtualIso());
   const [busca, setBusca] = useState("");
   const [consultores, setConsultores] = useState<ConsultorDesempenho[] | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -53,6 +55,14 @@ export function ConsultoresPage() {
     carregar(controller.signal);
     return () => controller.abort();
   }, [carregar, recarregar]);
+
+  // Tempo real: recarrega com as vendas/leads e, na virada do mês, passa sozinho para o mês novo
+  // (só se ainda estava no mês que acabou — quem escolheu outro mês continua nele).
+  useAtualizarAoVivo(() => {
+    setMesReferencia((atual) => (atual === mesAtualRef.current ? mesAtualDoRelogio() : atual));
+    mesAtualRef.current = mesAtualDoRelogio();
+    setRecarregar((n) => n + 1);
+  });
 
   const filtrados = useMemo(() => {
     if (!consultores) return [];
@@ -82,7 +92,7 @@ export function ConsultoresPage() {
         <Input type="month" value={mesReferencia.slice(0, 7)} onChange={(e) => setMesReferencia(`${e.target.value}-01`)} />
       </div>
 
-      {!carregando && consultores && consultores.length > 0 && (
+      {consultores && consultores.length > 0 && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Card className="flex items-center gap-3 p-4">
             <div className="flex size-10 items-center justify-center rounded-full bg-[var(--brand-soft)] text-[var(--brand)]">
@@ -119,13 +129,13 @@ export function ConsultoresPage() {
         <Input className="pl-9" placeholder="Buscar consultor por nome ou e-mail" value={busca} onChange={(e) => setBusca(e.target.value)} />
       </div>
 
-      {carregando ? (
+      {carregando && !consultores ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-56" />
           ))}
         </div>
-      ) : erro ? (
+      ) : erro && !consultores ? (
         <ErrorState message={erro} onRetry={() => setRecarregar((n) => n + 1)} />
       ) : filtrados.length === 0 ? (
         <EmptyState title="Nenhum consultor encontrado" description="Ajuste a busca ou cadastre novos consultores na página Usuários." />

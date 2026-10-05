@@ -5,6 +5,7 @@ import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { Dashboard } from "../../lib/types";
 import { Badge, Card, ErrorState, Skeleton } from "../../components/ui";
+import { useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { StatCard } from "../../components/crm/StatCard";
 import { EvolucaoChart, FunilChart, OrigemChart } from "../../components/crm/Charts";
 
@@ -26,7 +27,10 @@ export function OverviewPage() {
     return () => controller.abort();
   }, [recarregar]);
 
-  if (carregando) {
+  // Tempo real: o painel recarrega (sem piscar) quando uma venda/lead muda e quando o mês vira.
+  useAtualizarAoVivo(() => setRecarregar((n) => n + 1));
+
+  if (carregando && !dados) {
     return (
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {Array.from({ length: 8 }).map((_, i) => (
@@ -36,7 +40,7 @@ export function OverviewPage() {
     );
   }
 
-  if (erro || !dados) {
+  if (!dados) {
     return <ErrorState message={erro ?? "Não foi possível carregar o painel."} onRetry={() => setRecarregar((n) => n + 1)} />;
   }
 

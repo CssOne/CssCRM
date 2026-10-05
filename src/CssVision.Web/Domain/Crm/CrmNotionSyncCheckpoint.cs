@@ -45,4 +45,11 @@ public class CrmNotionSyncCheckpoint
     /// Nulo = importação de 2025 pendente (roda uma vez por base).
     /// </summary>
     public DateTimeOffset? Importacao2025ConcluidaEm { get; set; }
+
+    /// <summary>
+    /// Quando todos os cards criados desde a data mínima de importação (01/01/2025) que ainda não tinham
+    /// lead no CRM foram trazidos — cada card do Notion passa a aparecer no quadro de leads. Nulo =
+    /// importação completa pendente (roda uma vez por base).
+    /// </summary>
+    public DateTimeOffset? ImportacaoCompletaConcluidaEm { get; set; }
 }

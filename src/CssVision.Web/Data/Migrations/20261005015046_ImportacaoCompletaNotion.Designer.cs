@@ -3,6 +3,7 @@ using System;
 using CssVision.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CssVision.Web.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261005015046_ImportacaoCompletaNotion")]
+    partial class ImportacaoCompletaNotion
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1408,22 +1411,6 @@ namespace CssVision.Web.Data.Migrations
                     b.ToTable("CrmTags", (string)null);
                 });
 
-            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmUsuarioAlias", b =>
-                {
-                    b.Property<string>("EmailNormalizado")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
-
-                    b.Property<Guid>("UsuarioId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("EmailNormalizado");
-
-                    b.HasIndex("UsuarioId");
-
-                    b.ToTable("CrmUsuarioAliases", (string)null);
-                });
-
             modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmVeiculo", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1586,10 +1573,6 @@ namespace CssVision.Web.Data.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<string>("NotionUserId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.Property<string>("PasswordHash")
                         .HasColumnType("text");
 
@@ -1630,8 +1613,6 @@ namespace CssVision.Web.Data.Migrations
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
-
-                    b.HasIndex("NotionUserId");
 
                     b.HasIndex("RegionalId");
 
@@ -2032,15 +2013,6 @@ namespace CssVision.Web.Data.Migrations
                     b.Navigation("Opportunity");
 
                     b.Navigation("Usuario");
-                });
-
-            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmUsuarioAlias", b =>
-                {
-                    b.HasOne("CssVision.Web.Domain.Identity.ApplicationUser", null)
-                        .WithMany()
-                        .HasForeignKey("UsuarioId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmVeiculo", b =>
