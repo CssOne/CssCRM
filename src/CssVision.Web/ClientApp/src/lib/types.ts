@@ -147,6 +147,76 @@ export interface LeadListItem {
 }
 
 /** Rodapé da lista de leads: contagem e somas de todos os leads que batem com os filtros. */
+/** Painel da TV (/tv/comercial): dados direto do CRM. */
+export interface TvRanking {
+  posicao: number;
+  consultorId: string;
+  nome: string;
+  fotoUrl?: string | null;
+  regional: string;
+  quantidadeVendas: number;
+  /** Adesão paga das vendas. */
+  valorVendido: number;
+  quantidadeMeta?: number | null;
+  percentualMeta?: number | null;
+}
+
+export interface TvConversao {
+  posicao: number;
+  consultorId: string;
+  nome: string;
+  fotoUrl?: string | null;
+  regional: string;
+  leadsAtendidos: number;
+  vendasFechadas: number;
+  leadsPerdidos: number;
+  taxaConversao: number;
+}
+
+export interface TvRegional {
+  posicao: number;
+  regionalId: string;
+  nome: string;
+  quantidadeVendas: number;
+  valorTotal: number;
+  percentualParticipacao: number;
+  quantidadeMeta?: number | null;
+  percentualMeta?: number | null;
+}
+
+export interface TvVenda {
+  vendaId: string;
+  consultor: string;
+  fotoUrl?: string | null;
+  regional: string;
+  cliente?: string | null;
+  numeroContrato?: string | null;
+  origem?: string | null;
+  valor: number;
+  dataVenda: string;
+  atualizadaEm: string;
+}
+
+export interface TvEvolucao {
+  data: string;
+  quantidadeVendasDia: number;
+  valorVendidoDia: number;
+  quantidadeAcumulada: number;
+  valorAcumulado: number;
+}
+
+export interface TvComercial {
+  periodo: { mes: number; ano: number };
+  resumo: { vendasHoje: number; vendasNoMes: number; valorHoje: number; valorNoMes: number; percentualMetaGeral?: number | null };
+  rankingConsultores: TvRanking[];
+  rankingValorAdesao: TvRanking[];
+  rankingConversao: TvConversao[];
+  rankingRegionais: TvRegional[];
+  evolucaoMensal: TvEvolucao[];
+  ultimasVendas: TvVenda[];
+  atualizadoEm: string;
+}
+
 export interface LeadTotais {
   contagem: number;
   adesao: number;
