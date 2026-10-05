@@ -1,10 +1,10 @@
-import { ArrowUp, ChevronLeft, ChevronRight, CheckCircle2, CircleDollarSign, Activity, Pause, Play, Radio, ShoppingBag, SlidersHorizontal, Target, TrendingUp, ArrowUpRight, Wifi, WifiOff, X } from "lucide-react";
+import { ArrowUp, ChevronLeft, ChevronRight, CheckCircle2, CircleDollarSign, Activity, Pause, Play, Radio, RefreshCw, Satellite, ShoppingBag, SlidersHorizontal, Target, TrendingUp, ArrowUpRight, Wifi, WifiOff, X } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Chart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
 import { api, isAbortError } from "../../lib/api";
 import { useAtualizarAoVivo } from "../../lib/useAoVivo";
-import type { TvComercial, TvConversao, TvRanking, TvRegional, TvVenda } from "../../lib/types";
+import type { TvAdministrativoIndicador, TvComercial, TvConversao, TvRanking, TvRegional, TvVenda } from "../../lib/types";
 import "./tv.css";
 
 type ModoRanking = "vendas" | "adesao" | "conversao";
@@ -173,12 +173,43 @@ function PainelRankingsBase({ dados, periodo }: { dados: TvComercial; periodo: s
 }
 const PainelRankings = memo(PainelRankingsBase);
 
-function PainelRegionais({ itens }: { itens: TvRegional[] }) {
+const ICONES_ADMINISTRATIVO: Record<string, typeof Activity> = { reintegration: RefreshCw, claim: CheckCircle2, tracker: Satellite };
+
+function CartaoAdministrativo({ item }: { item: TvAdministrativoIndicador }) {
+  const Icone = ICONES_ADMINISTRATIVO[item.id] ?? Activity;
   return (
-    <div className="panel regions">
+    <div className={`administrative-card administrative-card-${item.id}`} aria-label={`${item.rotulo}: ${item.total}`}>
+      <div className="administrative-icon"><Icone /></div>
+      <div className="administrative-card-main">
+        <span>{item.rotulo}</span>
+        <strong>{item.total}</strong>
+        <small>{item.hoje} {item.hoje === 1 ? "registro hoje" : "registros hoje"}</small>
+      </div>
+      <div className="administrative-person"><span>Último registro</span><strong>{item.ultimo?.pessoa || "Sem registros"}</strong></div>
+    </div>
+  );
+}
+
+function PainelAdministrativo({ indicadores }: { indicadores?: TvAdministrativoIndicador[] | null }) {
+  return (
+    <div className="panel administrative">
+      <div className="panel-title compact-title">
+        <div><span className="eyebrow">ACOMPANHAMENTO OPERACIONAL</span><h1>Administrativo</h1></div>
+        <span className={`administrative-hint${indicadores ? "" : " error"}`}>{indicadores ? "Dados do Notion" : "Notion indisponível"}</span>
+      </div>
+      <div className="administrative-grid">
+        {(indicadores ?? []).map((i) => <CartaoAdministrativo key={i.id} item={i} />)}
+      </div>
+    </div>
+  );
+}
+
+function PainelRegionais({ itens, compacto = false }: { itens: TvRegional[]; compacto?: boolean }) {
+  return (
+    <div className={`panel regions${compacto ? " regions-compact" : ""}`}>
       <div className="panel-title compact-title"><div><span className="eyebrow">PERFORMANCE</span><h1>Ranking regional</h1></div></div>
       <div className="region-list">
-        {itens.slice(0, 4).map((x) => (
+        {itens.slice(0, compacto ? 2 : 4).map((x) => (
           <div className="region-row" key={x.regionalId}>
             <b>{x.posicao}</b>
             <div>
@@ -441,8 +472,11 @@ export function TvComercialPage() {
                 />
               </div>
             </div>
-            <div className="bottom-grid">
-              <PainelRegionais itens={dados.rankingRegionais} />
+            <div className="bottom-grid bottom-grid-administrative">
+              <div className="operational-stack">
+                <PainelAdministrativo indicadores={dados.administrativo?.indicadores} />
+                <PainelRegionais itens={dados.rankingRegionais} compacto />
+              </div>
               <PainelUltimas itens={dados.ultimasVendas} agora={agora} />
             </div>
           </div>

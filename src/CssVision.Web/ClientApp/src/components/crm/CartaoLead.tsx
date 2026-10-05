@@ -112,7 +112,8 @@ export function CartaoLead({
 
       {/* Etiquetas */}
       <div className="mt-2 flex flex-wrap gap-1">
-        {cartao.oQue && <Badge variant="info">{cartao.oQue}</Badge>}
+        {/* Cards de Indicação não mostram a etiqueta "O que?" (AGV...). */}
+        {cartao.oQue && classe !== "indicacao" && <Badge variant="info">{cartao.oQue}</Badge>}
         {rotuloTipo && <Badge variant={classe === "lead" ? "info" : "brand"}>{rotuloTipo}</Badge>}
         {cartao.indicacao && rotuloTipo !== "Indicação" && rotuloTipo !== TIPO_INDICACAO_LEAD && <Badge variant="brand">Indicação</Badge>}
         {cartao.veiculoAdicional && <Badge variant="neutral">Veículo adicional</Badge>}

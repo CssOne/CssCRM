@@ -205,6 +205,24 @@ export interface TvEvolucao {
   valorAcumulado: number;
 }
 
+export interface TvAdministrativoRegistro {
+  pessoa: string;
+  fotoUrl?: string | null;
+  cliente?: string | null;
+  placa?: string | null;
+  tipoEvento?: string | null;
+  data: string;
+}
+
+export interface TvAdministrativoIndicador {
+  id: "reintegration" | "claim" | "tracker" | string;
+  rotulo: string;
+  acao: string;
+  total: number;
+  hoje: number;
+  ultimo?: TvAdministrativoRegistro | null;
+}
+
 export interface TvComercial {
   periodo: { mes: number; ano: number };
   resumo: { vendasHoje: number; vendasNoMes: number; valorHoje: number; valorNoMes: number; percentualMetaGeral?: number | null };
@@ -215,6 +233,10 @@ export interface TvComercial {
   evolucaoMensal: TvEvolucao[];
   ultimasVendas: TvVenda[];
   atualizadoEm: string;
+  /** Reintegrações, eventos finalizados e rastreadores (Notion); nulo se o Notion não respondeu. */
+  administrativo?: { indicadores: TvAdministrativoIndicador[] } | null;
+  /** Vendas do painel que existem só no Notion (base MG134), já sem as que o CRM também tem. */
+  vendasSoNoNotion?: number;
 }
 
 export interface LeadTotais {

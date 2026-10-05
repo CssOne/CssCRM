@@ -20,10 +20,17 @@ public interface ITvComercialService
 public sealed class TvComercialService(
     ApplicationDbContext db,
     IEquipeComercialService equipe,
+    ICurrentUserService? currentUser = null,
+    ITvNotionFonte? notion = null,
     IMemoryCache? cache = null,
     ICrmEventHub? eventos = null) : ITvComercialService
 {
     private const string SemRegional = "Sem regional";
+
+    /// <summary>Venda do painel, venha do CRM ou só do Notion.</summary>
+    private sealed record VendaTv(Guid Id, Guid ResponsavelId, DateTimeOffset Data, decimal Adesao, DateTimeOffset Atualizada, string? Cliente, string? Placa, string? Origem, bool SoNoNotion = false);
+
+    private sealed record PessoaTv(Guid Id, string NomeCompleto, string? FotoUrl, Guid? RegionalId, string? Regional);
 
     public async Task<TvComercialDto> ObterAsync(int? mes, int? ano, CancellationToken ct)
     {
@@ -32,11 +39,16 @@ public sealed class TvComercialService(
         if (primeiro > HorarioBrasilia.PrimeiroDiaDoMes(hoje)) primeiro = HorarioBrasilia.PrimeiroDiaDoMes(hoje);
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
+        // O Notion tem cache próprio; a versão dele entra na chave para o painel refletir cada atualização.
+        IReadOnlyList<TvNotionVenda> vendasNotion = notion is null ? [] : await notion.VendasAsync(primeiro, ct);
+        var administrativo = notion is null ? null : await notion.AdministrativoAsync(primeiro, ct);
         return await RespostaEmCache.ObterAsync(cache, eventos, "tv-comercial",
-            new { escopo = RespostaEmCache.Escopo(visiveis), primeiro, hoje }, () => CalcularAsync(primeiro, hoje, visiveis, ct));
+            new { escopo = RespostaEmCache.Escopo(visiveis), primeiro, hoje, notion = notion?.Versao ?? 0 },
+            () => CalcularAsync(primeiro, hoje, visiveis, vendasNotion, administrativo, ct));
     }
 
-    private async Task<TvComercialDto> CalcularAsync(DateOnly primeiro, DateOnly hoje, List<Guid>? visiveis, CancellationToken ct)
+    private async Task<TvComercialDto> CalcularAsync(
+        DateOnly primeiro, DateOnly hoje, List<Guid>? visiveis, IReadOnlyList<TvNotionVenda> vendasNotion, TvAdministrativoDto? administrativo, CancellationToken ct)
     {
         var inicioMes = HorarioBrasilia.Inicio(primeiro);
         var fimMes = HorarioBrasilia.Inicio(primeiro.AddMonths(1));
@@ -52,13 +64,16 @@ public sealed class TvComercialService(
         }
 
         var vendas = await vendasQuery
-            .Select(o => new
-            {
-                o.Id, o.ResponsavelId, Data = o.DataEfetivaFechamento!.Value, Adesao = o.PagamentoAdesao ?? 0m,
-                Atualizada = o.AtualizadoEm ?? o.CriadoEm, Cliente = o.Lead.NomeOuRazaoSocial,
-                Placa = o.Veiculo != null ? o.Veiculo.Placa : null, Origem = o.TipoIndicacao ?? o.Lead.TipoIndicacao,
-            })
+            .Select(o => new VendaTv(
+                o.Id, o.ResponsavelId, o.DataEfetivaFechamento!.Value, o.PagamentoAdesao ?? 0m,
+                o.AtualizadoEm ?? o.CriadoEm, o.Lead.NomeOuRazaoSocial,
+                o.Veiculo != null ? o.Veiculo.Placa : null, o.TipoIndicacao ?? o.Lead.TipoIndicacao, false))
             .ToListAsync(ct);
+
+        // ----- vendas que existem só no Notion (base MG134), sem repetir as que o CRM já tem -----
+        var regionais = await db.CrmRegionais.AsNoTracking().Where(r => r.Ativa).Select(r => new { r.Id, r.Nome }).ToListAsync(ct);
+        var (vendasSoNoNotion, pessoasDoNotion) = await VendasSoNoNotionAsync(vendasNotion, vendas, visiveis, regionais.FirstOrDefault(r => r.Nome == "MG134")?.Id, ct);
+        vendas = vendas.Concat(vendasSoNoNotion).ToList();
 
         // Leads do mês por consultor: recebidos e perdidos (conversão = vendas ÷ leads do mês, como na Visão geral).
         var leadsPorConsultor = await ContagensPorVendedor.ContarLeadsAsync(leadsQuery, ct);
@@ -68,8 +83,9 @@ public sealed class TvComercialService(
         var ids = vendas.Select(v => v.ResponsavelId).Concat(leadsPorConsultor.Keys).Distinct().ToList();
         var pessoas = await db.Users.AsNoTracking()
             .Where(u => ids.Contains(u.Id) && !u.NomeCompleto.StartsWith(NotionPageExtensions.PrefixoNomeProvisorio))
-            .Select(u => new { u.Id, u.NomeCompleto, u.FotoUrl, u.RegionalId, Regional = u.Regional != null ? u.Regional.Nome : null })
+            .Select(u => new PessoaTv(u.Id, u.NomeCompleto, u.FotoUrl, u.RegionalId, u.Regional != null ? u.Regional.Nome : null))
             .ToDictionaryAsync(u => u.Id, ct);
+        foreach (var (id, pessoa) in pessoasDoNotion) pessoas.TryAdd(id, pessoa);
         vendas = vendas.Where(v => pessoas.ContainsKey(v.ResponsavelId)).ToList();
 
         var metasIndividuais = await db.CrmSalesGoals.AsNoTracking()
@@ -112,7 +128,6 @@ public sealed class TvComercialService(
 
         // ----- regionais -----
         var totalAdesao = vendas.Sum(v => v.Adesao);
-        var regionais = await db.CrmRegionais.AsNoTracking().Where(r => r.Ativa).Select(r => new { r.Id, r.Nome }).ToListAsync(ct);
         var porRegional = vendas.GroupBy(v => pessoas[v.ResponsavelId].RegionalId)
             .ToDictionary(g => g.Key ?? Guid.Empty, g => new { Qtd = g.Count(), Valor = g.Sum(v => v.Adesao) });
         var rankingRegionais = regionais
@@ -157,6 +172,63 @@ public sealed class TvComercialService(
             }).ToList();
 
         return new TvComercialDto(new TvPeriodoDto(primeiro.Month, primeiro.Year), resumo, rankingVendas, rankingAdesao, rankingConversao,
-            rankingRegionais, evolucao, ultimas, DateTimeOffset.UtcNow);
+            rankingRegionais, evolucao, ultimas, DateTimeOffset.UtcNow, administrativo, vendas.Count(v => v.SoNoNotion));
     }
+
+    /// <summary>
+    /// Vendas do Notion (MG134) que o CRM não tem. Uma venda nunca conta duas vezes: sai a que já está no CRM pelo mesmo card do Notion
+    /// (<c>NotionPageId</c>) ou pela mesma placa no mês, e a que se repete entre as bases do Notion. Quem vê só uma regional só recebe as do
+    /// MG134 se for dessa regional.
+    /// </summary>
+    private async Task<(List<VendaTv> Vendas, Dictionary<Guid, PessoaTv> Pessoas)> VendasSoNoNotionAsync(
+        IReadOnlyList<TvNotionVenda> doNotion, List<VendaTv> doCrm, List<Guid>? visiveis, Guid? regionalMg134Id, CancellationToken ct)
+    {
+        var vazio = (new List<VendaTv>(), new Dictionary<Guid, PessoaTv>());
+        if (doNotion.Count == 0) return vazio;
+
+        if (visiveis is not null)
+        {
+            // Escopo regional: só quem é do MG134 vê as vendas do MG134.
+            var regionalDoUsuario = currentUser is null ? null
+                : await db.Users.AsNoTracking().Where(u => u.Id == currentUser.UserId).Select(u => u.RegionalId).FirstOrDefaultAsync(ct);
+            if (regionalMg134Id is null || regionalDoUsuario != regionalMg134Id) return vazio;
+        }
+
+        // 1) mesmo card do Notion já importado e ativo no CRM
+        var paginas = doNotion.Select(v => v.PageId).ToList();
+        var jaNoCrm = (await db.CrmOpportunities.AsNoTracking()
+            .Where(o => !o.Arquivado && o.NotionPageId != null && paginas.Contains(o.NotionPageId))
+            .Select(o => o.NotionPageId!).ToListAsync(ct)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // 2) mesma placa de uma venda do CRM no mês (a consultora pode ter registrado nos dois lugares)
+        var placasDoCrm = doCrm.Select(v => TvNotionFonte.Normalizar(v.Placa)).Where(p => p is not null).ToHashSet();
+
+        // Consultor do Notion → usuário do CRM (id do Notion ou e-mail); sem correspondência, uma pessoa só do painel.
+        var notionIds = doNotion.Select(v => v.ConsultorNotionId).Where(i => i is not null).Distinct().ToList();
+        var emails = doNotion.Select(v => v.ConsultorEmail?.Trim().ToLowerInvariant()).Where(e => !string.IsNullOrEmpty(e)).Distinct().ToList();
+        var usuarios = await db.Users.AsNoTracking()
+            .Where(u => (u.NotionUserId != null && notionIds.Contains(u.NotionUserId)) || (u.Email != null && emails.Contains(u.Email.ToLower())))
+            .Select(u => new { u.Id, u.NotionUserId, u.Email })
+            .ToListAsync(ct);
+
+        var vendas = new List<VendaTv>();
+        var pessoas = new Dictionary<Guid, PessoaTv>();
+        var placasVistas = new HashSet<string>();
+        foreach (var n in doNotion.OrderBy(v => v.DataVenda))
+        {
+            if (jaNoCrm.Contains(n.PageId)) continue;
+            if (n.Placa is not null && (placasDoCrm.Contains(n.Placa) || !placasVistas.Add(n.Placa))) continue;
+
+            var usuario = usuarios.FirstOrDefault(u => n.ConsultorNotionId is not null && u.NotionUserId == n.ConsultorNotionId)
+                ?? usuarios.FirstOrDefault(u => n.ConsultorEmail is not null && string.Equals(u.Email, n.ConsultorEmail, StringComparison.OrdinalIgnoreCase));
+            var consultorId = usuario?.Id ?? IdDaPessoaDoNotion(n.ConsultorNotionId ?? n.Consultor);
+            if (usuario is null) pessoas.TryAdd(consultorId, new PessoaTv(consultorId, n.Consultor, n.FotoUrl, regionalMg134Id, n.Regional));
+
+            vendas.Add(new VendaTv(Guid.TryParse(n.PageId, out var id) ? id : Guid.NewGuid(), consultorId, n.DataVenda, n.Adesao, n.AtualizadaEm, n.Cliente, n.Placa, null, true));
+        }
+        return (vendas, pessoas);
+    }
+
+    /// <summary>Id estável para quem aparece só no Notion (o mesmo consultor cai sempre na mesma linha do ranking).</summary>
+    private static Guid IdDaPessoaDoNotion(string chave) =>
+        new(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes("tv-notion:" + chave.Trim().ToLowerInvariant())));
 }
