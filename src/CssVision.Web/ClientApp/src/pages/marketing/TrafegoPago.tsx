@@ -8,6 +8,7 @@ import {
   Save,
   Target,
   Timer,
+  MapPin,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -44,6 +45,7 @@ interface Filtros {
   responsavelId: string[];
   estado: string[];
   etapa: string[];
+  regional: string[];
 }
 
 const FILTROS_PADRAO: Filtros = {
@@ -58,6 +60,7 @@ const FILTROS_PADRAO: Filtros = {
   responsavelId: [],
   estado: [],
   etapa: [],
+  regional: [],
 };
 
 const CHAVE_FILTROS = "css:trafego:filtros";
@@ -93,7 +96,7 @@ function gravarJson(chave: string, valor: unknown) {
 
 function normalizar(bruto: Partial<Filtros> | null | undefined): Filtros {
   const f = { ...FILTROS_PADRAO, ...(bruto ?? {}) };
-  for (const campo of ["oQue", "origem", "campanha", "canal", "responsavelId", "estado", "etapa"] as const) {
+  for (const campo of ["oQue", "origem", "campanha", "canal", "responsavelId", "estado", "etapa", "regional"] as const) {
     if (!Array.isArray(f[campo])) f[campo] = [];
   }
   return f;
@@ -248,6 +251,10 @@ export function TrafegoPagoPage() {
     setFiltros((f) => ({ ...f, [campo]: valor }));
   }
 
+  function alternarRegional(nome: string) {
+    setFiltros((f) => ({ ...f, regional: f.regional.includes(nome) ? f.regional.filter((r) => r !== nome) : [...f.regional, nome] }));
+  }
+
   function alternarOQue(tag: string) {
     setFiltros((f) => ({ ...f, oQue: f.oQue.includes(tag) ? f.oQue.filter((t) => t !== tag) : [...f.oQue, tag] }));
   }
@@ -270,7 +277,7 @@ export function TrafegoPagoPage() {
 
   const qtdFiltros =
     filtros.oQue.length + filtros.origem.length + filtros.campanha.length + filtros.canal.length +
-    filtros.responsavelId.length + filtros.estado.length + filtros.etapa.length + (filtros.fonte !== "trafego" ? 1 : 0);
+    filtros.responsavelId.length + filtros.estado.length + filtros.etapa.length + filtros.regional.length + (filtros.fonte !== "trafego" ? 1 : 0);
 
   if (carregando && !dados) {
     return (
@@ -385,6 +392,11 @@ export function TrafegoPagoPage() {
               <option value="todos">Todos os leads</option>
             </Select>
           </Campo>
+          {(opcoes.regionais?.length ?? 0) > 0 && (
+            <Campo rotulo="Regional" largura="w-40">
+              <MultiSelect ariaLabel="Regional" rotuloTodos="Todas" opcoes={(opcoes.regionais ?? []).map((r) => ({ valor: r, rotulo: r }))} valores={filtros.regional} onChange={(v) => set("regional", v)} />
+            </Campo>
+          )}
           <Campo rotulo="Canal">
             <MultiSelect ariaLabel="Canal" opcoes={opcoes.canais.map((c) => ({ valor: c, rotulo: c }))} valores={filtros.canal} onChange={(v) => set("canal", v)} />
           </Campo>
@@ -482,6 +494,45 @@ export function TrafegoPagoPage() {
         <StatCard titulo="Perdidos" valor={String(ind.leadsPerdidos)} icone={TrendingDown} tom="danger" subtitulo={ind.leadsNaoFazemos > 0 ? `+ ${ind.leadsNaoFazemos} "não fazemos"` : undefined} />
         <StatCard titulo="Sem telefone" valor={String(ind.leadsSemContato)} icone={PhoneMissed} tom={ind.leadsSemContato > 0 ? "warning" : "neutral"} />
       </div>
+
+      {/* Por regional: MG132 e MG134 lado a lado (clique para filtrar a tela inteira por uma regional) */}
+      {(dados.porRegional?.length ?? 0) > 0 && (
+        <Secao titulo="Leads por regional" icone={<MapPin className="size-4 text-[var(--fg-muted)]" />}>
+          <p className="mb-3 text-xs text-[var(--fg-muted)]">
+            Todos os filtros da tela, menos o de regional, para comparar as regionais. Clique em uma para ver a tela só dela.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {(dados.porRegional ?? []).map((r) => {
+              const ativa = filtros.regional.includes(r.regional);
+              return (
+                <button
+                  key={r.regional}
+                  type="button"
+                  onClick={() => alternarRegional(r.regional)}
+                  aria-pressed={ativa}
+                  className={`cursor-pointer rounded-lg border p-3 text-left transition hover:bg-[var(--surface-hover)] ${ativa ? "border-[var(--brand)] bg-[var(--brand-soft)]" : "border-[var(--border)]"}`}
+                  title="Clique para filtrar por esta regional"
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-sm font-semibold text-[var(--fg)]">{r.regional}</p>
+                    <span className="text-xs text-[var(--fg-muted)]">{formatarPercentual(r.participacaoPercentual)} dos leads</span>
+                  </div>
+                  <p className="mt-1 text-3xl font-semibold text-[var(--fg)]">{r.totalLeads.toLocaleString("pt-BR")}</p>
+                  <p className="text-xs text-[var(--fg-muted)]">
+                    {r.ganhos} vendas · {formatarPercentual(r.taxaConversao)} conversão
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--fg-muted)]">
+                    {r.semEtapa} sem etapa · {r.emAndamento} em andamento · {r.perdidos} perdidos · {r.naoFazemos} não fazemos
+                  </p>
+                  <p className="text-xs text-[var(--fg-muted)]">
+                    {r.semContato} sem contato · {r.semResponsavel} sem responsável
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </Secao>
+      )}
 
       {/* Leads por dia + O que */}
       <div className="grid gap-4 lg:grid-cols-3">

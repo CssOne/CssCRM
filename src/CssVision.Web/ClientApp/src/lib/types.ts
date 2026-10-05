@@ -974,6 +974,21 @@ export interface MarketingMotivoPerda {
   quantidade: number;
 }
 
+/** Números de uma regional no Tráfego pago (MG132, MG134...). */
+export interface MarketingRegional {
+  regional: string;
+  totalLeads: number;
+  semEtapa: number;
+  emAndamento: number;
+  ganhos: number;
+  perdidos: number;
+  naoFazemos: number;
+  taxaConversao: number;
+  semContato: number;
+  semResponsavel: number;
+  participacaoPercentual: number;
+}
+
 export interface MarketingOpcoes {
   oQue: string[];
   origens: string[];
@@ -982,6 +997,7 @@ export interface MarketingOpcoes {
   consultores: { id: string; nome: string }[];
   estados: string[];
   etapas: string[];
+  regionais?: string[];
 }
 
 export interface MarketingLeadItem {
@@ -1021,6 +1037,8 @@ export interface MarketingDashboard {
   porConsultorMensal: MarketingConsultorMes[];
   /** Total de leads do período — a lista vem paginada por /marketing/leads. */
   totalLeadsLista: number;
+  /** Leads por regional, com todos os filtros menos o de regional (para comparar lado a lado). */
+  porRegional?: MarketingRegional[];
 }
 
 // --- Metas ---
@@ -1198,6 +1216,9 @@ export interface UserSummary {
   /** Distribuição automática: só recebe leads com estes "O que?". Nulo = qualquer lead. */
   recebeSomenteOQue?: string[] | null;
   limiteDiarioLeads?: number | null;
+  /** Administrador restrito a esta regional (vê só os dados dela). Nulo = todas. */
+  regionalRestritaId?: string | null;
+  regionalRestritaNome?: string | null;
 }
 
 export interface UserFilterRequest {
@@ -1222,6 +1243,7 @@ export interface UserCreateRequest {
   limiteMensalLeads?: number | null;
   recebeSomenteOQue?: string[] | null;
   limiteDiarioLeads?: number | null;
+  regionalRestritaId?: string | null;
 }
 
 export interface UserUpdateRequest {
@@ -1235,6 +1257,9 @@ export interface UserUpdateRequest {
   ativo: boolean;
   recebeSomenteOQue?: string[] | null;
   limiteDiarioLeads?: number | null;
+  regionalRestritaId?: string | null;
+  /** Verdadeiro quando o campo acima foi mexido (nulo + verdadeiro = tira a restrição). */
+  alterarRestricaoRegional?: boolean;
 }
 
 export interface GrupoMembro {

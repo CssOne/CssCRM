@@ -26,8 +26,15 @@ export interface UserFormValues {
   limiteDiarioLeads: string;
   /** Vazio = recebe qualquer lead na distribuição automática. */
   recebeSomenteOQue: string[];
+  /** Administrador restrito a uma regional: id dela, ou vazio = vê todas. */
+  regionalRestritaId: string;
+  /** O campo foi mexido (só então a restrição é enviada na edição). */
+  restricaoAlterada: boolean;
   ativo: boolean;
 }
+
+/** Papéis que veem todas as regionais — são os que podem ser restritos a uma só. */
+const PAPEIS_COM_VISAO_TOTAL = ["Admin", "GestorMaster", "SupervisorComercial"];
 
 function valoresVazios(papelFixo?: string): UserFormValues {
   return {
@@ -42,6 +49,8 @@ function valoresVazios(papelFixo?: string): UserFormValues {
     limiteMensalLeads: "",
     limiteDiarioLeads: "",
     recebeSomenteOQue: [],
+    regionalRestritaId: "",
+    restricaoAlterada: false,
     ativo: true,
   };
 }
@@ -59,6 +68,8 @@ export function paraFormValues(usuario: UserSummary): UserFormValues {
     limiteMensalLeads: usuario.limiteMensalLeads != null ? String(usuario.limiteMensalLeads) : "",
     limiteDiarioLeads: usuario.limiteDiarioLeads != null ? String(usuario.limiteDiarioLeads) : "",
     recebeSomenteOQue: usuario.recebeSomenteOQue ?? [],
+    regionalRestritaId: usuario.regionalRestritaId ?? "",
+    restricaoAlterada: false,
     ativo: usuario.ativo,
   };
 }
@@ -76,6 +87,7 @@ export function paraCriarRequest(v: UserFormValues): UserCreateRequest {
     limiteMensalLeads: v.limiteMensalLeads ? Number(v.limiteMensalLeads) : null,
     limiteDiarioLeads: v.limiteDiarioLeads ? Number(v.limiteDiarioLeads) : null,
     recebeSomenteOQue: v.papel === "Comercial" ? v.recebeSomenteOQue : null,
+    regionalRestritaId: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.regionalRestritaId || null : null,
   };
 }
 
@@ -91,6 +103,8 @@ export function paraAtualizarRequest(v: UserFormValues): UserUpdateRequest {
     limiteDiarioLeads: v.limiteDiarioLeads ? Number(v.limiteDiarioLeads) : null,
     ativo: v.ativo,
     recebeSomenteOQue: v.papel === "Comercial" ? v.recebeSomenteOQue : null,
+    regionalRestritaId: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.regionalRestritaId || null : null,
+    alterarRestricaoRegional: v.restricaoAlterada,
   };
 }
 
@@ -245,6 +259,27 @@ export function UserForm({
               ))}
             </Select>
             <FieldError>{erros.regional}</FieldError>
+          </div>
+        )}
+
+        {podeGerenciarTudo && PAPEIS_COM_VISAO_TOTAL.includes(valores.papel) && regionais.length > 1 && (
+          <div className="sm:col-span-2">
+            <Label htmlFor="user-regional-restrita">Acesso por regional</Label>
+            <Select
+              id="user-regional-restrita"
+              value={valores.regionalRestritaId}
+              onChange={(e) => setValores((v) => ({ ...v, regionalRestritaId: e.target.value, restricaoAlterada: true }))}
+            >
+              <option value="">Todas as regionais</option>
+              {regionais.map((r) => (
+                <option key={r.id} value={r.id}>
+                  Somente {r.nome}
+                </option>
+              ))}
+            </Select>
+            <p className="mt-1 text-xs text-[var(--fg-muted)]">
+              Com uma regional escolhida, este usuário deixa de ver leads, usuários, metas e Tráfego pago das outras regionais.
+            </p>
           </div>
         )}
 

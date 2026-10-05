@@ -25,6 +25,13 @@ public record MarketingFilterRequest
     public string[]? Estado { get; init; }
     /// <summary>Etapa atual no quadro de leads (nome; "Sem etapa" para os ainda não trabalhados).</summary>
     public string[]? Etapa { get; init; }
+    /// <summary>Regional do lead (MG132, MG134...): a do próprio lead e, na falta, a do consultor responsável.</summary>
+    public string[]? Regional { get; init; }
+    /// <summary>
+    /// Regionais que o usuário pode ver (administrador restrito a uma regional). Preenchido pelo servidor, que sobrescreve o que vier da
+    /// requisição; compõe a chave do cache.
+    /// </summary>
+    public string[]? RegionaisPermitidas { get; init; }
 }
 
 public static class MarketingCanais
@@ -97,7 +104,8 @@ public record MarketingOpcoesDto(
     IReadOnlyList<string> Canais,
     IReadOnlyList<MarketingConsultorOpcaoDto> Consultores,
     IReadOnlyList<string> Estados,
-    IReadOnlyList<string> Etapas);
+    IReadOnlyList<string> Etapas,
+    IReadOnlyList<string>? Regionais = null);
 
 public record MarketingLeadItemDto(
     Guid Id,
@@ -134,4 +142,11 @@ public record MarketingDashboardDto(
     string? PeriodoFim = null,
     IReadOnlyList<MarketingConsultorMesDto>? PorConsultorMensal = null,
     /// <summary>Total de leads do período (a lista em si vem paginada por /api/marketing/leads).</summary>
-    int TotalLeadsLista = 0);
+    int TotalLeadsLista = 0,
+    /// <summary>Leads por regional (MG132, MG134...), com todos os filtros menos o de regional — para comparar as regionais lado a lado.</summary>
+    IReadOnlyList<MarketingRegionalDto>? PorRegional = null);
+
+/// <summary>Números de uma regional no Tráfego pago.</summary>
+public record MarketingRegionalDto(
+    string Regional, int TotalLeads, int SemEtapa, int EmAndamento, int Ganhos, int Perdidos, int NaoFazemos, decimal TaxaConversao,
+    int SemContato, int SemResponsavel, decimal ParticipacaoPercentual);

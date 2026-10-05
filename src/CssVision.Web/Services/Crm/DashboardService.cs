@@ -101,10 +101,7 @@ public sealed class DashboardService(
         var metaRegionalQuery = db.CrmRegionalGoals.AsNoTracking().Where(g => g.MesReferencia == mesReferencia);
         if (visiveis is not null)
         {
-            var minhaRegionalId = await db.Users.AsNoTracking()
-                .Where(u => u.Id == currentUser.UserId)
-                .Select(u => u.RegionalId)
-                .FirstOrDefaultAsync(ct);
+            var minhaRegionalId = await EscopoRegional.EfetivaAsync(db, currentUser, ct);
             metaRegionalQuery = minhaRegionalId is null
                 ? metaRegionalQuery.Where(g => false)
                 : metaRegionalQuery.Where(g => g.RegionalId == minhaRegionalId);

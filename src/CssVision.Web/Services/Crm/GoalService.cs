@@ -115,8 +115,9 @@ public sealed class GoalService(
 
         var mes = NormalizarMes(mesReferencia ?? HorarioBrasilia.Hoje);
 
+        var restrita = await EscopoRegional.RestritaAsync(db, currentUser, ct);
         var regionais = await db.CrmRegionais.AsNoTracking()
-            .Where(r => r.Ativa)
+            .Where(r => r.Ativa && (restrita == null || r.Id == restrita))
             .OrderBy(r => r.Nome)
             .ToListAsync(ct);
         var regionalIds = regionais.Select(r => r.Id).ToList();
@@ -155,6 +156,11 @@ public sealed class GoalService(
         if (!currentUser.TemVisaoTotal)
         {
             throw new CrmForbiddenException("Apenas administradores podem definir a meta geral de uma regional.");
+        }
+
+        if (await EscopoRegional.RestritaAsync(db, currentUser, ct) is { } restritaDaMeta && request.RegionalId != restritaDaMeta)
+        {
+            throw new CrmForbiddenException("Você só pode definir a meta da sua regional.");
         }
 
         if (request.MetaQuantidadeVendas < 0)

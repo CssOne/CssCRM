@@ -26,6 +26,12 @@ public class ApplicationUserConfiguration : IEntityTypeConfiguration<Application
             .HasForeignKey(e => e.RegionalId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasIndex(e => e.RegionalRestritaId);
+        builder.HasOne<Domain.Crm.CrmRegional>()
+            .WithMany()
+            .HasForeignKey(e => e.RegionalRestritaId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasOne(e => e.Grupo)
             .WithMany(g => g.Usuarios)
             .HasForeignKey(e => e.GrupoId)

@@ -19,7 +19,10 @@ public record UserSummaryDto(
     string? FotoUrl,
     DateTimeOffset CriadoEm,
     IReadOnlyList<string>? RecebeSomenteOQue = null,
-    int? LimiteDiarioLeads = null);
+    int? LimiteDiarioLeads = null,
+    /// <summary>Administrador restrito a esta regional (vê só os dados dela); nulo = todas.</summary>
+    Guid? RegionalRestritaId = null,
+    string? RegionalRestritaNome = null);
 
 public record UserFilterRequest : PagedRequest
 {
@@ -41,7 +44,8 @@ public record UserCreateRequest(
     Guid? GrupoId,
     int? LimiteMensalLeads,
     IReadOnlyList<string>? RecebeSomenteOQue = null,
-    int? LimiteDiarioLeads = null);
+    int? LimiteDiarioLeads = null,
+    Guid? RegionalRestritaId = null);
 
 public record UserUpdateRequest(
     string NomeCompleto,
@@ -53,7 +57,11 @@ public record UserUpdateRequest(
     int? LimiteMensalLeads,
     bool Ativo,
     IReadOnlyList<string>? RecebeSomenteOQue = null,
-    int? LimiteDiarioLeads = null);
+    int? LimiteDiarioLeads = null,
+    /// <summary>Só considerado quando vem de um administrador sem restrição e o papel é Admin/Gestor master; nulo = todas as regionais.</summary>
+    Guid? RegionalRestritaId = null,
+    /// <summary>Verdadeiro quando o chamador manda o campo (nulo + falso = não mexe; nulo + verdadeiro = remove a restrição).</summary>
+    bool AlterarRestricaoRegional = false);
 
 public record ResetPasswordRequest(string NovaSenha);
 

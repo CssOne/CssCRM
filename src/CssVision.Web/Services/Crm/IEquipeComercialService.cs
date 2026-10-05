@@ -23,7 +23,14 @@ public sealed class EquipeComercialService(ApplicationDbContext db, ICurrentUser
 {
     public async Task<List<Guid>?> ObterVendedoresVisiveisAsync(CancellationToken ct)
     {
-        if (currentUser.TemVisaoTotal) return null;
+        if (currentUser.TemVisaoTotal)
+        {
+            // Administrador restrito a uma regional: só a equipe dela (e ele mesmo).
+            if (await EscopoRegional.RestritaAsync(db, currentUser, ct) is not { } restrita) return null;
+            var daRegional = await db.Users.AsNoTracking().Where(u => u.RegionalId == restrita).Select(u => u.Id).ToListAsync(ct);
+            if (!daRegional.Contains(currentUser.UserId)) daRegional.Add(currentUser.UserId);
+            return daRegional;
+        }
 
         if (currentUser.IsGestorComercial)
         {

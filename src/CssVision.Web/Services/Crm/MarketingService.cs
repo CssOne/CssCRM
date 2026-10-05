@@ -19,8 +19,25 @@ namespace CssVision.Web.Services.Crm;
 /// ("AGV ELETRICO" do Notion = "AGV ELÉTRICO").
 /// </para>
 /// </summary>
-public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cache = null, ICrmEventHub? eventos = null) : IMarketingService
+public sealed class MarketingService(ApplicationDbContext db, ICurrentUserService? currentUser = null, IMemoryCache? cache = null, ICrmEventHub? eventos = null) : IMarketingService
 {
+    private const string SemRegional = "Sem regional";
+
+    /// <summary>
+    /// Administrador restrito a uma regional só vê a dela: o filtro passa a levar essa regional (e entra na chave do cache), qualquer
+    /// que seja a requisição. Quem não tem restrição não muda nada (e o campo vindo da requisição é ignorado).
+    /// </summary>
+    private async Task<MarketingFilterRequest> AplicarEscopoAsync(MarketingFilterRequest filtro, CancellationToken ct)
+    {
+        string[]? permitidas = null;
+        if (currentUser is not null && await EscopoRegional.RestritaAsync(db, currentUser, ct) is { } restrita)
+        {
+            var nome = await db.CrmRegionais.AsNoTracking().Where(r => r.Id == restrita).Select(r => r.Nome).FirstOrDefaultAsync(ct);
+            permitidas = [nome ?? SemRegional];
+        }
+        return filtro with { RegionaisPermitidas = permitidas };
+    }
+
     /// <summary>Nome (prefixo) das colunas de venda ganha do quadro de leads — ver LeadsKanban.tsx/CrmSeeder.cs.</summary>
     private const string EtapaVendaConcluida = "Venda concluída";
     private const string EtapaPerdido = "Perdido";
@@ -33,15 +50,18 @@ public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cach
 
     private static readonly TimeSpan Brasilia = TimeSpan.FromHours(-3);
 
-    public Task<MarketingDashboardDto> ObterAsync(MarketingFilterRequest filtro, CancellationToken ct) =>
-        RespostaEmCache.ObterAsync(cache, eventos, "trafego", filtro, () => CalcularAsync(filtro, ct));
+    public async Task<MarketingDashboardDto> ObterAsync(MarketingFilterRequest filtro, CancellationToken ct)
+    {
+        filtro = await AplicarEscopoAsync(filtro, ct);
+        return await RespostaEmCache.ObterAsync(cache, eventos, "trafego", filtro, () => CalcularAsync(filtro, ct));
+    }
 
     /// <summary>Lista "Últimos leads" paginada (mais recentes primeiro), com os mesmos filtros do painel.</summary>
     public async Task<PagedResult<MarketingLeadItemDto>> ListarLeadsAsync(MarketingFilterRequest filtro, int pagina, int tamanhoPagina, CancellationToken ct)
     {
         pagina = Math.Max(1, pagina);
         tamanhoPagina = Math.Clamp(tamanhoPagina, 5, 100);
-        var carga = await CarregarAsync(filtro, ct);
+        var carga = await CarregarAsync(await AplicarEscopoAsync(filtro, ct), ct);
         return new PagedResult<MarketingLeadItemDto>
         {
             Itens = carga.Leads
@@ -59,7 +79,7 @@ public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cach
 
     /// <summary>Leads do período (já filtrados), do período anterior e as opções dos filtros.</summary>
     private sealed record Carga(
-        DateOnly Inicio, DateOnly Fim, int Dias, List<Linha> Leads, List<Linha> Anteriores, MarketingOpcoesDto Opcoes);
+        DateOnly Inicio, DateOnly Fim, int Dias, List<Linha> Leads, List<Linha> Anteriores, MarketingOpcoesDto Opcoes, List<Linha> LeadsTodasRegionais);
 
     /// <summary>Compartilhada entre o painel e a lista paginada — trocar de página não recarrega a base.</summary>
     private Task<Carga> CarregarAsync(MarketingFilterRequest filtro, CancellationToken ct) =>
@@ -68,7 +88,7 @@ public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cach
     private sealed record Linha(
         Guid Id, string Nome, string? Telefone, bool SemContato, string? Origem, string? Campanha, string? UtmSource, string? UtmMedium,
         string OQue, string? Estado, string Canal, string EtapaNome, string? EtapaCor, int EtapaOrdem, Guid? ResponsavelId, string? ResponsavelNome,
-        DateTimeOffset CriadoEm, DateTimeOffset Chegada, string? MotivoPerda)
+        DateTimeOffset CriadoEm, DateTimeOffset Chegada, string? MotivoPerda, string Regional = SemRegional)
     {
         public bool Ganho => EtapaNome.StartsWith(EtapaVendaConcluida, StringComparison.Ordinal);
         public bool Perdido => EtapaNome == EtapaPerdido;
@@ -111,6 +131,8 @@ public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cach
                 ResponsavelNome = l.Responsavel != null ? l.Responsavel.NomeCompleto : null,
                 l.CriadoEm, l.ResponsavelAtribuidoEm,
                 MotivoPerda = l.MotivoPerda != null ? l.MotivoPerda.Descricao : null,
+                RegionalDoLead = l.Regional,
+                RegionalDoResponsavel = l.Responsavel != null && l.Responsavel.Regional != null ? l.Responsavel.Regional.Nome : null,
             })
             .ToListAsync(ct);
 
@@ -121,8 +143,16 @@ public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cach
                 NormalizarOQue(l.ProdutoInteresse), Vazio(l.Estado)?.ToUpperInvariant(),
                 Canal(l.MetaLeadId, l.Gclid, l.MetaClickId, l.ConsentimentoOrigem),
                 l.EtapaNome ?? SemEtapa, l.EtapaCor, l.EtapaOrdem, l.ResponsavelId, l.ResponsavelNome,
-                l.CriadoEm, l.ResponsavelAtribuidoEm ?? l.CriadoEm, l.MotivoPerda))
+                l.CriadoEm, l.ResponsavelAtribuidoEm ?? l.CriadoEm, l.MotivoPerda,
+                // Regional do próprio lead (MG132, MG134...); sem ela, a do consultor responsável.
+                Vazio(l.RegionalDoLead)?.ToUpperInvariant() ?? Vazio(l.RegionalDoResponsavel)?.ToUpperInvariant() ?? SemRegional))
             .ToList();
+
+        // Administrador restrito a uma regional: o resto da tela (opções, números, lista) só conhece a dela.
+        if (Lista(filtro.RegionaisPermitidas)?.Select(r => r.ToUpperInvariant()).ToHashSet() is { } permitidas)
+        {
+            todas = todas.Where(l => permitidas.Contains(l.Regional)).ToList();
+        }
 
         var doPeriodo = todas.Where(l => l.CriadoEm >= inicioUtc).ToList();
         // Opções dos filtros: tudo o que existe no período (antes dos demais filtros), para o
@@ -133,12 +163,14 @@ public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cach
         return new Carga(inicioPeriodo, fimPeriodo, dias,
             filtradas.Where(l => l.CriadoEm >= inicioUtc).ToList(),
             filtradas.Where(l => l.CriadoEm < inicioUtc).ToList(),
-            opcoes);
+            opcoes,
+            // Para comparar as regionais lado a lado: todos os filtros, menos o de regional.
+            Filtrar(todas, filtro with { Regional = null }).Where(l => l.CriadoEm >= inicioUtc).ToList());
     }
 
     private async Task<MarketingDashboardDto> CalcularAsync(MarketingFilterRequest filtro, CancellationToken ct)
     {
-        var (inicioPeriodo, fimPeriodo, dias, leads, anteriores, opcoes) = await CarregarAsync(filtro, ct);
+        var (inicioPeriodo, fimPeriodo, dias, leads, anteriores, opcoes, leadsTodasRegionais) = await CarregarAsync(filtro, ct);
 
         var ids = leads.Select(l => l.Id).ToList();
         var (tempoMedio, tempoPorConsultor) = await TempoPrimeiroContatoAsync(leads, ct);
@@ -247,8 +279,22 @@ public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cach
             Agrupar(leads, l => l.Estado ?? NaoInformado),
             porConsultor, funil, porHorario, motivos, opcoes,
             inicioPeriodo.ToString("yyyy-MM-dd"), fimPeriodo.ToString("yyyy-MM-dd"),
-            porConsultorMensal, leads.Count);
+            porConsultorMensal, leads.Count, PorRegional(leadsTodasRegionais));
     }
+
+    /// <summary>MG132, MG134... lado a lado (participação sobre o total de leads de todas as regionais).</summary>
+    private static List<MarketingRegionalDto> PorRegional(List<Linha> leads) => leads
+        .GroupBy(l => l.Regional)
+        .Select(g =>
+        {
+            var gan = g.Count(l => l.Ganho);
+            var per = g.Count(l => l.Perdido);
+            return new MarketingRegionalDto(g.Key, g.Count(), g.Count(l => l.SemEtapaMarcada), g.Count(l => l.EmAndamento), gan, per,
+                g.Count(l => l.NaoFazemos), Taxa(gan, gan + per), g.Count(l => l.SemContato), g.Count(l => l.ResponsavelId is null),
+                leads.Count == 0 ? 0m : Math.Round(100m * g.Count() / leads.Count, 1));
+        })
+        .OrderBy(r => r.Regional == SemRegional ? 1 : 0).ThenBy(r => r.Regional)
+        .ToList();
 
     private static List<Linha> Filtrar(List<Linha> linhas, MarketingFilterRequest filtro)
     {
@@ -265,6 +311,8 @@ public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cach
         if (estados is not null) q = q.Where(l => estados.Contains(l.Estado ?? NaoInformado));
         var etapas = Lista(filtro.Etapa)?.ToHashSet();
         if (etapas is not null) q = q.Where(l => etapas.Contains(l.EtapaNome));
+        var regionais = Lista(filtro.Regional)?.Select(r => r.ToUpperInvariant()).ToHashSet();
+        if (regionais is not null) q = q.Where(l => regionais.Contains(l.Regional));
         if (filtro.ResponsavelId is { Length: > 0 } responsaveis)
         {
             var ids = responsaveis.ToHashSet();
@@ -283,7 +331,8 @@ public sealed class MarketingService(ApplicationDbContext db, IMemoryCache? cach
             .Select(g => new MarketingConsultorOpcaoDto(g.Key, g.First().ResponsavelNome ?? "Sem responsável"))
             .OrderBy(c => c.Nome).ToList(),
         linhas.Select(l => l.Estado ?? NaoInformado).Distinct().Order().ToList(),
-        linhas.GroupBy(l => l.EtapaNome).OrderBy(g => g.First().EtapaOrdem).Select(g => g.Key).ToList());
+        linhas.GroupBy(l => l.EtapaNome).OrderBy(g => g.First().EtapaOrdem).Select(g => g.Key).ToList(),
+        linhas.Select(l => l.Regional).Distinct().OrderBy(r => r == SemRegional ? 1 : 0).ThenBy(r => r).ToList());
 
     private static List<MarketingGrupoDto> Agrupar(List<Linha> linhas, Func<Linha, string> chave) => linhas
         .GroupBy(chave)
