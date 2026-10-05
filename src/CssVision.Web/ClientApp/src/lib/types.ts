@@ -146,6 +146,19 @@ export interface LeadListItem {
   venda?: LeadVendaResumo | null;
 }
 
+/** Rodapé da lista de leads: contagem e somas de todos os leads que batem com os filtros. */
+export interface LeadTotais {
+  contagem: number;
+  adesao: number;
+  fipe: number;
+  mensalidade: number;
+  mensalidadeComDesconto: number;
+  rastreador: number;
+  indicacao: number;
+  vistoria: number;
+  total: number;
+}
+
 export interface LeadVendaResumo {
   adesao?: number | null;
   fipe?: number | null;
@@ -286,6 +299,8 @@ export interface LeadCreateRequest {
   placa?: string | null;
   temSeguro?: boolean | null;
   utilidadeVeiculo?: string | null;
+  /** Modelo do veículo que não atendemos (coluna "Não fazemos"). */
+  veiculoNaoAtendido?: string | null;
   gclid?: string | null;
   utmMedium?: string | null;
   utmSource?: string | null;
@@ -360,6 +375,8 @@ export interface LeadKanbanCard {
   /** Motivo da perda (cartões em "Perdido") e a explicação do consultor. */
   motivoPerda?: string | null;
   motivoPerdaObservacao?: string | null;
+  /** Modelo do veículo informado pelo consultor (cartões em "Não fazemos"). */
+  veiculoNaoAtendido?: string | null;
 }
 
 /** Opção do filtro por motivo da coluna "Perdido" (id vazio = sem motivo informado). */
@@ -961,6 +978,8 @@ export interface VendedorResumo {
   diasSemanaLeads?: number[] | null;
   /** Tipos de lead ("O que?") que o consultor recebe; vazio/nulo = qualquer tipo. */
   recebeSomenteOQue?: string[] | null;
+  /** Leads de tráfego pago que chegaram para o vendedor no mês anterior. */
+  leadsTrafegoMesAnterior?: number;
   /** Leads de tráfego pago (Notion + sistema novo) que chegaram no mês. */
   leadsTrafegoNoMes?: number;
 }
@@ -994,6 +1013,8 @@ export interface RankingComercial {
   valorGanho: number;
   vendasGanhas: number;
   taxaConversao: number;
+  /** Soma do pagamento de adesão das vendas do período. */
+  valorAdesao?: number;
 }
 
 export interface TempoMedioEtapa {

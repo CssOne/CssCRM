@@ -295,6 +295,7 @@ public sealed class LeadService(
             Placa = request.Placa?.Trim().ToUpperInvariant() is { Length: > 0 and <= 10 } placaValida ? placaValida : null,
             TemSeguro = request.TemSeguro,
             UtilidadeVeiculo = request.UtilidadeVeiculo,
+            VeiculoNaoAtendido = LimparVeiculoNaoAtendido(request.VeiculoNaoAtendido),
             Gclid = request.Gclid,
             UtmMedium = request.UtmMedium,
             UtmSource = request.UtmSource,
@@ -380,6 +381,8 @@ public sealed class LeadService(
         lead.Placa = request.Placa?.Trim().ToUpperInvariant() is { Length: > 0 and <= 10 } placaValida ? placaValida : null;
         lead.TemSeguro = request.TemSeguro;
         lead.UtilidadeVeiculo = request.UtilidadeVeiculo;
+        // Nulo = o chamador não manda o campo (não mexe); vazio = limpa.
+        if (request.VeiculoNaoAtendido is not null) lead.VeiculoNaoAtendido = LimparVeiculoNaoAtendido(request.VeiculoNaoAtendido);
         lead.Gclid = request.Gclid;
         lead.UtmMedium = request.UtmMedium;
         lead.UtmSource = request.UtmSource;
@@ -847,6 +850,41 @@ public sealed class LeadService(
         eventos?.PublicarQuadroAtualizado("crm");
 
         return new LeadImportResultDto(linhas.Count, importados, duplicados, erros.Count, erros);
+    }
+
+    private static string? LimparVeiculoNaoAtendido(string? veiculo) =>
+        string.IsNullOrWhiteSpace(veiculo) ? null : veiculo.Trim() is { Length: > 200 } longo ? longo[..200] : veiculo.Trim();
+
+    public async Task<LeadTotaisDto> ObterTotaisAsync(LeadFilterRequest filtro, CancellationToken ct)
+    {
+        if (!PodeVerOrigem) filtro = filtro with { Origem = null, Origens = null };
+        var query = await QueryEscopadaAsync(filtro.IncluirArquivados, ct);
+        query = AplicarFiltros(query, filtro);
+
+        var contagem = await query.CountAsync(ct);
+
+        // Somas sobre as vendas (oportunidades não arquivadas) dos leads filtrados: cada venda é um card do Notion,
+        // como na barra de somas da tela de relatórios de lá.
+        var somas = await query
+            .SelectMany(l => l.Oportunidades.Where(o => !o.Arquivado))
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Adesao = g.Sum(o => o.PagamentoAdesao) ?? 0m,
+                Fipe = g.Sum(o => o.Veiculo != null ? o.Veiculo.Fipe : null) ?? 0m,
+                Mensalidade = g.Sum(o => o.Mensalidade) ?? 0m,
+                MensalidadeComDesconto = g.Sum(o => o.MensalidadeComDesconto) ?? 0m,
+                Rastreador = g.Sum(o => o.Veiculo != null ? o.Veiculo.Rastreador : null) ?? 0m,
+                Indicacao = g.Sum(o => o.ValorIndicacao) ?? 0m,
+                Vistoria = g.Sum(o => o.Veiculo != null ? o.Veiculo.ValorVistoria : null) ?? 0m,
+                Total = g.Sum(o => o.Total ?? o.ValorFinal) ?? 0m,
+            })
+            .FirstOrDefaultAsync(ct);
+
+        return somas is null
+            ? new LeadTotaisDto(contagem, 0, 0, 0, 0, 0, 0, 0, 0)
+            : new LeadTotaisDto(contagem, somas.Adesao, somas.Fipe, somas.Mensalidade, somas.MensalidadeComDesconto,
+                somas.Rastreador, somas.Indicacao, somas.Vistoria, somas.Total);
     }
 
     public async Task<byte[]> ExportarAsync(LeadFilterRequest filtro, CancellationToken ct)

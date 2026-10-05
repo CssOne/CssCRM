@@ -656,9 +656,9 @@ export function LeadsKanbanPage() {
           />
         </div>
         <div className="w-48">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Tipo de indicação</label>
+          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Canal de Aquisição</label>
           <MultiSelect
-            ariaLabel="Tipo de indicação"
+            ariaLabel="Canal de Aquisição"
             opcoes={OPCOES_FILTRO_TIPO_INDICACAO.map((t) => ({ valor: t, rotulo: t }))}
             valores={tipoIndicacao}
             onChange={setTipoIndicacao}

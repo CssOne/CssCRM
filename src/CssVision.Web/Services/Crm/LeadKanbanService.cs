@@ -142,6 +142,7 @@ public sealed class LeadKanbanService(
                 VeiculoAdicional = l.VeiculoAdicionalDeLeadId != null,
                 MotivoPerda = l.MotivoPerda != null ? l.MotivoPerda.Descricao : null,
                 l.MotivoPerdaObservacao,
+                l.VeiculoNaoAtendido,
                 // A oportunidade mais recente é a fonte dos selos Migração/Indicação — normalmente é a
                 // que fechou a venda (o lead só chega na coluna "Venda concluída" depois disso).
                 Oportunidade = l.Oportunidades
@@ -161,7 +162,7 @@ public sealed class LeadKanbanService(
             // um telefone é preenchido.
             l.CriadoEm, l.UltimoContatoEm, string.IsNullOrWhiteSpace(l.Telefone) && string.IsNullOrWhiteSpace(l.Telefone2),
             l.Arquivado, l.RowVersion, l.ProdutoInteresse, l.ValorAdesao, l.ResponsavelFotoUrl, l.VeiculoAdicional,
-            l.MotivoPerda, l.MotivoPerdaObservacao)).ToList();
+            l.MotivoPerda, l.MotivoPerdaObservacao, l.VeiculoNaoAtendido)).ToList();
     }
 
     private (IQueryable<CrmLead> Query, bool PodeVerOrigem) Filtrar(LeadKanbanFilterRequest filtro, List<Guid>? visiveis)

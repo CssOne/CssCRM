@@ -36,7 +36,9 @@ public record LeadKanbanCardDto(
     bool VeiculoAdicional = false,
     /// <summary>Motivo da perda (cartões em "Perdido") e a explicação do consultor.</summary>
     string? MotivoPerda = null,
-    string? MotivoPerdaObservacao = null);
+    string? MotivoPerdaObservacao = null,
+    /// <summary>Modelo do veículo informado pelo consultor (cartões em "Não fazemos").</summary>
+    string? VeiculoNaoAtendido = null);
 
 /// <summary>Opção do filtro por motivo da coluna "Perdido" (Id vazio = sem motivo informado), com a quantidade.</summary>
 public record LeadKanbanMotivoPerdaDto(Guid Id, string Descricao, int Quantidade);

@@ -595,7 +595,7 @@ export function VendaConcluidaDialog({
               <>
                 <div className="w-48">
                   <Label htmlFor="venda-tipo-indicacao" required={ehVenda}>
-                    Tipo de indicação
+                    Canal de Aquisição
                   </Label>
                   <Select id="venda-tipo-indicacao" value={valores.tipoIndicacao ?? ""} onChange={(e) => set("tipoIndicacao", e.target.value)}>
                     <option value="">Selecione...</option>

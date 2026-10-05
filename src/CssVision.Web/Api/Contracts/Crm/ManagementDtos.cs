@@ -19,7 +19,9 @@ public record VendedorResumoDto(
     /// <summary>Dias em que recebe leads (0 = domingo … 6 = sábado); nulo = todos.</summary>
     int[]? DiasSemanaLeads = null,
     /// <summary>Tipos de lead ("O que?") que o consultor recebe; nulo = qualquer tipo.</summary>
-    IReadOnlyList<string>? RecebeSomenteOQue = null);
+    IReadOnlyList<string>? RecebeSomenteOQue = null,
+    /// <summary>Leads de tráfego pago (Notion + sistema novo) que chegaram para o vendedor no mês anterior.</summary>
+    int LeadsTrafegoMesAnterior = 0);
 
 public record AtualizarTiposLeadRequest(IReadOnlyList<string>? OQue);
 
@@ -79,7 +81,9 @@ public record RankingComercialDto(
     int Posicao,
     decimal ValorGanho,
     int VendasGanhas,
-    decimal TaxaConversao);
+    decimal TaxaConversao,
+    /// <summary>Soma do pagamento de adesão das vendas do período (a coluna "Valor" do ranking).</summary>
+    decimal ValorAdesao = 0m);
 
 public record TempoMedioEtapaDto(string Etapa, double DiasMedios);
 

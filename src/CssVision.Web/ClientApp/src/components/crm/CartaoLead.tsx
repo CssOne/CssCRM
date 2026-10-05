@@ -1,4 +1,4 @@
-import { ArrowRightLeft, Clock, Mail, Phone, Trash2, UserCog, XCircle } from "lucide-react";
+import { ArrowRightLeft, Car, Clock, Mail, Phone, Trash2, UserCog, XCircle } from "lucide-react";
 import type { DragEvent, MouseEvent, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { diasRelativos, formatarDataHora, formatarTelefone } from "../../lib/format";
@@ -184,6 +184,13 @@ export function CartaoLead({
             Motivo: {cartao.motivoPerda}
             {cartao.motivoPerdaObservacao && <span className="font-normal text-[var(--fg-muted)]"> — {cartao.motivoPerdaObservacao}</span>}
           </span>
+        </p>
+      )}
+
+      {cartao.veiculoNaoAtendido && (
+        <p className="mt-1.5 flex items-start gap-1 text-[11px] font-medium text-[var(--danger)]" title="Veículo que não atendemos">
+          <Car className="mt-px size-3 shrink-0" aria-hidden />
+          <span className="line-clamp-2">Veículo: {cartao.veiculoNaoAtendido}</span>
         </p>
       )}
 
