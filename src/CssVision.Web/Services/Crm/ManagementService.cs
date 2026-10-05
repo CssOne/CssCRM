@@ -79,7 +79,9 @@ public sealed class ManagementService(
         }
         else
         {
-            query = query.Where(u => u.Ativo);
+            // Consultores que estão num grupo da regional aparecem mesmo inativos (vêm marcados como inativos).
+            var comercialEmGrupo = db.UserRoles.Join(db.Roles.Where(r => r.Name == Roles.Comercial), ur => ur.RoleId, r => r.Id, (ur, _) => ur.UserId);
+            query = query.Where(u => u.Ativo || (u.GrupoId != null && comercialEmGrupo.Contains(u.Id)));
         }
         if (visiveis is not null) query = query.Where(u => visiveis.Contains(u.Id));
         // Vendedores que o Notion não identifica ("Vendedor Notion xxxx") ficam fora do filtro e da carteira até alguém renomeá-los.

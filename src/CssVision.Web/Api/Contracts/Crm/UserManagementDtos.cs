@@ -63,7 +63,7 @@ public record CreateRegionalRequest(string Nome);
 
 public record UpdateRegionalRequest(string Nome, bool Ativa);
 
-public record GrupoMembroDto(Guid Id, string NomeCompleto, string? FotoUrl);
+public record GrupoMembroDto(Guid Id, string NomeCompleto, string? FotoUrl, bool Ativo = true);
 
 public record GrupoDto(Guid Id, Guid RegionalId, string Nome, bool Ativo, IReadOnlyList<GrupoMembroDto> Consultores);
 

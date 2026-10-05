@@ -1145,6 +1145,7 @@ export interface GrupoMembro {
   id: string;
   nomeCompleto: string;
   fotoUrl?: string | null;
+  ativo?: boolean;
 }
 
 export interface Grupo {

@@ -376,7 +376,10 @@ export function ManagementPage() {
             {paginaCarteira.itensDaPagina.map((v) => (
               <div key={v.id} className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface-hover)]/60 p-3 text-sm">
                 <div>
-                  <p className="truncate font-semibold text-[var(--fg)]" title={v.nome}>{v.nome}</p>
+                  <p className="flex items-center gap-2 font-semibold text-[var(--fg)]" title={v.nome}>
+                    <span className="truncate">{v.nome}</span>
+                    {v.ativo === false && <Badge variant="danger">Inativo</Badge>}
+                  </p>
                   <p className="text-xs text-[var(--fg-muted)]">
                     {v.leadsAtivos.toLocaleString("pt-BR")} leads · {v.oportunidadesAbertas} oportunidades
                   </p>

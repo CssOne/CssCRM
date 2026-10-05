@@ -753,6 +753,7 @@ function GruposDeRegional({ regionalId, notificar }: { regionalId: string | null
                           <div key={c.id} className="flex items-center gap-2">
                             <MembroAvatar nome={c.nomeCompleto} fotoUrl={c.fotoUrl} />
                             <span className="text-sm text-[var(--fg)]">{c.nomeCompleto}</span>
+                            {c.ativo === false && <Badge variant="danger">Inativo</Badge>}
                           </div>
                         ))}
                       </div>
