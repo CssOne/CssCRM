@@ -75,9 +75,14 @@ public static partial class DocumentValidation
     {
         if (string.IsNullOrEmpty(documentoNormalizado)) return string.Empty;
         var formatado = FormatarDocumento(documentoNormalizado);
-        return documentoNormalizado.Length == 11
-            ? $"{formatado[..3]}.***.**{formatado[^5..]}"
-            : $"{formatado[..2]}.***.**{formatado[^9..]}";
+        return documentoNormalizado.Length switch
+        {
+            11 => $"{formatado[..3]}.***.**{formatado[^5..]}",
+            14 => $"{formatado[..2]}.***.**{formatado[^9..]}",
+            // Documento de outro tamanho (restos da migração antiga): antes estourava e a lista de leads dava erro 500.
+            <= 4 => new string('*', documentoNormalizado.Length),
+            var n => $"{documentoNormalizado[..2]}{new string('*', n - 4)}{documentoNormalizado[^2..]}",
+        };
     }
 
     public static bool ValidarCpf(string cpf)

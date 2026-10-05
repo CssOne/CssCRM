@@ -376,13 +376,19 @@ export function ManagementPage() {
             {paginaCarteira.itensDaPagina.map((v) => (
               <div key={v.id} className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface-hover)]/60 p-3 text-sm">
                 <div>
-                  <p className="truncate font-semibold text-[var(--fg)]" title={v.nome}>{v.nome}</p>
+                  <p className="flex items-center gap-2 font-semibold text-[var(--fg)]" title={v.nome}>
+                    <span className="truncate">{v.nome}</span>
+                    {v.ativo === false && <Badge variant="danger">Inativo</Badge>}
+                  </p>
                   <p className="text-xs text-[var(--fg-muted)]">
                     {v.leadsAtivos.toLocaleString("pt-BR")} leads · {v.oportunidadesAbertas} oportunidades
                   </p>
                   <p className="mt-1 text-xs" title="Leads de tráfego pago (Notion e sistema novo) que chegaram para o vendedor neste mês">
                     <span className="font-semibold text-[var(--brand)]">{(v.leadsTrafegoNoMes ?? 0).toLocaleString("pt-BR")}</span>{" "}
                     <span className="text-[var(--fg-muted)]">leads de tráfego pago no mês</span>
+                    <span className="text-[var(--fg-muted)]">
+                      {" "}· <span className="font-semibold text-[var(--fg)]">{(v.leadsTrafegoMesAnterior ?? 0).toLocaleString("pt-BR")}</span> no mês anterior
+                    </span>
                   </p>
                 </div>
                 <div className="space-y-1.5 border-t border-[var(--border)] pt-2">
@@ -411,7 +417,7 @@ export function ManagementPage() {
                   <th className="pb-2 font-medium">#</th>
                   <th className="pb-2 font-medium">Vendedor</th>
                   <th className="pb-2 font-medium">Ganhas</th>
-                  <th className="pb-2 font-medium">Valor</th>
+                  <th className="pb-2 font-medium" title="Soma do pagamento de adesão das vendas do período">Valor (adesão)</th>
                   <th className="pb-2 font-medium">Conversão</th>
                 </tr>
               </thead>
@@ -421,7 +427,7 @@ export function ManagementPage() {
                     <td className="py-2 text-[var(--fg-muted)]">{r.posicao}</td>
                     <td className="py-2 text-[var(--fg)]">{r.vendedorNome}</td>
                     <td className="py-2 text-[var(--fg-muted)]">{r.vendasGanhas}</td>
-                    <td className="py-2 text-[var(--fg-muted)]">{formatarMoeda(r.valorGanho)}</td>
+                    <td className="py-2 text-[var(--fg-muted)]">{formatarMoeda(r.valorAdesao ?? 0)}</td>
                     <td className="py-2 text-[var(--fg-muted)]">{formatarPercentual(r.taxaConversao)}</td>
                   </tr>
                 ))}

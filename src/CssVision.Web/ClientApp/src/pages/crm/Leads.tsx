@@ -8,6 +8,7 @@ import {
   type LeadCreateRequest,
   type LeadDuplicateWarning,
   type LeadListItem,
+  type LeadTotais,
   type LeadStage,
   type PagedResult,
   type Regional,
@@ -57,6 +58,8 @@ export function LeadsPage() {
   const [listaGrupos, setListaGrupos] = useState<GrupoFiltro[]>([]);
 
   const [dados, setDados] = useState<PagedResult<LeadListItem> | null>(null);
+  // Rodapé: contagem e somas de TODOS os leads que batem com os filtros (não só os da página).
+  const [totais, setTotais] = useState<LeadTotais | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
@@ -118,6 +121,20 @@ export function LeadsPage() {
     carregar(controller.signal);
     return () => controller.abort();
   }, [carregar, recarregar]);
+
+  // Mesmos filtros, sem a paginação.
+  const filtroTotais = useMemo(() => {
+    const { pagina: _pagina, tamanhoPagina: _tamanho, ...resto } = filtro;
+    return resto;
+  }, [filtro]);
+  useEffect(() => {
+    const controller = new AbortController();
+    api
+      .get<LeadTotais>(`/crm/leads/totais${toQueryString(filtroTotais)}`, controller.signal)
+      .then(setTotais)
+      .catch((e) => { if (!isAbortError(e)) setTotais(null); });
+    return () => controller.abort();
+  }, [filtroTotais, recarregar]);
 
   function limparFiltros() {
     setBusca("");
@@ -404,6 +421,30 @@ export function LeadsPage() {
                   </tr>
                 ))}
               </tbody>
+              {totais && (
+                <tfoot>
+                  <tr className="border-t-2 border-[var(--border)] bg-[var(--surface-hover)]/60 text-xs">
+                    <td colSpan={(podeGerir ? 1 : 0) + 5} className="px-2 py-3 font-medium text-[var(--fg)]">
+                      <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Contagem</span>
+                      {totais.contagem.toLocaleString("pt-BR")}
+                    </td>
+                    {[totais.adesao, totais.fipe, totais.mensalidade, totais.mensalidadeComDesconto].map((v, i) => (
+                      <td key={i} className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg)]">
+                        <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Soma</span>
+                        {formatarMoeda(v)}
+                      </td>
+                    ))}
+                    <td className="px-2 py-3" />
+                    {[totais.rastreador, totais.indicacao, totais.vistoria, totais.total].map((v, i) => (
+                      <td key={i} className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg)]">
+                        <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Soma</span>
+                        {formatarMoeda(v)}
+                      </td>
+                    ))}
+                    <td className="px-2 py-3" />
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
 
@@ -424,6 +465,13 @@ export function LeadsPage() {
               </Link>
             ))}
           </div>
+
+          {totais && (
+            <p className="text-xs text-[var(--fg-muted)] lg:hidden">
+              <span className="uppercase tracking-wide">Contagem</span> {totais.contagem.toLocaleString("pt-BR")} ·{" "}
+              <span className="uppercase tracking-wide">Soma total</span> {formatarMoeda(totais.total)}
+            </p>
+          )}
 
           <Pagination pagina={dados.pagina} totalPaginas={dados.totalPaginas} onChange={setPagina} />
         </>

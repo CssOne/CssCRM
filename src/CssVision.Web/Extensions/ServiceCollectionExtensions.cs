@@ -125,6 +125,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPublicLeadIntakeService, PublicLeadIntakeService>();
         services.AddScoped<IUserManagementService, UserManagementService>();
         services.AddScoped<IAnnouncementService, AnnouncementService>();
+        services.AddScoped<ISuporteService, SuporteService>();
         services.AddScoped<IMarketingService, MarketingService>();
 
         return services;

@@ -18,6 +18,9 @@ public interface ILeadService
     Task<int> AtribuirEmLoteAsync(LeadBulkAssignRequest request, CancellationToken ct);
     Task<LeadImportResultDto> ImportarAsync(Stream planilha, CancellationToken ct);
     Task<byte[]> ExportarAsync(LeadFilterRequest filtro, CancellationToken ct);
+
+    /// <summary>Contagem e somas dos leads que batem com os filtros (rodapé da lista).</summary>
+    Task<LeadTotaisDto> ObterTotaisAsync(LeadFilterRequest filtro, CancellationToken ct);
     Task<Guid> AdicionarNotaAsync(Guid leadId, string texto, CancellationToken ct);
     Task ExcluirAsync(Guid id, CancellationToken ct);
 }

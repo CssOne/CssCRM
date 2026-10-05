@@ -42,6 +42,7 @@ function paraFormValues(lead: LeadDetail): LeadFormValues {
     placa: lead.placa ?? "",
     temSeguro: lead.temSeguro === true ? "sim" : lead.temSeguro === false ? "nao" : "",
     utilidadeVeiculo: lead.utilidadeVeiculo ?? "",
+    veiculoNaoAtendido: lead.veiculoNaoAtendido ?? "",
     gclid: lead.gclid ?? "",
     utmMedium: lead.utmMedium ?? "",
     utmSource: lead.utmSource ?? "",
@@ -166,6 +167,8 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
         placa: valores.placa || null,
         temSeguro: valores.temSeguro === "sim" ? true : valores.temSeguro === "nao" ? false : null,
         utilidadeVeiculo: valores.utilidadeVeiculo || null,
+        // Vazio limpa o campo (o servidor só ignora quando o campo nem é enviado).
+        veiculoNaoAtendido: valores.veiculoNaoAtendido,
         gclid: valores.gclid || null,
         utmMedium: valores.utmMedium || null,
         utmSource: valores.utmSource || null,
@@ -374,6 +377,7 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
               </button>
             )}
           </div>
+          {lead.veiculoNaoAtendido && <InfoItem icone={Car} label="Veículo não atendido" valor={lead.veiculoNaoAtendido} />}
           {(lead.placa || lead.temSeguro !== null || lead.utilidadeVeiculo) && (
             <>
               <InfoItem icone={IdCard} label="Placa" valor={lead.placa || "-"} />
@@ -454,7 +458,7 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
                           )}
                           {op.pagamentoAdesao != null && <InfoItem icone={Wallet} label="Pagamento de adesão" valor={formatarMoeda(op.pagamentoAdesao)} />}
                           {op.total != null && <InfoItem icone={Wallet} label="Total" valor={formatarMoeda(op.total)} />}
-                          {op.indicacao && op.tipoIndicacao && <InfoItem icone={Handshake} label="Tipo de indicação" valor={op.tipoIndicacao} />}
+                          {op.indicacao && op.tipoIndicacao && <InfoItem icone={Handshake} label="Canal de Aquisição" valor={op.tipoIndicacao} />}
                           {op.indicacao && op.valorIndicacao != null && (
                             <InfoItem icone={Wallet} label="Valor da indicação" valor={formatarMoeda(op.valorIndicacao)} />
                           )}

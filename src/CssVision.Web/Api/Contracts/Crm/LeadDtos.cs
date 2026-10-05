@@ -46,6 +46,21 @@ public record LeadVendaResumoDto(
     decimal? Total,
     DateTimeOffset? DataVenda);
 
+/// <summary>
+/// Rodapé da lista de leads (como a barra de somas da tela do Notion): quantos leads batem com os filtros e a soma
+/// das colunas de dinheiro das vendas deles — todas as páginas, não só a que aparece.
+/// </summary>
+public record LeadTotaisDto(
+    int Contagem,
+    decimal Adesao,
+    decimal Fipe,
+    decimal Mensalidade,
+    decimal MensalidadeComDesconto,
+    decimal Rastreador,
+    decimal Indicacao,
+    decimal Vistoria,
+    decimal Total);
+
 public record LeadFilterRequest : PagedRequest
 {
     public string? Busca { get; init; }
@@ -216,7 +231,9 @@ public record LeadCreateRequest(
     bool ConsentimentoContato,
     string? ConsentimentoOrigem,
     bool IgnorarDuplicidade = false,
-    string? UtmCampaign = null);
+    string? UtmCampaign = null,
+    /// <summary>Modelo do veículo que não atendemos (coluna "Não fazemos"); vazio limpa, nulo não mexe.</summary>
+    string? VeiculoNaoAtendido = null);
 
 public record LeadUpdateRequest(
     string NomeOuRazaoSocial,
@@ -250,7 +267,8 @@ public record LeadUpdateRequest(
     bool ConsentimentoContato,
     string? ConsentimentoOrigem,
     uint RowVersion,
-    string? UtmCampaign = null);
+    string? UtmCampaign = null,
+    string? VeiculoNaoAtendido = null);
 
 public record LeadAssignRequest(Guid ResponsavelId, string? Motivo);
 

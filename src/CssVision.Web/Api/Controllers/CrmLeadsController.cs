@@ -16,6 +16,11 @@ public class CrmLeadsController(ILeadService leadService, ILeadKanbanService kan
     public async Task<ActionResult> Listar([FromQuery] LeadFilterRequest filtro, CancellationToken ct) =>
         Ok(await leadService.ListarAsync(filtro, ct));
 
+    /// <summary>Rodapé da lista de leads: contagem e somas (adesão, FIPE, mensalidade...) com os mesmos filtros.</summary>
+    [HttpGet("totais")]
+    public async Task<ActionResult<LeadTotaisDto>> ObterTotais([FromQuery] LeadFilterRequest filtro, CancellationToken ct) =>
+        Ok(await leadService.ObterTotaisAsync(filtro, ct));
+
     [HttpGet("kanban")]
     public async Task<ActionResult<LeadKanbanBoardDto>> ObterKanban([FromQuery] LeadKanbanFilterRequest filtro, CancellationToken ct) =>
         Ok(await kanbanService.ObterBoardAsync(filtro, ct));

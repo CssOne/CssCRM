@@ -23,6 +23,7 @@ import { PortalPropostasPage } from "./pages/portal/Propostas";
 import { ConfiguracoesPage } from "./pages/portal/Configuracoes";
 import { TrafegoPagoPage } from "./pages/marketing/TrafegoPago";
 import { BackupsPage } from "./pages/admin/Backups";
+import { SuportePage } from "./pages/Suporte";
 
 function CarregandoTelaCheia() {
   return (
@@ -100,6 +101,8 @@ export default function App() {
           </RotaProtegida>
         }
       />
+
+      <Route path="/app/suporte" element={<RotaProtegida><SuportePage /></RotaProtegida>} />
 
       <Route path="/app/portal" element={<RotaProtegida><PortalDashboardPage /></RotaProtegida>} />
       <Route path="/app/portal/clientes" element={<RotaProtegida><PortalClientesPage /></RotaProtegida>} />

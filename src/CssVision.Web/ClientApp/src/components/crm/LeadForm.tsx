@@ -24,6 +24,8 @@ export interface LeadFormValues {
   placa: string;
   temSeguro: string;
   utilidadeVeiculo: string;
+  /** Modelo do veículo que não atendemos (coluna "Não fazemos"). */
+  veiculoNaoAtendido: string;
   gclid: string;
   utmMedium: string;
   utmSource: string;
@@ -57,6 +59,7 @@ export const leadFormVazio: LeadFormValues = {
   placa: "",
   temSeguro: "",
   utilidadeVeiculo: "",
+  veiculoNaoAtendido: "",
   gclid: "",
   utmMedium: "",
   utmSource: "",
@@ -91,6 +94,7 @@ export function paraLeadCreateRequest(v: LeadFormValues): LeadCreateRequest {
     placa: v.placa || null,
     temSeguro: v.temSeguro === "sim" ? true : v.temSeguro === "nao" ? false : null,
     utilidadeVeiculo: v.utilidadeVeiculo || null,
+    veiculoNaoAtendido: v.veiculoNaoAtendido || null,
     gclid: v.gclid || null,
     utmMedium: v.utmMedium || null,
     utmSource: v.utmSource || null,
@@ -280,6 +284,20 @@ export function LeadForm({
         </div>
 
         <div className="sm:col-span-2">
+          <Label htmlFor={`${idPrefix}-veiculo-nao-atendido`}>Veículo não atendido (modelo)</Label>
+          <Input
+            id={`${idPrefix}-veiculo-nao-atendido`}
+            maxLength={200}
+            placeholder="Ex.: Honda CG 160, caminhão, moto de entrega"
+            value={valores.veiculoNaoAtendido}
+            onChange={(e) => set("veiculoNaoAtendido", e.target.value)}
+          />
+          <p className="mt-1 text-xs text-[var(--fg-muted)]">
+            Preenchido quando o veículo não é atendido (coluna "Não fazemos") — aparece no cartão do quadro.
+          </p>
+        </div>
+
+        <div className="sm:col-span-2">
           <Label htmlFor={`${idPrefix}-tags`}>Tags (separadas por vírgula)</Label>
           <Input id={`${idPrefix}-tags`} value={valores.tags} onChange={(e) => set("tags", e.target.value)} />
         </div>
@@ -311,7 +329,7 @@ export function LeadForm({
             )}
           </div>
           <div>
-            <Label htmlFor={`${idPrefix}-tipo-indicacao`}>Tipo de indicação</Label>
+            <Label htmlFor={`${idPrefix}-tipo-indicacao`}>Canal de Aquisição</Label>
             <Select id={`${idPrefix}-tipo-indicacao`} value={valores.tipoIndicacao} onChange={(e) => set("tipoIndicacao", e.target.value)}>
               <option value="">Selecione...</option>
               {OPCOES_TIPO_INDICACAO.map((tipo) => (

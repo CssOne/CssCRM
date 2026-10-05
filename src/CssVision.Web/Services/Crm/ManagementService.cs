@@ -79,7 +79,9 @@ public sealed class ManagementService(
         }
         else
         {
-            query = query.Where(u => u.Ativo);
+            // Consultores que estão num grupo da regional aparecem mesmo inativos (vêm marcados como inativos).
+            var comercialEmGrupo = db.UserRoles.Join(db.Roles.Where(r => r.Name == Roles.Comercial), ur => ur.RoleId, r => r.Id, (ur, _) => ur.UserId);
+            query = query.Where(u => u.Ativo || (u.GrupoId != null && comercialEmGrupo.Contains(u.Id)));
         }
         if (visiveis is not null) query = query.Where(u => visiveis.Contains(u.Id));
         // Vendedores que o Notion não identifica ("Vendedor Notion xxxx") ficam fora do filtro e da carteira até alguém renomeá-los.
@@ -104,13 +106,14 @@ public sealed class ManagementService(
         var recebidosNoMes = await ContagensPorVendedor.ContarLeadsAsync(doTrafego.Where(l => l.CriadoEm >= inicioMes), ct);
         var recebidosHoje = await ContagensPorVendedor.ContarLeadsAsync(doTrafego.Where(l => (l.ResponsavelAtribuidoEm ?? l.CriadoEm) >= inicioDia), ct);
         var trafegoNoMes = await LeadsDeTrafegoNoMesAsync(leadsDosVendedores, ct);
+        var trafegoMesAnterior = await LeadsDeTrafegoNoMesAsync(leadsDosVendedores, ct, mesesAtras: 1);
 
         return vendedores.Select(v => new VendedorResumoDto(
             v.Id, v.NomeCompleto, leadsAtivos.GetValueOrDefault(v.Id), abertas.GetValueOrDefault(v.Id).Quantidade,
             v.LimiteMensalLeads, recebidosNoMes.GetValueOrDefault(v.Id), v.LimiteDiarioLeads, recebidosHoje.GetValueOrDefault(v.Id),
             v.Ativo, v.RecebeLeads, trafegoNoMes.GetValueOrDefault(v.Id),
             v.HorarioInicioLeads?.ToString("HH:mm"), v.HorarioFimLeads?.ToString("HH:mm"), JanelaRecebimentoLeads.MascaraParaDias(v.DiasSemanaLeads),
-            FiltroOQue.Separar(v.RecebeSomenteOQue))).ToList();
+            FiltroOQue.Separar(v.RecebeSomenteOQue), trafegoMesAnterior.GetValueOrDefault(v.Id))).ToList();
     }
 
     public async Task<IReadOnlyList<ConsultorDesempenhoDto>> ObterDesempenhoConsultoresAsync(DateOnly? mesReferencia, CancellationToken ct)
@@ -301,12 +304,14 @@ public sealed class ManagementService(
     /// Leads de tráfego pago (Notion + sistema novo) que chegaram para o vendedor no mês corrente,
     /// pela data de chegada do lead (horário de Brasília).
     /// </summary>
-    private static Task<Dictionary<Guid, int>> LeadsDeTrafegoNoMesAsync(IQueryable<CrmLead> leads, CancellationToken ct)
+    private static Task<Dictionary<Guid, int>> LeadsDeTrafegoNoMesAsync(IQueryable<CrmLead> leads, CancellationToken ct, int mesesAtras = 0)
     {
-        var agoraBrasilia = DateTime.UtcNow.AddHours(-3);
-        var inicioMes = new DateTimeOffset(new DateTime(agoraBrasilia.Year, agoraBrasilia.Month, 1), TimeSpan.Zero).AddHours(3);
+        // Mês de Brasília: 0 = mês atual, 1 = mês anterior (de 00:00 do dia 1 até 00:00 do dia 1 do mês seguinte).
+        var primeiroDia = HorarioBrasilia.PrimeiroDiaDoMes(HorarioBrasilia.Hoje).AddMonths(-mesesAtras);
+        var inicioMes = HorarioBrasilia.Inicio(primeiroDia);
+        var fimMes = HorarioBrasilia.Inicio(primeiroDia.AddMonths(1));
         return ContagensPorVendedor.ContarLeadsAsync(
-            leads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Where(l => !l.Arquivado && l.CriadoEm >= inicioMes), ct);
+            leads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Where(l => !l.Arquivado && l.CriadoEm >= inicioMes && l.CriadoEm < fimMes), ct);
     }
 
     private void ExigirGestaoComercial()
@@ -436,9 +441,9 @@ public sealed class ManagementService(
             {
                 fechadas.TryGetValue(v.Id, out var f);
                 return new RankingComercialDto(v.Id, v.NomeCompleto, 0, f?.ValorGanho ?? 0m, f?.Ganhas ?? 0,
-                    ContagensPorVendedor.TaxaConversaoLeads(f?.Ganhas ?? 0, leadsDoPeriodo.GetValueOrDefault(v.Id)));
+                    ContagensPorVendedor.TaxaConversaoLeads(f?.Ganhas ?? 0, leadsDoPeriodo.GetValueOrDefault(v.Id)), f?.ValorAdesao ?? 0m);
             })
-            .OrderByDescending(r => r.ValorGanho)
+            .OrderByDescending(r => r.ValorAdesao).ThenByDescending(r => r.ValorGanho)
             .ToList();
         return ordenado.Select((r, i) => r with { Posicao = i + 1 }).ToList();
     }

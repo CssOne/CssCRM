@@ -2,6 +2,7 @@ using CssVision.Web.Api.Contracts.Common;
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
+using CssVision.Web.Services.Notion;
 using Microsoft.EntityFrameworkCore;
 
 namespace CssVision.Web.Services.Crm;
@@ -278,8 +279,10 @@ public sealed class LookupService(ApplicationDbContext db, ICurrentUserService c
 
     private static GrupoDto ParaGrupoDto(CrmGrupo grupo) => new(
         grupo.Id, grupo.RegionalId, grupo.Nome, grupo.Ativo,
-        grupo.Usuarios.Where(u => u.Ativo).OrderBy(u => u.NomeCompleto)
-            .Select(u => new GrupoMembroDto(u.Id, u.NomeCompleto, u.FotoUrl)).ToList());
+        // Inclui os inativos (marcados): escondê-los fazia o grupo parecer vazio e, ao salvar, tirava-os do grupo.
+        grupo.Usuarios.Where(u => !u.NomeCompleto.StartsWith(NotionPageExtensions.PrefixoNomeProvisorio))
+            .OrderByDescending(u => u.Ativo).ThenBy(u => u.NomeCompleto)
+            .Select(u => new GrupoMembroDto(u.Id, u.NomeCompleto, u.FotoUrl, u.Ativo)).ToList());
 
     private async Task<Guid?> ObterRegionalAtualAsync(CancellationToken ct) =>
         await db.Users.AsNoTracking().Where(u => u.Id == currentUser.UserId).Select(u => u.RegionalId).FirstOrDefaultAsync(ct);

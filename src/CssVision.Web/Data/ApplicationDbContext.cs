@@ -39,6 +39,8 @@ public class ApplicationDbContext(
     public DbSet<CrmControleMarketingMes> CrmControleMarketingMeses => Set<CrmControleMarketingMes>();
     public DbSet<CrmUsuarioAlias> CrmUsuarioAliases => Set<CrmUsuarioAlias>();
     public DbSet<CrmBackup> CrmBackups => Set<CrmBackup>();
+    public DbSet<CrmSuporteChamado> CrmSuporteChamados => Set<CrmSuporteChamado>();
+    public DbSet<CrmSuporteMensagem> CrmSuporteMensagens => Set<CrmSuporteMensagem>();
     public DbSet<CrmPushInscricao> CrmPushInscricoes => Set<CrmPushInscricao>();
     public DbSet<CrmParametro> CrmParametros => Set<CrmParametro>();
 
