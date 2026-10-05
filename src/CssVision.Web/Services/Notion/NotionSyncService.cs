@@ -951,7 +951,7 @@ public sealed class NotionSyncService(
         // Venda que alguém excluiu no CRM continua excluída.
         if (oportunidade is { Arquivado: true }) return;
 
-        var dataVenda = ParseUtc(page.DateStart("Data da venda"));
+        var dataVenda = DataDoNotion.ParaInstante(page.DateStart("Data da venda"));
         var mensalidade = page.Number("Mensalidade") is { } m ? (decimal)m : (decimal?)null;
         var mensalidadeComDesconto = page.FormulaDecimal("Mensalidade com desconto");
         var adesao = page.Number("Adesão") is { } a ? (decimal)a : (decimal?)null;
