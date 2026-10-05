@@ -144,6 +144,8 @@ public sealed class ManagementService(
         var recebidos = await ContagensPorVendedor.ContarLeadsAsync(
             leadsDosConsultores.Where(OrigemLead.VeioDoTrafegoPago).Where(l => l.CriadoEm >= inicioMes), ct);
         var trafegoNoMes = await LeadsDeTrafegoNoMesAsync(leadsDosConsultores, ct);
+        var leadsDoMes = await ContagensPorVendedor.ContarLeadsAsync(
+            leadsDosConsultores.Where(l => !l.Arquivado && l.CriadoEm >= inicioMes && l.CriadoEm < fimMes), ct);
 
         return consultores
             .Select(c =>
@@ -157,7 +159,7 @@ public sealed class ManagementService(
                 return new ConsultorDesempenhoDto(
                     c.Id, c.NomeCompleto, c.Email!, c.PhoneNumber, c.Regional?.Nome, c.Ativo,
                     leadsAtivos.GetValueOrDefault(c.Id), aberta.Quantidade, aberta.Valor, fechada?.Ganhas ?? 0, valorGanho,
-                    ContagensPorVendedor.TaxaConversao(fechada),
+                    ContagensPorVendedor.TaxaConversaoLeads(fechada?.Ganhas ?? 0, leadsDoMes.GetValueOrDefault(c.Id)),
                     c.LimiteMensalLeads, recebidos.GetValueOrDefault(c.Id), metaValor, valorGanho, percentualMeta, trafegoNoMes.GetValueOrDefault(c.Id));
             })
             .OrderByDescending(r => r.ValorGanho)
@@ -422,12 +424,15 @@ public sealed class ManagementService(
 
         var fechadas = await ContagensPorVendedor.FechadasAsync(db.CrmOpportunities.AsNoTracking()
             .Where(o => !o.Arquivado && ids.Contains(o.ResponsavelId) && o.DataEfetivaFechamento >= inicio && o.DataEfetivaFechamento <= fim), ct);
+        var leadsDoPeriodo = await ContagensPorVendedor.ContarLeadsAsync(db.CrmLeads.AsNoTracking()
+            .Where(l => !l.Arquivado && l.ResponsavelId != null && ids.Contains(l.ResponsavelId.Value) && l.CriadoEm >= inicio && l.CriadoEm <= fim), ct);
 
         var ordenado = vendedores
             .Select(v =>
             {
                 fechadas.TryGetValue(v.Id, out var f);
-                return new RankingComercialDto(v.Id, v.NomeCompleto, 0, f?.ValorGanho ?? 0m, f?.Ganhas ?? 0, ContagensPorVendedor.TaxaConversao(f));
+                return new RankingComercialDto(v.Id, v.NomeCompleto, 0, f?.ValorGanho ?? 0m, f?.Ganhas ?? 0,
+                    ContagensPorVendedor.TaxaConversaoLeads(f?.Ganhas ?? 0, leadsDoPeriodo.GetValueOrDefault(v.Id)));
             })
             .OrderByDescending(r => r.ValorGanho)
             .ToList();

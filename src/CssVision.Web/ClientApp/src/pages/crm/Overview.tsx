@@ -1,34 +1,48 @@
 import { AlertTriangle, CalendarClock, Handshake, PhoneMissed, Target, TrendingUp, UserPlus, Wallet } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { Dashboard } from "../../lib/types";
-import { Badge, Card, ErrorState, Skeleton } from "../../components/ui";
-import { useAtualizarAoVivo } from "../../lib/useAoVivo";
+import { Badge, Card, ErrorState, Input, Pagination, Skeleton } from "../../components/ui";
+import { usePaginacao } from "../../lib/usePaginacao";
+import { BarrasHorizontaisChart } from "../../components/marketing/GraficosTrafego";
+import { mesAtualIso, useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { StatCard } from "../../components/crm/StatCard";
-import { EvolucaoChart, FunilChart, OrigemChart } from "../../components/crm/Charts";
+import { EvolucaoChart, OrigemChart } from "../../components/crm/Charts";
 
 export function OverviewPage() {
   const [dados, setDados] = useState<Dashboard | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [recarregar, setRecarregar] = useState(0);
+  // Mês mostrado (YYYY-MM): começa no mês atual e acompanha a virada do mês se ninguém escolheu outro.
+  const [mes, setMes] = useState(() => mesAtualIso().slice(0, 7));
+  const mesAtualRef = useRef(mesAtualIso().slice(0, 7));
 
   useEffect(() => {
     const controller = new AbortController();
     setCarregando(true);
     setErro(null);
+    const [ano, numeroMes] = mes.split("-").map(Number);
+    const ultimoDia = new Date(ano, numeroMes, 0).getDate();
     api
-      .get<Dashboard>(`/crm/dashboard${toQueryString({})}`, controller.signal)
+      .get<Dashboard>(`/crm/dashboard${toQueryString({ dataInicio: `${mes}-01`, dataFim: `${mes}-${String(ultimoDia).padStart(2, "0")}` })}`, controller.signal)
       .then(setDados)
       .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar o painel."); })
       .finally(() => { if (!controller.signal.aborted) setCarregando(false); });
     return () => controller.abort();
-  }, [recarregar]);
+  }, [recarregar, mes]);
 
   // Tempo real: o painel recarrega (sem piscar) quando uma venda/lead muda e quando o mês vira.
-  useAtualizarAoVivo(() => setRecarregar((n) => n + 1));
+  useAtualizarAoVivo(() => {
+    const atual = mesAtualIso().slice(0, 7);
+    setMes((escolhido) => (escolhido === mesAtualRef.current ? atual : escolhido));
+    mesAtualRef.current = atual;
+    setRecarregar((n) => n + 1);
+  });
+
+  const paginaVendedores = usePaginacao(dados?.desempenhoPorVendedor, 10);
 
   if (carregando && !dados) {
     return (
@@ -44,25 +58,34 @@ export function OverviewPage() {
     return <ErrorState message={erro ?? "Não foi possível carregar o painel."} onRetry={() => setRecarregar((n) => n + 1)} />;
   }
 
-  const { indicadores, meta, funil, evolucaoVendas, origemLeads, desempenhoPorVendedor, atividadesDoDia, leadsParados } = dados;
+  const { indicadores, meta, evolucaoVendas, origemLeads, desempenhoPorVendedor, atividadesDoDia, leadsParados } = dados;
+  const funilLeads = dados.funilLeads ?? [];
+  const resumoMensal = dados.resumoMensal ?? [];
+  const leadsParadosTotal = dados.leadsParadosTotal ?? leadsParados.length;
+  const [anoMes, numMes] = mes.split("-");
+  const rotuloMes = `${numMes}/${anoMes}`;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold text-[var(--fg)]">Visão geral</h1>
-        <p className="text-sm text-[var(--fg-muted)]">Indicadores comerciais do período atual.</p>
+        <p className="text-sm text-[var(--fg-muted)]">Indicadores comerciais de {rotuloMes}.</p>
+      </div>
+      <div className="w-44">
+        <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Mês</label>
+        <Input type="month" value={mes} onChange={(e) => e.target.value && setMes(e.target.value)} />
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard titulo="Novos leads" valor={String(indicadores.novosLeads)} icone={UserPlus} tom="brand" />
-        <StatCard titulo="Leads sem contato" valor={String(indicadores.leadsSemContato)} icone={PhoneMissed} tom="warning" />
+        <StatCard titulo="Novos leads" valor={indicadores.novosLeads.toLocaleString("pt-BR")} subtitulo={`chegaram em ${rotuloMes}`} icone={UserPlus} tom="brand" />
+        <StatCard titulo="Leads sem contato" valor={indicadores.leadsSemContato.toLocaleString("pt-BR")} subtitulo="do mês, ainda em Sem etapa" icone={PhoneMissed} tom="warning" />
         <StatCard titulo="Atividades atrasadas" valor={String(indicadores.atividadesAtrasadas)} icone={AlertTriangle} tom="danger" />
         <StatCard titulo="Oportunidades abertas" valor={String(indicadores.oportunidadesAbertas)} icone={Handshake} tom="brand" />
         <StatCard titulo="Valor em pipeline" valor={formatarMoeda(indicadores.valorPipeline)} icone={Wallet} />
-        <StatCard titulo="Taxa de conversão" valor={formatarPercentual(indicadores.taxaConversao)} icone={TrendingUp} tom="success" />
+        <StatCard titulo="Taxa de conversão" valor={formatarPercentual(indicadores.taxaConversao)} subtitulo="vendas ÷ leads do mês" icone={TrendingUp} tom="success" />
         <StatCard titulo="Ticket médio" valor={formatarMoeda(indicadores.ticketMedio)} icone={Wallet} />
         <StatCard
-          titulo="Vendas ganhas (período)"
+          titulo="Vendas ganhas (mês)"
           valor={formatarMoeda(indicadores.vendasGanhasValor)}
           subtitulo={`${indicadores.vendasGanhasQuantidade} negócio(s)`}
           icone={Handshake}
@@ -88,8 +111,13 @@ export function OverviewPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="p-4 lg:col-span-2">
-          <h2 className="mb-3 text-sm font-semibold text-[var(--fg)]">Funil por etapa</h2>
-          <FunilChart dados={funil} />
+          <h2 className="text-sm font-semibold text-[var(--fg)]">Funil por etapa — resumo do quadro de leads</h2>
+          <p className="mb-2 text-xs text-[var(--fg-muted)]">Leads que chegaram em {rotuloMes}, na coluna em que estão hoje no quadro.</p>
+          <BarrasHorizontaisChart
+            categorias={funilLeads.map((e) => e.etapa)}
+            series={[{ nome: "Leads", valores: funilLeads.map((e) => e.quantidade) }]}
+            coresPorBarra={funilLeads.map((e, i) => e.cor ?? ["#2563eb", "#0ea5e9", "#8b5cf6", "#22c55e", "#f59e0b", "#f97316", "#ef4444", "#64748b"][i % 8])}
+          />
         </Card>
         <Card className="p-4">
           <h2 className="mb-3 text-sm font-semibold text-[var(--fg)]">Origem dos leads</h2>
@@ -102,33 +130,76 @@ export function OverviewPage() {
         <EvolucaoChart dados={evolucaoVendas} />
       </Card>
 
-      {desempenhoPorVendedor.length > 1 && (
+      <Card className="overflow-x-auto p-4">
+        <h2 className="text-sm font-semibold text-[var(--fg)]">Resumo por mês</h2>
+        <p className="mb-3 text-xs text-[var(--fg-muted)]">Últimos 12 meses. Clique em um mês para ver o painel dele.</p>
+        <table className="w-full min-w-[640px] text-sm">
+          <thead>
+            <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--fg-muted)]">
+              <th className="pb-2 font-medium">Mês</th>
+              <th className="pb-2 text-right font-medium">Leads</th>
+              <th className="pb-2 text-right font-medium">Perdidos</th>
+              <th className="pb-2 text-right font-medium">Vendas</th>
+              <th className="pb-2 text-right font-medium">Valor ganho</th>
+              <th className="pb-2 text-right font-medium">Adesão</th>
+              <th className="pb-2 text-right font-medium">Conversão</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[...resumoMensal].reverse().map((m) => {
+              const [mm, aaaa] = m.mes.split("/");
+              const selecionado = `${aaaa}-${mm}` === mes;
+              return (
+                <tr
+                  key={m.mes}
+                  onClick={() => setMes(`${aaaa}-${mm}`)}
+                  className={`cursor-pointer border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)] ${selecionado ? "bg-[var(--brand-soft)]" : ""}`}
+                >
+                  <td className="py-2 font-medium text-[var(--fg)]">{m.mes}</td>
+                  <td className="py-2 text-right text-[var(--fg-muted)]">{m.leads.toLocaleString("pt-BR")}</td>
+                  <td className="py-2 text-right text-[var(--fg-muted)]">{m.perdidos.toLocaleString("pt-BR")}</td>
+                  <td className="py-2 text-right text-[var(--fg-muted)]">{m.vendas.toLocaleString("pt-BR")}</td>
+                  <td className="py-2 text-right text-[var(--fg-muted)]">{formatarMoeda(m.valorGanho)}</td>
+                  <td className="py-2 text-right text-[var(--fg-muted)]">{formatarMoeda(m.adesao)}</td>
+                  <td className="py-2 text-right text-[var(--fg-muted)]">{formatarPercentual(m.conversao)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </Card>
+
+      {desempenhoPorVendedor.length > 0 && (
         <Card className="overflow-x-auto p-4">
-          <h2 className="mb-3 text-sm font-semibold text-[var(--fg)]">Desempenho por vendedor</h2>
+          <h2 className="text-sm font-semibold text-[var(--fg)]">Desempenho por vendedor</h2>
+          <p className="mb-3 text-xs text-[var(--fg-muted)]">
+            Leads que chegaram para o vendedor e vendas que ele fechou em {rotuloMes}. Conversão = vendas ÷ leads do mês.
+          </p>
           <table className="w-full min-w-[560px] text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--fg-muted)]">
                 <th className="pb-2 font-medium">Vendedor</th>
-                <th className="pb-2 font-medium">Leads</th>
-                <th className="pb-2 font-medium">Abertas</th>
-                <th className="pb-2 font-medium">Pipeline</th>
-                <th className="pb-2 font-medium">Ganhas</th>
-                <th className="pb-2 font-medium">Conversão</th>
+                <th className="pb-2 text-right font-medium">Leads</th>
+                <th className="pb-2 text-right font-medium">Vendas</th>
+                <th className="pb-2 text-right font-medium">Valor ganho</th>
+                <th className="pb-2 text-right font-medium">Adesão</th>
+                <th className="pb-2 text-right font-medium">Conversão</th>
               </tr>
             </thead>
             <tbody>
-              {desempenhoPorVendedor.map((v) => (
+              {paginaVendedores.itensDaPagina.map((v) => (
                 <tr key={v.vendedorId} className="border-b border-[var(--border)] last:border-0">
                   <td className="py-2 text-[var(--fg)]">{v.vendedorNome}</td>
-                  <td className="py-2 text-[var(--fg-muted)]">{v.leadsAtribuidos}</td>
-                  <td className="py-2 text-[var(--fg-muted)]">{v.oportunidadesAbertas}</td>
-                  <td className="py-2 text-[var(--fg-muted)]">{formatarMoeda(v.valorPipeline)}</td>
-                  <td className="py-2 text-[var(--fg-muted)]">{formatarMoeda(v.valorGanho)}</td>
-                  <td className="py-2 text-[var(--fg-muted)]">{formatarPercentual(v.taxaConversao)}</td>
+                  <td className="py-2 text-right text-[var(--fg-muted)]">{v.leadsAtribuidos.toLocaleString("pt-BR")}</td>
+                  <td className="py-2 text-right text-[var(--fg-muted)]">{v.vendasGanhas}</td>
+                  <td className="py-2 text-right text-[var(--fg-muted)]">{formatarMoeda(v.valorGanho)}</td>
+                  <td className="py-2 text-right text-[var(--fg-muted)]">{formatarMoeda(v.valorAdesao)}</td>
+                  <td className="py-2 text-right text-[var(--fg-muted)]">{formatarPercentual(v.taxaConversao)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <Pagination pagina={paginaVendedores.pagina} totalPaginas={paginaVendedores.totalPaginas} onChange={paginaVendedores.setPagina} />
         </Card>
       )}
 
@@ -156,8 +227,11 @@ export function OverviewPage() {
 
         <Card className="p-4">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--fg)]">
-            <Target className="size-4" /> Leads parados
+            <Target className="size-4" /> Leads parados{leadsParadosTotal > 0 ? ` (${leadsParadosTotal.toLocaleString("pt-BR")})` : ""}
           </h2>
+          <p className="mb-2 text-xs text-[var(--fg-muted)]">
+            Leads dos últimos 60 dias, em coluna aberta e com consultor ativo, sem contato nem movimento há mais de 5 dias.
+          </p>
           {leadsParados.length === 0 ? (
             <p className="text-sm text-[var(--fg-muted)]">Nenhum lead parado no momento. 🎉</p>
           ) : (

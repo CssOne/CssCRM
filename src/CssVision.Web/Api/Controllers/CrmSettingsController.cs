@@ -56,6 +56,11 @@ public class CrmSettingsController(ILookupService lookupService) : ControllerBas
     public async Task<ActionResult<RegionalDto>> AtualizarRegional(Guid id, UpdateRegionalRequest request, CancellationToken ct) =>
         Ok(await lookupService.AtualizarRegionalAsync(id, request, ct));
 
+    /// <summary>Todos os grupos (de todas as regionais visíveis) — alimenta o filtro "Grupo" do quadro e da lista de leads.</summary>
+    [HttpGet("groups/filtro")]
+    public async Task<ActionResult<IReadOnlyList<GrupoFiltroDto>>> ObterGruposParaFiltro(CancellationToken ct) =>
+        Ok(await lookupService.ObterGruposParaFiltroAsync(ct));
+
     [HttpGet("groups")]
     [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<ActionResult<IReadOnlyList<GrupoDto>>> ObterGrupos([FromQuery] Guid? regionalId, CancellationToken ct) =>

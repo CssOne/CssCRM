@@ -11,6 +11,7 @@ import {
   type LeadKanbanColumn,
   type PipelineBoard,
   type Regional,
+  type GrupoFiltro,
   type VendedorResumo,
 } from "../../lib/types";
 import { Button, ConfirmDialog, EmptyState, ErrorState, Input, Modal, Select, Skeleton, useToast } from "../../components/ui";
@@ -50,6 +51,8 @@ interface FiltrosQuadro {
   busca: string;
   responsavelId: string[];
   regional: string[];
+  /** Grupos (CrmGrupo) do consultor responsável. */
+  grupoId: string[];
   origem: string[];
   incluirArquivados: boolean;
   categoria: string[];
@@ -74,6 +77,7 @@ const FILTROS_VAZIOS: FiltrosQuadro = {
   busca: "",
   responsavelId: [],
   regional: [],
+  grupoId: [],
   origem: [],
   incluirArquivados: false,
   categoria: [],
@@ -87,7 +91,7 @@ const FILTROS_VAZIOS: FiltrosQuadro = {
   motivoPerdaId: [],
 };
 
-const CAMPOS_MULTIPLOS = ["responsavelId", "regional", "origem", "categoria", "fonte", "tipoIndicacao", "motivoPerdaId"] as const;
+const CAMPOS_MULTIPLOS = ["responsavelId", "regional", "grupoId", "origem", "categoria", "fonte", "tipoIndicacao", "motivoPerdaId"] as const;
 
 /** Completa e corrige filtros guardados — os salvos antes da múltipla escolha tinham um valor só (texto). */
 function normalizarFiltros(bruto: unknown): FiltrosQuadro {
@@ -147,6 +151,8 @@ export function LeadsKanbanPage() {
   const [busca, setBusca] = useState(filtrosIniciais.busca);
   const [responsavelId, setResponsavelId] = useState(filtrosIniciais.responsavelId);
   const [regional, setRegional] = useState(filtrosIniciais.regional);
+  const [grupoId, setGrupoId] = useState(filtrosIniciais.grupoId);
+  const [grupos, setGrupos] = useState<GrupoFiltro[]>([]);
   const [origem, setOrigem] = useState(filtrosIniciais.origem);
   const [incluirArquivados, setIncluirArquivados] = useState(filtrosIniciais.incluirArquivados);
   const [categoria, setCategoria] = useState(filtrosIniciais.categoria);
@@ -210,6 +216,8 @@ export function LeadsKanbanPage() {
     // Sempre com os inativos: a opção "Só ativos / Todos" do filtro só esconde ou mostra na lista.
     api.get<VendedorResumo[]>("/crm/management/vendedores?incluirInativos=true").then(setVendedores).catch(() => setVendedores([]));
     api.get<Regional[]>("/crm/settings/regionals").then(setRegionais).catch(() => setRegionais([]));
+    // Todos os grupos das regionais (os já criados e os que forem criados depois).
+    api.get<GrupoFiltro[]>("/crm/settings/groups/filtro").then(setGrupos).catch(() => setGrupos([]));
   }, [podeGerir]);
 
   const filtro = useMemo(
@@ -217,6 +225,7 @@ export function LeadsKanbanPage() {
       busca: busca || undefined,
       responsavelId,
       regional,
+      grupoId,
       origem,
       incluirArquivados: incluirArquivados || undefined,
       categoria,
@@ -232,6 +241,7 @@ export function LeadsKanbanPage() {
       busca,
       responsavelId,
       regional,
+      grupoId,
       origem,
       incluirArquivados,
       categoria,
@@ -250,6 +260,7 @@ export function LeadsKanbanPage() {
       busca,
       responsavelId,
       regional,
+      grupoId,
       origem,
       incluirArquivados,
       categoria,
@@ -262,7 +273,7 @@ export function LeadsKanbanPage() {
       dataVendaFim,
       motivoPerdaId,
     }),
-    [busca, responsavelId, regional, origem, incluirArquivados, categoria, fonte, tipoIndicacao, vendedoresInativos, dataChegadaInicio, dataChegadaFim, dataVendaInicio, dataVendaFim, motivoPerdaId]
+    [busca, responsavelId, regional, grupoId, origem, incluirArquivados, categoria, fonte, tipoIndicacao, vendedoresInativos, dataChegadaInicio, dataChegadaFim, dataVendaInicio, dataVendaFim, motivoPerdaId]
   );
 
   // Mantém os filtros ao abrir um card e voltar, ou ao recarregar a página.
@@ -274,6 +285,7 @@ export function LeadsKanbanPage() {
     setBusca(f.busca);
     setResponsavelId(f.responsavelId);
     setRegional(f.regional);
+    setGrupoId(f.grupoId);
     setOrigem(f.origem);
     setIncluirArquivados(f.incluirArquivados);
     setCategoria(f.categoria);
@@ -571,6 +583,7 @@ export function LeadsKanbanPage() {
     busca ||
     responsavelId.length ||
     regional.length ||
+    grupoId.length ||
     origem.length ||
     incluirArquivados ||
     categoria.length ||
@@ -717,6 +730,19 @@ export function LeadsKanbanPage() {
                 opcoes={regionais.map((r) => ({ valor: r.nome, rotulo: r.nome }))}
                 valores={regional}
                 onChange={setRegional}
+              />
+            </div>
+            <div className="w-52">
+              <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Grupo</label>
+              <MultiSelect
+                ariaLabel="Grupo"
+                rotuloTodos="Todos"
+                opcoes={grupos
+                  // Com regionais marcadas, só os grupos delas.
+                  .filter((g) => regional.length === 0 || regional.includes(g.regionalNome))
+                  .map((g) => ({ valor: g.id, rotulo: `${g.regionalNome} · ${g.nome}` }))}
+                valores={grupoId}
+                onChange={setGrupoId}
               />
             </div>
             <div className="w-40">

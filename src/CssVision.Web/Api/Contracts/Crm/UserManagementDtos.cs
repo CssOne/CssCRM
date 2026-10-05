@@ -67,6 +67,9 @@ public record GrupoMembroDto(Guid Id, string NomeCompleto, string? FotoUrl);
 
 public record GrupoDto(Guid Id, Guid RegionalId, string Nome, bool Ativo, IReadOnlyList<GrupoMembroDto> Consultores);
 
+/// <summary>Grupo com o nome da regional, para os filtros do quadro e da lista de leads (inclui os grupos criados depois).</summary>
+public record GrupoFiltroDto(Guid Id, Guid RegionalId, string RegionalNome, string Nome);
+
 public record CreateGrupoRequest(Guid? RegionalId, string Nome);
 
 public record UpdateGrupoRequest(string Nome, bool Ativo);

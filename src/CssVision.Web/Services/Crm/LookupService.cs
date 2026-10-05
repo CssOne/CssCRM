@@ -155,6 +155,24 @@ public sealed class LookupService(ApplicationDbContext db, ICurrentUserService c
         return grupos.Select(ParaGrupoDto).ToList();
     }
 
+    public async Task<IReadOnlyList<GrupoFiltroDto>> ObterGruposParaFiltroAsync(CancellationToken ct)
+    {
+        if (!currentUser.PodeGerirComercial) return [];
+
+        var query = db.CrmGrupos.AsNoTracking().Where(g => g.Ativo);
+        if (!currentUser.TemVisaoTotal)
+        {
+            var regionalAtual = await ObterRegionalAtualAsync(ct);
+            if (regionalAtual is null) return [];
+            query = query.Where(g => g.RegionalId == regionalAtual);
+        }
+
+        return await query
+            .OrderBy(g => g.Regional.Nome).ThenBy(g => g.Nome)
+            .Select(g => new GrupoFiltroDto(g.Id, g.RegionalId, g.Regional.Nome, g.Nome))
+            .ToListAsync(ct);
+    }
+
     public async Task<GrupoDto> CriarGrupoAsync(CreateGrupoRequest request, CancellationToken ct)
     {
         if (!currentUser.PodeGerirComercial)

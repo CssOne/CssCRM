@@ -195,6 +195,8 @@ public sealed class LeadKanbanService(
         if (podeVerOrigem && origens.Count > 0) query = query.Where(l => origens.Contains(l.Origem));
         var regionais = Valores(filtro.Regional);
         if (regionais.Count > 0) query = query.Where(l => regionais.Contains(l.Regional));
+        var grupos = Valores(filtro.GrupoId?.Select(id => (Guid?)id));
+        if (grupos.Count > 0) query = query.Where(l => l.Responsavel != null && grupos.Contains(l.Responsavel.GrupoId));
 
         // Dados migrados em épocas diferentes gravaram TipoIndicacao com capitalização distinta
         // (ex.: "LEAD" vs "Lead") — as comparações abaixo ignoram maiúsculas/minúsculas.

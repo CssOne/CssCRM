@@ -60,6 +60,9 @@ public record LeadKanbanFilterRequest
     public Guid[]? ResponsavelId { get; init; }
     public string[]? Origem { get; init; }
     public string[]? Regional { get; init; }
+
+    /// <summary>Grupos (CrmGrupo) do consultor responsável: leads de quem está em algum destes grupos.</summary>
+    public Guid[]? GrupoId { get; init; }
     public bool IncluirArquivados { get; init; }
 
     /// <summary>
