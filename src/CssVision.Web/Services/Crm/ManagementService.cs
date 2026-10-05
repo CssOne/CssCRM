@@ -3,6 +3,7 @@ using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Authorization;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
+using CssVision.Web.Services.Notion;
 using CssVision.Web.Domain.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -81,6 +82,8 @@ public sealed class ManagementService(
             query = query.Where(u => u.Ativo);
         }
         if (visiveis is not null) query = query.Where(u => visiveis.Contains(u.Id));
+        // Vendedores que o Notion não identifica ("Vendedor Notion xxxx") ficam fora do filtro e da carteira até alguém renomeá-los.
+        query = query.Where(u => !u.NomeCompleto.StartsWith(NotionPageExtensions.PrefixoNomeProvisorio));
 
         var vendedores = await query
             .OrderByDescending(u => u.Ativo).ThenBy(u => u.NomeCompleto)
@@ -122,7 +125,8 @@ public sealed class ManagementService(
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
         var idsComPapelComercial = (await userManager.GetUsersInRoleAsync(Roles.Comercial)).Select(u => u.Id).ToHashSet();
 
-        var query = db.Users.AsNoTracking().Include(u => u.Regional).Where(u => idsComPapelComercial.Contains(u.Id));
+        var query = db.Users.AsNoTracking().Include(u => u.Regional).Where(u => idsComPapelComercial.Contains(u.Id))
+            .Where(u => !u.NomeCompleto.StartsWith(NotionPageExtensions.PrefixoNomeProvisorio));
         if (visiveis is not null) query = query.Where(u => visiveis.Contains(u.Id));
 
         var consultores = await query.ToListAsync(ct);

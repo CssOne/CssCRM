@@ -232,7 +232,7 @@ export function OverviewPage() {
             <Target className="size-4" /> Leads parados{leadsParadosTotal > 0 ? ` (${leadsParadosTotal.toLocaleString("pt-BR")})` : ""}
           </h2>
           <p className="mb-2 text-xs text-[var(--fg-muted)]">
-            Leads dos últimos 60 dias, em coluna aberta e com consultor ativo, sem contato nem movimento há mais de 5 dias.
+            Leads do tráfego pago (não os do Notion) dos últimos 60 dias, em coluna aberta e com consultor ativo, sem contato nem movimento há mais de 5 dias.
           </p>
           {leadsParados.length === 0 ? (
             <p className="text-sm text-[var(--fg-muted)]">Nenhum lead parado no momento. 🎉</p>
@@ -248,7 +248,10 @@ export function OverviewPage() {
                       <p className="truncate font-medium text-[var(--fg)]">{l.leadNome}</p>
                       <p className="truncate text-xs text-[var(--fg-muted)]">{l.responsavelNome ?? "Sem responsável"}</p>
                     </div>
-                    <Badge variant="warning">{l.diasSemContato} dia(s)</Badge>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <Badge variant="info">{l.etapaNome ?? "Sem etapa"}</Badge>
+                      <Badge variant="warning">{l.diasSemContato} dia(s)</Badge>
+                    </div>
                   </Link>
                 </li>
               ))}

@@ -147,6 +147,12 @@ public static partial class NotionPageExtensions
         return null;
     }
 
+    /// <summary>Prefixo do nome dado a vendedor que o Notion não identifica — a Gestão comercial não lista estes usuários.</summary>
+    public const string PrefixoNomeProvisorio = "Vendedor Notion ";
+
+    public static string NomeProvisorio(string idNotion) =>
+        idNotion.Length <= 12 ? PrefixoNomeProvisorio + idNotion : $"{PrefixoNomeProvisorio}{idNotion[..8]}-{idNotion[^4..]}";
+
     public record VendedorInfo(string Nome, string? Email, string? Id = null, bool EhBot = false, bool NomeDesconhecido = false);
 
     /// <summary>Primeiro vendedor da propriedade "Vendedor" (people) — a maioria das linhas tem só um.</summary>
@@ -164,7 +170,8 @@ public static partial class NotionPageExtensions
         // card caía em "Vendedor não identificado"; agora o vendedor existe, com nome provisório até alguém renomear.
         if (string.IsNullOrWhiteSpace(nome) && string.IsNullOrWhiteSpace(idPessoa)) return null;
         var nomeDesconhecido = string.IsNullOrWhiteSpace(nome);
-        if (nomeDesconhecido) nome = $"Vendedor Notion {idPessoa![..Math.Min(8, idPessoa.Length)]}";
+        // Início + fim do id: muitos ids do Notion dividem os 8 primeiros caracteres ("391d872b-594c-8130-...").
+        if (nomeDesconhecido) nome = NomeProvisorio(idPessoa!);
 
         string? email = null;
         if (pessoa.TryGetProperty("person", out var p) && p.TryGetProperty("email", out var e))

@@ -719,6 +719,8 @@ export interface DesempenhoVendedor {
 }
 
 export interface AlertaLeadParado {
+  /** Coluna do quadro de leads em que o lead está. */
+  etapaNome?: string | null;
   leadId: string;
   leadNome: string;
   responsavelNome?: string | null;

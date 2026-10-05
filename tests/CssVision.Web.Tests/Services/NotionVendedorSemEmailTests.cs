@@ -130,7 +130,7 @@ public class NotionVendedorSemEmailTests
         await service.ProcessarPaginaAsync(Pagina("p1", "Cliente", notionId, vendedorNome: null), regional, "MG132", etapas, ganho, placeholder.Id, false, CancellationToken.None);
 
         var vendedor = await db.Users.SingleAsync(u => u.NotionUserId == notionId);
-        Assert.Equal("Vendedor Notion 56ded1ab", vendedor.NomeCompleto);
+        Assert.Equal("Vendedor Notion 56ded1ab-933a", vendedor.NomeCompleto); // início + fim do id (vários ids dividem o início)
         Assert.False(vendedor.Ativo);
         Assert.Equal(vendedor.Id, (await db.CrmLeads.SingleAsync()).ResponsavelId);
     }

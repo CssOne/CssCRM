@@ -79,22 +79,30 @@ public class VisaoGeralEFiltrosDeLeadsTests
         db.CrmLeadStages.Add(perdido);
         await db.SaveChangesAsync();
 
-        CrmLead L(string nome, Guid resp, Guid etapa) => new() { NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = resp, EtapaId = etapa };
+        // Só vem de anúncio (Meta Lead Ads/site) quem tem MetaLeadId; os cards do Notion têm o marcador de sincronização.
+        CrmLead L(string nome, Guid resp, Guid etapa) => new()
+        {
+            NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = resp, EtapaId = etapa, MetaLeadId = Guid.NewGuid().ToString(),
+        };
         var parado = L("Parado", ana.Id, aberta.Id);
+        var doNotion = L("Parado mas do Notion", ana.Id, aberta.Id);
+        doNotion.MetaLeadId = null;
+        doNotion.ConsentimentoOrigem = OrigemLead.MarcadorSincronizacaoNotion;
         var fechado = L("Perdido", ana.Id, perdido.Id);
         var deInativa = L("De inativa", inativa.Id, aberta.Id);
         var antigo = L("Antigo de 2023", ana.Id, aberta.Id);
         var comContato = L("Com contato recente", ana.Id, aberta.Id);
-        db.CrmLeads.AddRange(parado, fechado, deInativa, antigo, comContato);
+        db.CrmLeads.AddRange(parado, doNotion, fechado, deInativa, antigo, comContato);
         await db.SaveChangesAsync();
         var agora = DateTimeOffset.UtcNow;
-        foreach (var l in new[] { parado, fechado, deInativa, comContato }) await DatarAsync(db, l.Id, agora.AddDays(-20), l == comContato ? agora.AddDays(-1) : null);
+        foreach (var l in new[] { parado, doNotion, fechado, deInativa, comContato }) await DatarAsync(db, l.Id, agora.AddDays(-20), l == comContato ? agora.AddDays(-1) : null);
         await DatarAsync(db, antigo.Id, agora.AddDays(-1300));
 
         var r = await Painel(db, admin.Id).ObterAsync(new DashboardFilterRequest(null, null, null), CancellationToken.None);
 
         var item = Assert.Single(r.LeadsParados);
-        Assert.Equal("Parado", item.LeadNome);
+        Assert.Equal("Parado", item.LeadNome); // o parado do Notion não entra
+        Assert.Equal("Em atendimento", item.EtapaNome);
         Assert.InRange(item.DiasSemContato, 19, 21);
         Assert.Equal(1, r.LeadsParadosTotal);
     }

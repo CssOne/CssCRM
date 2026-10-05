@@ -39,7 +39,8 @@ public sealed class NotionSyncService(
         ("0f91c248-497e-4369-aad9-1d4266a49db4", "MG132", null, "MG132"),
         // MG134 (1a163799-99a8-81e2-82be-000bb2817da0) saiu da sincronização a pedido (04/10/2026): os
         // leads dela foram arquivados (migration ArquivaLeadsMg134) e novos cards não entram mais.
-        ("31763799-99a8-8118-b573-000b24781bfe", "MG134 Consultores Externos", null, "MG134 Consultores Externos"),
+        // "MG134 Consultores Externos" (31763799-99a8-8118-b573-000b24781bfe) também saiu da sincronização a pedido
+        // (05/10/2026): os leads dela foram arquivados (migration) e os usuários continuam.
         ("31763799-99a8-81b2-b83b-000bfca82506", "MG132", "CSS Growth Sales", "CSS Growth Sales"),
     ];
 
