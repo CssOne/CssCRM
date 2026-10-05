@@ -39,7 +39,7 @@ public record DesempenhoVendedorDto(
     decimal TaxaConversao,
     decimal ValorAdesao);
 
-public record AlertaLeadParadoDto(Guid LeadId, string LeadNome, string? ResponsavelNome, int DiasSemContato);
+public record AlertaLeadParadoDto(Guid LeadId, string LeadNome, string? ResponsavelNome, int DiasSemContato, string? EtapaNome = null);
 
 public record DashboardDto(
     DashboardIndicadoresDto Indicadores,

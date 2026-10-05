@@ -213,7 +213,7 @@ public sealed class DashboardService(
     }
 
     /// <summary>
-    /// Leads parados: em coluna aberta, de consultor ativo, que chegaram nos últimos 60 dias e não tiveram
+    /// Leads parados do tráfego pago (não os do Notion): em coluna aberta, de consultor ativo, que chegaram nos últimos 60 dias e não tiveram
     /// contato, atualização nem troca de responsável há mais de 5 dias. Antes entrava qualquer lead sem
     /// "último contato" — todo o histórico do Notion (leads de 2023 apareciam com 1.300 dias parados).
     /// </summary>
@@ -224,6 +224,8 @@ public sealed class DashboardService(
         var janela = agora.AddDays(-DiasJanelaLeadsParados);
 
         var candidatos = leadsQuery
+            // Só leads que vieram dos anúncios (Meta Lead Ads e formulário do site): os cards do Notion são trabalhados lá.
+            .Where(OrigemLead.VeioDoTrafegoPago)
             .Where(l => l.Etapa == null || !l.Etapa.Fechada)
             .Where(l => l.Responsavel != null && l.Responsavel.Ativo)
             .Where(l => l.CriadoEm >= janela && l.CriadoEm < limite)
@@ -238,6 +240,7 @@ public sealed class DashboardService(
             .Select(l => new
             {
                 l.Id, l.NomeOuRazaoSocial, ResponsavelNome = l.Responsavel!.NomeCompleto,
+                EtapaNome = l.Etapa != null ? l.Etapa.Nome : null,
                 l.UltimoContatoEm, l.AtualizadoEm, l.ResponsavelAtribuidoEm, l.CriadoEm,
             })
             .ToListAsync(ct);
@@ -246,7 +249,7 @@ public sealed class DashboardService(
         {
             var ultimoMovimento = new[] { l.UltimoContatoEm, l.AtualizadoEm, l.ResponsavelAtribuidoEm, l.CriadoEm }
                 .Where(d => d.HasValue).Max()!.Value;
-            return new AlertaLeadParadoDto(l.Id, l.NomeOuRazaoSocial, l.ResponsavelNome, (int)(agora - ultimoMovimento).TotalDays);
+            return new AlertaLeadParadoDto(l.Id, l.NomeOuRazaoSocial, l.ResponsavelNome, (int)(agora - ultimoMovimento).TotalDays, l.EtapaNome ?? "Sem etapa");
         }).ToList();
         return (itens, total);
     }
