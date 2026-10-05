@@ -157,6 +157,7 @@ export interface LeadTotais {
   indicacao: number;
   vistoria: number;
   total: number;
+  mediaPorcentagem?: number;
 }
 
 export interface LeadVendaResumo {
@@ -696,6 +697,8 @@ export interface DashboardIndicadores {
   vendasGanhasValor: number;
   vendasGanhasQuantidade: number;
   vendasGanhasAdesaoValor: number;
+  /** Leads do período vindos do tráfego pago que ainda estão em "Sem etapa". */
+  novosLeadsTrafegoSemEtapa?: number;
 }
 
 export interface MetaResultado {
@@ -716,6 +719,7 @@ export interface EvolucaoVendas {
   periodo: string;
   valorGanho: number;
   quantidade: number;
+  adesao?: number;
 }
 
 export interface OrigemLead {

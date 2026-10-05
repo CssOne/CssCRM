@@ -878,13 +878,14 @@ public sealed class LeadService(
                 Indicacao = g.Sum(o => o.ValorIndicacao) ?? 0m,
                 Vistoria = g.Sum(o => o.Veiculo != null ? o.Veiculo.ValorVistoria : null) ?? 0m,
                 Total = g.Sum(o => o.Total ?? o.ValorFinal) ?? 0m,
+                MediaPorcentagem = g.Average(o => o.Porcentagem) ?? 0m,
             })
             .FirstOrDefaultAsync(ct);
 
         return somas is null
             ? new LeadTotaisDto(contagem, 0, 0, 0, 0, 0, 0, 0, 0)
             : new LeadTotaisDto(contagem, somas.Adesao, somas.Fipe, somas.Mensalidade, somas.MensalidadeComDesconto,
-                somas.Rastreador, somas.Indicacao, somas.Vistoria, somas.Total);
+                somas.Rastreador, somas.Indicacao, somas.Vistoria, somas.Total, Math.Round(somas.MediaPorcentagem, 2));
     }
 
     public async Task<byte[]> ExportarAsync(LeadFilterRequest filtro, CancellationToken ct)

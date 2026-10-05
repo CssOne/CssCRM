@@ -13,7 +13,9 @@ public record DashboardIndicadoresDto(
     decimal TicketMedio,
     decimal VendasGanhasValor,
     int VendasGanhasQuantidade,
-    decimal VendasGanhasAdesaoValor);
+    decimal VendasGanhasAdesaoValor,
+    /// <summary>Leads do período vindos do tráfego pago que ainda estão em "Sem etapa" (o card "Novos leads").</summary>
+    int NovosLeadsTrafegoSemEtapa = 0);
 
 public record MetaResultadoDto(
     decimal MetaValor,
@@ -24,7 +26,7 @@ public record MetaResultadoDto(
 
 public record FunilEtapaDto(string Etapa, int Quantidade, decimal ValorTotal);
 
-public record EvolucaoVendasDto(string Periodo, decimal ValorGanho, int Quantidade);
+public record EvolucaoVendasDto(string Periodo, decimal ValorGanho, int Quantidade, decimal Adesao = 0m);
 
 public record OrigemLeadDto(string Origem, int Quantidade);
 

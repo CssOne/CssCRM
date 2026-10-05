@@ -11,6 +11,8 @@ import { mesAtualIso, useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { StatCard } from "../../components/crm/StatCard";
 import { EvolucaoChart, OrigemChart } from "../../components/crm/Charts";
 
+const TAMANHO_PAGINA_VENDEDORES = 10;
+
 export function OverviewPage() {
   const [dados, setDados] = useState<Dashboard | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -42,7 +44,7 @@ export function OverviewPage() {
     setRecarregar((n) => n + 1);
   });
 
-  const paginaVendedores = usePaginacao(dados?.desempenhoPorVendedor, 10);
+  const paginaVendedores = usePaginacao(dados?.desempenhoPorVendedor, TAMANHO_PAGINA_VENDEDORES);
 
   if (carregando && !dados) {
     return (
@@ -77,7 +79,7 @@ export function OverviewPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard titulo="Novos leads" valor={indicadores.novosLeads.toLocaleString("pt-BR")} subtitulo={`chegaram em ${rotuloMes}`} icone={UserPlus} tom="brand" />
+        <StatCard titulo="Novos leads" valor={(indicadores.novosLeadsTrafegoSemEtapa ?? 0).toLocaleString("pt-BR")} subtitulo={`do tráfego pago em Sem etapa — ${rotuloMes}`} icone={UserPlus} tom="brand" />
         <StatCard titulo="Leads sem contato" valor={indicadores.leadsSemContato.toLocaleString("pt-BR")} subtitulo="do mês, ainda em Sem etapa" icone={PhoneMissed} tom="warning" />
         <StatCard titulo="Atividades atrasadas" valor={String(indicadores.atividadesAtrasadas)} icone={AlertTriangle} tom="danger" />
         <StatCard titulo="Oportunidades abertas" valor={String(indicadores.oportunidadesAbertas)} icone={Handshake} tom="brand" />
@@ -126,7 +128,8 @@ export function OverviewPage() {
       </div>
 
       <Card className="p-4">
-        <h2 className="mb-3 text-sm font-semibold text-[var(--fg)]">Evolução de vendas (6 meses)</h2>
+        <h2 className="text-sm font-semibold text-[var(--fg)]">Evolução de vendas (6 meses)</h2>
+        <p className="mb-3 text-xs text-[var(--fg-muted)]">Rendimento de cada mês: valor ganho (total das vendas) e adesão recebida, pela data da venda.</p>
         <EvolucaoChart dados={evolucaoVendas} />
       </Card>
 
@@ -173,11 +176,12 @@ export function OverviewPage() {
         <Card className="overflow-x-auto p-4">
           <h2 className="text-sm font-semibold text-[var(--fg)]">Desempenho por vendedor</h2>
           <p className="mb-3 text-xs text-[var(--fg-muted)]">
-            Leads que chegaram para o vendedor e vendas que ele fechou em {rotuloMes}. Conversão = vendas ÷ leads do mês.
+            Ranking pela maior conversão. Leads que chegaram para o vendedor e vendas que ele fechou em {rotuloMes}. Conversão = vendas ÷ leads do mês.
           </p>
           <table className="w-full min-w-[560px] text-sm">
             <thead>
               <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--fg-muted)]">
+                <th className="pb-2 pr-2 font-medium">#</th>
                 <th className="pb-2 font-medium">Vendedor</th>
                 <th className="pb-2 text-right font-medium">Leads</th>
                 <th className="pb-2 text-right font-medium">Vendas</th>
@@ -187,8 +191,9 @@ export function OverviewPage() {
               </tr>
             </thead>
             <tbody>
-              {paginaVendedores.itensDaPagina.map((v) => (
+              {paginaVendedores.itensDaPagina.map((v, i) => (
                 <tr key={v.vendedorId} className="border-b border-[var(--border)] last:border-0">
+                  <td className="py-2 pr-2 text-[var(--fg-muted)]">{(paginaVendedores.pagina - 1) * TAMANHO_PAGINA_VENDEDORES + i + 1}</td>
                   <td className="py-2 text-[var(--fg)]">{v.vendedorNome}</td>
                   <td className="py-2 text-right text-[var(--fg-muted)]">{v.leadsAtribuidos.toLocaleString("pt-BR")}</td>
                   <td className="py-2 text-right text-[var(--fg-muted)]">{v.vendasGanhas}</td>

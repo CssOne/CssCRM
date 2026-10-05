@@ -48,10 +48,24 @@ export function EvolucaoChart({ dados }: { dados: EvolucaoVendas[] }) {
     fill: { type: "gradient", gradient: { opacityFrom: 0.35, opacityTo: 0 } },
     xaxis: { categories: dados.map((d) => d.periodo) },
     yaxis: { labels: { formatter: (v) => formatarMoeda(v) } },
-    tooltip: { ...baseOptions(modoEscuro).tooltip, y: { formatter: (v) => formatarMoeda(v) } },
+    legend: { position: "top" },
+    tooltip: {
+      ...baseOptions(modoEscuro).tooltip,
+      y: { formatter: (v, opts) => `${formatarMoeda(v)} · ${dados[(opts as { dataPointIndex?: number } | undefined)?.dataPointIndex ?? -1]?.quantidade ?? 0} venda(s)` },
+    },
   };
 
-  return <Chart type="area" height={260} options={options} series={[{ name: "Vendas ganhas", data: dados.map((d) => d.valorGanho) }]} />;
+  return (
+    <Chart
+      type="area"
+      height={260}
+      options={options}
+      series={[
+        { name: "Valor ganho", data: dados.map((d) => d.valorGanho) },
+        { name: "Adesão", data: dados.map((d) => d.adesao ?? 0) },
+      ]}
+    />
+  );
 }
 
 export function OrigemChart({ dados }: { dados: OrigemLead[] }) {

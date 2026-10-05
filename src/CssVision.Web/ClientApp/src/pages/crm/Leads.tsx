@@ -434,7 +434,10 @@ export function LeadsPage() {
                         {formatarMoeda(v)}
                       </td>
                     ))}
-                    <td className="px-2 py-3" />
+                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg)]" title="Média da porcentagem das vendas">
+                      <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Média</span>
+                      {formatarPercentual(totais.mediaPorcentagem ?? 0)}
+                    </td>
                     {[totais.rastreador, totais.indicacao, totais.vistoria, totais.total].map((v, i) => (
                       <td key={i} className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg)]">
                         <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Soma</span>
