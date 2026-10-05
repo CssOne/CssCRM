@@ -195,7 +195,7 @@ public sealed class OpportunityService(
         opportunity.Total = request.Total;
         if (request.DataEfetivaFechamento is not null)
         {
-            opportunity.DataEfetivaFechamento = request.DataEfetivaFechamento.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            opportunity.DataEfetivaFechamento = DataDaVendaAoMeioDia(request.DataEfetivaFechamento.Value);
         }
         // Só quando vier: as outras telas de edição não mandam o campo e não podem apagar a data.
         if (request.DataPagamentoAdesaoPrevista is not null)
@@ -259,7 +259,7 @@ public sealed class OpportunityService(
             }
 
             opportunity.ValorFinal = request.ValorFinal;
-            opportunity.DataEfetivaFechamento = request.DataEfetivaFechamento.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            opportunity.DataEfetivaFechamento = DataDaVendaAoMeioDia(request.DataEfetivaFechamento.Value);
             opportunity.Cpf = string.IsNullOrWhiteSpace(request.Cpf) ? null : request.Cpf.Trim();
             opportunity.Estado = string.IsNullOrWhiteSpace(request.Estado) ? null : request.Estado.Trim().ToUpperInvariant();
             opportunity.Indicacao = request.Indicacao;
@@ -388,6 +388,12 @@ public sealed class OpportunityService(
             .Select(o => new LembreteAdesaoDto(o.Id, o.LeadId, o.Lead.NomeOuRazaoSocial, o.DataPagamentoAdesaoPrevista!.Value, o.PagamentoAdesao))
             .ToListAsync(ct);
     }
+
+    /// <summary>
+    /// "Data da venda" do formulário vem só com o dia. À meia-noite UTC seria 21h do dia anterior em Brasília — a venda de
+    /// hoje contava como de ontem (e a do dia 1º, como do mês passado). Ao meio-dia UTC (9h em Brasília) cai sempre no dia certo.
+    /// </summary>
+    internal static DateTimeOffset DataDaVendaAoMeioDia(DateOnly dia) => new(dia.ToDateTime(new TimeOnly(12, 0)), TimeSpan.Zero);
 
     private async Task<CrmOpportunity> CarregarComEscopoAsync(Guid id, CancellationToken ct)
     {
