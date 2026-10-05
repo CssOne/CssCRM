@@ -379,6 +379,7 @@ public class AccountController(
         if (somenteMarketing)
         {
             menu.Add(new MenuItemDto("marketing", "Tráfego pago", "megaphone", "/app/marketing"));
+            menu.Add(new MenuItemDto("suporte", "Suporte", "life-buoy", "/app/suporte"));
             return new SessionDto(usuario.Id, usuario.Email!, usuario.NomeCompleto, usuario.FotoUrl, papeis.ToList(), "/app/marketing", menu);
         }
 
@@ -409,6 +410,8 @@ public class AccountController(
         {
             menu.Add(new MenuItemDto("admin-backups", "Backups", "database", "/app/admin/backups"));
         }
+
+        menu.Add(new MenuItemDto("suporte", "Suporte", "life-buoy", "/app/suporte"));
 
         return new SessionDto(usuario.Id, usuario.Email!, usuario.NomeCompleto, usuario.FotoUrl, papeis.ToList(), areaInicial, menu);
     }

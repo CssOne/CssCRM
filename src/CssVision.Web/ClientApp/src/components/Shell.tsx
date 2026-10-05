@@ -12,6 +12,7 @@ import {
   KanbanSquare,
   LayoutDashboard,
   LayoutGrid,
+  LifeBuoy,
   LogOut,
   Megaphone,
   Menu as MenuIcon,
@@ -54,6 +55,7 @@ const iconesPorChave: Record<string, typeof Gauge> = {
   "id-card": IdCard,
   megaphone: Megaphone,
   database: Database,
+  "life-buoy": LifeBuoy,
 };
 
 export const PAPEL_LABEL: Record<string, string> = {
