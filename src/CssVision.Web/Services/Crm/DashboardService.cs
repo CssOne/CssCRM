@@ -62,6 +62,9 @@ public sealed class DashboardService(
         // (antes contava todos os leads da base sem data de último contato: dezenas de milhares).
         var leadsSemContato = await leadsQuery.CountAsync(l => l.EtapaId == null && l.CriadoEm >= inicioUtc && l.CriadoEm <= fimUtc
             && l.Responsavel != null && l.Responsavel.Ativo, ct);
+        // Card "Novos leads": só os do tráfego pago que ainda estão sem etapa (a conversão segue usando todos os leads do período).
+        var novosLeadsTrafegoSemEtapa = await leadsQuery.Where(OrigemLead.VeioDoTrafegoPago)
+            .CountAsync(l => l.EtapaId == null && l.CriadoEm >= inicioUtc && l.CriadoEm <= fimUtc, ct);
         var contatosHoje = await atividadesQuery.CountAsync(a =>
             a.Status == StatusAtividade.Pendente && a.DataHoraPrevista >= inicioHoje && a.DataHoraPrevista <= fimHoje, ct);
         var atividadesAtrasadas = await atividadesQuery.CountAsync(a => a.Status == StatusAtividade.Pendente && a.DataHoraPrevista < agora, ct);
@@ -84,7 +87,7 @@ public sealed class DashboardService(
 
         var indicadores = new DashboardIndicadoresDto(
             novosLeads, leadsSemContato, contatosHoje, atividadesAtrasadas,
-            oportunidadesAbertas, valorPipeline, taxaConversao, ticketMedio, valorGanho, qtdGanhas, valorAdesao);
+            oportunidadesAbertas, valorPipeline, taxaConversao, ticketMedio, valorGanho, qtdGanhas, valorAdesao, novosLeadsTrafegoSemEtapa);
 
         // Meta comercial do mês corrente para os vendedores visíveis.
         var mesReferencia = HorarioBrasilia.PrimeiroDiaDoMes(hoje);
@@ -160,7 +163,7 @@ public sealed class DashboardService(
 
         var fechamentos = await oportunidadesQuery
             .Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho && o.DataEfetivaFechamento >= inicioJanelaUtc)
-            .Select(o => new { o.DataEfetivaFechamento, Valor = o.ValorFinal ?? o.ValorEstimado })
+            .Select(o => new { o.DataEfetivaFechamento, Valor = o.ValorFinal ?? o.ValorEstimado, o.PagamentoAdesao })
             .ToListAsync(ct);
 
         var resultado = new List<EvolucaoVendasDto>();
@@ -168,7 +171,7 @@ public sealed class DashboardService(
         {
             var mes = new DateOnly(hoje.Year, hoje.Month, 1).AddMonths(-i);
             var doMes = fechamentos.Where(f => HorarioBrasilia.Dia(f.DataEfetivaFechamento!.Value) is var dia && dia.Year == mes.Year && dia.Month == mes.Month).ToList();
-            resultado.Add(new EvolucaoVendasDto(mes.ToString("MM/yyyy"), doMes.Sum(f => f.Valor), doMes.Count));
+            resultado.Add(new EvolucaoVendasDto(mes.ToString("MM/yyyy"), doMes.Sum(f => f.Valor), doMes.Count, doMes.Sum(f => f.PagamentoAdesao ?? 0m)));
         }
 
         return resultado;
@@ -208,7 +211,9 @@ public sealed class DashboardService(
                     fechada?.Ganhas ?? 0, fechada?.ValorGanho ?? 0m, ContagensPorVendedor.TaxaConversaoLeads(fechada?.Ganhas ?? 0, leadsDoVendedor),
                     fechada?.ValorAdesao ?? 0m);
             })
-            .OrderByDescending(d => d.ValorGanho).ThenByDescending(d => d.LeadsAtribuidos)
+            // Ranking: maior conversão primeiro; quem não recebeu lead no período (conversão não se aplica) vai para o fim.
+            .OrderByDescending(d => d.LeadsAtribuidos > 0).ThenByDescending(d => d.TaxaConversao)
+            .ThenByDescending(d => d.VendasGanhas).ThenByDescending(d => d.ValorGanho)
             .ToList();
     }
 

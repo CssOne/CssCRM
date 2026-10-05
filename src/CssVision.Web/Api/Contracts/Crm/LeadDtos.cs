@@ -59,7 +59,9 @@ public record LeadTotaisDto(
     decimal Rastreador,
     decimal Indicacao,
     decimal Vistoria,
-    decimal Total);
+    decimal Total,
+    /// <summary>Média da porcentagem (coluna "%") das vendas dos leads filtrados.</summary>
+    decimal MediaPorcentagem = 0m);
 
 public record LeadFilterRequest : PagedRequest
 {

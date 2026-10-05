@@ -975,7 +975,9 @@ public sealed class NotionSyncService(
         oportunidade.ProdutoOuServico = oQue;
         oportunidade.ValorEstimado = mensalidade ?? total ?? oportunidade.ValorEstimado;
         oportunidade.ValorFinal = total ?? mensalidade ?? oportunidade.ValorFinal;
-        oportunidade.DataEfetivaFechamento = dataVenda ?? oportunidade.DataEfetivaFechamento;
+        // Card em "Venda concluída" sem "Data da venda" preenchida (cadastro recente): conta no mês em que o lead chegou,
+        // em vez de ficar de fora dos gráficos e do ranking. Quando a data for preenchida no Notion, ela passa a valer.
+        oportunidade.DataEfetivaFechamento = dataVenda ?? oportunidade.DataEfetivaFechamento ?? lead.CriadoEm;
         oportunidade.DataAdesao = dataVenda.HasValue ? DateOnly.FromDateTime(dataVenda.Value.UtcDateTime) : oportunidade.DataAdesao;
         oportunidade.AtivoEm = ativoEm ?? oportunidade.AtivoEm;
         oportunidade.Mensalidade = mensalidade ?? oportunidade.Mensalidade;
