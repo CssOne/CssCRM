@@ -236,6 +236,14 @@ public sealed class NotionSyncService(
                 continue;
             }
 
+            // Vendedor que o Notion não identifica (só o id, sem nome): por enquanto o card fica de fora — nem lead nem
+            // login novo (pedido de 05/10/2026; revisão futura). Se alguém já renomeou o usuário dele, o card entra normal.
+            if (await VendedorSemNomeNaoRevisadoAsync(page, ct))
+            {
+                ignorados++;
+                continue;
+            }
+
             processados++;
             // Card sem título e sem nenhum dado de contato (centenas em algumas bases) não tem como
             // virar lead — a não ser que seja de um consultor ativo: aí entra com um nome provisório.
@@ -1014,6 +1022,24 @@ public sealed class NotionSyncService(
     /// <summary>Contagem de como cada card teve o vendedor resolvido (diagnóstico da importação completa).</summary>
     private readonly Dictionary<string, int> _diagVendedores = [];
     private readonly List<string> _amostrasVendedores = [];
+
+    private readonly Dictionary<string, bool> _semNomeNaoRevisado = [];
+
+    /// <summary>
+    /// O card é de um vendedor sem nome no Notion que ainda não foi identificado no CRM (sem usuário, ou usuário que
+    /// continua com o nome provisório "Vendedor Notion ...")?
+    /// </summary>
+    internal async Task<bool> VendedorSemNomeNaoRevisadoAsync(JsonElement page, CancellationToken ct)
+    {
+        if (page.PrimeiroVendedor("Vendedor") is not { NomeDesconhecido: true, Id: { } id }) return false;
+        var chave = id.Trim().ToLowerInvariant();
+        if (_semNomeNaoRevisado.TryGetValue(chave, out var guardado)) return guardado;
+
+        var nome = await db.Users.AsNoTracking().Where(u => u.NotionUserId == chave).Select(u => u.NomeCompleto).FirstOrDefaultAsync(ct);
+        var naoRevisado = nome is null || nome.StartsWith(NotionPageExtensions.PrefixoNomeProvisorio, StringComparison.Ordinal);
+        _semNomeNaoRevisado[chave] = naoRevisado;
+        return naoRevisado;
+    }
 
     /// <summary>Por vendedor sem nome no Notion: quantos cards e um card de exemplo (para descobrir quem é).</summary>
     private readonly Dictionary<string, (int Cards, string? CardExemplo)> _cardsPorNotionId = [];

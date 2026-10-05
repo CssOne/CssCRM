@@ -188,4 +188,28 @@ public class NotionVendedorSemEmailTests
         Assert.Equal(usuariosAntes, await db.Users.CountAsync()); // nenhuma conta nova
         Assert.Equal("id-carol", (await db.Users.SingleAsync(u => u.Id == queFicou.Id)).NotionUserId);
     }
+
+    [Fact]
+    public async Task CardDeVendedorSemNome_FicaDeForaSalvoSeOUsuarioJaFoiRenomeado()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, service, _, _, _, _) = await PrepararAsync(factory);
+        await using var _ = db;
+        var renomeado = await factory.CriarUsuarioAsync(db, "Fulano Renomeado");
+        renomeado.NotionUserId = "id-renomeado";
+        var provisorio = await factory.CriarUsuarioAsync(db, NotionPageExtensions.NomeProvisorio("id-provisorio-0000-1111"));
+        provisorio.NotionUserId = "id-provisorio-0000-1111";
+        await db.SaveChangesAsync();
+
+        // Sem nome no Notion (só o id) e sem usuário: fica de fora (nem lead nem login novo).
+        Assert.True(await service.VendedorSemNomeNaoRevisadoAsync(Pagina("p1", "C", "id-desconhecido-0000", vendedorNome: null), CancellationToken.None));
+        // Usuário ainda com o nome provisório: também de fora.
+        Assert.True(await service.VendedorSemNomeNaoRevisadoAsync(Pagina("p2", "C", "id-provisorio-0000-1111", vendedorNome: null), CancellationToken.None));
+        // Usuário já renomeado em Usuários: o card entra normal.
+        Assert.False(await service.VendedorSemNomeNaoRevisadoAsync(Pagina("p3", "C", "id-renomeado", vendedorNome: null), CancellationToken.None));
+        // Vendedor com nome, ou card sem vendedor: não é o caso.
+        Assert.False(await service.VendedorSemNomeNaoRevisadoAsync(Pagina("p4", "C", "qualquer", "Maria"), CancellationToken.None));
+        Assert.False(await service.VendedorSemNomeNaoRevisadoAsync(Pagina("p5", "C", null), CancellationToken.None));
+        Assert.Empty(await db.Users.Where(u => u.NotionUserId == "id-desconhecido-0000").ToListAsync()); // não criou login
+    }
 }
