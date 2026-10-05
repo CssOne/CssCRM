@@ -15,6 +15,8 @@ public interface ILookupService
     Task<RegionalDto> CriarRegionalAsync(CreateRegionalRequest request, CancellationToken ct);
     Task<RegionalDto> AtualizarRegionalAsync(Guid id, UpdateRegionalRequest request, CancellationToken ct);
     Task<IReadOnlyList<GrupoDto>> ObterGruposAsync(Guid? regionalId, CancellationToken ct);
+    /// <summary>Todos os grupos ativos das regionais que o usuário enxerga (visão total: todas; gestor regional: a dele).</summary>
+    Task<IReadOnlyList<GrupoFiltroDto>> ObterGruposParaFiltroAsync(CancellationToken ct);
     Task<GrupoDto> CriarGrupoAsync(CreateGrupoRequest request, CancellationToken ct);
     Task<GrupoDto> AtualizarGrupoAsync(Guid id, UpdateGrupoRequest request, CancellationToken ct);
     Task<GrupoDto> AtualizarMembrosGrupoAsync(Guid id, UpdateGrupoMembrosRequest request, CancellationToken ct);

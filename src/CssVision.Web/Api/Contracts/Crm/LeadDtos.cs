@@ -29,7 +29,22 @@ public record LeadListItemDto(
     DateTimeOffset? UltimoContatoEm,
     DateTimeOffset? ProximoContatoEm,
     bool SemContato,
-    bool Arquivado);
+    bool Arquivado,
+    /// <summary>Dados da venda do lead (colunas dos Relatórios do Notion); nulo se o lead não tem oportunidade.</summary>
+    LeadVendaResumoDto? Venda = null);
+
+/// <summary>Venda do lead: as mesmas colunas da tela "RELATÓRIOS CSS BRASIL" do Notion.</summary>
+public record LeadVendaResumoDto(
+    decimal? Adesao,
+    decimal? Fipe,
+    decimal? Mensalidade,
+    decimal? MensalidadeComDesconto,
+    decimal? Porcentagem,
+    decimal? Rastreador,
+    decimal? Indicacao,
+    decimal? Vistoria,
+    decimal? Total,
+    DateTimeOffset? DataVenda);
 
 public record LeadFilterRequest : PagedRequest
 {
@@ -42,6 +57,18 @@ public record LeadFilterRequest : PagedRequest
     public Guid? EtapaId { get; init; }
     public DateOnly? DataInicio { get; init; }
     public DateOnly? DataFim { get; init; }
+    /// <summary>Período da venda (data efetiva de fechamento de alguma oportunidade do lead).</summary>
+    public DateOnly? DataVendaInicio { get; init; }
+    public DateOnly? DataVendaFim { get; init; }
+
+    // Filtros de múltipla escolha (?responsavelIds=a&responsavelIds=b traz de a OU b).
+    public Guid[]? ResponsavelIds { get; init; }
+    /// <summary>Etapas do quadro de leads; Guid.Empty = "Sem etapa".</summary>
+    public Guid[]? LeadEtapaIds { get; init; }
+    public string[]? Origens { get; init; }
+    public string[]? Regionais { get; init; }
+    /// <summary>Grupos (CrmGrupo) do consultor responsável.</summary>
+    public Guid[]? GrupoIds { get; init; }
     public List<string>? Tags { get; init; }
     public bool IncluirArquivados { get; init; }
     public string? OrdenarPor { get; init; } = "criadoEm";
