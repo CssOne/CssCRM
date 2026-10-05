@@ -88,7 +88,7 @@
 .tv-metric strong { display: block; font-size: 1.9em; line-height: 1.15; }
 .tv-metric small { color: var(--tv-muted); }
 
-.tv-evolution { flex: 1.2; }
+.tv-evolution { flex: 1; }
 .tv-goal { display: flex; align-items: center; gap: 8px; color: var(--tv-green); }
 .tv-goal b { font-size: 1.5em; }
 .tv-goal span { color: var(--tv-muted); }
@@ -101,7 +101,7 @@
 .tv-legend i.total { background: var(--tv-green); }
 .tv-chart { flex: 1; min-height: 0; }
 
-.tv-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; flex: 1; min-height: 0; }
+.tv-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; flex: 1.25; min-height: 0; }
 .tv-region-list, .tv-sales-list { display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
 .tv-region-row { display: grid; grid-template-columns: 2em minmax(0, 1fr) auto; gap: 12px; align-items: center; }
 .tv-region-row > b { font-size: 1.4em; color: var(--tv-blue); text-align: center; }
