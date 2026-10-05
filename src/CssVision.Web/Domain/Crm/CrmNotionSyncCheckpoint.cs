@@ -52,4 +52,10 @@ public class CrmNotionSyncCheckpoint
     /// importação completa pendente (roda uma vez por base).
     /// </summary>
     public DateTimeOffset? ImportacaoCompletaConcluidaEm { get; set; }
+
+    /// <summary>
+    /// Quando os cards de leads parados em "Vendedor não identificado" foram relidos para ligar cada um ao vendedor
+    /// do card. Nulo = revisão pendente (roda uma vez por base).
+    /// </summary>
+    public DateTimeOffset? RevisaoVendedoresConcluidaEm { get; set; }
 }

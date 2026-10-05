@@ -72,7 +72,7 @@ public sealed class NotionSyncService(
         var relatorios = new List<string>();
         // Primeiro o incremental de todas as bases (cards novos/editados não esperam as passadas
         // longas); depois, a reimportação dos consultores ativos e a importação das vendas pendentes.
-        foreach (var passada in new[] { Passada.Normal, Passada.ReimportacaoAtivos, Passada.ImportacaoVendas, Passada.Importacao2025, Passada.ImportacaoCompleta, Passada.CorrecaoDataChegada })
+        foreach (var passada in new[] { Passada.Normal, Passada.ReimportacaoAtivos, Passada.ImportacaoVendas, Passada.Importacao2025, Passada.ImportacaoCompleta, Passada.RevisaoVendedores, Passada.CorrecaoDataChegada })
         {
             foreach (var spec in DataSources)
             {
@@ -103,7 +103,7 @@ public sealed class NotionSyncService(
         return string.Join(" | ", relatorios);
     }
 
-    private enum Passada { Normal, ReimportacaoAtivos, ImportacaoVendas, Importacao2025, ImportacaoCompleta, CorrecaoDataChegada }
+    private enum Passada { Normal, ReimportacaoAtivos, ImportacaoVendas, Importacao2025, ImportacaoCompleta, RevisaoVendedores, CorrecaoDataChegada }
 
     /// <param name="passada">
     /// Normal: realinhamento (se pendente) ou incremental. ReimportacaoAtivos / ImportacaoVendas: só
@@ -138,12 +138,17 @@ public sealed class NotionSyncService(
         // têm lead no CRM — os que nunca foram editados depois da migração inicial não entravam pelo
         // incremental. Cada card já ligado a um lead (inclusive arquivado) é pulado.
         var importarCompleta = passada == Passada.ImportacaoCompleta && !realinhar && checkpoint!.ImportacaoCompletaConcluidaEm is null;
-        if (passada != Passada.Normal && !reimportarAtivos && !importarVendas && !importar2025 && !importarCompleta) return null;
+        // Revisão dos vendedores (uma vez por base): relê TODOS os cards (de qualquer data) cujo lead ainda está em
+        // "Vendedor não identificado" e liga cada um ao vendedor do card (existente ou com login novo).
+        var revisarVendedores = passada == Passada.RevisaoVendedores && !realinhar && checkpoint!.RevisaoVendedoresConcluidaEm is null;
+        if (passada != Passada.Normal && !reimportarAtivos && !importarVendas && !importar2025 && !importarCompleta && !revisarVendedores) return null;
         await CarregarUsuariosAtivosAsync(ct);
         var paginas = realinhar
             ? PaginasCriadasDesdeAsync(notion, dataSourceId, DataMinimaImportacao, ct)
             : importarVendas
                 ? PaginasDeVendaAsync(notion, dataSourceId, ct)
+            : revisarVendedores
+                ? PaginasCriadasDesdeAsync(notion, dataSourceId, InicioHistoricoNotion, ct)
             : importarCompleta
                 ? PaginasCriadasDesdeAsync(notion, dataSourceId, DataMinimaImportacao, ct)
             : importar2025
@@ -177,12 +182,24 @@ public sealed class NotionSyncService(
                 .Where(l => l.NotionPageId != null && (l.ResponsavelId == null || !_idsPlaceholders.Contains(l.ResponsavelId.Value)))
                 .Select(l => l.NotionPageId!).ToListAsync(ct)).ToHashSet()
             : null;
+        // Revisão: só os cards de leads parados em "Vendedor não identificado".
+        var paraRevisar = revisarVendedores
+            ? (await db.CrmLeads.AsNoTracking()
+                .Where(l => l.NotionPageId != null && l.ResponsavelId != null && _idsPlaceholders.Contains(l.ResponsavelId.Value))
+                .Select(l => l.NotionPageId!).ToListAsync(ct)).ToHashSet()
+            : null;
         _diagVendedores.Clear();
         _amostrasVendedores.Clear();
+        _cardsPorNotionId.Clear();
 
         await foreach (var page in paginas)
         {
             if (jaLigados is not null && jaLigados.Contains(page.PageId()))
+            {
+                ignorados++;
+                continue;
+            }
+            if (paraRevisar is not null && !paraRevisar.Contains(page.PageId()))
             {
                 ignorados++;
                 continue;
@@ -212,7 +229,7 @@ public sealed class NotionSyncService(
             }
 
             // Incremental: cards anteriores à data mínima só entram se forem de um consultor ativo.
-            if (!realinhar && !reimportarAtivos && !importarVendas && !importarCompleta && !doConsultorAtivo && CriadoAntesDaDataMinima(page))
+            if (!realinhar && !reimportarAtivos && !importarVendas && !importarCompleta && !revisarVendedores && !doConsultorAtivo && CriadoAntesDaDataMinima(page))
             {
                 ignorados++;
                 continue;
@@ -267,6 +284,7 @@ public sealed class NotionSyncService(
         if (importarVendas) checkpoint.ImportacaoVendasConcluidaEm = inicioDaExecucao;
         if (importar2025) checkpoint.Importacao2025ConcluidaEm = inicioDaExecucao;
         if (importarCompleta) checkpoint.ImportacaoCompletaConcluidaEm = inicioDaExecucao;
+        if (revisarVendedores) checkpoint.RevisaoVendedoresConcluidaEm = inicioDaExecucao;
         await db.SaveChangesAsync(ct);
 
         if (_mudancasNoQuadro > 0)
@@ -275,15 +293,20 @@ public sealed class NotionSyncService(
             _mudancasNoQuadro = 0;
         }
 
-        var modo = realinhar ? " (realinhamento)" : reimportarAtivos ? " (reimportação dos consultores ativos)" : importarVendas ? " (importação das vendas)" : importar2025 ? " (importação de 2025)" : importarCompleta ? " (importação completa desde 01/01/2025)" : "";
+        var modo = realinhar ? " (realinhamento)" : reimportarAtivos ? " (reimportação dos consultores ativos)" : importarVendas ? " (importação das vendas)" : importar2025 ? " (importação de 2025)" : importarCompleta ? " (importação completa desde 01/01/2025)" : revisarVendedores ? " (revisão dos vendedores)" : "";
         var relatorio = $"{baseNome}: {processados} processados, {criados} criados, {atualizados} atualizados, {devolvidos} devolvidos ao vendedor do card, {erros} erros, {semNome} sem nome, {ignorados} ignorados{modo}";
-        if (importarCompleta)
+        if (importarCompleta || revisarVendedores)
         {
             // Fica guardado (Gestão comercial > /api/crm/management/sincronizacao-notion) para conferir o que entrou e o que falhou.
             if (amostraErros.Count > 0) relatorio += $" | amostra de erros: {string.Join("; ", amostraErros)}";
-            await GuardarResumoAsync($"importacao-completa:{baseNome}", relatorio, ct);
+            await GuardarResumoAsync($"{(revisarVendedores ? "revisao-vendedores" : "importacao-completa")}:{baseNome}", relatorio, ct);
             var vendedores = string.Join("; ", _diagVendedores.OrderByDescending(d => d.Value).Select(d => $"{d.Key}: {d.Value}"));
             await GuardarResumoAsync($"vendedores:{baseNome}", $"{vendedores} | amostras: {string.Join(" / ", _amostrasVendedores)}", ct);
+            // Vendedores que o Notion não identifica por nome: id, quantos cards e um card de exemplo — abrir o card no
+            // Notion mostra quem é; depois é só renomear o usuário "Vendedor Notion xxxxxxxx" em Usuários.
+            var desconhecidos = string.Join(" // ", _cardsPorNotionId.OrderByDescending(c => c.Value.Cards).Take(60)
+                .Select(c => $"{c.Key}: {c.Value.Cards} cards, ex.: https://www.notion.so/{c.Value.CardExemplo.Replace("-", "")}"));
+            await GuardarResumoAsync($"vendedores-sem-nome:{baseNome}", desconhecidos.Length == 0 ? "nenhum" : desconhecidos, ct);
         }
         return relatorio;
     }
@@ -710,6 +733,11 @@ public sealed class NotionSyncService(
         var vendedorInfo = page.PrimeiroVendedor("Vendedor");
         var chaveVendedor = ChaveVendedor(vendedorInfo);
         var vendedorId = await ResolverVendedorAsync(vendedorInfo, regionalId, regionalNome, placeholderVendedorId, ct);
+        if (vendedorInfo is { NomeDesconhecido: true, Id: { } idSemNome })
+        {
+            var anterior = _cardsPorNotionId.GetValueOrDefault(idSemNome);
+            _cardsPorNotionId[idSemNome] = (anterior.Cards + 1, anterior.CardExemplo ?? pageId);
+        }
 
         var criadoAgora = lead is null;
         if (lead is null)
@@ -918,7 +946,8 @@ public sealed class NotionSyncService(
         var mensalidade = page.Number("Mensalidade") is { } m ? (decimal)m : (decimal?)null;
         var mensalidadeComDesconto = page.FormulaDecimal("Mensalidade com desconto");
         var adesao = page.Number("Adesão") is { } a ? (decimal)a : (decimal?)null;
-        var porcentagem = page.Number("Porcentagem") is { } pc ? (decimal)pc : (decimal?)null;
+        // O Notion guarda o percentual como fração (0,23 = 23%); o CRM guarda em pontos (23), como a tela de venda.
+        var porcentagem = page.Number("Porcentagem") is { } pc ? Math.Round((decimal)pc * 100m, 2) : (decimal?)null;
         var total = page.FormulaDecimal("Total");
         var ativoEm = ParseUtc(page.DateStart("Ativo em"));
         var oQue = page.Select("O que");
@@ -984,6 +1013,9 @@ public sealed class NotionSyncService(
     /// <summary>Contagem de como cada card teve o vendedor resolvido (diagnóstico da importação completa).</summary>
     private readonly Dictionary<string, int> _diagVendedores = [];
     private readonly List<string> _amostrasVendedores = [];
+
+    /// <summary>Por vendedor sem nome no Notion: quantos cards e um card de exemplo (para descobrir quem é).</summary>
+    private readonly Dictionary<string, (int Cards, string? CardExemplo)> _cardsPorNotionId = [];
 
     private void Diag(string motivo, string? amostra = null)
     {
