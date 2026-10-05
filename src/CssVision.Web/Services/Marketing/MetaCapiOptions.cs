@@ -25,4 +25,37 @@ public class MetaCapiOptions
     public string EventoCustomizadoNome { get; set; } = "LeadConvertido";
 
     public string EventSourceLabel { get; set; } = "CssVision CRM";
+
+    /// <summary>
+    /// Pixels extras por "O que" do lead (ex.: regional com pixel próprio). Lead cujo ProdutoInteresse
+    /// bate com <see cref="MetaCapiPixelPorOQue.OQue"/> usa esse pixel; os demais usam PixelId/AccessToken acima.
+    /// Env: MetaCapi__PixelsPorOQue__0__OQue / __PixelId / __AccessToken.
+    /// </summary>
+    public List<MetaCapiPixelPorOQue> PixelsPorOQue { get; set; } = [];
+
+    /// <summary>Opções efetivas para o lead: troca só o par PixelId/AccessToken quando há pixel dedicado.</summary>
+    public MetaCapiOptions ParaLead(string? oQue)
+    {
+        if (string.IsNullOrWhiteSpace(oQue)) return this;
+
+        var dedicado = PixelsPorOQue.FirstOrDefault(p =>
+            !string.IsNullOrWhiteSpace(p.OQue) && string.Equals(p.OQue.Trim(), oQue.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (dedicado is null) return this;
+
+        return new MetaCapiOptions
+        {
+            PixelId = dedicado.PixelId,
+            AccessToken = dedicado.AccessToken,
+            GraphApiVersion = GraphApiVersion,
+            EventoCustomizadoNome = EventoCustomizadoNome,
+            EventSourceLabel = EventSourceLabel,
+        };
+    }
+}
+
+public class MetaCapiPixelPorOQue
+{
+    public string OQue { get; set; } = string.Empty;
+    public string PixelId { get; set; } = string.Empty;
+    public string AccessToken { get; set; } = string.Empty;
 }
