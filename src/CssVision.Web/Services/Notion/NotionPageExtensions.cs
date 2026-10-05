@@ -147,7 +147,13 @@ public static partial class NotionPageExtensions
         return null;
     }
 
-    public record VendedorInfo(string Nome, string? Email);
+    /// <summary>Prefixo do nome dado a vendedor que o Notion não identifica — a Gestão comercial não lista estes usuários.</summary>
+    public const string PrefixoNomeProvisorio = "Vendedor Notion ";
+
+    public static string NomeProvisorio(string idNotion) =>
+        idNotion.Length <= 12 ? PrefixoNomeProvisorio + idNotion : $"{PrefixoNomeProvisorio}{idNotion[..8]}-{idNotion[^4..]}";
+
+    public record VendedorInfo(string Nome, string? Email, string? Id = null, bool EhBot = false, bool NomeDesconhecido = false);
 
     /// <summary>Primeiro vendedor da propriedade "Vendedor" (people) — a maioria das linhas tem só um.</summary>
     public static VendedorInfo? PrimeiroVendedor(this JsonElement page, params string[] nomes)
@@ -159,13 +165,21 @@ public static partial class NotionPageExtensions
 
         var pessoa = pessoas[0];
         var nome = pessoa.TryGetProperty("name", out var n) ? n.GetString() : null;
-        if (string.IsNullOrWhiteSpace(nome)) return null;
+        var idPessoa = pessoa.TryGetProperty("id", out var idPrimeiro) ? idPrimeiro.GetString() : null;
+        // Pessoa que a integração não enxerga (convidado, outro workspace) vem só com o id, sem nome: antes o
+        // card caía em "Vendedor não identificado"; agora o vendedor existe, com nome provisório até alguém renomear.
+        if (string.IsNullOrWhiteSpace(nome) && string.IsNullOrWhiteSpace(idPessoa)) return null;
+        var nomeDesconhecido = string.IsNullOrWhiteSpace(nome);
+        // Início + fim do id: muitos ids do Notion dividem os 8 primeiros caracteres ("391d872b-594c-8130-...").
+        if (nomeDesconhecido) nome = NomeProvisorio(idPessoa!);
 
         string? email = null;
         if (pessoa.TryGetProperty("person", out var p) && p.TryGetProperty("email", out var e))
         {
             email = e.GetString();
         }
-        return new VendedorInfo(nome.Trim(), email);
+        var id = pessoa.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
+        var bot = pessoa.TryGetProperty("type", out var tipo) && tipo.GetString() == "bot";
+        return new VendedorInfo(nome!.Trim(), email, id, bot, nomeDesconhecido);
     }
 }

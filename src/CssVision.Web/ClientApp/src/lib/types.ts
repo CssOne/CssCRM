@@ -142,6 +142,29 @@ export interface LeadListItem {
   proximoContatoEm?: string | null;
   semContato: boolean;
   arquivado: boolean;
+  /** Dados da venda (colunas dos Relatórios do Notion); nulo se o lead não tem oportunidade. */
+  venda?: LeadVendaResumo | null;
+}
+
+export interface LeadVendaResumo {
+  adesao?: number | null;
+  fipe?: number | null;
+  mensalidade?: number | null;
+  mensalidadeComDesconto?: number | null;
+  porcentagem?: number | null;
+  rastreador?: number | null;
+  indicacao?: number | null;
+  vistoria?: number | null;
+  total?: number | null;
+  dataVenda?: string | null;
+}
+
+/** Grupo com o nome da regional — alimenta o filtro "Grupo" do quadro e da lista de leads. */
+export interface GrupoFiltro {
+  id: string;
+  regionalId: string;
+  regionalNome: string;
+  nome: string;
 }
 
 export interface LeadOpportunitySummary {
@@ -696,6 +719,8 @@ export interface DesempenhoVendedor {
 }
 
 export interface AlertaLeadParado {
+  /** Coluna do quadro de leads em que o lead está. */
+  etapaNome?: string | null;
   leadId: string;
   leadNome: string;
   responsavelNome?: string | null;
@@ -711,6 +736,27 @@ export interface Dashboard {
   desempenhoPorVendedor: DesempenhoVendedor[];
   atividadesDoDia: Activity[];
   leadsParados: AlertaLeadParado[];
+  /** Resumo do quadro de leads: leads do período em cada coluna. */
+  funilLeads?: EtapaLeadResumo[];
+  /** Últimos 12 meses (mês atual por último). */
+  resumoMensal?: ResumoMensal[];
+  leadsParadosTotal?: number;
+}
+
+export interface EtapaLeadResumo {
+  etapa: string;
+  cor?: string | null;
+  quantidade: number;
+}
+
+export interface ResumoMensal {
+  mes: string;
+  leads: number;
+  perdidos: number;
+  vendas: number;
+  valorGanho: number;
+  adesao: number;
+  conversao: number;
 }
 
 // --- Marketing / tráfego pago ---

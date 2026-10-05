@@ -231,5 +231,5 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
     }
 
     private static DateTimeOffset InicioDoMes() =>
-        new(new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1), TimeSpan.Zero);
+        HorarioBrasilia.Inicio(HorarioBrasilia.PrimeiroDiaDoMes(HorarioBrasilia.Hoje));
 }

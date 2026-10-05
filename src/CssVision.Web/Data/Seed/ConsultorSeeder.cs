@@ -4,6 +4,7 @@ using CssVision.Web.Domain.Identity;
 using CssVision.Web.Services.Crm;
 using CssVision.Web.Services.Storage;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 namespace CssVision.Web.Data.Seed;
 
@@ -45,10 +46,18 @@ public static class ConsultorSeeder
     {
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
         var storage = services.GetRequiredService<IFileStorageService>();
+        var db = services.GetRequiredService<ApplicationDbContext>();
 
         foreach (var (nome, email, telefone, fotoArquivo) in Consultores)
         {
             var usuario = await userManager.FindByEmailAsync(email);
+            // E-mail de uma conta que foi unificada em outra (CrmUsuarioAliases): não recria a duplicada —
+            // sem isso ela voltava, ativa e com a senha inicial, a cada inicialização.
+            if (usuario is null && await db.CrmUsuarioAliases.AnyAsync(a => a.EmailNormalizado == email.ToUpper(), ct))
+            {
+                continue;
+            }
+
             if (usuario is null)
             {
                 usuario = new ApplicationUser

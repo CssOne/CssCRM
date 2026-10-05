@@ -39,7 +39,7 @@ public record DesempenhoVendedorDto(
     decimal TaxaConversao,
     decimal ValorAdesao);
 
-public record AlertaLeadParadoDto(Guid LeadId, string LeadNome, string? ResponsavelNome, int DiasSemContato);
+public record AlertaLeadParadoDto(Guid LeadId, string LeadNome, string? ResponsavelNome, int DiasSemContato, string? EtapaNome = null);
 
 public record DashboardDto(
     DashboardIndicadoresDto Indicadores,
@@ -49,4 +49,14 @@ public record DashboardDto(
     IReadOnlyList<OrigemLeadDto> OrigemLeads,
     IReadOnlyList<DesempenhoVendedorDto> DesempenhoPorVendedor,
     IReadOnlyList<ActivityDto> AtividadesDoDia,
-    IReadOnlyList<AlertaLeadParadoDto> LeadsParados);
+    IReadOnlyList<AlertaLeadParadoDto> LeadsParados,
+    /// <summary>Resumo do quadro de leads: quantos leads do período estão em cada coluna.</summary>
+    IReadOnlyList<EtapaLeadResumoDto>? FunilLeads = null,
+    /// <summary>Últimos 12 meses (mês atual por último): leads, vendas, valor, adesão e conversão.</summary>
+    IReadOnlyList<ResumoMensalDto>? ResumoMensal = null,
+    /// <summary>Total de leads parados (a lista traz só os 15 mais antigos).</summary>
+    int LeadsParadosTotal = 0);
+
+public record EtapaLeadResumoDto(string Etapa, string? Cor, int Quantidade);
+
+public record ResumoMensalDto(string Mes, int Leads, int Perdidos, int Vendas, decimal ValorGanho, decimal Adesao, decimal Conversao);

@@ -47,6 +47,12 @@ public class ApplicationUser : IdentityUser<Guid>
     public bool RecebeLeads { get; set; } = true;
 
     /// <summary>
+    /// Id do usuário no Notion (campo "Vendedor" dos cards). Liga o card ao usuário mesmo quando o Notion
+    /// não informa o e-mail da pessoa — assim o lead não cai em "Vendedor não identificado".
+    /// </summary>
+    public string? NotionUserId { get; set; }
+
+    /// <summary>
     /// Se preenchido, a distribuição automática só entrega a este consultor leads com um destes
     /// "O que?" (ProdutoInteresse), separados por vírgula — ex.: "AGV TRUCK". Nulo = recebe qualquer lead.
     /// </summary>

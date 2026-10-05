@@ -23,6 +23,11 @@ public sealed class NotionSyncService(
     /// <summary>Valor de CrmLead.NotionVendedorEmail para card sem vendedor.</summary>
     public const string SemVendedor = "(sem vendedor)";
 
+    private const string PrefixoEmailPlaceholder = "vendedor.nao.identificado.";
+
+    /// <summary>Ids das contas "Vendedor não identificado" (uma por base) — leads nelas ainda não têm vendedor de verdade.</summary>
+    private HashSet<Guid> _idsPlaceholders = [];
+
     /// <summary>Ids dos usuários ativos no CRM (carregados junto com _emailsAtivos).</summary>
     private HashSet<Guid>? _idsAtivos;
     /// <summary>
@@ -34,7 +39,8 @@ public sealed class NotionSyncService(
         ("0f91c248-497e-4369-aad9-1d4266a49db4", "MG132", null, "MG132"),
         // MG134 (1a163799-99a8-81e2-82be-000bb2817da0) saiu da sincronização a pedido (04/10/2026): os
         // leads dela foram arquivados (migration ArquivaLeadsMg134) e novos cards não entram mais.
-        ("31763799-99a8-8118-b573-000b24781bfe", "MG134 Consultores Externos", null, "MG134 Consultores Externos"),
+        // "MG134 Consultores Externos" (31763799-99a8-8118-b573-000b24781bfe) também saiu da sincronização a pedido
+        // (05/10/2026): os leads dela foram arquivados (migration) e os usuários continuam.
         ("31763799-99a8-81b2-b83b-000bfca82506", "MG132", "CSS Growth Sales", "CSS Growth Sales"),
     ];
 
@@ -67,7 +73,7 @@ public sealed class NotionSyncService(
         var relatorios = new List<string>();
         // Primeiro o incremental de todas as bases (cards novos/editados não esperam as passadas
         // longas); depois, a reimportação dos consultores ativos e a importação das vendas pendentes.
-        foreach (var passada in new[] { Passada.Normal, Passada.ReimportacaoAtivos, Passada.ImportacaoVendas, Passada.Importacao2025, Passada.CorrecaoDataChegada })
+        foreach (var passada in new[] { Passada.Normal, Passada.ReimportacaoAtivos, Passada.ImportacaoVendas, Passada.Importacao2025, Passada.ImportacaoCompleta, Passada.RevisaoVendedores, Passada.CorrecaoDataChegada })
         {
             foreach (var spec in DataSources)
             {
@@ -98,7 +104,7 @@ public sealed class NotionSyncService(
         return string.Join(" | ", relatorios);
     }
 
-    private enum Passada { Normal, ReimportacaoAtivos, ImportacaoVendas, Importacao2025, CorrecaoDataChegada }
+    private enum Passada { Normal, ReimportacaoAtivos, ImportacaoVendas, Importacao2025, ImportacaoCompleta, RevisaoVendedores, CorrecaoDataChegada }
 
     /// <param name="passada">
     /// Normal: realinhamento (se pendente) ou incremental. ReimportacaoAtivos / ImportacaoVendas: só
@@ -129,12 +135,23 @@ public sealed class NotionSyncService(
         // Importação de 2025 (uma vez por base, depois do realinhamento): cards criados de 01/01/2025
         // até o fim do ano, que a data mínima anterior (2026) deixava de fora.
         var importar2025 = passada == Passada.Importacao2025 && !realinhar && checkpoint!.Importacao2025ConcluidaEm is null;
-        if (passada != Passada.Normal && !reimportarAtivos && !importarVendas && !importar2025) return null;
+        // Importação completa (uma vez por base): TODOS os cards criados desde a data mínima que ainda não
+        // têm lead no CRM — os que nunca foram editados depois da migração inicial não entravam pelo
+        // incremental. Cada card já ligado a um lead (inclusive arquivado) é pulado.
+        var importarCompleta = passada == Passada.ImportacaoCompleta && !realinhar && checkpoint!.ImportacaoCompletaConcluidaEm is null;
+        // Revisão dos vendedores (uma vez por base): relê TODOS os cards (de qualquer data) cujo lead ainda está em
+        // "Vendedor não identificado" e liga cada um ao vendedor do card (existente ou com login novo).
+        var revisarVendedores = passada == Passada.RevisaoVendedores && !realinhar && checkpoint!.RevisaoVendedoresConcluidaEm is null;
+        if (passada != Passada.Normal && !reimportarAtivos && !importarVendas && !importar2025 && !importarCompleta && !revisarVendedores) return null;
         await CarregarUsuariosAtivosAsync(ct);
         var paginas = realinhar
             ? PaginasCriadasDesdeAsync(notion, dataSourceId, DataMinimaImportacao, ct)
             : importarVendas
                 ? PaginasDeVendaAsync(notion, dataSourceId, ct)
+            : revisarVendedores
+                ? PaginasCriadasDesdeAsync(notion, dataSourceId, InicioHistoricoNotion, ct)
+            : importarCompleta
+                ? PaginasCriadasDesdeAsync(notion, dataSourceId, DataMinimaImportacao, ct)
             : importar2025
                 ? PaginasCriadasDesdeAsync(notion, dataSourceId, DataMinimaImportacao, ct, FimImportacao2025)
             : reimportarAtivos
@@ -158,9 +175,37 @@ public sealed class NotionSyncService(
         var placeholderVendedorId = await ObterOuCriarVendedorPlaceholderAsync(regional.Id, baseNome, ct);
 
         int processados = 0, criados = 0, atualizados = 0, erros = 0, semNome = 0, ignorados = 0, devolvidos = 0;
+        var amostraErros = new List<string>();
+        // Cards que já têm lead (ids em memória: ~50 mil textos curtos), para a importação completa pular.
+        // Cards de leads parados em "Vendedor não identificado" são reprocessados para achar o vendedor.
+        var jaLigados = importarCompleta
+            ? (await db.CrmLeads.AsNoTracking()
+                .Where(l => l.NotionPageId != null && (l.ResponsavelId == null || !_idsPlaceholders.Contains(l.ResponsavelId.Value)))
+                .Select(l => l.NotionPageId!).ToListAsync(ct)).ToHashSet()
+            : null;
+        // Revisão: só os cards de leads parados em "Vendedor não identificado".
+        var paraRevisar = revisarVendedores
+            ? (await db.CrmLeads.AsNoTracking()
+                .Where(l => l.NotionPageId != null && l.ResponsavelId != null && _idsPlaceholders.Contains(l.ResponsavelId.Value))
+                .Select(l => l.NotionPageId!).ToListAsync(ct)).ToHashSet()
+            : null;
+        _diagVendedores.Clear();
+        _amostrasVendedores.Clear();
+        _cardsPorNotionId.Clear();
 
         await foreach (var page in paginas)
         {
+            if (jaLigados is not null && jaLigados.Contains(page.PageId()))
+            {
+                ignorados++;
+                continue;
+            }
+            if (paraRevisar is not null && !paraRevisar.Contains(page.PageId()))
+            {
+                ignorados++;
+                continue;
+            }
+
             var doConsultorAtivo = DeConsultorAtivo(page);
 
             // Reimportação, card de outro vendedor (inativo, fora do CRM ou sem vendedor): não traz
@@ -185,7 +230,7 @@ public sealed class NotionSyncService(
             }
 
             // Incremental: cards anteriores à data mínima só entram se forem de um consultor ativo.
-            if (!realinhar && !reimportarAtivos && !importarVendas && !doConsultorAtivo && CriadoAntesDaDataMinima(page))
+            if (!realinhar && !reimportarAtivos && !importarVendas && !importarCompleta && !revisarVendedores && !doConsultorAtivo && CriadoAntesDaDataMinima(page))
             {
                 ignorados++;
                 continue;
@@ -210,6 +255,7 @@ public sealed class NotionSyncService(
             catch (Exception ex)
             {
                 erros++;
+                if (amostraErros.Count < 5) amostraErros.Add($"{page.PageId()}: {ex.GetBaseException().Message}");
                 logger.LogWarning(ex, "Erro sincronizando pagina {PageId} ({Regional})", page.PageId(), regionalNome);
             }
             finally
@@ -238,6 +284,8 @@ public sealed class NotionSyncService(
         if (reimportarAtivos) checkpoint.ReimportacaoAtivosConcluidaEm = inicioDaExecucao;
         if (importarVendas) checkpoint.ImportacaoVendasConcluidaEm = inicioDaExecucao;
         if (importar2025) checkpoint.Importacao2025ConcluidaEm = inicioDaExecucao;
+        if (importarCompleta) checkpoint.ImportacaoCompletaConcluidaEm = inicioDaExecucao;
+        if (revisarVendedores) checkpoint.RevisaoVendedoresConcluidaEm = inicioDaExecucao;
         await db.SaveChangesAsync(ct);
 
         if (_mudancasNoQuadro > 0)
@@ -246,8 +294,22 @@ public sealed class NotionSyncService(
             _mudancasNoQuadro = 0;
         }
 
-        var modo = realinhar ? " (realinhamento)" : reimportarAtivos ? " (reimportação dos consultores ativos)" : importarVendas ? " (importação das vendas)" : importar2025 ? " (importação de 2025)" : "";
-        return $"{baseNome}: {processados} processados, {criados} criados, {atualizados} atualizados, {devolvidos} devolvidos ao vendedor do card, {erros} erros, {semNome} sem nome, {ignorados} ignorados{modo}";
+        var modo = realinhar ? " (realinhamento)" : reimportarAtivos ? " (reimportação dos consultores ativos)" : importarVendas ? " (importação das vendas)" : importar2025 ? " (importação de 2025)" : importarCompleta ? " (importação completa desde 01/01/2025)" : revisarVendedores ? " (revisão dos vendedores)" : "";
+        var relatorio = $"{baseNome}: {processados} processados, {criados} criados, {atualizados} atualizados, {devolvidos} devolvidos ao vendedor do card, {erros} erros, {semNome} sem nome, {ignorados} ignorados{modo}";
+        if (importarCompleta || revisarVendedores)
+        {
+            // Fica guardado (Gestão comercial > /api/crm/management/sincronizacao-notion) para conferir o que entrou e o que falhou.
+            if (amostraErros.Count > 0) relatorio += $" | amostra de erros: {string.Join("; ", amostraErros)}";
+            await GuardarResumoAsync($"{(revisarVendedores ? "revisao-vendedores" : "importacao-completa")}:{baseNome}", relatorio, ct);
+            var vendedores = string.Join("; ", _diagVendedores.OrderByDescending(d => d.Value).Select(d => $"{d.Key}: {d.Value}"));
+            await GuardarResumoAsync($"vendedores:{baseNome}", $"{vendedores} | amostras: {string.Join(" / ", _amostrasVendedores)}", ct);
+            // Vendedores que o Notion não identifica por nome: id, quantos cards e um card de exemplo — abrir o card no
+            // Notion mostra quem é; depois é só renomear o usuário "Vendedor Notion xxxxxxxx" em Usuários.
+            var desconhecidos = string.Join(" // ", _cardsPorNotionId.OrderByDescending(c => c.Value.Cards).Take(60)
+                .Select(c => $"{c.Key}: {c.Value.Cards} cards, ex.: https://www.notion.so/{c.Value.CardExemplo.Replace("-", "")}"));
+            await GuardarResumoAsync($"vendedores-sem-nome:{baseNome}", desconhecidos.Length == 0 ? "nenhum" : desconhecidos, ct);
+        }
+        return relatorio;
     }
 
     /// <summary>
@@ -300,6 +362,20 @@ public sealed class NotionSyncService(
         await db.SaveChangesAsync(ct);
         if (atualizados + ligados > 0) eventos?.PublicarQuadroAtualizado("notion");
         return $"{baseNome}: {lidos} cards lidos, {atualizados} datas de chegada gravadas, {ligados} leads antigos ligados ao card, {erros} erros (correção da data de chegada)";
+    }
+
+    /// <summary>Último ciclo da sincronização (resumo por base), para a tela/consulta de diagnóstico.</summary>
+    public Task GuardarResumoDoCicloAsync(string resumo, CancellationToken ct) => GuardarResumoAsync("ultimo-ciclo", resumo, ct);
+
+    /// <summary>Guarda o último resumo de uma passada (CrmParametros, chave "notion:..."), com a hora, para consulta pela API.</summary>
+    private async Task GuardarResumoAsync(string nome, string resumo, CancellationToken ct)
+    {
+        var chave = $"notion:{nome}";
+        var valor = $"{DateTimeOffset.UtcNow:O} | {resumo}";
+        var parametro = await db.CrmParametros.FirstOrDefaultAsync(p => p.Chave == chave, ct);
+        if (parametro is null) db.CrmParametros.Add(new CrmParametro { Chave = chave, Valor = valor });
+        else parametro.Valor = valor;
+        await db.SaveChangesAsync(ct);
     }
 
     private const string ControleMarketingDataSourceId = "542e7eaf-ab1b-46d0-a391-a36200eac604";
@@ -384,14 +460,22 @@ public sealed class NotionSyncService(
     private async Task CarregarUsuariosAtivosAsync(CancellationToken ct)
     {
         if (_emailsAtivos is not null && _idsAtivos is not null) return;
+        _idsPlaceholders = (await db.Users.AsNoTracking().Where(u => u.Email!.StartsWith(PrefixoEmailPlaceholder)).Select(u => u.Id).ToListAsync(ct)).ToHashSet();
         var ativos = await db.Users.AsNoTracking().Where(u => u.Ativo).Select(u => new { u.Id, u.Email }).ToListAsync(ct);
         _idsAtivos = ativos.Select(u => u.Id).ToHashSet();
         _emailsAtivos = ativos.Where(u => u.Email != null).Select(u => u.Email!.Trim().ToLowerInvariant()).ToHashSet();
+        // E-mails antigos de contas unificadas valem como o da conta ativa que ficou.
+        foreach (var alias in await db.CrmUsuarioAliases.AsNoTracking().Where(a => _idsAtivos.Contains(a.UsuarioId)).Select(a => a.EmailNormalizado).ToListAsync(ct))
+        {
+            _emailsAtivos.Add(alias.ToLowerInvariant());
+        }
     }
 
     /// <summary>Chave do vendedor do card (e-mail minúsculo) — ver CrmLead.NotionVendedorEmail.</summary>
     private static string ChaveVendedor(NotionPageExtensions.VendedorInfo? vendedor) =>
-        string.IsNullOrWhiteSpace(vendedor?.Email) ? SemVendedor : vendedor.Email.Trim().ToLowerInvariant();
+        !string.IsNullOrWhiteSpace(vendedor?.Email) ? vendedor.Email.Trim().ToLowerInvariant()
+        : !string.IsNullOrWhiteSpace(vendedor?.Id) ? $"notion:{vendedor.Id}"
+        : SemVendedor;
 
     /// <summary>
     /// Card de um vendedor que não é consultor ativo: se o lead dele (vindo do Notion) está com um
@@ -526,7 +610,9 @@ public sealed class NotionSyncService(
     {
         var mudouNoNotion = lead.NotionVendedorEmail != chaveVendedor;
         lead.NotionVendedorEmail = chaveVendedor;
-        if (!mudouNoNotion || vendedorId == lead.ResponsavelId) return;
+        // Lead parado em "Vendedor não identificado" passa ao vendedor do card assim que ele é resolvido.
+        var comPlaceholder = lead.ResponsavelId is { } atual && _idsPlaceholders.Contains(atual);
+        if ((!mudouNoNotion && !comPlaceholder) || vendedorId == lead.ResponsavelId) return;
         if (await db.CrmLeadAssignmentHistories.AnyAsync(h => h.LeadId == lead.Id, ct)) return;
 
         if (_idsAtivos!.Contains(vendedorId))
@@ -536,7 +622,7 @@ public sealed class NotionSyncService(
         }
 
         var doNotion = lead.ConsentimentoOrigem is OrigemLead.MarcadorMigracaoNotion or OrigemLead.MarcadorSincronizacaoNotion;
-        if (doNotion && (lead.ResponsavelId is null || _idsAtivos.Contains(lead.ResponsavelId.Value)))
+        if (doNotion && (lead.ResponsavelId is null || comPlaceholder || _idsAtivos.Contains(lead.ResponsavelId.Value)))
         {
             lead.ResponsavelId = vendedorId;
         }
@@ -648,6 +734,11 @@ public sealed class NotionSyncService(
         var vendedorInfo = page.PrimeiroVendedor("Vendedor");
         var chaveVendedor = ChaveVendedor(vendedorInfo);
         var vendedorId = await ResolverVendedorAsync(vendedorInfo, regionalId, regionalNome, placeholderVendedorId, ct);
+        if (vendedorInfo is { NomeDesconhecido: true, Id: { } idSemNome })
+        {
+            var anterior = _cardsPorNotionId.GetValueOrDefault(idSemNome);
+            _cardsPorNotionId[idSemNome] = (anterior.Cards + 1, anterior.CardExemplo ?? pageId);
+        }
 
         var criadoAgora = lead is null;
         if (lead is null)
@@ -856,7 +947,8 @@ public sealed class NotionSyncService(
         var mensalidade = page.Number("Mensalidade") is { } m ? (decimal)m : (decimal?)null;
         var mensalidadeComDesconto = page.FormulaDecimal("Mensalidade com desconto");
         var adesao = page.Number("Adesão") is { } a ? (decimal)a : (decimal?)null;
-        var porcentagem = page.Number("Porcentagem") is { } pc ? (decimal)pc : (decimal?)null;
+        // O Notion guarda o percentual como fração (0,23 = 23%); o CRM guarda em pontos (23), como a tela de venda.
+        var porcentagem = page.Number("Porcentagem") is { } pc ? Math.Round((decimal)pc * 100m, 2) : (decimal?)null;
         var total = page.FormulaDecimal("Total");
         var ativoEm = ParseUtc(page.DateStart("Ativo em"));
         var oQue = page.Select("O que");
@@ -913,46 +1005,139 @@ public sealed class NotionSyncService(
     }
 
     private readonly Dictionary<string, Guid> _vendedorPorEmailCache = new();
+    private readonly Dictionary<string, Guid> _vendedorPorNotionIdCache = new();
     private readonly Dictionary<string, Guid> _placeholderPorBaseCache = new();
 
     /// <summary>Grupo (dentro da regional) da base que está sendo sincronizada; nulo = sem grupo.</summary>
     private Guid? _grupoId;
 
+    /// <summary>Contagem de como cada card teve o vendedor resolvido (diagnóstico da importação completa).</summary>
+    private readonly Dictionary<string, int> _diagVendedores = [];
+    private readonly List<string> _amostrasVendedores = [];
+
+    /// <summary>Por vendedor sem nome no Notion: quantos cards e um card de exemplo (para descobrir quem é).</summary>
+    private readonly Dictionary<string, (int Cards, string? CardExemplo)> _cardsPorNotionId = [];
+
+    private void Diag(string motivo, string? amostra = null)
+    {
+        _diagVendedores[motivo] = _diagVendedores.GetValueOrDefault(motivo) + 1;
+        if (amostra is not null && _amostrasVendedores.Count < 30 && !_amostrasVendedores.Contains(amostra)) _amostrasVendedores.Add(amostra);
+    }
+
     /// <returns>
-    /// O usuário do campo "Vendedor" do card (ativo ou não — o lead é dele); o placeholder da base
-    /// quando o card não tem vendedor.
+    /// O usuário do campo "Vendedor" do card (ativo ou não — o lead é dele): pelo e-mail ou, sem e-mail,
+    /// pelo id da pessoa no Notion. Quem ainda não existe no CRM ganha um login (inativo, sem receber
+    /// leads e com senha aleatória: um administrador ativa e define a senha em Usuários). O placeholder
+    /// da base só vale quando o card não tem vendedor, ou é um bot/automação.
     /// </returns>
     private async Task<Guid> ResolverVendedorAsync(NotionPageExtensions.VendedorInfo? vendedor, Guid regionalId, string regionalNome, Guid placeholderVendedorId, CancellationToken ct)
     {
-        if (vendedor is null || string.IsNullOrWhiteSpace(vendedor.Email)) return placeholderVendedorId;
-
-        var email = vendedor.Email.Trim().ToLowerInvariant();
-        if (_vendedorPorEmailCache.TryGetValue(email, out var idCache)) return idCache;
-
-        var existente = await userManager.FindByEmailAsync(email);
-        if (existente is not null)
+        if (vendedor is null)
         {
-            _vendedorPorEmailCache[email] = existente.Id;
-            return existente.Id;
+            Diag("card sem vendedor");
+            return placeholderVendedorId;
         }
 
+        var notionId = string.IsNullOrWhiteSpace(vendedor.Id) ? null : vendedor.Id.Trim().ToLowerInvariant();
+        if (notionId is not null && _vendedorPorNotionIdCache.TryGetValue(notionId, out var idPorNotion)) return idPorNotion;
+
+        if (!string.IsNullOrWhiteSpace(vendedor.Email))
+        {
+            var email = vendedor.Email.Trim().ToLowerInvariant();
+            if (_vendedorPorEmailCache.TryGetValue(email, out var idCache)) return idCache;
+
+            var existente = await userManager.FindByEmailAsync(email);
+            if (existente is not null)
+            {
+                await VincularNotionIdAsync(existente, notionId);
+                _vendedorPorEmailCache[email] = existente.Id;
+                return existente.Id;
+            }
+
+            // E-mail antigo de uma conta unificada: o card vai para a conta que ficou.
+            var aliasId = await db.CrmUsuarioAliases.AsNoTracking().Where(a => a.EmailNormalizado == email.ToUpperInvariant())
+                .Select(a => (Guid?)a.UsuarioId).FirstOrDefaultAsync(ct);
+            if (aliasId is { } viaAlias)
+            {
+                await VincularNotionIdAsync(await userManager.FindByIdAsync(viaAlias.ToString()), notionId);
+                _vendedorPorEmailCache[email] = viaAlias;
+                return viaAlias;
+            }
+
+            var criado = await CriarLoginDoVendedorAsync(email, vendedor.Nome, notionId, regionalId, ct);
+            if (criado is null) return placeholderVendedorId;
+            _vendedorPorEmailCache[email] = criado.Value;
+            return criado.Value;
+        }
+
+        // Sem e-mail no Notion (convidado, pessoa de outro workspace, bot...).
+        if (notionId is null)
+        {
+            Diag("vendedor sem e-mail e sem id", vendedor.Nome);
+            return placeholderVendedorId;
+        }
+
+        var porNotionId = await db.Users.AsNoTracking().Where(u => u.NotionUserId == notionId).Select(u => (Guid?)u.Id).FirstOrDefaultAsync(ct);
+        if (porNotionId is { } achado)
+        {
+            _vendedorPorNotionIdCache[notionId] = achado;
+            return achado;
+        }
+
+        if (vendedor.EhBot)
+        {
+            Diag("vendedor é um bot/automação", vendedor.Nome);
+            return placeholderVendedorId;
+        }
+
+        // Login novo para quem só existe no Notion (e-mail provisório com o id; o administrador troca por um real).
+        var emailProvisorio = $"notion.{notionId}@cssvision.local";
+        var existenteProvisorio = await userManager.FindByEmailAsync(emailProvisorio);
+        if (existenteProvisorio is not null)
+        {
+            _vendedorPorNotionIdCache[notionId] = existenteProvisorio.Id;
+            return existenteProvisorio.Id;
+        }
+
+        var novo = await CriarLoginDoVendedorAsync(emailProvisorio, vendedor.Nome, notionId, regionalId, ct, semEmailNoNotion: true);
+        if (novo is null) return placeholderVendedorId;
+        _vendedorPorNotionIdCache[notionId] = novo.Value;
+        return novo.Value;
+    }
+
+    private async Task VincularNotionIdAsync(ApplicationUser? usuario, string? notionId)
+    {
+        if (usuario is null || notionId is null || usuario.NotionUserId is not null) return;
+        usuario.NotionUserId = notionId;
+        await userManager.UpdateAsync(usuario);
+        _vendedorPorNotionIdCache[notionId] = usuario.Id;
+    }
+
+    private async Task<Guid?> CriarLoginDoVendedorAsync(string email, string nome, string? notionId, Guid regionalId, CancellationToken ct, bool semEmailNoNotion = false)
+    {
         var usuario = new ApplicationUser
         {
             UserName = email,
             Email = email,
             EmailConfirmed = true,
-            NomeCompleto = vendedor.Nome,
+            NomeCompleto = nome.Length > 200 ? nome[..200] : nome,
             RegionalId = regionalId,
             GrupoId = _grupoId,
+            NotionUserId = notionId,
             // Vendedor que só existe no Notion entra inativo: não recebe leads do tráfego pago nem
-            // aparece como consultor até um administrador ativá-lo.
+            // aparece como consultor até um administrador ativá-lo (e definir a senha).
             Ativo = false,
+            RecebeLeads = false,
         };
-        var resultado = await userManager.CreateAsync(usuario, "Senha@123");
-        if (!resultado.Succeeded) return placeholderVendedorId;
+        var resultado = await userManager.CreateAsync(usuario, "Aa1!" + Guid.NewGuid().ToString("N"));
+        if (!resultado.Succeeded)
+        {
+            Diag("falha ao criar o login", $"{nome} <{email}>: {string.Join(", ", resultado.Errors.Select(e => e.Code))}");
+            return null;
+        }
 
         await userManager.AddToRoleAsync(usuario, Roles.Comercial);
-        _vendedorPorEmailCache[email] = usuario.Id;
+        Diag(semEmailNoNotion ? "login criado (sem e-mail no Notion)" : "login criado (com e-mail)", $"criado: {nome}");
         return usuario.Id;
     }
 

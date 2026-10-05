@@ -6,6 +6,7 @@ import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/f
 import type { GestaoComercialResumo, RedistribuicaoHistorico, VendedorResumo } from "../../lib/types";
 import { Badge, Card, ErrorState, Skeleton, useToast, Pagination } from "../../components/ui";
 import { OPCOES_O_QUE } from "../../lib/opcoesLead";
+import { useAtualizarAoVivo } from "../../lib/useAoVivo";
 
 function LimiteInput({
   vendedor,
@@ -304,6 +305,9 @@ export function ManagementPage() {
     return () => controller.abort();
   }, [carregar, recarregar]);
 
+  // Tempo real: ranking, carteira e métricas se atualizam sozinhos (vendas, leads) e quando o mês vira.
+  useAtualizarAoVivo(() => setRecarregar((n) => n + 1));
+
   // Paginação das listas (hooks antes dos retornos de carregando/erro).
   const paginaContato = usePaginacao(resumo?.primeiroContatoPorVendedor, 8);
   const paginaCarteira = usePaginacao(vendedores, 9);
@@ -311,7 +315,7 @@ export function ManagementPage() {
   const paginaParadas = usePaginacao(resumo?.oportunidadesSemMovimentacao, 8);
   const paginaHistorico = usePaginacao(historico, 10);
 
-  if (carregando) {
+  if (carregando && !resumo) {
     return (
       <div className="space-y-4">
         {Array.from({ length: 3 }).map((_, i) => (
@@ -321,7 +325,7 @@ export function ManagementPage() {
     );
   }
 
-  if (erro || !resumo || !vendedores || !historico) {
+  if (!resumo || !vendedores || !historico) {
     return <ErrorState message={erro ?? "Não foi possível carregar."} onRetry={() => setRecarregar((n) => n + 1)} />;
   }
 
@@ -339,14 +343,14 @@ export function ManagementPage() {
           <h2 className="mb-2 text-sm font-semibold text-[var(--fg)]">Tempo médio até 1º contato</h2>
           {(resumo.leadsComPrimeiroContato ?? 0) === 0 ? (
             <p className="text-sm text-[var(--fg-muted)]">
-              Nenhum lead do CRM teve contato nos últimos 30 dias. O contato conta quando o consultor move o lead de etapa no quadro ou conclui uma
+              Nenhum lead do CRM teve contato neste mês. O contato conta quando o consultor move o lead de etapa no quadro ou conclui uma
               atividade.
             </p>
           ) : (
             <>
               <p className="text-2xl font-semibold text-[var(--fg)]">{formatarDuracao(resumo.tempoMedioPrimeiroContatoHoras)}</p>
               <p className="text-xs text-[var(--fg-muted)]">
-                média de {resumo.leadsComPrimeiroContato} lead(s) dos últimos 30 dias, da chegada até o consultor mover de etapa ou concluir uma atividade
+                média de {resumo.leadsComPrimeiroContato} lead(s) deste mês, da chegada até o consultor mover de etapa ou concluir uma atividade
               </p>
               {(resumo.primeiroContatoPorVendedor?.length ?? 0) > 0 && (
                 <ul className="mt-3 space-y-1.5 border-t border-[var(--border)] pt-3">

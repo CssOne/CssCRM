@@ -3,6 +3,7 @@ using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Authorization;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
+using CssVision.Web.Services.Notion;
 using CssVision.Web.Domain.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -31,9 +32,11 @@ public sealed class ManagementService(
 
     private async Task<GestaoComercialResumoDto> CalcularResumoAsync(DateOnly? dataInicio, DateOnly? dataFim, CancellationToken ct)
     {
-        var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
-        var inicio = (dataInicio ?? hoje.AddMonths(-1)).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var fim = (dataFim ?? hoje).ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+        // Sem período informado, o ranking e as métricas são do mês atual (Brasília) — antes eram os
+        // "últimos 30 dias", que depois da virada do mês ainda mostravam o mês anterior.
+        var hoje = HorarioBrasilia.Hoje;
+        var inicio = HorarioBrasilia.Inicio(dataInicio ?? HorarioBrasilia.PrimeiroDiaDoMes(hoje));
+        var fim = HorarioBrasilia.Fim(dataFim ?? hoje);
         var agora = DateTimeOffset.UtcNow;
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
@@ -79,12 +82,14 @@ public sealed class ManagementService(
             query = query.Where(u => u.Ativo);
         }
         if (visiveis is not null) query = query.Where(u => visiveis.Contains(u.Id));
+        // Vendedores que o Notion não identifica ("Vendedor Notion xxxx") ficam fora do filtro e da carteira até alguém renomeá-los.
+        query = query.Where(u => !u.NomeCompleto.StartsWith(NotionPageExtensions.PrefixoNomeProvisorio));
 
         var vendedores = await query
             .OrderByDescending(u => u.Ativo).ThenBy(u => u.NomeCompleto)
             .Select(u => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.Ativo, u.RecebeLeads, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads, u.RecebeSomenteOQue })
             .ToListAsync(ct);
-        var inicioMes = new DateTimeOffset(new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1), TimeSpan.Zero);
+        var inicioMes = HorarioBrasilia.Inicio(HorarioBrasilia.PrimeiroDiaDoMes(HorarioBrasilia.Hoje));
         var inicioDia = LeadAssignmentService.InicioDoDia();
         var ids = vendedores.Select(v => (Guid?)v.Id).ToList();
         var idsOportunidade = vendedores.Select(v => v.Id).ToList();
@@ -112,15 +117,16 @@ public sealed class ManagementService(
     {
         ExigirGestaoComercial();
 
-        var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
-        var mes = new DateOnly((mesReferencia ?? hoje).Year, (mesReferencia ?? hoje).Month, 1);
-        var inicioMes = mes.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var fimMes = mes.AddMonths(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var hoje = HorarioBrasilia.Hoje;
+        var mes = HorarioBrasilia.PrimeiroDiaDoMes(mesReferencia ?? hoje);
+        var inicioMes = HorarioBrasilia.Inicio(mes);
+        var fimMes = HorarioBrasilia.Inicio(mes.AddMonths(1));
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
         var idsComPapelComercial = (await userManager.GetUsersInRoleAsync(Roles.Comercial)).Select(u => u.Id).ToHashSet();
 
-        var query = db.Users.AsNoTracking().Include(u => u.Regional).Where(u => idsComPapelComercial.Contains(u.Id));
+        var query = db.Users.AsNoTracking().Include(u => u.Regional).Where(u => idsComPapelComercial.Contains(u.Id))
+            .Where(u => !u.NomeCompleto.StartsWith(NotionPageExtensions.PrefixoNomeProvisorio));
         if (visiveis is not null) query = query.Where(u => visiveis.Contains(u.Id));
 
         var consultores = await query.ToListAsync(ct);
@@ -142,6 +148,8 @@ public sealed class ManagementService(
         var recebidos = await ContagensPorVendedor.ContarLeadsAsync(
             leadsDosConsultores.Where(OrigemLead.VeioDoTrafegoPago).Where(l => l.CriadoEm >= inicioMes), ct);
         var trafegoNoMes = await LeadsDeTrafegoNoMesAsync(leadsDosConsultores, ct);
+        var leadsDoMes = await ContagensPorVendedor.ContarLeadsAsync(
+            leadsDosConsultores.Where(l => !l.Arquivado && l.CriadoEm >= inicioMes && l.CriadoEm < fimMes), ct);
 
         return consultores
             .Select(c =>
@@ -155,7 +163,7 @@ public sealed class ManagementService(
                 return new ConsultorDesempenhoDto(
                     c.Id, c.NomeCompleto, c.Email!, c.PhoneNumber, c.Regional?.Nome, c.Ativo,
                     leadsAtivos.GetValueOrDefault(c.Id), aberta.Quantidade, aberta.Valor, fechada?.Ganhas ?? 0, valorGanho,
-                    ContagensPorVendedor.TaxaConversao(fechada),
+                    ContagensPorVendedor.TaxaConversaoLeads(fechada?.Ganhas ?? 0, leadsDoMes.GetValueOrDefault(c.Id)),
                     c.LimiteMensalLeads, recebidos.GetValueOrDefault(c.Id), metaValor, valorGanho, percentualMeta, trafegoNoMes.GetValueOrDefault(c.Id));
             })
             .OrderByDescending(r => r.ValorGanho)
@@ -316,10 +324,10 @@ public sealed class ManagementService(
     /// Notion foram trabalhados lá) que chegaram no período.
     /// </summary>
     private async Task<(double Horas, int Leads, IReadOnlyList<PrimeiroContatoVendedorDto> PorVendedor)> ObterTempoMedioPrimeiroContatoAsync(
-        IQueryable<CrmLead> leadsQuery, DateTime inicio, DateTime fim, CancellationToken ct)
+        IQueryable<CrmLead> leadsQuery, DateTimeOffset inicio, DateTimeOffset fim, CancellationToken ct)
     {
-        var inicioUtc = new DateTimeOffset(inicio, TimeSpan.Zero);
-        var fimUtc = new DateTimeOffset(fim, TimeSpan.Zero);
+        var inicioUtc = inicio;
+        var fimUtc = fim;
         var leads = await leadsQuery
             .Where(l => l.ResponsavelId != null
                 && l.ConsentimentoOrigem != OrigemLead.MarcadorMigracaoNotion
@@ -420,12 +428,15 @@ public sealed class ManagementService(
 
         var fechadas = await ContagensPorVendedor.FechadasAsync(db.CrmOpportunities.AsNoTracking()
             .Where(o => !o.Arquivado && ids.Contains(o.ResponsavelId) && o.DataEfetivaFechamento >= inicio && o.DataEfetivaFechamento <= fim), ct);
+        var leadsDoPeriodo = await ContagensPorVendedor.ContarLeadsAsync(db.CrmLeads.AsNoTracking()
+            .Where(l => !l.Arquivado && l.ResponsavelId != null && ids.Contains(l.ResponsavelId.Value) && l.CriadoEm >= inicio && l.CriadoEm <= fim), ct);
 
         var ordenado = vendedores
             .Select(v =>
             {
                 fechadas.TryGetValue(v.Id, out var f);
-                return new RankingComercialDto(v.Id, v.NomeCompleto, 0, f?.ValorGanho ?? 0m, f?.Ganhas ?? 0, ContagensPorVendedor.TaxaConversao(f));
+                return new RankingComercialDto(v.Id, v.NomeCompleto, 0, f?.ValorGanho ?? 0m, f?.Ganhas ?? 0,
+                    ContagensPorVendedor.TaxaConversaoLeads(f?.Ganhas ?? 0, leadsDoPeriodo.GetValueOrDefault(v.Id)));
             })
             .OrderByDescending(r => r.ValorGanho)
             .ToList();

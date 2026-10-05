@@ -11,6 +11,8 @@ public class ApplicationUserConfiguration : IEntityTypeConfiguration<Application
         builder.Property(e => e.NomeCompleto).IsRequired().HasMaxLength(200);
 
         builder.HasIndex(e => e.GestorComercialId);
+        builder.Property(e => e.NotionUserId).HasMaxLength(64);
+        builder.HasIndex(e => e.NotionUserId);
         builder.HasIndex(e => e.RegionalId);
         builder.HasIndex(e => e.GrupoId);
 

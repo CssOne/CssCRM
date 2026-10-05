@@ -59,6 +59,14 @@ public static class ContagensPorVendedor
             });
     }
 
+    /// <summary>
+    /// Conversão = vendas fechadas no período ÷ leads que chegaram no período (limitada a 100%). A conta antiga
+    /// (ganhas ÷ ganhas+perdidas das oportunidades) dava sempre 100%: os cards do Notion perdidos nunca viram
+    /// oportunidade, só leads na coluna "Perdido".
+    /// </summary>
+    public static decimal TaxaConversaoLeads(int vendas, int leads) =>
+        leads <= 0 ? 0m : Math.Min(100m, Math.Round(100m * vendas / leads, 1));
+
     public static decimal TaxaConversao(Fechadas? f) =>
         f is null || f.Ganhas + f.Perdidas == 0 ? 0m : Math.Round(100m * f.Ganhas / (f.Ganhas + f.Perdidas), 1);
 }

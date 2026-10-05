@@ -93,11 +93,38 @@ public sealed class LeadService(
                 l.UltimoContatoEm,
                 l.ProximoContatoEm,
                 string.IsNullOrWhiteSpace(l.Telefone) && string.IsNullOrWhiteSpace(l.Telefone2),
-                l.Arquivado
+                l.Arquivado,
+                null
             ))
             .ToListAsync(ct);
 
-        var mascarados = itens.Select(i => i with { DocumentoMascarado = DocumentValidation.MascararDocumento(i.DocumentoMascarado) }).ToList();
+        // Colunas dos Relatórios do Notion (adesão, FIPE, mensalidade...): da venda do lead — a oportunidade ganha
+        // mais recente, ou a mais recente que existir. Buscadas só para os leads desta página.
+        var idsDaPagina = itens.Select(i => i.Id).ToList();
+        var oportunidades = await db.CrmOpportunities.AsNoTracking()
+            .Where(o => idsDaPagina.Contains(o.LeadId) && !o.Arquivado)
+            .Select(o => new
+            {
+                o.LeadId,
+                Ganha = o.Etapa.Tipo == TipoEtapaPipeline.Ganho,
+                Data = o.DataEfetivaFechamento ?? o.CriadoEm,
+                Venda = new LeadVendaResumoDto(
+                    o.PagamentoAdesao, o.Veiculo != null ? o.Veiculo.Fipe : null, o.Mensalidade, o.MensalidadeComDesconto, o.Porcentagem,
+                    o.Veiculo != null ? o.Veiculo.Rastreador : null, o.ValorIndicacao, o.Veiculo != null ? o.Veiculo.ValorVistoria : null,
+                    o.Total ?? o.ValorFinal, o.DataEfetivaFechamento),
+            })
+            .ToListAsync(ct);
+        var vendaPorLead = oportunidades
+            .GroupBy(o => o.LeadId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(o => o.Ganha).ThenByDescending(o => o.Data).First().Venda);
+
+        var mascarados = itens
+            .Select(i => i with
+            {
+                DocumentoMascarado = DocumentValidation.MascararDocumento(i.DocumentoMascarado),
+                Venda = vendaPorLead.GetValueOrDefault(i.Id),
+            })
+            .ToList();
 
         return new PagedResult<LeadListItemDto>
         {
@@ -933,6 +960,39 @@ public sealed class LeadService(
         if (!string.IsNullOrWhiteSpace(filtro.Regional)) query = query.Where(l => l.Regional == filtro.Regional);
         if (!string.IsNullOrWhiteSpace(filtro.Origem)) query = query.Where(l => l.Origem == filtro.Origem);
         if (filtro.LeadEtapaId.HasValue) query = query.Where(l => l.EtapaId == filtro.LeadEtapaId);
+
+        if (filtro.ResponsavelIds is { Length: > 0 })
+        {
+            var ids = filtro.ResponsavelIds.Select(id => (Guid?)id).ToList();
+            query = query.Where(l => ids.Contains(l.ResponsavelId));
+        }
+        if (filtro.LeadEtapaIds is { Length: > 0 })
+        {
+            var semEtapa = filtro.LeadEtapaIds.Contains(Guid.Empty);
+            var etapas = filtro.LeadEtapaIds.Where(id => id != Guid.Empty).Select(id => (Guid?)id).ToList();
+            query = query.Where(l => (l.EtapaId != null && etapas.Contains(l.EtapaId)) || (semEtapa && l.EtapaId == null));
+        }
+        if (filtro.Origens is { Length: > 0 })
+        {
+            var origens = filtro.Origens.Where(o => !string.IsNullOrWhiteSpace(o)).Select(o => o.Trim()).ToList();
+            query = query.Where(l => origens.Contains(l.Origem!));
+        }
+        if (filtro.Regionais is { Length: > 0 })
+        {
+            var regionais = filtro.Regionais.Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => r.Trim()).ToList();
+            query = query.Where(l => regionais.Contains(l.Regional!));
+        }
+        if (filtro.GrupoIds is { Length: > 0 })
+        {
+            var grupos = filtro.GrupoIds.Select(id => (Guid?)id).ToList();
+            query = query.Where(l => l.Responsavel != null && grupos.Contains(l.Responsavel.GrupoId));
+        }
+        if (filtro.DataVendaInicio.HasValue || filtro.DataVendaFim.HasValue)
+        {
+            var de = filtro.DataVendaInicio?.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) ?? DateTime.MinValue;
+            var ate = filtro.DataVendaFim?.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc) ?? DateTime.MaxValue;
+            query = query.Where(l => l.Oportunidades.Any(o => !o.Arquivado && o.DataEfetivaFechamento >= de && o.DataEfetivaFechamento <= ate));
+        }
         if (filtro.EtapaId.HasValue) query = query.Where(l => l.Oportunidades.Any(o => o.EtapaId == filtro.EtapaId && !o.Arquivado));
         if (filtro.DataInicio.HasValue)
         {

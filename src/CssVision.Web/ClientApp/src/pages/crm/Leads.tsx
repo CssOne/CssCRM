@@ -2,8 +2,18 @@ import { Download, LayoutGrid, Plus, Upload, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiRequestError, downloadUrl, isAbortError, toQueryString } from "../../lib/api";
-import { formatarData, formatarTelefone } from "../../lib/format";
-import { type LeadCreateRequest, type LeadDuplicateWarning, type LeadListItem, type LeadStage, type PagedResult } from "../../lib/types";
+import { formatarData, formatarMoeda, formatarPercentual, formatarTelefone } from "../../lib/format";
+import {
+  type GrupoFiltro,
+  type LeadCreateRequest,
+  type LeadDuplicateWarning,
+  type LeadListItem,
+  type LeadStage,
+  type PagedResult,
+  type Regional,
+  type VendedorResumo,
+} from "../../lib/types";
+import { MultiSelect } from "../../components/MultiSelect";
 import { useAuth } from "../../context/AuthContext";
 import {
   Badge,
@@ -14,7 +24,6 @@ import {
   Input,
   Modal,
   Pagination,
-  Select,
   Skeleton,
   useToast,
 } from "../../components/ui";
@@ -30,10 +39,22 @@ export function LeadsPage() {
   const { notificar } = useToast();
 
   const [busca, setBusca] = useState("");
-  const [leadEtapaId, setLeadEtapaId] = useState("");
-  const [origem, setOrigem] = useState("");
+  // Filtros de múltipla escolha: nada marcado = todos.
+  const [etapaIds, setEtapaIds] = useState<string[]>([]);
+  const [origens, setOrigens] = useState<string[]>([]);
+  const [consultorIds, setConsultorIds] = useState<string[]>([]);
+  const [regionais, setRegionais] = useState<string[]>([]);
+  const [grupoIds, setGrupoIds] = useState<string[]>([]);
+  const [chegadaDe, setChegadaDe] = useState("");
+  const [chegadaAte, setChegadaAte] = useState("");
+  const [vendaDe, setVendaDe] = useState("");
+  const [vendaAte, setVendaAte] = useState("");
   const [pagina, setPagina] = useState(1);
   const [etapas, setEtapas] = useState<LeadStage[]>([]);
+  const [listaOrigens, setListaOrigens] = useState<string[]>([]);
+  const [consultores, setConsultores] = useState<VendedorResumo[]>([]);
+  const [listaRegionais, setListaRegionais] = useState<Regional[]>([]);
+  const [listaGrupos, setListaGrupos] = useState<GrupoFiltro[]>([]);
 
   const [dados, setDados] = useState<PagedResult<LeadListItem> | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -48,13 +69,33 @@ export function LeadsPage() {
   const [recarregar, setRecarregar] = useState(0);
 
   const filtro = useMemo(
-    () => ({ busca: busca || undefined, leadEtapaId: leadEtapaId || undefined, origem: origem || undefined, pagina, tamanhoPagina: 20 }),
-    [busca, leadEtapaId, origem, pagina]
+    () => ({
+      busca: busca || undefined,
+      leadEtapaIds: etapaIds,
+      origens,
+      responsavelIds: consultorIds,
+      regionais,
+      grupoIds,
+      dataInicio: chegadaDe || undefined,
+      dataFim: chegadaAte || undefined,
+      dataVendaInicio: vendaDe || undefined,
+      dataVendaFim: vendaAte || undefined,
+      pagina,
+      tamanhoPagina: 20,
+    }),
+    [busca, etapaIds, origens, consultorIds, regionais, grupoIds, chegadaDe, chegadaAte, vendaDe, vendaAte, pagina]
   );
 
   useEffect(() => {
     api.get<LeadStage[]>("/crm/settings/lead-stages").then(setEtapas).catch(() => setEtapas([]));
-  }, []);
+    if (podeVerOrigem) api.get<string[]>("/crm/settings/origins").then(setListaOrigens).catch(() => setListaOrigens([]));
+    if (podeGerir) {
+      api.get<VendedorResumo[]>("/crm/management/vendedores?incluirInativos=true").then(setConsultores).catch(() => setConsultores([]));
+      api.get<Regional[]>("/crm/settings/regionals").then(setListaRegionais).catch(() => setListaRegionais([]));
+      // Grupos já criados e os que forem criados depois, de todas as regionais visíveis.
+      api.get<GrupoFiltro[]>("/crm/settings/groups/filtro").then(setListaGrupos).catch(() => setListaGrupos([]));
+    }
+  }, [podeGerir, podeVerOrigem]);
 
   const carregar = useCallback(
     (signal?: AbortSignal) => {
@@ -80,10 +121,31 @@ export function LeadsPage() {
 
   function limparFiltros() {
     setBusca("");
-    setLeadEtapaId("");
-    setOrigem("");
+    setEtapaIds([]);
+    setOrigens([]);
+    setConsultorIds([]);
+    setRegionais([]);
+    setGrupoIds([]);
+    setChegadaDe("");
+    setChegadaAte("");
+    setVendaDe("");
+    setVendaAte("");
     setPagina(1);
   }
+
+  // Qualquer mudança de filtro volta para a primeira página.
+  function comPagina1<T>(definir: (v: T) => void) {
+    return (v: T) => {
+      definir(v);
+      setPagina(1);
+    };
+  }
+
+  const filtrosAtivos = !!(
+    busca || etapaIds.length || origens.length || consultorIds.length || regionais.length || grupoIds.length ||
+    chegadaDe || chegadaAte || vendaDe || vendaAte
+  );
+  const dinheiro = (n?: number | null) => (n == null ? "—" : formatarMoeda(n));
 
   function alternarSelecao(id: string) {
     setSelecionados((atual) => {
@@ -152,46 +214,106 @@ export function LeadsPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-        <div className="min-w-48 flex-1">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Buscar</label>
-          <Input
-            placeholder="Nome, documento, telefone ou e-mail"
-            value={busca}
-            onChange={(e) => {
-              setBusca(e.target.value);
-              setPagina(1);
-            }}
-          />
-        </div>
-        <div className="w-44">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Etapa</label>
-          <Select
-            value={leadEtapaId}
-            onChange={(e) => {
-              setLeadEtapaId(e.target.value);
-              setPagina(1);
-            }}
-          >
-            <option value="">Todas</option>
-            {etapas.map((etapa) => (
-              <option key={etapa.id ?? ""} value={etapa.id ?? ""}>
-                {etapa.nome}
-              </option>
-            ))}
-          </Select>
-        </div>
-        {podeVerOrigem && (
-          <div className="w-44">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Origem</label>
-            <Input value={origem} onChange={(e) => { setOrigem(e.target.value); setPagina(1); }} />
+      <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-48 flex-1">
+            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Buscar</label>
+            <Input
+              placeholder="Nome, documento, telefone ou e-mail"
+              value={busca}
+              onChange={(e) => {
+                setBusca(e.target.value);
+                setPagina(1);
+              }}
+            />
           </div>
-        )}
-        {(busca || leadEtapaId || origem) && (
-          <Button variant="ghost" size="sm" onClick={limparFiltros}>
-            <X className="size-4" /> Limpar filtros
-          </Button>
-        )}
+          <div className="w-52">
+            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Etapa</label>
+            <MultiSelect
+              ariaLabel="Etapa"
+              rotuloTodos="Todas"
+              opcoes={[
+                ...etapas.filter((e) => e.ativa !== false && e.id).map((e) => ({ valor: e.id!, rotulo: e.nome })),
+                { valor: "00000000-0000-0000-0000-000000000000", rotulo: "Sem etapa" },
+              ]}
+              valores={etapaIds}
+              onChange={comPagina1(setEtapaIds)}
+            />
+          </div>
+          {podeGerir && (
+            <div className="w-52">
+              <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Consultor</label>
+              <MultiSelect
+                ariaLabel="Consultor"
+                rotuloTodos="Todos"
+                opcoes={consultores.map((c) => ({ valor: c.id, rotulo: c.ativo === false ? `${c.nome} (inativo)` : c.nome }))}
+                valores={consultorIds}
+                onChange={comPagina1(setConsultorIds)}
+              />
+            </div>
+          )}
+          {podeVerOrigem && (
+            <div className="w-52">
+              <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Origem</label>
+              <MultiSelect
+                ariaLabel="Origem"
+                rotuloTodos="Todas"
+                opcoes={listaOrigens.map((o) => ({ valor: o, rotulo: o }))}
+                valores={origens}
+                onChange={comPagina1(setOrigens)}
+              />
+            </div>
+          )}
+          {podeGerir && (
+            <>
+              <div className="w-44">
+                <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Regional</label>
+                <MultiSelect
+                  ariaLabel="Regional"
+                  rotuloTodos="Todas"
+                  opcoes={listaRegionais.map((r) => ({ valor: r.nome, rotulo: r.nome }))}
+                  valores={regionais}
+                  onChange={comPagina1(setRegionais)}
+                />
+              </div>
+              <div className="w-56">
+                <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Grupo</label>
+                <MultiSelect
+                  ariaLabel="Grupo"
+                  rotuloTodos="Todos"
+                  opcoes={listaGrupos
+                    .filter((g) => regionais.length === 0 || regionais.includes(g.regionalNome))
+                    .map((g) => ({ valor: g.id, rotulo: `${g.regionalNome} · ${g.nome}` }))}
+                  valores={grupoIds}
+                  onChange={comPagina1(setGrupoIds)}
+                />
+              </div>
+            </>
+          )}
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Chegada de</label>
+            <Input type="date" className="w-40" value={chegadaDe} max={chegadaAte || undefined} onChange={(e) => comPagina1(setChegadaDe)(e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">até</label>
+            <Input type="date" className="w-40" value={chegadaAte} min={chegadaDe || undefined} onChange={(e) => comPagina1(setChegadaAte)(e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Venda de</label>
+            <Input type="date" className="w-40" value={vendaDe} max={vendaAte || undefined} onChange={(e) => comPagina1(setVendaDe)(e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">até</label>
+            <Input type="date" className="w-40" value={vendaAte} min={vendaDe || undefined} onChange={(e) => comPagina1(setVendaAte)(e.target.value)} />
+          </div>
+          {filtrosAtivos && (
+            <Button variant="ghost" size="sm" onClick={limparFiltros}>
+              <X className="size-4" /> Limpar filtros
+            </Button>
+          )}
+        </div>
       </div>
 
       {podeGerir && selecionados.size > 0 && (
@@ -225,6 +347,15 @@ export function LeadsPage() {
                   <th className="px-2 py-3 font-medium">Responsável</th>
                   <th className="px-2 py-3 font-medium">Etapa</th>
                   <th className="px-2 py-3 font-medium">Oportunidade</th>
+                  <th className="px-2 py-3 text-right font-medium">Adesão</th>
+                  <th className="px-2 py-3 text-right font-medium">FIPE</th>
+                  <th className="px-2 py-3 text-right font-medium">Mensalidade</th>
+                  <th className="px-2 py-3 text-right font-medium" title="Mensalidade com desconto">Mens. c/ desconto</th>
+                  <th className="px-2 py-3 text-right font-medium">%</th>
+                  <th className="px-2 py-3 text-right font-medium">Rastreador</th>
+                  <th className="px-2 py-3 text-right font-medium">Indicação</th>
+                  <th className="px-2 py-3 text-right font-medium">Vistoria</th>
+                  <th className="px-2 py-3 text-right font-medium">Total</th>
                   <th className="px-2 py-3 font-medium">Criado em</th>
                 </tr>
               </thead>
@@ -258,6 +389,17 @@ export function LeadsPage() {
                       </Badge>
                     </td>
                     <td className="px-2 py-3 text-[var(--fg-muted)]">{lead.etapaAtual ?? "—"}</td>
+                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.adesao)}</td>
+                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.fipe)}</td>
+                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.mensalidade)}</td>
+                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.mensalidadeComDesconto)}</td>
+                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg-muted)]">
+                      {lead.venda?.porcentagem == null ? "—" : formatarPercentual(lead.venda.porcentagem)}
+                    </td>
+                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.rastreador)}</td>
+                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.indicacao)}</td>
+                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.vistoria)}</td>
+                    <td className="whitespace-nowrap px-2 py-3 text-right font-medium text-[var(--fg)]">{dinheiro(lead.venda?.total)}</td>
                     <td className="px-2 py-3 text-[var(--fg-muted)]">{formatarData(lead.criadoEm)}</td>
                   </tr>
                 ))}

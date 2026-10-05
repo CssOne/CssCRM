@@ -15,6 +15,7 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { Link } from "react-router-dom";
 import { api, isAbortError } from "../../lib/api";
 import { formatarDataHora, formatarMoeda } from "../../lib/format";
@@ -42,6 +43,8 @@ export function PortalDashboardPage() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
+  const [recarregar, setRecarregar] = useState(0);
+
   useEffect(() => {
     const controller = new AbortController();
     setCarregando(true);
@@ -61,7 +64,10 @@ export function PortalDashboardPage() {
       })
       .finally(() => { if (!controller.signal.aborted) setCarregando(false); });
     return () => controller.abort();
-  }, []);
+  }, [recarregar]);
+
+  // Tempo real: ranking, metas e indicadores atualizam sozinhos (vendas, leads) e quando o mês vira.
+  useAtualizarAoVivo(() => setRecarregar((n) => n + 1));
 
   const proximosEventos = useMemo(
     () => proximas.filter((a) => a.tipo === TipoAtividade.Reuniao || a.tipo === TipoAtividade.Visita).slice(0, 3),
@@ -69,7 +75,7 @@ export function PortalDashboardPage() {
   );
   const pendencias = proximas.slice(0, 4);
 
-  if (carregando) {
+  if (carregando && !dashboard) {
     return (
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {Array.from({ length: 8 }).map((_, i) => (
@@ -79,7 +85,7 @@ export function PortalDashboardPage() {
     );
   }
 
-  if (erro || !dashboard) {
+  if (!dashboard) {
     return <ErrorState message={erro ?? "Não foi possível carregar o painel."} />;
   }
 

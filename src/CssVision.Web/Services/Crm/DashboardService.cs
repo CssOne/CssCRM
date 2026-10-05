@@ -2,6 +2,7 @@ using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
 using Microsoft.EntityFrameworkCore;
+using CssVision.Web.Services.Notion;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace CssVision.Web.Services.Crm;
@@ -17,17 +18,21 @@ public sealed class DashboardService(
     /// <summary>Leads sem nenhum contato há mais de N dias entram no alerta de "parados".</summary>
     private const int DiasSemContatoAlerta = 5;
 
+    /// <summary>Só leads que chegaram nos últimos N dias entram em "parados": os antigos (anos, do Notion) não são alerta.</summary>
+    private const int DiasJanelaLeadsParados = 60;
+
     // Por usuário: as atividades do dia e a meta regional dependem de quem está vendo.
     public Task<DashboardDto> ObterAsync(DashboardFilterRequest filtro, CancellationToken ct) =>
         RespostaEmCache.ObterAsync(cache, eventos, "painel", new { usuario = currentUser.UserId, filtro }, () => CalcularAsync(filtro, ct));
 
     private async Task<DashboardDto> CalcularAsync(DashboardFilterRequest filtro, CancellationToken ct)
     {
-        var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
-        var inicioPeriodo = filtro.DataInicio ?? new DateOnly(hoje.Year, hoje.Month, 1);
+        // Mês e dia de hoje no horário de Brasília: o painel passa para o mês novo à meia-noite daqui.
+        var hoje = HorarioBrasilia.Hoje;
+        var inicioPeriodo = filtro.DataInicio ?? HorarioBrasilia.PrimeiroDiaDoMes(hoje);
         var fimPeriodo = filtro.DataFim ?? hoje;
-        var inicioUtc = inicioPeriodo.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var fimUtc = fimPeriodo.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+        var inicioUtc = HorarioBrasilia.Inicio(inicioPeriodo);
+        var fimUtc = HorarioBrasilia.Fim(fimPeriodo);
         var agora = DateTimeOffset.UtcNow;
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
@@ -49,11 +54,14 @@ public sealed class DashboardService(
         var atividadesQuery = db.CrmActivities.AsNoTracking().Where(a => !a.Arquivado);
         if (visiveis is not null) atividadesQuery = atividadesQuery.Where(a => visiveis.Contains(a.ResponsavelId));
 
-        var inicioHoje = hoje.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var fimHoje = hoje.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+        var inicioHoje = HorarioBrasilia.Inicio(hoje);
+        var fimHoje = HorarioBrasilia.Fim(hoje);
 
         var novosLeads = await leadsQuery.CountAsync(l => l.CriadoEm >= inicioUtc && l.CriadoEm <= fimUtc, ct);
-        var leadsSemContato = await leadsQuery.CountAsync(l => l.UltimoContatoEm == null, ct);
+        // "Sem contato" = leads do período que ainda não saíram de "Sem etapa" e são de um consultor ativo
+        // (antes contava todos os leads da base sem data de último contato: dezenas de milhares).
+        var leadsSemContato = await leadsQuery.CountAsync(l => l.EtapaId == null && l.CriadoEm >= inicioUtc && l.CriadoEm <= fimUtc
+            && l.Responsavel != null && l.Responsavel.Ativo, ct);
         var contatosHoje = await atividadesQuery.CountAsync(a =>
             a.Status == StatusAtividade.Pendente && a.DataHoraPrevista >= inicioHoje && a.DataHoraPrevista <= fimHoje, ct);
         var atividadesAtrasadas = await atividadesQuery.CountAsync(a => a.Status == StatusAtividade.Pendente && a.DataHoraPrevista < agora, ct);
@@ -71,7 +79,7 @@ public sealed class DashboardService(
         var qtdPerdidas = await perdidas.CountAsync(ct);
         var valorGanho = await ganhas.SumAsync(o => (decimal?)(o.ValorFinal ?? o.ValorEstimado), ct) ?? 0m;
         var valorAdesao = await ganhas.SumAsync(o => (decimal?)o.PagamentoAdesao, ct) ?? 0m;
-        var taxaConversao = (qtdGanhas + qtdPerdidas) == 0 ? 0m : Math.Round(100m * qtdGanhas / (qtdGanhas + qtdPerdidas), 1);
+        var taxaConversao = ContagensPorVendedor.TaxaConversaoLeads(qtdGanhas, novosLeads);
         var ticketMedio = qtdGanhas == 0 ? 0m : Math.Round(valorGanho / qtdGanhas, 2);
 
         var indicadores = new DashboardIndicadoresDto(
@@ -79,7 +87,7 @@ public sealed class DashboardService(
             oportunidadesAbertas, valorPipeline, taxaConversao, ticketMedio, valorGanho, qtdGanhas, valorAdesao);
 
         // Meta comercial do mês corrente para os vendedores visíveis.
-        var mesReferencia = new DateOnly(hoje.Year, hoje.Month, 1);
+        var mesReferencia = HorarioBrasilia.PrimeiroDiaDoMes(hoje);
         var metaQuery = db.CrmSalesGoals.AsNoTracking().Where(g => g.MesReferencia == mesReferencia);
         if (visiveis is not null) metaQuery = metaQuery.Where(g => visiveis.Contains(g.VendedorId));
         var metaValor = await metaQuery.SumAsync(g => (decimal?)g.MetaValor, ct) ?? 0m;
@@ -102,7 +110,7 @@ public sealed class DashboardService(
         metaQuantidade += await metaRegionalQuery.SumAsync(g => (int?)g.MetaQuantidadeVendas, ct) ?? 0;
 
         var ganhasDoMes = oportunidadesQuery.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho &&
-            o.DataEfetivaFechamento >= mesReferencia.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+            o.DataEfetivaFechamento >= HorarioBrasilia.Inicio(mesReferencia));
         var realizadoMes = await ganhasDoMes.SumAsync(o => (decimal?)(o.ValorFinal ?? o.ValorEstimado), ct) ?? 0m;
         var realizadoQuantidadeMes = await ganhasDoMes.CountAsync(ct);
         var meta = new MetaResultadoDto(
@@ -133,19 +141,22 @@ public sealed class DashboardService(
             .ToList();
 
         var desempenho = await ObterDesempenhoPorVendedorAsync(visiveis, inicioUtc, fimUtc, ct);
+        var funilLeads = await ObterFunilDeLeadsAsync(leadsQuery, inicioUtc, fimUtc, ct);
+        var resumoMensal = await ObterResumoMensalAsync(leadsQuery, oportunidadesQuery, hoje, ct);
 
         var atividadesDoDiaPagina = await activityService.ListarAsync(
             new ActivityFilterRequest { Visao = VisaoAtividade.Hoje, TamanhoPagina = 20 }, ct);
 
-        var leadsParados = await ObterLeadsParadosAsync(leadsQuery, agora, ct);
+        var (leadsParados, leadsParadosTotal) = await ObterLeadsParadosAsync(leadsQuery, agora, ct);
 
-        return new DashboardDto(indicadores, meta, funil, evolucao, origens, desempenho, atividadesDoDiaPagina.Itens, leadsParados);
+        return new DashboardDto(indicadores, meta, funil, evolucao, origens, desempenho, atividadesDoDiaPagina.Itens, leadsParados,
+            funilLeads, resumoMensal, leadsParadosTotal);
     }
 
     private static async Task<List<EvolucaoVendasDto>> ObterEvolucaoVendasAsync(IQueryable<CrmOpportunity> oportunidadesQuery, DateOnly hoje, CancellationToken ct)
     {
         var inicioJanela = new DateOnly(hoje.Year, hoje.Month, 1).AddMonths(-5);
-        var inicioJanelaUtc = inicioJanela.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var inicioJanelaUtc = HorarioBrasilia.Inicio(inicioJanela);
 
         var fechamentos = await oportunidadesQuery
             .Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho && o.DataEfetivaFechamento >= inicioJanelaUtc)
@@ -156,7 +167,7 @@ public sealed class DashboardService(
         for (var i = 5; i >= 0; i--)
         {
             var mes = new DateOnly(hoje.Year, hoje.Month, 1).AddMonths(-i);
-            var doMes = fechamentos.Where(f => f.DataEfetivaFechamento!.Value.Year == mes.Year && f.DataEfetivaFechamento.Value.Month == mes.Month).ToList();
+            var doMes = fechamentos.Where(f => HorarioBrasilia.Dia(f.DataEfetivaFechamento!.Value) is var dia && dia.Year == mes.Year && dia.Month == mes.Month).ToList();
             resultado.Add(new EvolucaoVendasDto(mes.ToString("MM/yyyy"), doMes.Sum(f => f.Valor), doMes.Count));
         }
 
@@ -169,7 +180,7 @@ public sealed class DashboardService(
         var vendedoresQuery = db.Users.AsNoTracking().AsQueryable();
         if (visiveis is not null) vendedoresQuery = vendedoresQuery.Where(u => visiveis.Contains(u.Id));
 
-        var vendedores = await vendedoresQuery.Select(u => new { u.Id, u.NomeCompleto }).ToListAsync(ct);
+        var vendedores = await vendedoresQuery.Select(u => new { u.Id, u.NomeCompleto, u.Ativo }).ToListAsync(ct);
 
         // Tudo agrupado por vendedor no banco — antes eram 7 consultas por vendedor (~560 por tela).
         var leadsQuery = db.CrmLeads.AsNoTracking().Where(l => !l.Arquivado);
@@ -179,38 +190,111 @@ public sealed class DashboardService(
             leadsQuery = leadsQuery.Where(l => l.ResponsavelId != null && visiveis.Contains(l.ResponsavelId.Value));
             oportunidades = oportunidades.Where(o => visiveis.Contains(o.ResponsavelId));
         }
-        var leads = await ContagensPorVendedor.ContarLeadsAsync(leadsQuery, ct);
+        // Leads e conversão do período: leads que chegaram para o vendedor no período e vendas fechadas nele.
+        var leads = await ContagensPorVendedor.ContarLeadsAsync(leadsQuery.Where(l => l.CriadoEm >= inicioUtc && l.CriadoEm <= fimUtc), ct);
         var abertas = await ContagensPorVendedor.AbertasAsync(oportunidades, ct);
         var fechadas = await ContagensPorVendedor.FechadasAsync(
             oportunidades.Where(o => o.DataEfetivaFechamento >= inicioUtc && o.DataEfetivaFechamento <= fimUtc), ct);
 
         return vendedores
+            // Sem a lista de dezenas de contas inativas zeradas: só quem é ativo, recebeu lead ou vendeu no período.
+            .Where(v => v.Ativo || leads.GetValueOrDefault(v.Id) > 0 || (fechadas.TryGetValue(v.Id, out var f) && f.Ganhas > 0))
             .Select(v =>
             {
                 abertas.TryGetValue(v.Id, out var aberta);
                 fechadas.TryGetValue(v.Id, out var fechada);
-                return new DesempenhoVendedorDto(v.Id, v.NomeCompleto, leads.GetValueOrDefault(v.Id), aberta.Quantidade, aberta.Valor,
-                    fechada?.Ganhas ?? 0, fechada?.ValorGanho ?? 0m, ContagensPorVendedor.TaxaConversao(fechada), fechada?.ValorAdesao ?? 0m);
+                var leadsDoVendedor = leads.GetValueOrDefault(v.Id);
+                return new DesempenhoVendedorDto(v.Id, v.NomeCompleto, leadsDoVendedor, aberta.Quantidade, aberta.Valor,
+                    fechada?.Ganhas ?? 0, fechada?.ValorGanho ?? 0m, ContagensPorVendedor.TaxaConversaoLeads(fechada?.Ganhas ?? 0, leadsDoVendedor),
+                    fechada?.ValorAdesao ?? 0m);
             })
-            .OrderByDescending(d => d.ValorGanho)
+            .OrderByDescending(d => d.ValorGanho).ThenByDescending(d => d.LeadsAtribuidos)
             .ToList();
     }
 
-    private static async Task<List<AlertaLeadParadoDto>> ObterLeadsParadosAsync(IQueryable<CrmLead> leadsQuery, DateTimeOffset agora, CancellationToken ct)
+    /// <summary>
+    /// Leads parados do tráfego pago (não os do Notion): em coluna aberta, de consultor ativo, que chegaram nos últimos 60 dias e não tiveram
+    /// contato, atualização nem troca de responsável há mais de 5 dias. Antes entrava qualquer lead sem
+    /// "último contato" — todo o histórico do Notion (leads de 2023 apareciam com 1.300 dias parados).
+    /// </summary>
+    private static async Task<(List<AlertaLeadParadoDto> Itens, int Total)> ObterLeadsParadosAsync(
+        IQueryable<CrmLead> leadsQuery, DateTimeOffset agora, CancellationToken ct)
     {
         var limite = agora.AddDays(-DiasSemContatoAlerta);
+        var janela = agora.AddDays(-DiasJanelaLeadsParados);
 
-        var parados = await leadsQuery
-            .Include(l => l.Responsavel)
+        var candidatos = leadsQuery
+            // Só leads que vieram dos anúncios (Meta Lead Ads e formulário do site): os cards do Notion são trabalhados lá.
+            .Where(OrigemLead.VeioDoTrafegoPago)
             .Where(l => l.Etapa == null || !l.Etapa.Fechada)
-            .Where(l => l.UltimoContatoEm == null ? l.CriadoEm < limite : l.UltimoContatoEm < limite)
-            .OrderBy(l => l.UltimoContatoEm ?? l.CriadoEm)
+            .Where(l => l.Responsavel != null && l.Responsavel.Ativo)
+            .Where(l => l.CriadoEm >= janela && l.CriadoEm < limite)
+            .Where(l => l.UltimoContatoEm == null || l.UltimoContatoEm < limite)
+            .Where(l => l.AtualizadoEm == null || l.AtualizadoEm < limite)
+            .Where(l => l.ResponsavelAtribuidoEm == null || l.ResponsavelAtribuidoEm < limite);
+
+        var total = await candidatos.CountAsync(ct);
+        var parados = await candidatos
+            .OrderBy(l => l.CriadoEm)
             .Take(15)
-            .Select(l => new { l.Id, l.NomeOuRazaoSocial, ResponsavelNome = l.Responsavel != null ? l.Responsavel.NomeCompleto : null, l.UltimoContatoEm, l.CriadoEm })
+            .Select(l => new
+            {
+                l.Id, l.NomeOuRazaoSocial, ResponsavelNome = l.Responsavel!.NomeCompleto,
+                EtapaNome = l.Etapa != null ? l.Etapa.Nome : null,
+                l.UltimoContatoEm, l.AtualizadoEm, l.ResponsavelAtribuidoEm, l.CriadoEm,
+            })
             .ToListAsync(ct);
 
-        return parados.Select(l => new AlertaLeadParadoDto(
-            l.Id, l.NomeOuRazaoSocial, l.ResponsavelNome,
-            (int)(agora - (l.UltimoContatoEm ?? l.CriadoEm)).TotalDays)).ToList();
+        var itens = parados.Select(l =>
+        {
+            var ultimoMovimento = new[] { l.UltimoContatoEm, l.AtualizadoEm, l.ResponsavelAtribuidoEm, l.CriadoEm }
+                .Where(d => d.HasValue).Max()!.Value;
+            return new AlertaLeadParadoDto(l.Id, l.NomeOuRazaoSocial, l.ResponsavelNome, (int)(agora - ultimoMovimento).TotalDays, l.EtapaNome ?? "Sem etapa");
+        }).ToList();
+        return (itens, total);
+    }
+
+    /// <summary>Resumo do quadro de leads: leads do período em cada coluna (etapa atual), na ordem do quadro.</summary>
+    private static async Task<List<EtapaLeadResumoDto>> ObterFunilDeLeadsAsync(
+        IQueryable<CrmLead> leadsQuery, DateTimeOffset inicioUtc, DateTimeOffset fimUtc, CancellationToken ct)
+    {
+        var grupos = await leadsQuery
+            .Where(l => l.CriadoEm >= inicioUtc && l.CriadoEm <= fimUtc)
+            .GroupBy(l => new { Nome = l.Etapa != null ? l.Etapa.Nome : null, Cor = l.Etapa != null ? l.Etapa.Cor : null, Ordem = l.Etapa != null ? l.Etapa.Ordem : -1 })
+            .Select(g => new { g.Key.Nome, g.Key.Cor, g.Key.Ordem, Quantidade = g.Count() })
+            .ToListAsync(ct);
+
+        return grupos.OrderBy(g => g.Ordem)
+            .Select(g => new EtapaLeadResumoDto(g.Nome ?? "Sem etapa", g.Cor, g.Quantidade))
+            .ToList();
+    }
+
+    /// <summary>Últimos 12 meses (horário de Brasília): leads que chegaram, perdidos, vendas, valor, adesão e conversão.</summary>
+    private static async Task<List<ResumoMensalDto>> ObterResumoMensalAsync(
+        IQueryable<CrmLead> leadsQuery, IQueryable<CrmOpportunity> oportunidadesQuery, DateOnly hoje, CancellationToken ct)
+    {
+        var primeiroMes = HorarioBrasilia.PrimeiroDiaDoMes(hoje).AddMonths(-11);
+        var inicioUtc = HorarioBrasilia.Inicio(primeiroMes);
+
+        var leads = await leadsQuery
+            .Where(l => l.CriadoEm >= inicioUtc)
+            .Select(l => new { l.CriadoEm, Perdido = l.Etapa != null && l.Etapa.Nome == NotionEtapaLead.Perdido })
+            .ToListAsync(ct);
+        var vendas = await oportunidadesQuery
+            .Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho && o.DataEfetivaFechamento >= inicioUtc)
+            .Select(o => new { Data = o.DataEfetivaFechamento!.Value, Valor = o.ValorFinal ?? o.ValorEstimado, Adesao = o.PagamentoAdesao })
+            .ToListAsync(ct);
+
+        var leadsPorMes = leads.ToLookup(l => HorarioBrasilia.PrimeiroDiaDoMes(HorarioBrasilia.Dia(l.CriadoEm)));
+        var vendasPorMes = vendas.ToLookup(v => HorarioBrasilia.PrimeiroDiaDoMes(HorarioBrasilia.Dia(v.Data)));
+
+        return Enumerable.Range(0, 12).Select(i =>
+        {
+            var mes = primeiroMes.AddMonths(i);
+            var l = leadsPorMes[mes].ToList();
+            var v = vendasPorMes[mes].ToList();
+            return new ResumoMensalDto(mes.ToString("MM/yyyy"), l.Count, l.Count(x => x.Perdido), v.Count,
+                v.Sum(x => x.Valor), v.Sum(x => x.Adesao ?? 0m), ContagensPorVendedor.TaxaConversaoLeads(v.Count, l.Count));
+        }).ToList();
     }
 }

@@ -8,6 +8,8 @@ import type { LeadStage, RelatorioComercial, VendedorResumo } from "../../lib/ty
 import { useTheme } from "../../context/ThemeContext";
 import { Card, ErrorState, Input, Pagination, Select, Skeleton } from "../../components/ui";
 import { MultiSelect } from "../../components/MultiSelect";
+import { useCrmEventos } from "../../lib/useCrmEventos";
+import { useMudancaDeDia } from "../../lib/useAoVivo";
 import { baseOptions, SemDados } from "../../components/crm/Charts";
 import { BarrasHorizontaisChart, DonutChart } from "../../components/marketing/GraficosTrafego";
 
@@ -124,6 +126,14 @@ export function RelatorioComercialPage() {
       .finally(() => { if (!controller.signal.aborted) setCarregando(false); });
     return () => controller.abort();
   }, [inicio, fim, consultorId, etapaIds, recarregar]);
+
+  // Tempo real (vendas, leads, sincronização); na virada do dia, o período que terminava "hoje" passa a
+  // terminar no dia novo — quem escolheu um período passado continua nele.
+  useCrmEventos(() => setRecarregar((n) => n + 1), 500);
+  useMudancaDeDia((hoje, anterior) => {
+    setFim((atual) => (atual === anterior ? hoje : atual));
+    setRecarregar((n) => n + 1);
+  });
 
   const paginaVendedores = usePaginacao(dados?.porVendedor, 10);
   const paginaOrigens = usePaginacao(dados?.porOrigem, 8);
