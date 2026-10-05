@@ -440,6 +440,11 @@ public sealed class NotionSyncService(
         var ativos = await db.Users.AsNoTracking().Where(u => u.Ativo).Select(u => new { u.Id, u.Email }).ToListAsync(ct);
         _idsAtivos = ativos.Select(u => u.Id).ToHashSet();
         _emailsAtivos = ativos.Where(u => u.Email != null).Select(u => u.Email!.Trim().ToLowerInvariant()).ToHashSet();
+        // E-mails antigos de contas unificadas valem como o da conta ativa que ficou.
+        foreach (var alias in await db.CrmUsuarioAliases.AsNoTracking().Where(a => _idsAtivos.Contains(a.UsuarioId)).Select(a => a.EmailNormalizado).ToListAsync(ct))
+        {
+            _emailsAtivos.Add(alias.ToLowerInvariant());
+        }
     }
 
     /// <summary>Chave do vendedor do card (e-mail minúsculo) — ver CrmLead.NotionVendedorEmail.</summary>
@@ -1016,6 +1021,16 @@ public sealed class NotionSyncService(
                 return existente.Id;
             }
 
+            // E-mail antigo de uma conta unificada: o card vai para a conta que ficou.
+            var aliasId = await db.CrmUsuarioAliases.AsNoTracking().Where(a => a.EmailNormalizado == email.ToUpperInvariant())
+                .Select(a => (Guid?)a.UsuarioId).FirstOrDefaultAsync(ct);
+            if (aliasId is { } viaAlias)
+            {
+                await VincularNotionIdAsync(await userManager.FindByIdAsync(viaAlias.ToString()), notionId);
+                _vendedorPorEmailCache[email] = viaAlias;
+                return viaAlias;
+            }
+
             var criado = await CriarLoginDoVendedorAsync(email, vendedor.Nome, notionId, regionalId, ct);
             if (criado is null) return placeholderVendedorId;
             _vendedorPorEmailCache[email] = criado.Value;
@@ -1057,9 +1072,9 @@ public sealed class NotionSyncService(
         return novo.Value;
     }
 
-    private async Task VincularNotionIdAsync(ApplicationUser usuario, string? notionId)
+    private async Task VincularNotionIdAsync(ApplicationUser? usuario, string? notionId)
     {
-        if (notionId is null || usuario.NotionUserId is not null) return;
+        if (usuario is null || notionId is null || usuario.NotionUserId is not null) return;
         usuario.NotionUserId = notionId;
         await userManager.UpdateAsync(usuario);
         _vendedorPorNotionIdCache[notionId] = usuario.Id;

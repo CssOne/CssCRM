@@ -123,4 +123,22 @@ public class NotionVendedorSemEmailTests
         Assert.All(await db.CrmLeads.ToListAsync(), l => Assert.Equal(placeholder.Id, l.ResponsavelId));
         Assert.DoesNotContain(await db.Users.ToListAsync(), u => u.NotionUserId == "bot-1");
     }
+
+    [Fact]
+    public async Task EmailAntigoDeContaUnificada_LigaOCardAContaQueFicou_SemCriarOutra()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, service, regional, ganho, placeholder, etapas) = await PrepararAsync(factory);
+        await using var _ = db;
+        var queFicou = await factory.CriarUsuarioAsync(db, "Carol Barcelos");
+        db.CrmUsuarioAliases.Add(new CrmUsuarioAlias { EmailNormalizado = "CAROLBARCELOSAGV@GMAIL.COM", UsuarioId = queFicou.Id });
+        await db.SaveChangesAsync();
+        var usuariosAntes = await db.Users.CountAsync();
+
+        await service.ProcessarPaginaAsync(Pagina("p1", "Cliente", "id-carol", "Carol Barcelos", email: "carolbarcelosagv@gmail.com"), regional, "MG132", etapas, ganho, placeholder.Id, false, CancellationToken.None);
+
+        Assert.Equal(queFicou.Id, (await db.CrmLeads.SingleAsync()).ResponsavelId);
+        Assert.Equal(usuariosAntes, await db.Users.CountAsync()); // nenhuma conta nova
+        Assert.Equal("id-carol", (await db.Users.SingleAsync(u => u.Id == queFicou.Id)).NotionUserId);
+    }
 }
