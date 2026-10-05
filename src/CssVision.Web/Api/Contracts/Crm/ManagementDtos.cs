@@ -12,7 +12,37 @@ public record VendedorResumoDto(
     bool Ativo = true,
     bool RecebeLeads = true,
     /// <summary>Leads de tráfego pago (Notion + sistema novo) que chegaram para o vendedor no mês.</summary>
-    int LeadsTrafegoNoMes = 0);
+    int LeadsTrafegoNoMes = 0,
+    /// <summary>Faixa de horário (Brasília, "HH:mm") em que recebe leads; nulo = o dia todo.</summary>
+    string? HorarioInicioLeads = null,
+    string? HorarioFimLeads = null,
+    /// <summary>Dias em que recebe leads (0 = domingo … 6 = sábado); nulo = todos.</summary>
+    int[]? DiasSemanaLeads = null,
+    /// <summary>Tipos de lead ("O que?") que o consultor recebe; nulo = qualquer tipo.</summary>
+    IReadOnlyList<string>? RecebeSomenteOQue = null);
+
+public record AtualizarTiposLeadRequest(IReadOnlyList<string>? OQue);
+
+/// <summary>Estado da distribuição automática: leads parados porque todos os consultores bateram o limite diário/mensal.</summary>
+public record AlertaDistribuicaoDto(
+    bool Bloqueada,
+    int LeadsSemResponsavel,
+    int LeadsBloqueadosPorLimite,
+    int Consultores,
+    int NoLimiteDiario,
+    int NoLimiteMensal,
+    /// <summary>Se um gestor mandou continuar a distribuição ignorando os limites, até quando (fim do dia, Brasília).</summary>
+    DateTimeOffset? ContinuarAteEm,
+    /// <summary>Leads sem responsável que ficam parados por limite e/ou horário (cada lead conta uma vez).</summary>
+    int LeadsBloqueados = 0,
+    /// <summary>Leads parados porque os consultores aptos estão fora do dia/horário de recebimento.</summary>
+    int LeadsBloqueadosPorHorario = 0,
+    /// <summary>Consultores ativos que recebem leads mas estão fora do dia/horário agora.</summary>
+    int ConsultoresForaDoHorario = 0);
+
+public record ContinuarDistribuicaoRequest(bool Continuar);
+
+public record AtualizarJanelaRecebimentoRequest(string? HorarioInicio, string? HorarioFim, int[]? DiasSemana);
 
 public record AtualizarLimiteMensalRequest(int? Limite);
 

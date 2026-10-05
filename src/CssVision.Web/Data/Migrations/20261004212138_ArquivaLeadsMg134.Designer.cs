@@ -3,6 +3,7 @@ using System;
 using CssVision.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CssVision.Web.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261004212138_ArquivaLeadsMg134")]
+    partial class ArquivaLeadsMg134
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -322,46 +325,6 @@ namespace CssVision.Web.Data.Migrations
                     b.HasIndex("CriadoEm");
 
                     b.ToTable("CrmBackups", (string)null);
-                });
-
-            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmControleMarketingMes", b =>
-                {
-                    b.Property<DateOnly>("Mes")
-                        .HasColumnType("date");
-
-                    b.Property<decimal>("Backlinks")
-                        .HasPrecision(14, 2)
-                        .HasColumnType("numeric(14,2)");
-
-                    b.Property<decimal>("FacebookAds")
-                        .HasPrecision(14, 2)
-                        .HasColumnType("numeric(14,2)");
-
-                    b.Property<decimal>("FaturamentoTotal")
-                        .HasPrecision(14, 2)
-                        .HasColumnType("numeric(14,2)");
-
-                    b.Property<decimal>("FerramentasMarketing")
-                        .HasPrecision(14, 2)
-                        .HasColumnType("numeric(14,2)");
-
-                    b.Property<decimal>("GoogleAds")
-                        .HasPrecision(14, 2)
-                        .HasColumnType("numeric(14,2)");
-
-                    b.Property<int>("LeadsGerados")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("MetaFaturamento")
-                        .HasPrecision(14, 2)
-                        .HasColumnType("numeric(14,2)");
-
-                    b.Property<int>("VendasQuantidade")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Mes");
-
-                    b.ToTable("CrmControleMarketingMeses", (string)null);
                 });
 
             modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmGrupo", b =>
@@ -1517,9 +1480,6 @@ namespace CssVision.Web.Data.Migrations
                     b.Property<DateTimeOffset>("CriadoEm")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int?>("DiasSemanaLeads")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
@@ -1535,12 +1495,6 @@ namespace CssVision.Web.Data.Migrations
 
                     b.Property<Guid?>("GrupoId")
                         .HasColumnType("uuid");
-
-                    b.Property<TimeOnly?>("HorarioFimLeads")
-                        .HasColumnType("time without time zone");
-
-                    b.Property<TimeOnly?>("HorarioInicioLeads")
-                        .HasColumnType("time without time zone");
 
                     b.Property<int?>("LimiteDiarioLeads")
                         .HasColumnType("integer");

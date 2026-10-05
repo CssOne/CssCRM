@@ -123,9 +123,9 @@ export function LeadForm({
   const [valores, setValores] = useState<LeadFormValues>(valoresIniciais ?? leadFormVazio);
   const [erros, setErros] = useState<Record<string, string>>({});
   const { temPapel } = useAuth();
-  const podeVerMarketing = temPapel("Admin", "GestorMaster", "GestorComercial");
+  const podeVerMarketing = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
   // Origem do lead é só para administradores (o servidor também não a envia nem a altera para os demais).
-  const podeVerOrigem = temPapel("Admin", "GestorMaster");
+  const podeVerOrigem = temPapel("Admin", "GestorMaster", "SupervisorComercial");
 
   function set<K extends keyof LeadFormValues>(campo: K, valor: LeadFormValues[K]) {
     setValores((v) => ({ ...v, [campo]: valor }));

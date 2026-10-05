@@ -39,4 +39,10 @@ public class CrmNotionSyncCheckpoint
     /// (antes a importação gravava a data da migração). Nulo = correção pendente.
     /// </summary>
     public DateTimeOffset? DataChegadaCorrigidaEm { get; set; }
+
+    /// <summary>
+    /// Quando os cards criados em 2025 (01/01/2025 até 31/12/2025) foram trazidos para o CRM.
+    /// Nulo = importação de 2025 pendente (roda uma vez por base).
+    /// </summary>
+    public DateTimeOffset? Importacao2025ConcluidaEm { get; set; }
 }

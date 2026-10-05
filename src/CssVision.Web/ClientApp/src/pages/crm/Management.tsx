@@ -5,6 +5,7 @@ import { api, isAbortError } from "../../lib/api";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { GestaoComercialResumo, RedistribuicaoHistorico, VendedorResumo } from "../../lib/types";
 import { Badge, Card, ErrorState, Skeleton, useToast, Pagination } from "../../components/ui";
+import { OPCOES_O_QUE } from "../../lib/opcoesLead";
 
 function LimiteInput({
   vendedor,
@@ -67,6 +68,153 @@ function LimiteInput({
           }}
         />
       </div>
+    </div>
+  );
+}
+
+const DIAS_SEMANA = ["D", "S", "T", "Q", "Q", "S", "S"];
+const NOMES_DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+
+/** Dias da semana e faixa de horário (Brasília) em que o consultor entra no rodízio de leads. */
+function JanelaRecebimento({ vendedor, onSalvo }: { vendedor: VendedorResumo; onSalvo: () => void }) {
+  const { notificar } = useToast();
+  const inicial = {
+    inicio: vendedor.horarioInicioLeads ?? "",
+    fim: vendedor.horarioFimLeads ?? "",
+    dias: vendedor.diasSemanaLeads ?? [0, 1, 2, 3, 4, 5, 6],
+  };
+  const [inicio, setInicio] = useState(inicial.inicio);
+  const [fim, setFim] = useState(inicial.fim);
+  const [dias, setDias] = useState<number[]>(inicial.dias);
+  const [salvando, setSalvando] = useState(false);
+
+  const alterado = inicio !== inicial.inicio || fim !== inicial.fim || dias.join() !== [...inicial.dias].sort().join();
+
+  async function salvar() {
+    if ((inicio === "") !== (fim === "")) {
+      notificar("error", "Informe o horário de início e o de fim, ou deixe os dois vazios.");
+      return;
+    }
+    if (dias.length === 0) {
+      notificar("error", "Escolha ao menos um dia da semana.");
+      return;
+    }
+    setSalvando(true);
+    try {
+      await api.put(`/crm/management/vendedores/${vendedor.id}/janela-recebimento`, {
+        horarioInicio: inicio || null,
+        horarioFim: fim || null,
+        diasSemana: dias,
+      });
+      notificar("success", "Dias e horário de recebimento atualizados.");
+      onSalvo();
+    } catch {
+      notificar("error", "Não foi possível atualizar o horário.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  function alternarDia(d: number) {
+    setDias((atual) => (atual.includes(d) ? atual.filter((x) => x !== d) : [...atual, d].sort()));
+  }
+
+  const campoHora =
+    "focus-ring h-7 w-[4.5rem] rounded-md border border-[var(--border)] bg-[var(--surface)] px-1 text-center text-xs text-[var(--fg)] disabled:opacity-50";
+  return (
+    <div className="space-y-1.5 border-t border-[var(--border)] pt-2 text-xs">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[var(--fg-muted)]" title="Horário de Brasília. Vazio = o dia todo">Horário</span>
+        <div className="flex items-center gap-1">
+          <input type="time" className={campoHora} aria-label="Início do horário de recebimento de leads" value={inicio} disabled={salvando} onChange={(e) => setInicio(e.target.value)} />
+          <span className="text-[var(--fg-muted)]">às</span>
+          <input type="time" className={campoHora} aria-label="Fim do horário de recebimento de leads" value={fim} disabled={salvando} onChange={(e) => setFim(e.target.value)} />
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[var(--fg-muted)]">Dias</span>
+        <div className="flex gap-0.5" role="group" aria-label="Dias da semana em que recebe leads">
+          {DIAS_SEMANA.map((rotulo, d) => {
+            const ligado = dias.includes(d);
+            return (
+              <button
+                key={d}
+                type="button"
+                aria-pressed={ligado}
+                title={NOMES_DIAS[d]}
+                disabled={salvando}
+                onClick={() => alternarDia(d)}
+                className={`focus-ring size-6 cursor-pointer rounded-md text-[11px] font-semibold transition-colors disabled:opacity-50 ${
+                  ligado ? "bg-[var(--brand)] text-white" : "border border-[var(--border)] text-[var(--fg-muted)]"
+                }`}
+              >
+                {rotulo}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {alterado && (
+        <div className="flex justify-end gap-2">
+          <button type="button" className="focus-ring cursor-pointer text-[var(--fg-muted)] hover:underline" disabled={salvando}
+            onClick={() => { setInicio(inicial.inicio); setFim(inicial.fim); setDias(inicial.dias); }}>
+            Descartar
+          </button>
+          <button type="button" className="focus-ring cursor-pointer font-semibold text-[var(--brand)] hover:underline disabled:opacity-50" disabled={salvando} onClick={salvar}>
+            Salvar horário
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Tipos de lead ("O que?") que o consultor recebe — o mesmo campo de Usuários > Editar. Nenhum marcado = qualquer tipo. */
+function TiposLeadSelect({ vendedor, onSalvo }: { vendedor: VendedorResumo; onSalvo: () => void }) {
+  const { notificar } = useToast();
+  const [tipos, setTipos] = useState<string[]>(vendedor.recebeSomenteOQue ?? []);
+  const [salvando, setSalvando] = useState(false);
+
+  async function alternar(tipo: string) {
+    const novos = tipos.includes(tipo) ? tipos.filter((t) => t !== tipo) : [...tipos, tipo];
+    const anteriores = tipos;
+    setTipos(novos);
+    setSalvando(true);
+    try {
+      await api.put(`/crm/management/vendedores/${vendedor.id}/tipos-lead`, { oQue: novos });
+      notificar("success", novos.length === 0 ? `${vendedor.nome} recebe qualquer tipo de lead.` : `${vendedor.nome} recebe só: ${novos.join(", ")}.`);
+      onSalvo();
+    } catch {
+      setTipos(anteriores);
+      notificar("error", "Não foi possível atualizar os tipos de lead.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="space-y-1 border-t border-[var(--border)] pt-2 text-xs">
+      <span className="text-[var(--fg-muted)]" title="Nenhum marcado = recebe qualquer tipo de lead">Recebe somente leads de</span>
+      <div className="flex flex-wrap gap-1" role="group" aria-label="Tipos de lead que o consultor recebe">
+        {OPCOES_O_QUE.map((tipo) => {
+          const ligado = tipos.includes(tipo);
+          return (
+            <button
+              key={tipo}
+              type="button"
+              aria-pressed={ligado}
+              disabled={salvando}
+              onClick={() => alternar(tipo)}
+              className={`focus-ring cursor-pointer rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors disabled:opacity-50 ${
+                ligado ? "bg-[var(--brand)] text-white" : "border border-[var(--border)] text-[var(--fg-muted)]"
+              }`}
+            >
+              {tipo}
+            </button>
+          );
+        })}
+      </div>
+      {tipos.length === 0 && <p className="text-[var(--fg-muted)]">Todos os tipos</p>}
     </div>
   );
 }
@@ -237,6 +385,8 @@ export function ManagementPage() {
                   <LimiteInput tipo="mensal" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
                   <LimiteInput tipo="diario" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
                 </div>
+                <TiposLeadSelect key={`${v.id}-${v.recebeSomenteOQue?.join("|")}`} vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
+                <JanelaRecebimento key={`${v.id}-${v.horarioInicioLeads}-${v.horarioFimLeads}-${v.diasSemanaLeads?.join("")}`} vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
                 <RecebeLeadsSwitch vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
               </div>
             ))}

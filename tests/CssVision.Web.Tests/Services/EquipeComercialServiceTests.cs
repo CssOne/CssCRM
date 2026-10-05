@@ -8,7 +8,7 @@ namespace CssVision.Web.Tests.Services;
 public class EquipeComercialServiceTests
 {
     [Fact]
-    public async Task ObterVendedoresVisiveisAsync_GestorComercial_DeveIncluirEquipeDaMesmaRegional()
+    public async Task ObterVendedoresVisiveisAsync_GestorRegional_VeSomenteASuaRegional()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
@@ -23,7 +23,7 @@ public class EquipeComercialServiceTests
         consultorMesmaRegional.RegionalId = regional.Id;
 
         var consultorReporteDireto = await factory.CriarUsuarioAsync(db, "ConsultorReporte", gestorId: gestor.Id);
-        consultorReporteDireto.RegionalId = outraRegional.Id; // regional diferente, mas reporta direto à gestora
+        consultorReporteDireto.RegionalId = outraRegional.Id; // regional diferente: o gestor regional não a enxerga, mesmo reportando a ele
 
         var consultorOutraRegional = await factory.CriarUsuarioAsync(db, "ConsultorFora");
         consultorOutraRegional.RegionalId = outraRegional.Id;
@@ -38,8 +38,37 @@ public class EquipeComercialServiceTests
         Assert.NotNull(visiveis);
         Assert.Contains(gestor.Id, visiveis);
         Assert.Contains(consultorMesmaRegional.Id, visiveis); // mesma regional
-        Assert.Contains(consultorReporteDireto.Id, visiveis); // reporte direto, regional diferente
-        Assert.DoesNotContain(consultorOutraRegional.Id, visiveis); // nem regional nem reporte
+        Assert.DoesNotContain(consultorReporteDireto.Id, visiveis); // só a regional vale
+        Assert.DoesNotContain(consultorOutraRegional.Id, visiveis);
+    }
+
+    [Fact]
+    public async Task ObterVendedoresVisiveisAsync_GestorRegionalDeRegionalNova_VeSoQuemEDelaEGestorSemRegionalVeOsReportes()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var mg134 = await factory.CriarRegionalAsync(db, "MG134");
+        var nova = await factory.CriarRegionalAsync(db, "Regional Nova");
+
+        var gestorMg134 = await factory.CriarUsuarioAsync(db, "Gestor MG134");
+        gestorMg134.RegionalId = mg134.Id;
+        var consultorMg134 = await factory.CriarUsuarioAsync(db, "Consultor MG134");
+        consultorMg134.RegionalId = mg134.Id;
+        var consultorNova = await factory.CriarUsuarioAsync(db, "Consultor Nova");
+        consultorNova.RegionalId = nova.Id;
+
+        var gestorSemRegional = await factory.CriarUsuarioAsync(db, "Gestor antigo");
+        var reporte = await factory.CriarUsuarioAsync(db, "Reporte", gestorId: gestorSemRegional.Id);
+        await db.SaveChangesAsync();
+
+        var daMg134 = await new EquipeComercialService(db, TestDbContextFactory.MockCurrentUser(gestorMg134.Id, gestorComercial: true).Object)
+            .ObterVendedoresVisiveisAsync(CancellationToken.None);
+        Assert.Equal(new[] { gestorMg134.Id, consultorMg134.Id }.Order(), daMg134!.Order());
+
+        var antigo = await new EquipeComercialService(db, TestDbContextFactory.MockCurrentUser(gestorSemRegional.Id, gestorComercial: true).Object)
+            .ObterVendedoresVisiveisAsync(CancellationToken.None);
+        Assert.Contains(reporte.Id, antigo!);
+        Assert.DoesNotContain(consultorMg134.Id, antigo!);
     }
 
     [Fact]

@@ -7,7 +7,8 @@ import { Button, Checkbox, FieldError, Input, Label, Select } from "../ui";
 const PAPEL_LABEL: Record<string, string> = {
   Admin: "Administrador",
   GestorMaster: "Gestor master",
-  GestorComercial: "Gestor comercial",
+  GestorComercial: "Gestor regional",
+  SupervisorComercial: "Supervisor comercial",
   Comercial: "Consultor comercial",
   Marketing: "Marketing",
 };
@@ -100,6 +101,8 @@ export function paraAtualizarRequest(v: UserFormValues): UserUpdateRequest {
 export function UserForm({
   modoEdicao,
   podeGerenciarTudo,
+  regionalFixaId,
+  papeisPermitidos,
   valoresIniciais,
   salvando,
   onSubmit,
@@ -107,12 +110,18 @@ export function UserForm({
 }: {
   modoEdicao: boolean;
   podeGerenciarTudo: boolean;
+  /** Supervisor comercial: cadastra só na própria regional (o backend força), então a regional não é escolhida na tela. */
+  regionalFixaId?: string;
+  /** Papéis que podem ser escolhidos quando quem cadastra não gerencia todas as regionais (Supervisor: consultor e gestor regional). */
+  papeisPermitidos?: string[];
   valoresIniciais?: UserFormValues;
   salvando: boolean;
   onSubmit: (valores: UserFormValues) => void;
   onCancel: () => void;
 }) {
-  const [valores, setValores] = useState<UserFormValues>(valoresIniciais ?? valoresVazios(podeGerenciarTudo ? undefined : "Comercial"));
+  const [valores, setValores] = useState<UserFormValues>(
+    valoresIniciais ?? { ...valoresVazios(podeGerenciarTudo ? undefined : "Comercial"), regionalId: regionalFixaId ?? "" }
+  );
   const [erros, setErros] = useState<Record<string, string>>({});
   const [regionais, setRegionais] = useState<Regional[]>([]);
   const [gestores, setGestores] = useState<UserSummary[]>([]);
@@ -127,17 +136,18 @@ export function UserForm({
   }, [podeGerenciarTudo]);
 
   useEffect(() => {
-    if (podeGerenciarTudo) {
-      if (!valores.regionalId) {
+    if (podeGerenciarTudo || regionalFixaId) {
+      const regional = podeGerenciarTudo ? valores.regionalId : regionalFixaId;
+      if (!regional) {
         setGrupos([]);
         return;
       }
-      api.get<Grupo[]>(`/crm/settings/groups?regionalId=${valores.regionalId}`).then((lista) => setGrupos(lista.filter((g) => g.ativo)));
+      api.get<Grupo[]>(`/crm/settings/groups?regionalId=${regional}`).then((lista) => setGrupos(lista.filter((g) => g.ativo)));
     } else {
       api.get<Grupo[]>("/crm/settings/groups").then((lista) => setGrupos(lista.filter((g) => g.ativo)));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [podeGerenciarTudo, valores.regionalId]);
+  }, [podeGerenciarTudo, regionalFixaId, valores.regionalId]);
 
   function set<K extends keyof UserFormValues>(campo: K, valor: UserFormValues[K]) {
     setValores((v) => ({ ...v, [campo]: valor }));
@@ -201,11 +211,13 @@ export function UserForm({
           </div>
         )}
 
-        {podeGerenciarTudo ? (
+        {podeGerenciarTudo || papeisPermitidos ? (
           <div>
             <Label htmlFor="user-papel">Papel</Label>
             <Select id="user-papel" value={valores.papel} onChange={(e) => set("papel", e.target.value)}>
-              {Object.entries(PAPEL_LABEL).map(([valor, rotulo]) => (
+              {Object.entries(PAPEL_LABEL)
+                .filter(([valor]) => podeGerenciarTudo || papeisPermitidos?.includes(valor))
+                .map(([valor, rotulo]) => (
                 <option key={valor} value={valor}>
                   {rotulo}
                 </option>
@@ -238,7 +250,7 @@ export function UserForm({
 
         {podeGerenciarTudo && valores.papel === "Comercial" && (
           <div>
-            <Label htmlFor="user-gestor">Gestor comercial responsável</Label>
+            <Label htmlFor="user-gestor">Gestor regional responsável</Label>
             <Select id="user-gestor" value={valores.gestorComercialId} onChange={(e) => set("gestorComercialId", e.target.value)}>
               <option value="">Nenhum</option>
               {gestores.map((g) => (

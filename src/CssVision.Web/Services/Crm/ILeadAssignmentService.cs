@@ -30,6 +30,18 @@ public interface ILeadAssignmentService
     /// </summary>
     Task<int> DistribuirPendentesAsync(CancellationToken ct);
 
+    /// <summary>
+    /// Leads do tráfego pago parados sem responsável, quantos deles só estão parados porque todos os
+    /// consultores aptos bateram o limite diário/mensal, e se um gestor mandou ignorar os limites.
+    /// </summary>
+    Task<AlertaDistribuicaoDto> ObterEstadoDistribuicaoAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Gestor decide continuar a distribuição automática mesmo com os limites atingidos (vale até o fim
+    /// do dia, horário de Brasília) ou volta a respeitá-los.
+    /// </summary>
+    Task DefinirContinuarAposLimiteAsync(bool continuar, CancellationToken ct);
+
     /// <summary>Leads que passaram a ser do usuário depois de <paramref name="desde"/> (notificação de novo lead).</summary>
     Task<NovosLeadsDto> NovosLeadsAsync(Guid usuarioId, DateTimeOffset? desde, CancellationToken ct);
 }

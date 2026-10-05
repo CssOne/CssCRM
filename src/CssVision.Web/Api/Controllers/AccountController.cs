@@ -350,7 +350,7 @@ public class AccountController(
     private async Task<ProfileDto> MontarPerfilAsync(ApplicationUser usuario)
     {
         var papeis = await userManager.GetRolesAsync(usuario);
-        var podeExcluir = papeis.Contains(Roles.Admin) || papeis.Contains(Roles.GestorMaster);
+        var podeExcluir = Roles.VisaoTotal.Any(papeis.Contains);
         return new ProfileDto(
             usuario.Id, usuario.NomeCompleto, usuario.Email!, usuario.PhoneNumber, usuario.FotoUrl,
             usuario.TwoFactorEnabled, papeis.ToList(), podeExcluir);
@@ -391,9 +391,10 @@ public class AccountController(
         menu.Add(new MenuItemDto("crm-agenda", "Agenda", "calendar-days", "/app/crm/agenda"));
         menu.Add(new MenuItemDto("crm-goals", "Metas", "target", "/app/crm/goals"));
 
-        if (papeis.Contains(Roles.Admin) || papeis.Contains(Roles.GestorMaster) || papeis.Contains(Roles.GestorComercial))
+        if (Roles.GestaoComercial.Any(papeis.Contains))
         {
             menu.Add(new MenuItemDto("crm-management", "Gestão comercial", "users-round", "/app/crm/gestao"));
+            menu.Add(new MenuItemDto("crm-relatorio", "Relatório comercial", "chart-column", "/app/crm/relatorio-comercial"));
             menu.Add(new MenuItemDto("crm-consultores", "Consultores", "id-card", "/app/crm/consultores"));
             menu.Add(new MenuItemDto("crm-users", "Usuários", "user-cog", "/app/crm/usuarios"));
         }
@@ -403,7 +404,8 @@ public class AccountController(
             menu.Add(new MenuItemDto("marketing", "Tráfego pago", "megaphone", "/app/marketing"));
         }
 
-        if (papeis.Contains(Roles.Admin))
+        // Backups: Admin e Supervisor comercial (que vê o mesmo que o Admin, menos o tráfego pago).
+        if (papeis.Contains(Roles.Admin) || papeis.Contains(Roles.SupervisorComercial))
         {
             menu.Add(new MenuItemDto("admin-backups", "Backups", "database", "/app/admin/backups"));
         }

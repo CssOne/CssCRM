@@ -12,7 +12,7 @@ namespace CssVision.Web.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/admin/backups")]
-[Authorize(Roles = Roles.Admin)]
+[Authorize(Roles = Roles.Admin + "," + Roles.SupervisorComercial)]
 public class BackupsController(IBackupService backups) : ControllerBase
 {
     [HttpGet]

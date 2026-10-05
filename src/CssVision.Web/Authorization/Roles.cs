@@ -11,23 +11,26 @@ public static class Roles
     public const string GestorComercial = "GestorComercial";
     public const string Comercial = "Comercial";
 
+    /// <summary>Supervisor comercial: vê e faz o mesmo que o administrador, exceto o tráfego pago (AreaMarketing).</summary>
+    public const string SupervisorComercial = "SupervisorComercial";
+
     /// <summary>Acompanhamento de tráfego pago (leads, origem, campanhas) — não tem acesso ao resto do CRM.</summary>
     public const string Marketing = "Marketing";
 
-    public static readonly string[] All = [Admin, GestorMaster, GestorComercial, Comercial, Marketing];
+    public static readonly string[] All = [Admin, GestorMaster, GestorComercial, Comercial, Marketing, SupervisorComercial];
 
     /// <summary>Perfis com acesso à página de tráfego pago.</summary>
     public static readonly string[] AreaMarketing = [Admin, Marketing];
 
     /// <summary>Perfis com acesso à área administrativa (dashboards, importações, auditoria etc.).</summary>
-    public static readonly string[] Administrativos = [Admin, GestorMaster];
+    public static readonly string[] Administrativos = [Admin, GestorMaster, SupervisorComercial];
 
     /// <summary>Perfis com acesso ao CRM.</summary>
-    public static readonly string[] Comerciais = [Admin, GestorMaster, GestorComercial, Comercial];
+    public static readonly string[] Comerciais = [Admin, GestorMaster, SupervisorComercial, GestorComercial, Comercial];
 
     /// <summary>Perfis que enxergam toda a base (sem restrição por carteira/equipe).</summary>
-    public static readonly string[] VisaoTotal = [Admin, GestorMaster];
+    public static readonly string[] VisaoTotal = [Admin, GestorMaster, SupervisorComercial];
 
     /// <summary>Perfis que gerenciam equipe comercial (distribuição, metas, configurações do funil).</summary>
-    public static readonly string[] GestaoComercial = [Admin, GestorMaster, GestorComercial];
+    public static readonly string[] GestaoComercial = [Admin, GestorMaster, SupervisorComercial, GestorComercial];
 }

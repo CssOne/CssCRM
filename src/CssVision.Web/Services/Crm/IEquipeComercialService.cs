@@ -4,10 +4,11 @@ using Microsoft.EntityFrameworkCore;
 namespace CssVision.Web.Services.Crm;
 
 /// <summary>
-/// Resolve quais vendedores o usuário atual pode enxergar: Admin/GestorMaster veem tudo,
-/// GestorComercial vê a própria equipe (vendedores com GestorComercialId apontando para ele) mais
-/// todo mundo da mesma regional (RegionalId), Comercial vê apenas a si mesmo. Usado por todos os
-/// serviços que aplicam escopo de carteira/equipe.
+/// Resolve quais vendedores o usuário atual pode enxergar: Admin/GestorMaster/SupervisorComercial veem
+/// tudo, o Gestor regional (GestorComercial) vê somente a própria regional (RegionalId) — vale também
+/// para regionais criadas depois —, Comercial vê apenas a si mesmo. Gestor sem regional (cadastro
+/// antigo) cai na equipe que reporta diretamente a ele. Usado por todos os serviços que aplicam
+/// escopo de carteira/equipe.
 /// </summary>
 public interface IEquipeComercialService
 {
@@ -32,7 +33,7 @@ public sealed class EquipeComercialService(ApplicationDbContext db, ICurrentUser
                 .FirstOrDefaultAsync(ct);
 
             var equipe = await db.Users.AsNoTracking()
-                .Where(u => u.GestorComercialId == currentUser.UserId || (regionalId != null && u.RegionalId == regionalId))
+                .Where(u => regionalId != null ? u.RegionalId == regionalId : u.GestorComercialId == currentUser.UserId)
                 .Select(u => u.Id)
                 .ToListAsync(ct);
 

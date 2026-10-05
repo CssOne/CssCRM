@@ -50,7 +50,10 @@ function MembroAvatar({ nome, fotoUrl }: { nome: string; fotoUrl?: string | null
 
 export function UsersPage() {
   const { temPapel } = useAuth();
+  // Admin e Gestor master gerenciam usuários de todas as regionais; o Supervisor comercial tem as demais
+  // funções do administrador, mas cadastra e edita usuários só da própria regional (como o Gestor regional).
   const podeGerenciarTudo = temPapel("Admin", "GestorMaster");
+  const ehSupervisor = !podeGerenciarTudo && temPapel("SupervisorComercial");
   const { notificar } = useToast();
 
   const [aba, setAba] = useState("usuarios");
@@ -61,7 +64,7 @@ export function UsersPage() {
         <h1 className="text-xl font-semibold text-[var(--fg)]">Usuários</h1>
         <p className="text-sm text-[var(--fg-muted)]">
           {podeGerenciarTudo
-            ? "Cadastre consultores, gestores comerciais e administradores."
+            ? "Cadastre consultores, gestores regionais, supervisores e administradores."
             : "Cadastre e gerencie os consultores da sua regional."}
         </p>
       </div>
@@ -69,24 +72,43 @@ export function UsersPage() {
       <Tabs
         tabs={[
           { chave: "usuarios", rotulo: "Usuários" },
-          podeGerenciarTudo ? { chave: "regionais", rotulo: "Regionais" } : { chave: "grupos", rotulo: "Grupos" },
+          podeGerenciarTudo || ehSupervisor ? { chave: "regionais", rotulo: "Regionais" } : { chave: "grupos", rotulo: "Grupos" },
         ]}
         ativa={aba}
         onChange={setAba}
       />
 
-      {aba === "usuarios" && <UsuariosTab podeGerenciarTudo={podeGerenciarTudo} notificar={notificar} />}
-      {aba === "grupos" && !podeGerenciarTudo && <GruposDeRegional regionalId={null} notificar={notificar} />}
-      {aba === "regionais" && podeGerenciarTudo && <RegionaisTab notificar={notificar} />}
+      {aba === "usuarios" && <UsuariosTab podeGerenciarTudo={podeGerenciarTudo} ehSupervisor={ehSupervisor} notificar={notificar} />}
+      {aba === "grupos" && !podeGerenciarTudo && !ehSupervisor && <GruposDeRegional regionalId={null} notificar={notificar} />}
+      {aba === "regionais" && (podeGerenciarTudo || ehSupervisor) && <RegionaisTab notificar={notificar} />}
     </div>
   );
 }
 
-function UsuariosTab({ podeGerenciarTudo, notificar }: { podeGerenciarTudo: boolean; notificar: (t: "success" | "error", m: string) => void }) {
+function UsuariosTab({
+  podeGerenciarTudo,
+  ehSupervisor,
+  notificar,
+}: {
+  podeGerenciarTudo: boolean;
+  ehSupervisor: boolean;
+  notificar: (t: "success" | "error", m: string) => void;
+}) {
   const { sessao } = useAuth();
+  // Regional do Supervisor: o cadastro de usuários dele fica restrito a ela.
+  const [regionalDoSupervisor, setRegionalDoSupervisor] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!ehSupervisor || !sessao) return;
+    api
+      .get<UserSummary>(`/crm/users/${sessao.id}`)
+      .then((u) => setRegionalDoSupervisor(u.regionalId ?? undefined))
+      .catch(() => setRegionalDoSupervisor(undefined));
+  }, [ehSupervisor, sessao]);
+  const papeisDoSupervisor = ehSupervisor ? ["Comercial", "GestorComercial"] : undefined;
   const [busca, setBusca] = useState("");
   const [papel, setPapel] = useState("");
   const [regionalId, setRegionalId] = useState("");
+  const [ativo, setAtivo] = useState("");
   const [pagina, setPagina] = useState(1);
 
   const [regionais, setRegionais] = useState<Regional[]>([]);
@@ -112,14 +134,14 @@ function UsuariosTab({ podeGerenciarTudo, notificar }: { podeGerenciarTudo: bool
       setCarregando(true);
       setErro(null);
       api
-        .get<PagedResult<UserSummary>>(`/crm/users${toQueryString({ busca, papel, regionalId, pagina, tamanhoPagina: 20 })}`, signal)
+        .get<PagedResult<UserSummary>>(`/crm/users${toQueryString({ busca, papel, regionalId, ativo, pagina, tamanhoPagina: 20 })}`, signal)
         .then(setDados)
         .catch((e) => {
           if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar os usuários.");
         })
         .finally(() => { if (!signal?.aborted) setCarregando(false); });
     },
-    [busca, papel, regionalId, pagina]
+    [busca, papel, regionalId, ativo, pagina]
   );
 
   useEffect(() => {
@@ -195,6 +217,14 @@ function UsuariosTab({ podeGerenciarTudo, notificar }: { podeGerenciarTudo: bool
             <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Buscar</label>
             <Input placeholder="Nome ou e-mail" value={busca} onChange={(e) => { setBusca(e.target.value); setPagina(1); }} />
           </div>
+          <div className="w-40">
+            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Situação</label>
+            <Select value={ativo} onChange={(e) => { setAtivo(e.target.value); setPagina(1); }} aria-label="Situação do usuário">
+              <option value="">Todos</option>
+              <option value="true">Ativos</option>
+              <option value="false">Inativos</option>
+            </Select>
+          </div>
           {podeGerenciarTudo && (
             <>
               <div className="w-44">
@@ -267,7 +297,7 @@ function UsuariosTab({ podeGerenciarTudo, notificar }: { podeGerenciarTudo: bool
                   <Button size="sm" variant="secondary" onClick={() => setUsuarioEditando(usuario)}>
                     <Pencil className="size-4" /> Editar
                   </Button>
-                  {podeGerenciarTudo && usuario.id !== sessao?.id && (
+                  {(podeGerenciarTudo || ehSupervisor) && usuario.id !== sessao?.id && (
                     <Button size="sm" variant="danger" onClick={() => setUsuarioExcluindo(usuario)}>
                       <Trash2 className="size-4" /> Excluir
                     </Button>
@@ -281,7 +311,21 @@ function UsuariosTab({ podeGerenciarTudo, notificar }: { podeGerenciarTudo: bool
       )}
 
       <Modal open={modalNovo} onClose={() => setModalNovo(false)} title="Novo usuário" size="lg">
-        <UserForm modoEdicao={false} podeGerenciarTudo={podeGerenciarTudo} salvando={salvando} onSubmit={criarUsuario} onCancel={() => setModalNovo(false)} />
+        {ehSupervisor && !regionalDoSupervisor ? (
+          <p className="text-sm text-[var(--fg-muted)]">
+            Sua conta ainda não está vinculada a uma regional — peça a um administrador para configurá-la antes de cadastrar usuários.
+          </p>
+        ) : (
+          <UserForm
+            modoEdicao={false}
+            podeGerenciarTudo={podeGerenciarTudo}
+            regionalFixaId={regionalDoSupervisor}
+            papeisPermitidos={papeisDoSupervisor}
+            salvando={salvando}
+            onSubmit={criarUsuario}
+            onCancel={() => setModalNovo(false)}
+          />
+        )}
       </Modal>
 
       <Modal open={!!usuarioEditando} onClose={() => setUsuarioEditando(null)} title="Editar usuário" size="lg">
@@ -289,6 +333,8 @@ function UsuariosTab({ podeGerenciarTudo, notificar }: { podeGerenciarTudo: bool
           <UserForm
             modoEdicao
             podeGerenciarTudo={podeGerenciarTudo}
+            regionalFixaId={regionalDoSupervisor}
+            papeisPermitidos={papeisDoSupervisor}
             valoresIniciais={paraFormValues(usuarioEditando)}
             salvando={salvando}
             onSubmit={salvarEdicao}

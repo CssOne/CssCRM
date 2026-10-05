@@ -25,18 +25,26 @@ public sealed class NotionSyncService(
 
     /// <summary>Ids dos usuários ativos no CRM (carregados junto com _emailsAtivos).</summary>
     private HashSet<Guid>? _idsAtivos;
-    private static readonly (string DataSourceId, string RegionalName)[] DataSources =
+    /// <summary>
+    /// Regional e grupo onde os leads de cada base entram. "Base" é o nome da base no Notion — usado no
+    /// "Vendedor não identificado" e nos relatórios. A CSS Growth Sales é um grupo da regional MG132.
+    /// </summary>
+    private static readonly (string DataSourceId, string RegionalName, string? Grupo, string Base)[] DataSources =
     [
-        ("0f91c248-497e-4369-aad9-1d4266a49db4", "MG132"),
-        ("1a163799-99a8-81e2-82be-000bb2817da0", "MG134"),
-        ("31763799-99a8-8118-b573-000b24781bfe", "MG134 Consultores Externos"),
-        ("31763799-99a8-81b2-b83b-000bfca82506", "CSS Growth Sales"),
+        ("0f91c248-497e-4369-aad9-1d4266a49db4", "MG132", null, "MG132"),
+        // MG134 (1a163799-99a8-81e2-82be-000bb2817da0) saiu da sincronização a pedido (04/10/2026): os
+        // leads dela foram arquivados (migration ArquivaLeadsMg134) e novos cards não entram mais.
+        ("31763799-99a8-8118-b573-000b24781bfe", "MG134 Consultores Externos", null, "MG134 Consultores Externos"),
+        ("31763799-99a8-81b2-b83b-000bfca82506", "MG132", "CSS Growth Sales", "CSS Growth Sales"),
     ];
 
     /// <summary>A partir desta data (Data de chegada do card no Notion), a sincronização periódica
     /// passa a importar/atualizar leads — cards mais antigos deixam de entrar no CRM mesmo que
     /// alguém ainda os edite no Notion.</summary>
-    private static readonly DateOnly DataMinimaImportacao = new(2026, 1, 1);
+    private static readonly DateOnly DataMinimaImportacao = new(2025, 1, 1);
+
+    /// <summary>Fim (exclusivo) da importação única de 2025: de 2026 em diante os cards já entravam.</summary>
+    private static readonly DateOnly FimImportacao2025 = new(2026, 1, 1);
 
     /// <summary>Início da reimportação dos cards dos consultores ativos (antes disso as bases não têm cards).</summary>
     private static readonly DateOnly InicioHistoricoNotion = new(2018, 1, 1);
@@ -59,13 +67,13 @@ public sealed class NotionSyncService(
         var relatorios = new List<string>();
         // Primeiro o incremental de todas as bases (cards novos/editados não esperam as passadas
         // longas); depois, a reimportação dos consultores ativos e a importação das vendas pendentes.
-        foreach (var passada in new[] { Passada.Normal, Passada.ReimportacaoAtivos, Passada.ImportacaoVendas, Passada.CorrecaoDataChegada })
+        foreach (var passada in new[] { Passada.Normal, Passada.ReimportacaoAtivos, Passada.ImportacaoVendas, Passada.Importacao2025, Passada.CorrecaoDataChegada })
         {
             foreach (var spec in DataSources)
             {
                 try
                 {
-                    if (await SincronizarDataSourceAsync(notion, spec.DataSourceId, spec.RegionalName, passada, ct) is { } relatorio)
+                    if (await SincronizarDataSourceAsync(notion, spec.DataSourceId, spec.RegionalName, spec.Grupo, spec.Base, passada, ct) is { } relatorio)
                     {
                         relatorios.Add(relatorio);
                     }
@@ -73,20 +81,30 @@ public sealed class NotionSyncService(
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "Falha sincronizando data source {DataSourceId} ({Regional})", spec.DataSourceId, spec.RegionalName);
-                    relatorios.Add($"{spec.RegionalName}: FALHOU ({ex.Message})");
+                    relatorios.Add($"{spec.Base}: FALHOU ({ex.Message})");
                 }
             }
+        }
+
+        try
+        {
+            if (await SincronizarControleMarketingAsync(notion, ct) is { } controle) relatorios.Add(controle);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Falha sincronizando o controle de marketing do Notion");
+            relatorios.Add($"Controle de marketing: FALHOU ({ex.Message})");
         }
         return string.Join(" | ", relatorios);
     }
 
-    private enum Passada { Normal, ReimportacaoAtivos, ImportacaoVendas, CorrecaoDataChegada }
+    private enum Passada { Normal, ReimportacaoAtivos, ImportacaoVendas, Importacao2025, CorrecaoDataChegada }
 
     /// <param name="passada">
     /// Normal: realinhamento (se pendente) ou incremental. ReimportacaoAtivos / ImportacaoVendas: só
     /// essa passada única, se ainda pendente nesta base — senão não faz nada e devolve null.
     /// </param>
-    private async Task<string?> SincronizarDataSourceAsync(NotionClient notion, string dataSourceId, string regionalNome, Passada passada, CancellationToken ct)
+    private async Task<string?> SincronizarDataSourceAsync(NotionClient notion, string dataSourceId, string regionalNome, string? grupoNome, string baseNome, Passada passada, CancellationToken ct)
     {
         var inicioDaExecucao = DateTimeOffset.UtcNow;
         var checkpoint = await db.CrmNotionSyncCheckpoints.FindAsync([dataSourceId], ct);
@@ -94,7 +112,7 @@ public sealed class NotionSyncService(
         if (passada == Passada.CorrecaoDataChegada)
         {
             if (checkpoint is not { RealinhamentoConcluidoEm: not null, DataChegadaCorrigidaEm: null }) return null;
-            return await CorrigirDataDeChegadaAsync(notion, dataSourceId, regionalNome, inicioDaExecucao, ct);
+            return await CorrigirDataDeChegadaAsync(notion, dataSourceId, regionalNome, baseNome, inicioDaExecucao, ct);
         }
 
         // Realinhamento (uma vez por base): relê todos os cards desde a data mínima para colocar cada
@@ -108,12 +126,17 @@ public sealed class NotionSyncService(
         // CONCLUIDA", de qualquer vendedor e data — cada um vira (ou atualiza) a sua oportunidade.
         var importarVendas = passada == Passada.ImportacaoVendas && !realinhar
             && checkpoint!.ReimportacaoAtivosConcluidaEm is not null && checkpoint.ImportacaoVendasConcluidaEm is null;
-        if (passada != Passada.Normal && !reimportarAtivos && !importarVendas) return null;
+        // Importação de 2025 (uma vez por base, depois do realinhamento): cards criados de 01/01/2025
+        // até o fim do ano, que a data mínima anterior (2026) deixava de fora.
+        var importar2025 = passada == Passada.Importacao2025 && !realinhar && checkpoint!.Importacao2025ConcluidaEm is null;
+        if (passada != Passada.Normal && !reimportarAtivos && !importarVendas && !importar2025) return null;
         await CarregarUsuariosAtivosAsync(ct);
         var paginas = realinhar
             ? PaginasCriadasDesdeAsync(notion, dataSourceId, DataMinimaImportacao, ct)
             : importarVendas
                 ? PaginasDeVendaAsync(notion, dataSourceId, ct)
+            : importar2025
+                ? PaginasCriadasDesdeAsync(notion, dataSourceId, DataMinimaImportacao, ct, FimImportacao2025)
             : reimportarAtivos
                 ? PaginasCriadasDesdeAsync(notion, dataSourceId, InicioHistoricoNotion, ct)
                 // Sem filtro de data no Notion: cards antigos de consultores ativos também entram (o
@@ -131,7 +154,8 @@ public sealed class NotionSyncService(
         // Só colunas ativas: "Pré-cadastro" e "Recusa/Inativa" foram desativadas (ver NotionEtapaLead).
         var etapasPorNome = await db.CrmLeadStages.Where(s => s.Ativa).ToDictionaryAsync(s => s.Nome.Trim(), s => s.Id, ct);
         var ganhoStageId = (await db.CrmPipelineStages.FirstAsync(s => s.Tipo == TipoEtapaPipeline.Ganho, ct)).Id;
-        var placeholderVendedorId = await ObterOuCriarVendedorPlaceholderAsync(regional.Id, regionalNome, ct);
+        _grupoId = grupoNome is null ? null : await ObterOuCriarGrupoAsync(regional.Id, grupoNome, ct);
+        var placeholderVendedorId = await ObterOuCriarVendedorPlaceholderAsync(regional.Id, baseNome, ct);
 
         int processados = 0, criados = 0, atualizados = 0, erros = 0, semNome = 0, ignorados = 0, devolvidos = 0;
 
@@ -204,7 +228,7 @@ public sealed class NotionSyncService(
         checkpoint = await db.CrmNotionSyncCheckpoints.FindAsync([dataSourceId], ct);
         if (checkpoint is null)
         {
-            checkpoint = new CrmNotionSyncCheckpoint { DataSourceId = dataSourceId, RegionalNome = regionalNome };
+            checkpoint = new CrmNotionSyncCheckpoint { DataSourceId = dataSourceId, RegionalNome = baseNome };
             db.CrmNotionSyncCheckpoints.Add(checkpoint);
         }
         // A reimportação relê a base inteira e demora: não adianta o checkpoint do incremental (as
@@ -213,6 +237,7 @@ public sealed class NotionSyncService(
         if (realinhar) checkpoint.RealinhamentoConcluidoEm = inicioDaExecucao;
         if (reimportarAtivos) checkpoint.ReimportacaoAtivosConcluidaEm = inicioDaExecucao;
         if (importarVendas) checkpoint.ImportacaoVendasConcluidaEm = inicioDaExecucao;
+        if (importar2025) checkpoint.Importacao2025ConcluidaEm = inicioDaExecucao;
         await db.SaveChangesAsync(ct);
 
         if (_mudancasNoQuadro > 0)
@@ -221,15 +246,15 @@ public sealed class NotionSyncService(
             _mudancasNoQuadro = 0;
         }
 
-        var modo = realinhar ? " (realinhamento)" : reimportarAtivos ? " (reimportação dos consultores ativos)" : importarVendas ? " (importação das vendas)" : "";
-        return $"{regionalNome}: {processados} processados, {criados} criados, {atualizados} atualizados, {devolvidos} devolvidos ao vendedor do card, {erros} erros, {semNome} sem nome, {ignorados} ignorados{modo}";
+        var modo = realinhar ? " (realinhamento)" : reimportarAtivos ? " (reimportação dos consultores ativos)" : importarVendas ? " (importação das vendas)" : importar2025 ? " (importação de 2025)" : "";
+        return $"{baseNome}: {processados} processados, {criados} criados, {atualizados} atualizados, {devolvidos} devolvidos ao vendedor do card, {erros} erros, {semNome} sem nome, {ignorados} ignorados{modo}";
     }
 
     /// <summary>
     /// Grava a "Data de chegada" de cada card (created_time) no lead ligado a ele. Só atualiza a
     /// data — em lote, direto no banco —, então é rápida mesmo relendo a base inteira.
     /// </summary>
-    private async Task<string> CorrigirDataDeChegadaAsync(NotionClient notion, string dataSourceId, string regionalNome, DateTimeOffset inicio, CancellationToken ct)
+    private async Task<string> CorrigirDataDeChegadaAsync(NotionClient notion, string dataSourceId, string regionalNome, string baseNome, DateTimeOffset inicio, CancellationToken ct)
     {
         int lidos = 0, atualizados = 0, ligados = 0, erros = 0;
 
@@ -274,7 +299,76 @@ public sealed class NotionSyncService(
         checkpoint!.DataChegadaCorrigidaEm = inicio;
         await db.SaveChangesAsync(ct);
         if (atualizados + ligados > 0) eventos?.PublicarQuadroAtualizado("notion");
-        return $"{regionalNome}: {lidos} cards lidos, {atualizados} datas de chegada gravadas, {ligados} leads antigos ligados ao card, {erros} erros (correção da data de chegada)";
+        return $"{baseNome}: {lidos} cards lidos, {atualizados} datas de chegada gravadas, {ligados} leads antigos ligados ao card, {erros} erros (correção da data de chegada)";
+    }
+
+    private const string ControleMarketingDataSourceId = "542e7eaf-ab1b-46d0-a391-a36200eac604";
+
+    /// <summary>Intervalo mínimo entre leituras do controle de marketing (a base tem ~60 linhas e muda pouco).</summary>
+    private static readonly TimeSpan IntervaloControleMarketing = TimeSpan.FromMinutes(30);
+
+    /// <summary>
+    /// Traz a base "CONTROLE CSS BRASIL" do Notion (investimento em mídia, leads e faturamento) para
+    /// a tabela usada no Relatório comercial. A base mistura linhas mensais e semanais: o mês é a
+    /// linha de maior "Leads Gerados" entre as do mês, desde que haja ao menos duas e ela seja pelo
+    /// menos 1,5x a segunda maior — mês só com linhas semanais (em andamento) fica de fora.
+    /// </summary>
+    internal async Task<string?> SincronizarControleMarketingAsync(NotionClient notion, CancellationToken ct)
+    {
+        var inicioDaExecucao = DateTimeOffset.UtcNow;
+        var checkpoint = await db.CrmNotionSyncCheckpoints.FindAsync([ControleMarketingDataSourceId], ct);
+        if (checkpoint is not null && inicioDaExecucao - checkpoint.UltimaSincronizacaoEm < IntervaloControleMarketing) return null;
+
+        var linhas = new List<(DateOnly Mes, int Vendas, int Leads, decimal Facebook, decimal Google, decimal Ferramentas, decimal Backlinks, decimal Faturamento, decimal Meta)>();
+        await foreach (var page in notion.QueryAsync(ControleMarketingDataSourceId, null, ct))
+        {
+            if (ParseUtc(page.DateStart("Data")) is not { } data) continue;
+            var dia = DateOnly.FromDateTime(data.UtcDateTime);
+            decimal Valor(string nome) => page.Number(nome) is { } n ? (decimal)n : 0m;
+            linhas.Add((new DateOnly(dia.Year, dia.Month, 1), (int)Valor("Vendas  Quantidades"), (int)Valor("Leads Gerados"),
+                Valor("Facebook ADS"), Valor("Google Ads"), Valor("Ferramentas de marketing"), Valor("Backlinks"),
+                Valor("Faturamento Total"), Valor("Meta FATURAMENTO total")));
+        }
+
+        var mensais = linhas
+            .GroupBy(l => l.Mes)
+            .Select(g => g.OrderByDescending(l => l.Leads).ToList())
+            .Where(g => g.Count >= 2 && g[0].Leads >= g[1].Leads * 1.5m)
+            .Select(g => g[0])
+            .ToList();
+
+        var existentes = await db.CrmControleMarketingMeses.ToDictionaryAsync(m => m.Mes, ct);
+        int criados = 0, atualizados = 0;
+        foreach (var l in mensais)
+        {
+            if (!existentes.TryGetValue(l.Mes, out var mes))
+            {
+                mes = new CrmControleMarketingMes { Mes = l.Mes };
+                db.CrmControleMarketingMeses.Add(mes);
+                criados++;
+            }
+            else
+            {
+                atualizados++;
+            }
+            mes.VendasQuantidade = l.Vendas;
+            mes.LeadsGerados = l.Leads;
+            mes.FacebookAds = l.Facebook;
+            mes.GoogleAds = l.Google;
+            mes.FerramentasMarketing = l.Ferramentas;
+            mes.Backlinks = l.Backlinks;
+            mes.FaturamentoTotal = l.Faturamento;
+            mes.MetaFaturamento = l.Meta;
+        }
+
+        if (checkpoint is null)
+        {
+            checkpoint = new CrmNotionSyncCheckpoint { DataSourceId = ControleMarketingDataSourceId, RegionalNome = "Controle de marketing" };
+            db.CrmNotionSyncCheckpoints.Add(checkpoint);
+        }
+        checkpoint.UltimaSincronizacaoEm = inicioDaExecucao;
+        await db.SaveChangesAsync(ct);
+        return $"Controle de marketing: {linhas.Count} linhas lidas, {criados} meses criados, {atualizados} atualizados";
     }
 
     /// <summary>Dados do card usados para achar o lead (ver EncontrarLeadAsync).</summary>
@@ -730,9 +824,9 @@ public sealed class NotionSyncService(
 
     /// <summary>Todos os cards criados desde <paramref name="desde"/>, em fatias mensais (cada consulta do Notion tem teto de ~10 mil linhas).</summary>
     private static async IAsyncEnumerable<JsonElement> PaginasCriadasDesdeAsync(
-        NotionClient notion, string dataSourceId, DateOnly desde, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        NotionClient notion, string dataSourceId, DateOnly desde, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct, DateOnly? ate = null)
     {
-        var amanha = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
+        var amanha = ate ?? DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
         for (var inicio = desde; inicio < amanha; inicio = inicio.AddMonths(1))
         {
             var fim = inicio.AddMonths(1) < amanha ? inicio.AddMonths(1) : amanha;
@@ -819,7 +913,10 @@ public sealed class NotionSyncService(
     }
 
     private readonly Dictionary<string, Guid> _vendedorPorEmailCache = new();
-    private readonly Dictionary<Guid, Guid> _placeholderPorRegionalCache = new();
+    private readonly Dictionary<string, Guid> _placeholderPorBaseCache = new();
+
+    /// <summary>Grupo (dentro da regional) da base que está sendo sincronizada; nulo = sem grupo.</summary>
+    private Guid? _grupoId;
 
     /// <returns>
     /// O usuário do campo "Vendedor" do card (ativo ou não — o lead é dele); o placeholder da base
@@ -846,6 +943,7 @@ public sealed class NotionSyncService(
             EmailConfirmed = true,
             NomeCompleto = vendedor.Nome,
             RegionalId = regionalId,
+            GrupoId = _grupoId,
             // Vendedor que só existe no Notion entra inativo: não recebe leads do tráfego pago nem
             // aparece como consultor até um administrador ativá-lo.
             Ativo = false,
@@ -858,15 +956,27 @@ public sealed class NotionSyncService(
         return usuario.Id;
     }
 
+    private async Task<Guid> ObterOuCriarGrupoAsync(Guid regionalId, string nome, CancellationToken ct)
+    {
+        var grupo = await db.CrmGrupos.FirstOrDefaultAsync(g => g.RegionalId == regionalId && g.Nome == nome, ct);
+        if (grupo is null)
+        {
+            grupo = new CrmGrupo { RegionalId = regionalId, Nome = nome };
+            db.CrmGrupos.Add(grupo);
+            await db.SaveChangesAsync(ct);
+        }
+        return grupo.Id;
+    }
+
     private async Task<Guid> ObterOuCriarVendedorPlaceholderAsync(Guid regionalId, string regionalNome, CancellationToken ct)
     {
-        if (_placeholderPorRegionalCache.TryGetValue(regionalId, out var idCache)) return idCache;
-
         var email = $"vendedor.nao.identificado.{regionalNome.ToLowerInvariant().Replace(" ", "-")}@cssvision.local";
+        if (_placeholderPorBaseCache.TryGetValue(email, out var idCache)) return idCache;
+
         var existente = await userManager.FindByEmailAsync(email);
         if (existente is not null)
         {
-            _placeholderPorRegionalCache[regionalId] = existente.Id;
+            _placeholderPorBaseCache[email] = existente.Id;
             return existente.Id;
         }
 
@@ -877,11 +987,12 @@ public sealed class NotionSyncService(
             EmailConfirmed = true,
             NomeCompleto = $"Vendedor não identificado ({regionalNome})",
             RegionalId = regionalId,
+            GrupoId = _grupoId,
             Ativo = false,
         };
         await userManager.CreateAsync(usuario, "Senha@123");
         await userManager.AddToRoleAsync(usuario, Roles.Comercial);
-        _placeholderPorRegionalCache[regionalId] = usuario.Id;
+        _placeholderPorBaseCache[email] = usuario.Id;
         return usuario.Id;
     }
 
