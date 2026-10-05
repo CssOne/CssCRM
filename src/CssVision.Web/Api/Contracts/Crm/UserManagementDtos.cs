@@ -20,9 +20,9 @@ public record UserSummaryDto(
     DateTimeOffset CriadoEm,
     IReadOnlyList<string>? RecebeSomenteOQue = null,
     int? LimiteDiarioLeads = null,
-    /// <summary>Administrador restrito a esta regional (vê só os dados dela); nulo = todas.</summary>
-    Guid? RegionalRestritaId = null,
-    string? RegionalRestritaNome = null);
+    /// <summary>Regionais ocultas para este administrador (ele não vê os dados delas).</summary>
+    IReadOnlyList<Guid>? RegionaisOcultasIds = null,
+    IReadOnlyList<string>? RegionaisOcultasNomes = null);
 
 public record UserFilterRequest : PagedRequest
 {
@@ -45,7 +45,7 @@ public record UserCreateRequest(
     int? LimiteMensalLeads,
     IReadOnlyList<string>? RecebeSomenteOQue = null,
     int? LimiteDiarioLeads = null,
-    Guid? RegionalRestritaId = null);
+    IReadOnlyList<Guid>? RegionaisOcultasIds = null);
 
 public record UserUpdateRequest(
     string NomeCompleto,
@@ -58,10 +58,9 @@ public record UserUpdateRequest(
     bool Ativo,
     IReadOnlyList<string>? RecebeSomenteOQue = null,
     int? LimiteDiarioLeads = null,
-    /// <summary>Só considerado quando vem de um administrador sem restrição e o papel é Admin/Gestor master; nulo = todas as regionais.</summary>
-    Guid? RegionalRestritaId = null,
-    /// <summary>Verdadeiro quando o chamador manda o campo (nulo + falso = não mexe; nulo + verdadeiro = remove a restrição).</summary>
-    bool AlterarRestricaoRegional = false);
+    /// <summary>Regionais a ocultar deste administrador; só vale com <see cref="AlterarRegionaisOcultas"/> e vindo de um administrador sem regionais ocultas.</summary>
+    IReadOnlyList<Guid>? RegionaisOcultasIds = null,
+    bool AlterarRegionaisOcultas = false);
 
 public record ResetPasswordRequest(string NovaSenha);
 

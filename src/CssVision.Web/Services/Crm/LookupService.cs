@@ -102,9 +102,9 @@ public sealed class LookupService(ApplicationDbContext db, ICurrentUserService c
 
     public async Task<IReadOnlyList<RegionalDto>> ObterRegionaisAsync(CancellationToken ct)
     {
-        var restrita = await EscopoRegional.RestritaAsync(db, currentUser, ct);
+        var ocultas = await EscopoRegional.OcultasAsync(db, currentUser, ct);
         return await db.CrmRegionais.AsNoTracking()
-            .Where(r => restrita == null || r.Id == restrita)
+            .Where(r => !ocultas.Contains(r.Id))
             .OrderBy(r => r.Nome)
             .Select(r => new RegionalDto(r.Id, r.Nome, r.Ativa, r.Usuarios.Count))
             .ToListAsync(ct);
@@ -165,10 +165,11 @@ public sealed class LookupService(ApplicationDbContext db, ICurrentUserService c
         if (!currentUser.PodeGerirComercial) return [];
 
         var query = db.CrmGrupos.AsNoTracking().Where(g => g.Ativo);
-        var restrita = await EscopoRegional.RestritaAsync(db, currentUser, ct);
-        if (!currentUser.TemVisaoTotal || restrita is not null)
+        var ocultas = await EscopoRegional.OcultasAsync(db, currentUser, ct);
+        if (ocultas.Count > 0) query = query.Where(g => !ocultas.Contains(g.RegionalId));
+        if (!currentUser.TemVisaoTotal)
         {
-            var regionalAtual = restrita ?? await ObterRegionalAtualAsync(ct);
+            var regionalAtual = await ObterRegionalAtualAsync(ct);
             if (regionalAtual is null) return [];
             query = query.Where(g => g.RegionalId == regionalAtual);
         }
@@ -187,8 +188,7 @@ public sealed class LookupService(ApplicationDbContext db, ICurrentUserService c
         }
 
         Guid regionalId;
-        var restritaDoCriador = await EscopoRegional.RestritaAsync(db, currentUser, ct);
-        if (currentUser.TemVisaoTotal && restritaDoCriador is null)
+        if (currentUser.TemVisaoTotal)
         {
             if (request.RegionalId is null)
             {
@@ -196,6 +196,10 @@ public sealed class LookupService(ApplicationDbContext db, ICurrentUserService c
             }
 
             regionalId = request.RegionalId.Value;
+            if ((await EscopoRegional.OcultasAsync(db, currentUser, ct)).Contains(regionalId))
+            {
+                throw new CrmForbiddenException("Esta regional está oculta para você.");
+            }
         }
         else
         {
@@ -290,7 +294,8 @@ public sealed class LookupService(ApplicationDbContext db, ICurrentUserService c
             .OrderByDescending(u => u.Ativo).ThenBy(u => u.NomeCompleto)
             .Select(u => new GrupoMembroDto(u.Id, u.NomeCompleto, u.FotoUrl, u.Ativo)).ToList());
 
-    private async Task<Guid?> ObterRegionalAtualAsync(CancellationToken ct) => await EscopoRegional.EfetivaAsync(db, currentUser, ct);
+    private async Task<Guid?> ObterRegionalAtualAsync(CancellationToken ct) =>
+        await db.Users.AsNoTracking().Where(u => u.Id == currentUser.UserId).Select(u => u.RegionalId).FirstOrDefaultAsync(ct);
 
     /// <summary>Resolve a regional cujos grupos devem ser lidos: Admin/GestorMaster escolhem via parâmetro;
     /// GestorComercial sempre enxerga a própria (ignorando um parâmetro divergente).</summary>
@@ -301,9 +306,11 @@ public sealed class LookupService(ApplicationDbContext db, ICurrentUserService c
             throw new CrmForbiddenException("Apenas gestores comerciais podem visualizar grupos.");
         }
 
-        var restrita = await EscopoRegional.RestritaAsync(db, currentUser, ct);
-        if (restrita is not null) return restrita;
-        if (currentUser.TemVisaoTotal) return regionalId;
+        if (currentUser.TemVisaoTotal)
+        {
+            // Regional oculta não devolve grupos (como se não existisse).
+            return regionalId is { } pedida && (await EscopoRegional.OcultasAsync(db, currentUser, ct)).Contains(pedida) ? Guid.Empty : regionalId;
+        }
 
         var regionalAtual = await ObterRegionalAtualAsync(ct);
         return regionalAtual;
@@ -316,7 +323,14 @@ public sealed class LookupService(ApplicationDbContext db, ICurrentUserService c
             throw new CrmForbiddenException("Apenas gestores comerciais podem gerenciar grupos.");
         }
 
-        if (currentUser.TemVisaoTotal && await EscopoRegional.RestritaAsync(db, currentUser, ct) is null) return;
+        if (currentUser.TemVisaoTotal)
+        {
+            if ((await EscopoRegional.OcultasAsync(db, currentUser, ct)).Contains(regionalId))
+            {
+                throw new CrmForbiddenException("Esta regional está oculta para você.");
+            }
+            return;
+        }
 
         var regionalAtual = await ObterRegionalAtualAsync(ct);
         if (regionalAtual is null || regionalAtual != regionalId)

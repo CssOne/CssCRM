@@ -32,10 +32,15 @@ public sealed class UserManagementService(
             .Include(u => u.Grupo)
             .AsQueryable();
 
-        if (!await GerenciaTodasAsRegionaisAsync(ct))
+        if (!GerenciaTodasAsRegionais)
         {
             var regionalId = await ObterRegionalAtualAsync(ct);
             query = regionalId is null ? query.Where(u => false) : query.Where(u => u.RegionalId == regionalId);
+        }
+        else if (await EscopoRegional.OcultasAsync(db, currentUser, ct) is { Count: > 0 } ocultas)
+        {
+            // Administrador com regionais ocultas não lista quem é delas (quem não tem regional continua aparecendo).
+            query = query.Where(u => u.RegionalId == null || !ocultas.Contains(u.RegionalId.Value));
         }
 
         // "Vendedor Notion ..." (vendedores que o Notion não identifica) ficam fora do sistema por enquanto: só aparecem
@@ -98,11 +103,11 @@ public sealed class UserManagementService(
         Guid? regionalId = request.RegionalId;
         Guid? gestorComercialId = request.GestorComercialId;
 
-        if (!await GerenciaTodasAsRegionaisAsync(ct))
+        if (!GerenciaTodasAsRegionais)
         {
-            if (!(await PapeisQuePodeGerenciarAsync(ct)).Contains(request.Papel))
+            if (!PapeisQuePodeGerenciar.Contains(request.Papel))
             {
-                throw new CrmForbiddenException(await EhLimitadoAUmaRegionalAsync(ct)
+                throw new CrmForbiddenException(EhSomenteSupervisor
                     ? "Você só pode cadastrar consultores e gestores regionais da sua regional."
                     : "Você só pode cadastrar consultores (papel Comercial).");
             }
@@ -112,7 +117,7 @@ public sealed class UserManagementService(
 
             regionalId = regionalAtual;
             // O Gestor regional fica como gestor do consultor que cadastra; o Supervisor não é gestor de equipe.
-            gestorComercialId = await EhLimitadoAUmaRegionalAsync(ct) ? null : currentUser.UserId;
+            gestorComercialId = EhSomenteSupervisor ? null : currentUser.UserId;
         }
         else if (request.Papel is Roles.Comercial or Roles.GestorComercial && regionalId is null)
         {
@@ -134,6 +139,7 @@ public sealed class UserManagementService(
             }
         }
 
+        await ExigirRegionalVisivelAsync(regionalId, ct);
         var grupoId = await ValidarGrupoAsync(request.GrupoId, regionalId, ct);
 
         var usuario = new ApplicationUser
@@ -144,7 +150,7 @@ public sealed class UserManagementService(
             NomeCompleto = request.NomeCompleto.Trim(),
             PhoneNumber = DocumentValidation.NormalizarTelefone(request.Telefone),
             RegionalId = regionalId,
-            RegionalRestritaId = await ValidarRestricaoAsync(request.RegionalRestritaId, request.Papel, ct),
+            RegionaisOcultas = await ValidarOcultasAsync(request.RegionaisOcultasIds, request.Papel, ct),
             GestorComercialId = gestorComercialId,
             GrupoId = grupoId,
             LimiteMensalLeads = request.Papel == Roles.Comercial ? request.LimiteMensalLeads : null,
@@ -176,11 +182,11 @@ public sealed class UserManagementService(
         var regionalId = request.RegionalId;
         var gestorComercialId = request.GestorComercialId;
 
-        if (!await GerenciaTodasAsRegionaisAsync(ct))
+        if (!GerenciaTodasAsRegionais)
         {
-            if (!(await PapeisQuePodeGerenciarAsync(ct)).Contains(request.Papel))
+            if (!PapeisQuePodeGerenciar.Contains(request.Papel))
             {
-                throw new CrmForbiddenException(await EhLimitadoAUmaRegionalAsync(ct)
+                throw new CrmForbiddenException(EhSomenteSupervisor
                     ? "Você só pode gerenciar consultores e gestores regionais da sua regional."
                     : "Você só pode gerenciar consultores (papel Comercial).");
             }
@@ -226,6 +232,7 @@ public sealed class UserManagementService(
             }
         }
 
+        await ExigirRegionalVisivelAsync(regionalId, ct);
         var grupoId = await ValidarGrupoAsync(request.GrupoId, regionalId, ct);
 
         usuario.NomeCompleto = request.NomeCompleto.Trim();
@@ -233,9 +240,9 @@ public sealed class UserManagementService(
         usuario.RegionalId = regionalId;
         usuario.GestorComercialId = gestorComercialId;
         usuario.GrupoId = grupoId;
-        // Papel que não tem visão total nunca fica com restrição; o campo só muda quando o chamador (administrador sem restrição) o manda.
-        if (request.Papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial)) usuario.RegionalRestritaId = null;
-        else if (request.AlterarRestricaoRegional) usuario.RegionalRestritaId = await ValidarRestricaoAsync(request.RegionalRestritaId, request.Papel, ct);
+        // Papel sem visão total nunca fica com regionais ocultas; a lista só muda quando o chamador a manda.
+        if (request.Papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial)) usuario.RegionaisOcultas = null;
+        else if (request.AlterarRegionaisOcultas) usuario.RegionaisOcultas = await ValidarOcultasAsync(request.RegionaisOcultasIds, request.Papel, ct, alterando: true);
         usuario.LimiteMensalLeads = request.Papel == Roles.Comercial ? request.LimiteMensalLeads : null;
         usuario.LimiteDiarioLeads = request.Papel == Roles.Comercial ? request.LimiteDiarioLeads : null;
         // Só quando vier (lista vazia limpa): outras telas que editam o usuário não mandam o campo.
@@ -260,7 +267,7 @@ public sealed class UserManagementService(
     {
         var usuario = await CarregarComEscopoAsync(id, ct);
 
-        if (!await GerenciaTodasAsRegionaisAsync(ct) && !await PossuiAlgumPapelAsync(usuario, await PapeisQuePodeGerenciarAsync(ct)))
+        if (!GerenciaTodasAsRegionais && !await PossuiAlgumPapelAsync(usuario, PapeisQuePodeGerenciar))
         {
             throw new CrmForbiddenException("Você só pode redefinir a senha de usuários da sua regional (consultores e gestores regionais).");
         }
@@ -290,7 +297,7 @@ public sealed class UserManagementService(
         var usuario = await userManager.FindByIdAsync(id.ToString())
             ?? throw new CrmNotFoundException("Usuário", id);
 
-        if (await EhLimitadoAUmaRegionalAsync(ct))
+        if (EhSomenteSupervisor)
         {
             var regionalAtual = await ObterRegionalAtualAsync(ct);
             if (regionalAtual is null || usuario.RegionalId != regionalAtual)
@@ -340,17 +347,10 @@ public sealed class UserManagementService(
         currentUser.IsInRole(Roles.SupervisorComercial) && !currentUser.IsInRole(Roles.Admin) && !currentUser.IsInRole(Roles.GestorMaster);
 
     /// <summary>Admin/Gestor master gerenciam usuários de qualquer regional; Gestor regional e Supervisor, só da sua.</summary>
-    /// <summary>Admin/Gestor master sem restrição gerenciam usuários de qualquer regional; Gestor regional, Supervisor e administrador restrito, só da sua.</summary>
-    private async Task<bool> GerenciaTodasAsRegionaisAsync(CancellationToken ct) =>
-        currentUser.TemVisaoTotal && !EhSomenteSupervisor && await EscopoRegional.RestritaAsync(db, currentUser, ct) is null;
+    private bool GerenciaTodasAsRegionais => currentUser.TemVisaoTotal && !EhSomenteSupervisor;
 
-    /// <summary>Supervisor ou administrador restrito a uma regional: gerencia consultores e gestores regionais, só da regional dele.</summary>
-    private async Task<bool> EhLimitadoAUmaRegionalAsync(CancellationToken ct) =>
-        EhSomenteSupervisor || (currentUser.TemVisaoTotal && await EscopoRegional.RestritaAsync(db, currentUser, ct) is not null);
-
-    /// <summary>Papéis que quem gerencia só a própria regional pode cadastrar/editar: o Gestor regional, consultores; o Supervisor/restrito, também gestores regionais.</summary>
-    private async Task<string[]> PapeisQuePodeGerenciarAsync(CancellationToken ct) =>
-        await EhLimitadoAUmaRegionalAsync(ct) ? [Roles.Comercial, Roles.GestorComercial] : [Roles.Comercial];
+    /// <summary>Papéis que quem gerencia só a própria regional pode cadastrar/editar: o Gestor regional, consultores; o Supervisor, também gestores regionais.</summary>
+    private string[] PapeisQuePodeGerenciar => EhSomenteSupervisor ? [Roles.Comercial, Roles.GestorComercial] : [Roles.Comercial];
 
     private async Task<bool> PossuiAlgumPapelAsync(ApplicationUser usuario, IEnumerable<string> papeis)
     {
@@ -361,7 +361,8 @@ public sealed class UserManagementService(
         return false;
     }
 
-    private async Task<Guid?> ObterRegionalAtualAsync(CancellationToken ct) => await EscopoRegional.EfetivaAsync(db, currentUser, ct);
+    private async Task<Guid?> ObterRegionalAtualAsync(CancellationToken ct) =>
+        await db.Users.AsNoTracking().Where(u => u.Id == currentUser.UserId).Select(u => u.RegionalId).FirstOrDefaultAsync(ct);
 
     private async Task<Guid?> ValidarGrupoAsync(Guid? grupoId, Guid? regionalId, CancellationToken ct)
     {
@@ -379,18 +380,30 @@ public sealed class UserManagementService(
     }
 
     /// <summary>
-    /// Regional à qual um administrador fica restrito. Só um administrador sem restrição define isso, e só para quem tem visão total
-    /// (Admin/Gestor master/Supervisor); para os demais papéis, e para nulo, não há restrição.
+    /// Regionais ocultas de um administrador. Só quem não tem regionais ocultas define isso (senão ele se liberaria), e só para quem
+    /// tem visão total (Admin/Gestor master/Supervisor); para os demais papéis, e para uma lista vazia, não há regional oculta.
     /// </summary>
-    private async Task<Guid?> ValidarRestricaoAsync(Guid? regionalRestritaId, string papel, CancellationToken ct)
+    private async Task<string?> ValidarOcultasAsync(IReadOnlyList<Guid>? ids, string papel, CancellationToken ct, bool alterando = false)
     {
-        if (regionalRestritaId is null || papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial)) return null;
-        if (!await GerenciaTodasAsRegionaisAsync(ct))
+        var lista = (ids ?? []).Where(i => i != Guid.Empty).Distinct().ToList();
+        if (papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial)) return null;
+        if (lista.Count == 0 && !alterando) return null;
+        if (!GerenciaTodasAsRegionais || (await EscopoRegional.OcultasAsync(db, currentUser, ct)).Count > 0)
         {
-            throw new CrmForbiddenException("Apenas um administrador sem restrição de regional pode limitar o acesso de outro administrador.");
+            throw new CrmForbiddenException("Apenas um administrador sem regionais ocultas pode ocultar regionais de outro administrador.");
         }
-        if (!await db.CrmRegionais.AnyAsync(r => r.Id == regionalRestritaId, ct)) throw new CrmNotFoundException("Regional", regionalRestritaId.Value);
-        return regionalRestritaId;
+        var existentes = await db.CrmRegionais.AsNoTracking().Where(r => lista.Contains(r.Id)).Select(r => r.Id).ToListAsync(ct);
+        if (existentes.Count != lista.Count) throw new CrmNotFoundException("Regional", lista.First(i => !existentes.Contains(i)));
+        return EscopoRegional.Gravar(lista);
+    }
+
+    /// <summary>Quem tem regionais ocultas não cadastra nem edita usuário de uma delas.</summary>
+    private async Task ExigirRegionalVisivelAsync(Guid? regionalId, CancellationToken ct)
+    {
+        if (regionalId is { } r && (await EscopoRegional.OcultasAsync(db, currentUser, ct)).Contains(r))
+        {
+            throw new CrmForbiddenException("Esta regional está oculta para você.");
+        }
     }
 
     private async Task<ApplicationUser> CarregarComEscopoAsync(Guid id, CancellationToken ct)
@@ -399,7 +412,12 @@ public sealed class UserManagementService(
             .FirstOrDefaultAsync(u => u.Id == id, ct)
             ?? throw new CrmNotFoundException("Usuário", id);
 
-        if (!await GerenciaTodasAsRegionaisAsync(ct))
+        if (usuario.RegionalId is { } regionalDoUsuario && (await EscopoRegional.OcultasAsync(db, currentUser, ct)).Contains(regionalDoUsuario))
+        {
+            throw new CrmForbiddenException("Você não tem permissão para acessar este usuário.");
+        }
+
+        if (!GerenciaTodasAsRegionais)
         {
             var regionalAtual = await ObterRegionalAtualAsync(ct);
             if (regionalAtual is null || usuario.RegionalId != regionalAtual)
@@ -420,6 +438,13 @@ public sealed class UserManagementService(
             usuario.GestorComercialId, usuario.GestorComercial?.NomeCompleto,
             usuario.GrupoId, usuario.Grupo?.Nome,
             usuario.Ativo, usuario.LimiteMensalLeads, usuario.FotoUrl, usuario.CriadoEm, FiltroOQue.Separar(usuario.RecebeSomenteOQue), usuario.LimiteDiarioLeads,
-            usuario.RegionalRestritaId, usuario.RegionalRestritaId is { } restrita ? await db.CrmRegionais.AsNoTracking().Where(r => r.Id == restrita).Select(r => r.Nome).FirstOrDefaultAsync(ct) : null);
+            [.. EscopoRegional.Ler(usuario.RegionaisOcultas)],
+            await NomesDasOcultasAsync(usuario.RegionaisOcultas, ct));
+    }
+
+    private async Task<IReadOnlyList<string>> NomesDasOcultasAsync(string? ocultas, CancellationToken ct)
+    {
+        var ids = EscopoRegional.Ler(ocultas);
+        return ids.Count == 0 ? [] : await db.CrmRegionais.AsNoTracking().Where(r => ids.Contains(r.Id)).OrderBy(r => r.Nome).Select(r => r.Nome).ToListAsync(ct);
     }
 }

@@ -28,10 +28,10 @@ public record MarketingFilterRequest
     /// <summary>Regional do lead (MG132, MG134...): a do próprio lead e, na falta, a do consultor responsável.</summary>
     public string[]? Regional { get; init; }
     /// <summary>
-    /// Regionais que o usuário pode ver (administrador restrito a uma regional). Preenchido pelo servidor, que sobrescreve o que vier da
+    /// Regionais ocultas para o usuário (administrador que oculta regionais). Preenchido pelo servidor, que sobrescreve o que vier da
     /// requisição; compõe a chave do cache.
     /// </summary>
-    public string[]? RegionaisPermitidas { get; init; }
+    public string[]? RegionaisOcultas { get; init; }
 }
 
 public static class MarketingCanais

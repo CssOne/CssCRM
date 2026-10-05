@@ -38,7 +38,8 @@ public sealed class TvComercialService(
         var primeiro = new DateOnly(ano ?? hoje.Year, mes ?? hoje.Month, 1);
         if (primeiro > HorarioBrasilia.PrimeiroDiaDoMes(hoje)) primeiro = HorarioBrasilia.PrimeiroDiaDoMes(hoje);
 
-        var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
+        // O painel da TV mostra todas as regionais, mesmo para o administrador que oculta alguma nas demais telas.
+        var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct, ignorarRegionaisOcultas: true);
         // O Notion tem cache próprio; a versão dele entra na chave para o painel refletir cada atualização.
         IReadOnlyList<TvNotionVenda> vendasNotion = notion is null ? [] : await notion.VendasAsync(primeiro, ct);
         var administrativo = notion is null ? null : await notion.AdministrativoAsync(primeiro, ct);

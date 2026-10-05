@@ -1216,9 +1216,9 @@ export interface UserSummary {
   /** Distribuição automática: só recebe leads com estes "O que?". Nulo = qualquer lead. */
   recebeSomenteOQue?: string[] | null;
   limiteDiarioLeads?: number | null;
-  /** Administrador restrito a esta regional (vê só os dados dela). Nulo = todas. */
-  regionalRestritaId?: string | null;
-  regionalRestritaNome?: string | null;
+  /** Regionais ocultas para este administrador (ele não vê os dados delas). */
+  regionaisOcultasIds?: string[] | null;
+  regionaisOcultasNomes?: string[] | null;
 }
 
 export interface UserFilterRequest {
@@ -1243,7 +1243,7 @@ export interface UserCreateRequest {
   limiteMensalLeads?: number | null;
   recebeSomenteOQue?: string[] | null;
   limiteDiarioLeads?: number | null;
-  regionalRestritaId?: string | null;
+  regionaisOcultasIds?: string[] | null;
 }
 
 export interface UserUpdateRequest {
@@ -1257,9 +1257,9 @@ export interface UserUpdateRequest {
   ativo: boolean;
   recebeSomenteOQue?: string[] | null;
   limiteDiarioLeads?: number | null;
-  regionalRestritaId?: string | null;
-  /** Verdadeiro quando o campo acima foi mexido (nulo + verdadeiro = tira a restrição). */
-  alterarRestricaoRegional?: boolean;
+  regionaisOcultasIds?: string[] | null;
+  /** Verdadeiro quando a lista acima foi mexida (lista vazia + verdadeiro = mostra todas de novo). */
+  alterarRegionaisOcultas?: boolean;
 }
 
 export interface GrupoMembro {

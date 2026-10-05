@@ -24,18 +24,17 @@ public sealed class MarketingService(ApplicationDbContext db, ICurrentUserServic
     private const string SemRegional = "Sem regional";
 
     /// <summary>
-    /// Administrador restrito a uma regional só vê a dela: o filtro passa a levar essa regional (e entra na chave do cache), qualquer
-    /// que seja a requisição. Quem não tem restrição não muda nada (e o campo vindo da requisição é ignorado).
+    /// Administrador com regionais ocultas não vê os leads delas: o filtro passa a levar as regionais ocultas (e entra na chave do cache),
+    /// qualquer que seja a requisição. Quem não tem regional oculta não muda nada (e o campo vindo da requisição é ignorado).
     /// </summary>
     private async Task<MarketingFilterRequest> AplicarEscopoAsync(MarketingFilterRequest filtro, CancellationToken ct)
     {
-        string[]? permitidas = null;
-        if (currentUser is not null && await EscopoRegional.RestritaAsync(db, currentUser, ct) is { } restrita)
+        string[]? ocultas = null;
+        if (currentUser is not null && await EscopoRegional.OcultasAsync(db, currentUser, ct) is { Count: > 0 } ids)
         {
-            var nome = await db.CrmRegionais.AsNoTracking().Where(r => r.Id == restrita).Select(r => r.Nome).FirstOrDefaultAsync(ct);
-            permitidas = [nome ?? SemRegional];
+            ocultas = (await db.CrmRegionais.AsNoTracking().Where(r => ids.Contains(r.Id)).Select(r => r.Nome).ToListAsync(ct)).Order().ToArray();
         }
-        return filtro with { RegionaisPermitidas = permitidas };
+        return filtro with { RegionaisOcultas = ocultas };
     }
 
     /// <summary>Nome (prefixo) das colunas de venda ganha do quadro de leads — ver LeadsKanban.tsx/CrmSeeder.cs.</summary>
@@ -148,10 +147,10 @@ public sealed class MarketingService(ApplicationDbContext db, ICurrentUserServic
                 Vazio(l.RegionalDoLead)?.ToUpperInvariant() ?? Vazio(l.RegionalDoResponsavel)?.ToUpperInvariant() ?? SemRegional))
             .ToList();
 
-        // Administrador restrito a uma regional: o resto da tela (opções, números, lista) só conhece a dela.
-        if (Lista(filtro.RegionaisPermitidas)?.Select(r => r.ToUpperInvariant()).ToHashSet() is { } permitidas)
+        // Administrador com regionais ocultas: o resto da tela (opções, números, lista) não conhece os leads delas.
+        if (Lista(filtro.RegionaisOcultas)?.Select(r => r.ToUpperInvariant()).ToHashSet() is { } ocultas)
         {
-            todas = todas.Where(l => permitidas.Contains(l.Regional)).ToList();
+            todas = todas.Where(l => !ocultas.Contains(l.Regional)).ToList();
         }
 
         var doPeriodo = todas.Where(l => l.CriadoEm >= inicioUtc).ToList();

@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace CssVision.Web.Data.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20261005191333_AdminRestritoAUmaRegional")]
-    partial class AdminRestritoAUmaRegional
+    [Migration("20261005194209_AdminOcultaRegionais")]
+    partial class AdminOcultaRegionais
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -1708,10 +1708,11 @@ namespace CssVision.Web.Data.Migrations
                     b.Property<string>("RecebeSomenteOQue")
                         .HasColumnType("text");
 
-                    b.Property<Guid?>("RegionalId")
-                        .HasColumnType("uuid");
+                    b.Property<string>("RegionaisOcultas")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
-                    b.Property<Guid?>("RegionalRestritaId")
+                    b.Property<Guid?>("RegionalId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("SecurityStamp")
@@ -1740,8 +1741,6 @@ namespace CssVision.Web.Data.Migrations
                     b.HasIndex("NotionUserId");
 
                     b.HasIndex("RegionalId");
-
-                    b.HasIndex("RegionalRestritaId");
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -2196,11 +2195,6 @@ namespace CssVision.Web.Data.Migrations
                         .WithMany("Usuarios")
                         .HasForeignKey("RegionalId")
                         .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("CssVision.Web.Domain.Crm.CrmRegional", null)
-                        .WithMany()
-                        .HasForeignKey("RegionalRestritaId")
-                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("GestorComercial");
 

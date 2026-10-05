@@ -46,7 +46,7 @@ public sealed class DashboardService(
         }
 
         var leadsQuery = db.CrmLeads.AsNoTracking().Where(l => !l.Arquivado);
-        if (visiveis is not null) leadsQuery = leadsQuery.Where(l => l.ResponsavelId != null && visiveis.Contains(l.ResponsavelId.Value));
+        if (visiveis is not null) leadsQuery = leadsQuery.Where(l => visiveis.Contains(l.ResponsavelId ?? Guid.Empty));
 
         var oportunidadesQuery = db.CrmOpportunities.AsNoTracking().Where(o => !o.Arquivado);
         if (visiveis is not null) oportunidadesQuery = oportunidadesQuery.Where(o => visiveis.Contains(o.ResponsavelId));
@@ -99,9 +99,18 @@ public sealed class DashboardService(
         // Meta geral por regional (definida pelo administrador) soma-se às metas individuais:
         // visão total considera todas as regionais, os demais só a própria regional.
         var metaRegionalQuery = db.CrmRegionalGoals.AsNoTracking().Where(g => g.MesReferencia == mesReferencia);
-        if (visiveis is not null)
+        if (visiveis is not null && currentUser.TemVisaoTotal)
         {
-            var minhaRegionalId = await EscopoRegional.EfetivaAsync(db, currentUser, ct);
+            // Administrador com regionais ocultas: as metas das regionais que ele vê.
+            var ocultas = await EscopoRegional.OcultasAsync(db, currentUser, ct);
+            metaRegionalQuery = metaRegionalQuery.Where(g => !ocultas.Contains(g.RegionalId));
+        }
+        else if (visiveis is not null)
+        {
+            var minhaRegionalId = await db.Users.AsNoTracking()
+                .Where(u => u.Id == currentUser.UserId)
+                .Select(u => u.RegionalId)
+                .FirstOrDefaultAsync(ct);
             metaRegionalQuery = minhaRegionalId is null
                 ? metaRegionalQuery.Where(g => false)
                 : metaRegionalQuery.Where(g => g.RegionalId == minhaRegionalId);
@@ -187,7 +196,7 @@ public sealed class DashboardService(
         var oportunidades = db.CrmOpportunities.AsNoTracking().Where(o => !o.Arquivado);
         if (visiveis is not null)
         {
-            leadsQuery = leadsQuery.Where(l => l.ResponsavelId != null && visiveis.Contains(l.ResponsavelId.Value));
+            leadsQuery = leadsQuery.Where(l => visiveis.Contains(l.ResponsavelId ?? Guid.Empty));
             oportunidades = oportunidades.Where(o => visiveis.Contains(o.ResponsavelId));
         }
         // Leads e conversão do período: leads que chegaram para o vendedor no período e vendas fechadas nele.

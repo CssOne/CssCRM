@@ -26,10 +26,10 @@ export interface UserFormValues {
   limiteDiarioLeads: string;
   /** Vazio = recebe qualquer lead na distribuição automática. */
   recebeSomenteOQue: string[];
-  /** Administrador restrito a uma regional: id dela, ou vazio = vê todas. */
-  regionalRestritaId: string;
-  /** O campo foi mexido (só então a restrição é enviada na edição). */
-  restricaoAlterada: boolean;
+  /** Regionais ocultas para este administrador (ids). Vazio = vê todas. */
+  regionaisOcultas: string[];
+  /** A lista foi mexida (só então ela é enviada na edição). */
+  ocultasAlteradas: boolean;
   ativo: boolean;
 }
 
@@ -49,8 +49,8 @@ function valoresVazios(papelFixo?: string): UserFormValues {
     limiteMensalLeads: "",
     limiteDiarioLeads: "",
     recebeSomenteOQue: [],
-    regionalRestritaId: "",
-    restricaoAlterada: false,
+    regionaisOcultas: [],
+    ocultasAlteradas: false,
     ativo: true,
   };
 }
@@ -68,8 +68,8 @@ export function paraFormValues(usuario: UserSummary): UserFormValues {
     limiteMensalLeads: usuario.limiteMensalLeads != null ? String(usuario.limiteMensalLeads) : "",
     limiteDiarioLeads: usuario.limiteDiarioLeads != null ? String(usuario.limiteDiarioLeads) : "",
     recebeSomenteOQue: usuario.recebeSomenteOQue ?? [],
-    regionalRestritaId: usuario.regionalRestritaId ?? "",
-    restricaoAlterada: false,
+    regionaisOcultas: usuario.regionaisOcultasIds ?? [],
+    ocultasAlteradas: false,
     ativo: usuario.ativo,
   };
 }
@@ -87,7 +87,7 @@ export function paraCriarRequest(v: UserFormValues): UserCreateRequest {
     limiteMensalLeads: v.limiteMensalLeads ? Number(v.limiteMensalLeads) : null,
     limiteDiarioLeads: v.limiteDiarioLeads ? Number(v.limiteDiarioLeads) : null,
     recebeSomenteOQue: v.papel === "Comercial" ? v.recebeSomenteOQue : null,
-    regionalRestritaId: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.regionalRestritaId || null : null,
+    regionaisOcultasIds: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.regionaisOcultas : null,
   };
 }
 
@@ -103,8 +103,8 @@ export function paraAtualizarRequest(v: UserFormValues): UserUpdateRequest {
     limiteDiarioLeads: v.limiteDiarioLeads ? Number(v.limiteDiarioLeads) : null,
     ativo: v.ativo,
     recebeSomenteOQue: v.papel === "Comercial" ? v.recebeSomenteOQue : null,
-    regionalRestritaId: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.regionalRestritaId || null : null,
-    alterarRestricaoRegional: v.restricaoAlterada,
+    regionaisOcultasIds: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.regionaisOcultas : null,
+    alterarRegionaisOcultas: v.ocultasAlteradas,
   };
 }
 
@@ -264,21 +264,26 @@ export function UserForm({
 
         {podeGerenciarTudo && PAPEIS_COM_VISAO_TOTAL.includes(valores.papel) && regionais.length > 1 && (
           <div className="sm:col-span-2">
-            <Label htmlFor="user-regional-restrita">Acesso por regional</Label>
-            <Select
-              id="user-regional-restrita"
-              value={valores.regionalRestritaId}
-              onChange={(e) => setValores((v) => ({ ...v, regionalRestritaId: e.target.value, restricaoAlterada: true }))}
-            >
-              <option value="">Todas as regionais</option>
+            <Label>Ocultar dados das regionais</Label>
+            <div className="flex flex-wrap gap-x-5 gap-y-1 rounded-lg border border-[var(--border)] p-2">
               {regionais.map((r) => (
-                <option key={r.id} value={r.id}>
-                  Somente {r.nome}
-                </option>
+                <Checkbox
+                  key={r.id}
+                  label={r.nome}
+                  checked={valores.regionaisOcultas.includes(r.id)}
+                  onChange={(e) =>
+                    setValores((v) => ({
+                      ...v,
+                      regionaisOcultas: e.target.checked ? [...v.regionaisOcultas, r.id] : v.regionaisOcultas.filter((id) => id !== r.id),
+                      ocultasAlteradas: true,
+                    }))
+                  }
+                />
               ))}
-            </Select>
+            </div>
             <p className="mt-1 text-xs text-[var(--fg-muted)]">
-              Com uma regional escolhida, este usuário deixa de ver leads, usuários, metas e Tráfego pago das outras regionais.
+              As regionais marcadas ficam escondidas deste usuário: leads, usuários, metas e Tráfego pago delas não aparecem. Novas regionais
+              continuam visíveis. O painel da TV segue mostrando todas.
             </p>
           </div>
         )}

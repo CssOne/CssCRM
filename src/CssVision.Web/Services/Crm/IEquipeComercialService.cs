@@ -12,8 +12,12 @@ namespace CssVision.Web.Services.Crm;
 /// </summary>
 public interface IEquipeComercialService
 {
-    /// <summary>Retorna null quando o usuário tem visão total (sem necessidade de filtrar por vendedor).</summary>
-    Task<List<Guid>?> ObterVendedoresVisiveisAsync(CancellationToken ct);
+    /// <summary>
+    /// Retorna null quando o usuário tem visão total (sem necessidade de filtrar por vendedor). Administrador com regionais ocultas recebe
+    /// a lista de quem NÃO é das regionais ocultas, mais <see cref="Guid.Empty"/> (leads ainda sem responsável). O painel da TV passa
+    /// <paramref name="ignorarRegionaisOcultas"/>, porque ele mostra todas as regionais.
+    /// </summary>
+    Task<List<Guid>?> ObterVendedoresVisiveisAsync(CancellationToken ct, bool ignorarRegionaisOcultas = false);
 
     /// <summary>Verifica se o usuário atual pode operar sobre registros do vendedor informado.</summary>
     Task<bool> PodeAcessarVendedorAsync(Guid vendedorId, CancellationToken ct);
@@ -21,15 +25,18 @@ public interface IEquipeComercialService
 
 public sealed class EquipeComercialService(ApplicationDbContext db, ICurrentUserService currentUser) : IEquipeComercialService
 {
-    public async Task<List<Guid>?> ObterVendedoresVisiveisAsync(CancellationToken ct)
+    public async Task<List<Guid>?> ObterVendedoresVisiveisAsync(CancellationToken ct, bool ignorarRegionaisOcultas = false)
     {
         if (currentUser.TemVisaoTotal)
         {
-            // Administrador restrito a uma regional: só a equipe dela (e ele mesmo).
-            if (await EscopoRegional.RestritaAsync(db, currentUser, ct) is not { } restrita) return null;
-            var daRegional = await db.Users.AsNoTracking().Where(u => u.RegionalId == restrita).Select(u => u.Id).ToListAsync(ct);
-            if (!daRegional.Contains(currentUser.UserId)) daRegional.Add(currentUser.UserId);
-            return daRegional;
+            var ocultas = ignorarRegionaisOcultas ? [] : await EscopoRegional.OcultasAsync(db, currentUser, ct);
+            if (ocultas.Count == 0) return null;
+
+            var visiveis = await db.Users.AsNoTracking()
+                .Where(u => u.RegionalId == null || !ocultas.Contains(u.RegionalId.Value))
+                .Select(u => u.Id).ToListAsync(ct);
+            visiveis.Add(Guid.Empty); // lead sem responsável não pertence a nenhuma regional oculta
+            return visiveis;
         }
 
         if (currentUser.IsGestorComercial)

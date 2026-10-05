@@ -15,6 +15,7 @@ public class ApplicationUserConfiguration : IEntityTypeConfiguration<Application
         builder.HasIndex(e => e.NotionUserId);
         builder.HasIndex(e => e.RegionalId);
         builder.HasIndex(e => e.GrupoId);
+        builder.Property(e => e.RegionaisOcultas).HasMaxLength(2000);
 
         builder.HasOne(e => e.GestorComercial)
             .WithMany()
@@ -25,12 +26,6 @@ public class ApplicationUserConfiguration : IEntityTypeConfiguration<Application
             .WithMany(r => r.Usuarios)
             .HasForeignKey(e => e.RegionalId)
             .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasIndex(e => e.RegionalRestritaId);
-        builder.HasOne<Domain.Crm.CrmRegional>()
-            .WithMany()
-            .HasForeignKey(e => e.RegionalRestritaId)
-            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasOne(e => e.Grupo)
             .WithMany(g => g.Usuarios)
