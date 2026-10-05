@@ -3,6 +3,7 @@ using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Authorization;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Identity;
+using CssVision.Web.Services.Notion;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,6 +21,9 @@ public sealed class UserManagementService(
     ICurrentUserService currentUser,
     IAuditSink audit) : IUserManagementService
 {
+    internal static bool ProcurandoProvisorios(string? busca) =>
+        !string.IsNullOrWhiteSpace(busca) && busca.Trim().StartsWith("Vendedor Notion", StringComparison.OrdinalIgnoreCase);
+
     public async Task<PagedResult<UserSummaryDto>> ListarAsync(UserFilterRequest filtro, CancellationToken ct)
     {
         var query = db.Users.AsNoTracking()
@@ -33,6 +37,10 @@ public sealed class UserManagementService(
             var regionalId = await ObterRegionalAtualAsync(ct);
             query = regionalId is null ? query.Where(u => false) : query.Where(u => u.RegionalId == regionalId);
         }
+
+        // "Vendedor Notion ..." (vendedores que o Notion não identifica) ficam fora do sistema por enquanto: só aparecem
+        // se alguém procurar o nome deles de propósito, para a revisão futura.
+        if (!ProcurandoProvisorios(filtro.Busca)) query = query.Where(u => !u.NomeCompleto.StartsWith(NotionPageExtensions.PrefixoNomeProvisorio));
 
         if (!string.IsNullOrWhiteSpace(filtro.Busca))
         {

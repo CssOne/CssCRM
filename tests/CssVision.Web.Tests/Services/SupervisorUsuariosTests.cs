@@ -2,6 +2,7 @@ using CssVision.Web.Api.Contracts.Common;
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Authorization;
 using CssVision.Web.Services.Crm;
+using CssVision.Web.Services.Notion;
 using CssVision.Web.Tests.Infrastructure;
 using Moq;
 using Xunit;
@@ -81,5 +82,31 @@ public class SupervisorUsuariosTests
         var semRegional = await factory.CriarUsuarioAsync(db, "Supervisor sem regional");
         var servicoSemRegional = new UserManagementService(db, userManager, Supervisor(semRegional.Id).Object, new NoOpAuditSink());
         await Assert.ThrowsAsync<CrmBusinessException>(() => servicoSemRegional.CriarAsync(Novo(Roles.Comercial, mg134.Id, "x@teste.com"), CancellationToken.None));
+    }
+}
+
+/// <summary>Usuários "Vendedor Notion ..." ficam fora da lista de Usuários, a menos que alguém procure por eles.</summary>
+public class UsuariosProvisoriosFicamEscondidosTests
+{
+    [Fact]
+    public async Task ListaDeUsuarios_EscondeOsProvisoriosEMostraQuandoProcurados()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        await factory.SeedRolesAsync(db);
+        using var userManager = TestDbContextFactory.CreateUserManager(db);
+        var admin = await factory.CriarUsuarioAsync(db, "Admin");
+        await factory.CriarUsuarioAsync(db, "Ana");
+        await factory.CriarUsuarioAsync(db, "Vendedor Notion 1d0d872b-601b");
+        var service = new UserManagementService(db, userManager, TestDbContextFactory.MockCurrentUser(admin.Id, visaoTotal: true).Object, new NoOpAuditSink());
+
+        var normal = await service.ListarAsync(new UserFilterRequest { Pagina = 1, TamanhoPagina = 50 }, CancellationToken.None);
+        Assert.DoesNotContain(normal.Itens, u => u.NomeCompleto.StartsWith("Vendedor Notion"));
+        Assert.Contains(normal.Itens, u => u.NomeCompleto == "Ana");
+
+        // Só aparecem quando alguém procura o nome deles de propósito (revisão futura).
+        Assert.True(UserManagementService.ProcurandoProvisorios("vendedor notion 1d0d"));
+        Assert.False(UserManagementService.ProcurandoProvisorios("Ana"));
+        Assert.False(UserManagementService.ProcurandoProvisorios(null));
     }
 }
