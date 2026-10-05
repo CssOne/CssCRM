@@ -24,6 +24,7 @@ import { ConfiguracoesPage } from "./pages/portal/Configuracoes";
 import { TrafegoPagoPage } from "./pages/marketing/TrafegoPago";
 import { BackupsPage } from "./pages/admin/Backups";
 import { SuportePage } from "./pages/Suporte";
+import { TvComercialPage } from "./pages/tv/TvComercial";
 
 function CarregandoTelaCheia() {
   return (
@@ -41,6 +42,17 @@ function RotaProtegida({ papeis, children }: { papeis?: string[]; children: Reac
   if (papeis && !temPapel(...papeis)) return <Navigate to={sessao.areaInicial} replace />;
 
   return <Shell>{children}</Shell>;
+}
+
+/** Painel da TV: mesma proteção das rotas de gestão, mas em tela cheia (sem menu lateral). */
+function RotaTelaCheia({ papeis, children }: { papeis: string[]; children: React.ReactNode }) {
+  const { sessao, carregando, temPapel } = useAuth();
+
+  if (carregando) return <CarregandoTelaCheia />;
+  if (!sessao) return <Navigate to="/login" replace />;
+  if (!temPapel(...papeis)) return <Navigate to={sessao.areaInicial} replace />;
+
+  return <>{children}</>;
 }
 
 const PAPEIS_GESTAO = ["Admin", "GestorMaster", "SupervisorComercial", "GestorComercial"];
@@ -102,6 +114,7 @@ export default function App() {
         }
       />
 
+      <Route path="/tv/comercial" element={<RotaTelaCheia papeis={PAPEIS_GESTAO}><TvComercialPage /></RotaTelaCheia>} />
       <Route path="/app/suporte" element={<RotaProtegida><SuportePage /></RotaProtegida>} />
 
       <Route path="/app/portal" element={<RotaProtegida><PortalDashboardPage /></RotaProtegida>} />

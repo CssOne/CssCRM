@@ -398,6 +398,7 @@ public class AccountController(
             menu.Add(new MenuItemDto("crm-relatorio", "Relatório comercial", "chart-column", "/app/crm/relatorio-comercial"));
             menu.Add(new MenuItemDto("crm-consultores", "Consultores", "id-card", "/app/crm/consultores"));
             menu.Add(new MenuItemDto("crm-users", "Usuários", "user-cog", "/app/crm/usuarios"));
+            menu.Add(new MenuItemDto("tv-comercial", "Painel da TV", "monitor", "/tv/comercial"));
         }
 
         if (papeis.Contains(Roles.Admin) || papeis.Contains(Roles.Marketing))

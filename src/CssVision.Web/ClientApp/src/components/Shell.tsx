@@ -17,6 +17,7 @@ import {
   Megaphone,
   Menu as MenuIcon,
   MessageCircle,
+  Monitor,
   Moon,
   Search,
   Settings,
@@ -56,6 +57,7 @@ const iconesPorChave: Record<string, typeof Gauge> = {
   megaphone: Megaphone,
   database: Database,
   "life-buoy": LifeBuoy,
+  monitor: Monitor,
 };
 
 export const PAPEL_LABEL: Record<string, string> = {
@@ -148,6 +150,20 @@ export function Shell({ children }: { children: ReactNode }) {
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-3" aria-label="Navegação principal">
           {itensNav?.map((item) => (
             <div key={item.chave}>
+              {item.rota.startsWith("/tv/") ? (
+                <a
+                  href={item.rota}
+                  target="_blank"
+                  rel="noopener"
+                  title={colapsado ? `${item.rotulo} (abre em outra aba)` : "Abre em outra aba"}
+                  className={`focus-ring flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-[var(--sidebar-fg-muted)] transition-colors hover:bg-[var(--sidebar-bg-active)]/60 hover:text-[var(--sidebar-fg)] ${
+                    colapsado ? "lg:justify-center lg:px-2" : ""
+                  }`}
+                >
+                  <item.icone className="size-4 shrink-0" aria-hidden />
+                  <span className={colapsado ? "lg:hidden" : undefined}>{item.rotulo}</span>
+                </a>
+              ) : (
               <NavLink
                 to={item.rota}
                 end={item.rota === "/app" || item.rota === "/app/crm" || item.rota === "/app/portal"}
@@ -166,6 +182,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 <item.icone className="size-4 shrink-0" aria-hidden />
                 <span className={colapsado ? "lg:hidden" : undefined}>{item.rotulo}</span>
               </NavLink>
+              )}
               {item.divisor && <div className="my-2 border-t border-[var(--sidebar-border)]" />}
             </div>
           ))}

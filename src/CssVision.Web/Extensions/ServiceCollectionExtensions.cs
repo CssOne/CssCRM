@@ -118,6 +118,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IPipelineService, PipelineService>();
         services.AddScoped<IActivityService, ActivityService>();
         services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<ITvComercialService, TvComercialService>();
         services.AddScoped<IGoalService, GoalService>();
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IManagementService, ManagementService>();
