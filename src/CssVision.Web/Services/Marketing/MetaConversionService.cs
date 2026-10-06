@@ -30,7 +30,7 @@ public sealed class MetaConversionService(
 {
     public async Task<bool> EnviarConversaoVendaAsync(CrmLead lead, CrmOpportunity opportunity, CancellationToken ct)
     {
-        var opts = options.Value.ParaLead(lead.ProdutoInteresse);
+        var opts = options.Value.ParaLead(lead.ProdutoInteresse, lead.Regional);
         if (!TemCredenciais(opts, $"oportunidade {opportunity.Id}")) return false;
 
         var payload = MetaConversionEventBuilder.BuildVendaGanhaPayload(lead, opportunity, opts);
@@ -39,7 +39,7 @@ public sealed class MetaConversionService(
 
     public async Task<bool> EnviarEventoEtapaAsync(CrmLead lead, Guid etapaId, string etapaNome, CancellationToken ct, decimal? valor = null)
     {
-        var opts = options.Value.ParaLead(lead.ProdutoInteresse);
+        var opts = options.Value.ParaLead(lead.ProdutoInteresse, lead.Regional);
         if (!TemCredenciais(opts, $"lead {lead.Id} -> etapa \"{etapaNome}\"")) return false;
 
         var payload = MetaConversionEventBuilder.BuildEtapaEventPayload(lead, etapaId, etapaNome, opts, valor);

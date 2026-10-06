@@ -33,13 +33,14 @@ public class MetaCapiOptions
     /// </summary>
     public List<MetaCapiPixelPorOQue> PixelsPorOQue { get; set; } = [];
 
-    /// <summary>Opções efetivas para o lead: troca só o par PixelId/AccessToken quando há pixel dedicado.</summary>
-    public MetaCapiOptions ParaLead(string? oQue)
+    /// <summary>
+    /// Opções efetivas para o lead: troca só o par PixelId/AccessToken quando há pixel dedicado. Vale a
+    /// primeira entrada de <see cref="PixelsPorOQue"/> cujos critérios preenchidos (OQue e/ou Regional)
+    /// batem com o lead; critério vazio é ignorado.
+    /// </summary>
+    public MetaCapiOptions ParaLead(string? oQue, string? regional = null)
     {
-        if (string.IsNullOrWhiteSpace(oQue)) return this;
-
-        var dedicado = PixelsPorOQue.FirstOrDefault(p =>
-            !string.IsNullOrWhiteSpace(p.OQue) && string.Equals(p.OQue.Trim(), oQue.Trim(), StringComparison.OrdinalIgnoreCase));
+        var dedicado = PixelsPorOQue.FirstOrDefault(p => p.Atende(oQue, regional));
         if (dedicado is null) return this;
 
         return new MetaCapiOptions
@@ -56,6 +57,21 @@ public class MetaCapiOptions
 public class MetaCapiPixelPorOQue
 {
     public string OQue { get; set; } = string.Empty;
+
+    /// <summary>Regional do lead (ex.: "MG132"). Opcional: sozinha vale para todos os leads da regional.</summary>
+    public string Regional { get; set; } = string.Empty;
     public string PixelId { get; set; } = string.Empty;
     public string AccessToken { get; set; } = string.Empty;
+
+    internal bool Atende(string? oQue, string? regional)
+    {
+        var exigeOQue = !string.IsNullOrWhiteSpace(OQue);
+        var exigeRegional = !string.IsNullOrWhiteSpace(Regional);
+        if (!exigeOQue && !exigeRegional) return false;
+
+        return (!exigeOQue || Igual(OQue, oQue)) && (!exigeRegional || Igual(Regional, regional));
+    }
+
+    private static bool Igual(string esperado, string? valor) =>
+        !string.IsNullOrWhiteSpace(valor) && string.Equals(esperado.Trim(), valor.Trim(), StringComparison.OrdinalIgnoreCase);
 }
