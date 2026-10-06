@@ -26,6 +26,7 @@ import {
   UserCog,
   Users,
   UsersRound,
+  Wallet,
   X,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
@@ -39,6 +40,7 @@ import { AlertaDistribuicaoLimites } from "./crm/AlertaDistribuicaoLimites";
 import { NotificacoesAtividades } from "./crm/NotificacoesAtividades";
 import { PainelLead } from "./crm/PainelLead";
 import { ConviteNotificacoesPush } from "./crm/NotificacoesPush";
+import { NotificacaoAvisosPagamento } from "./crm/NotificacaoAvisosPagamento";
 
 const iconesPorChave: Record<string, typeof Gauge> = {
   gauge: Gauge,
@@ -57,6 +59,7 @@ const iconesPorChave: Record<string, typeof Gauge> = {
   megaphone: Megaphone,
   database: Database,
   "life-buoy": LifeBuoy,
+  wallet: Wallet,
   monitor: Monitor,
 };
 
@@ -67,6 +70,7 @@ export const PAPEL_LABEL: Record<string, string> = {
   SupervisorComercial: "Supervisor comercial",
   Comercial: "Consultor",
   Marketing: "Marketing",
+  Financeiro: "Financeiro",
 };
 
 const PORTAL_NAV = [
@@ -106,6 +110,8 @@ export function Shell({ children }: { children: ReactNode }) {
   }, [colapsado]);
 
   const emPortal = location.pathname.startsWith("/app/portal");
+  // Financeiro "puro": só gestão da carteira, usuários e avisos — nada de leads, atividades nem avisos de lead novo.
+  const soFinanceiro = !!sessao && sessao.papeis.length === 1 && sessao.papeis[0] === "Financeiro";
   const itensNav = emPortal ? PORTAL_NAV : sessao?.menu.map((m) => ({ ...m, icone: iconesPorChave[m.icone] ?? Gauge, divisor: false }));
 
 
@@ -241,9 +247,10 @@ export function Shell({ children }: { children: ReactNode }) {
           {!emPortal && temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial") && <AlertaDistribuicaoLimites />}
           {children}
         </main>
-        {!emPortal && <LembretesAdesao />}
-        {!emPortal && <NotificacaoNovosLeads usuarioId={sessao.id} />}
-        {!emPortal && <PainelLead />}
+        {!emPortal && !soFinanceiro && <LembretesAdesao />}
+        {!emPortal && !soFinanceiro && <NotificacaoNovosLeads usuarioId={sessao.id} />}
+        {!soFinanceiro && temPapel("Comercial") && <NotificacaoAvisosPagamento usuarioId={sessao.id} />}
+        {!emPortal && !soFinanceiro && <PainelLead />}
         {!emPortal && <ConviteNotificacoesPush />}
       </div>
     </div>

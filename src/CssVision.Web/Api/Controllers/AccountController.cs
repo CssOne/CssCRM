@@ -383,6 +383,16 @@ public class AccountController(
             return new SessionDto(usuario.Id, usuario.Email!, usuario.NomeCompleto, usuario.FotoUrl, papeis.ToList(), "/app/marketing", menu);
         }
 
+        // Financeiro "puro": só gestão da carteira da regional, usuários (ativar/inativar consultor) e avisos de pagamento.
+        if (papeis.Contains(Roles.Financeiro) && papeis.Count == 1)
+        {
+            menu.Add(new MenuItemDto("crm-management", "Gestão comercial", "users-round", "/app/crm/gestao"));
+            menu.Add(new MenuItemDto("avisos-pagamento", "Avisos de pagamento", "wallet", "/app/crm/avisos-pagamento"));
+            menu.Add(new MenuItemDto("crm-users", "Usuários", "user-cog", "/app/crm/usuarios"));
+            menu.Add(new MenuItemDto("suporte", "Suporte", "life-buoy", "/app/suporte"));
+            return new SessionDto(usuario.Id, usuario.Email!, usuario.NomeCompleto, usuario.FotoUrl, papeis.ToList(), "/app/crm/gestao", menu);
+        }
+
         menu.Add(new MenuItemDto("portal", "Portal do Consultor", "briefcase", "/app/portal"));
         menu.Add(new MenuItemDto("crm-overview", "Visão geral", "gauge", "/app/crm"));
         menu.Add(new MenuItemDto("crm-leads", "Leads", "users", "/app/crm/leads"));
@@ -398,6 +408,7 @@ public class AccountController(
             menu.Add(new MenuItemDto("crm-relatorio", "Relatório comercial", "chart-column", "/app/crm/relatorio-comercial"));
             menu.Add(new MenuItemDto("crm-consultores", "Consultores", "id-card", "/app/crm/consultores"));
             menu.Add(new MenuItemDto("crm-users", "Usuários", "user-cog", "/app/crm/usuarios"));
+            menu.Add(new MenuItemDto("avisos-pagamento", "Avisos de pagamento", "wallet", "/app/crm/avisos-pagamento"));
             menu.Add(new MenuItemDto("tv-comercial", "Painel da TV", "monitor", "/tv/comercial"));
         }
 

@@ -11,6 +11,9 @@ public static class PolicyNames
     /// <summary>Gestão comercial: distribuição de leads, metas, configurações do funil.</summary>
     public const string GestaoComercial = "GestaoComercial";
 
+    /// <summary>Gestão leve da carteira (leads por consultor, receber lead, ativar/inativar consultor) e avisos de pagamento: gestão comercial + Financeiro.</summary>
+    public const string GestaoFinanceira = "GestaoFinanceira";
+
     /// <summary>Visão consolidada / total, sem restrição de carteira ou equipe.</summary>
     public const string VisaoTotalComercial = "VisaoTotalComercial";
 

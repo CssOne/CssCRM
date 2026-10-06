@@ -13,7 +13,7 @@ namespace CssVision.Web.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/crm/users")]
-[Authorize(Policy = PolicyNames.GestaoComercial)]
+[Authorize(Policy = PolicyNames.GestaoFinanceira)]
 public class CrmUsersController(IUserManagementService userService) : ControllerBase
 {
     [HttpGet]
@@ -21,10 +21,12 @@ public class CrmUsersController(IUserManagementService userService) : Controller
         Ok(await userService.ListarAsync(filtro, ct));
 
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<ActionResult<UserSummaryDto>> ObterPorId(Guid id, CancellationToken ct) =>
         Ok(await userService.ObterPorIdAsync(id, ct));
 
     [HttpPost]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<ActionResult<UserSummaryDto>> Criar(UserCreateRequest request, CancellationToken ct)
     {
         var resultado = await userService.CriarAsync(request, ct);
@@ -32,10 +34,17 @@ public class CrmUsersController(IUserManagementService userService) : Controller
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<ActionResult<UserSummaryDto>> Atualizar(Guid id, UserUpdateRequest request, CancellationToken ct) =>
         Ok(await userService.AtualizarAsync(id, request, ct));
 
+    /// <summary>Ativa/inativa a conta de um consultor — aberto também ao Financeiro (só consultores da regional dele).</summary>
+    [HttpPut("{id:guid}/ativo")]
+    public async Task<ActionResult<UserSummaryDto>> AlterarAtivo(Guid id, UserAtivoRequest request, CancellationToken ct) =>
+        Ok(await userService.AlterarAtivoAsync(id, request.Ativo, ct));
+
     [HttpPost("{id:guid}/reset-password")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<IActionResult> RedefinirSenha(Guid id, ResetPasswordRequest request, CancellationToken ct)
     {
         await userService.RedefinirSenhaAsync(id, request, ct);
@@ -43,6 +52,7 @@ public class CrmUsersController(IUserManagementService userService) : Controller
     }
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<IActionResult> Excluir(Guid id, CancellationToken ct)
     {
         await userService.ExcluirAsync(id, ct);

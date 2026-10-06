@@ -17,7 +17,13 @@ public static class Roles
     /// <summary>Acompanhamento de tráfego pago (leads, origem, campanhas) — não tem acesso ao resto do CRM.</summary>
     public const string Marketing = "Marketing";
 
-    public static readonly string[] All = [Admin, GestorMaster, GestorComercial, Comercial, Marketing, SupervisorComercial];
+    /// <summary>
+    /// Financeiro: atribuído a uma regional, vê só os dados dela. Acompanha a gestão comercial (leads por consultor, quem recebe lead),
+    /// ativa/inativa contas de consultores e avisa os consultores de pagamentos em aberto — não acessa leads, pipeline nem o resto do CRM.
+    /// </summary>
+    public const string Financeiro = "Financeiro";
+
+    public static readonly string[] All = [Admin, GestorMaster, GestorComercial, Comercial, Marketing, SupervisorComercial, Financeiro];
 
     /// <summary>Perfis com acesso à página de tráfego pago.</summary>
     public static readonly string[] AreaMarketing = [Admin, Marketing];
@@ -33,4 +39,7 @@ public static class Roles
 
     /// <summary>Perfis que gerenciam equipe comercial (distribuição, metas, configurações do funil).</summary>
     public static readonly string[] GestaoComercial = [Admin, GestorMaster, SupervisorComercial, GestorComercial];
+
+    /// <summary>Perfis que acompanham a carteira dos consultores, ligam/desligam a chegada de lead e avisam de pagamentos em aberto.</summary>
+    public static readonly string[] GestaoFinanceira = [Admin, GestorMaster, SupervisorComercial, GestorComercial, Financeiro];
 }

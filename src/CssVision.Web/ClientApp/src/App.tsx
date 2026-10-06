@@ -25,6 +25,9 @@ import { TrafegoPagoPage } from "./pages/marketing/TrafegoPago";
 import { BackupsPage } from "./pages/admin/Backups";
 import { SuportePage } from "./pages/Suporte";
 import { TvComercialPage } from "./pages/tv/TvComercial";
+import { GestaoFinanceiraPage } from "./pages/crm/GestaoFinanceira";
+import { UsuariosFinanceiroPage } from "./pages/crm/UsuariosFinanceiro";
+import { AvisosPagamentoPage } from "./pages/crm/AvisosPagamento";
 
 function CarregandoTelaCheia() {
   return (
@@ -56,6 +59,15 @@ function RotaTelaCheia({ papeis, children }: { papeis: string[]; children: React
 }
 
 const PAPEIS_GESTAO = ["Admin", "GestorMaster", "SupervisorComercial", "GestorComercial"];
+/** Gestão + Financeiro: gestão comercial (carteira e "recebe lead"), usuários (ativar/inativar consultor) e avisos de pagamento. */
+const PAPEIS_GESTAO_FINANCEIRA = [...PAPEIS_GESTAO, "Financeiro"];
+
+/** O Financeiro "puro" vê a versão enxuta da tela; os demais, a completa. */
+function PorPerfil({ financeiro, padrao }: { financeiro: React.ReactNode; padrao: React.ReactNode }) {
+  const { sessao } = useAuth();
+  const soFinanceiro = !!sessao && sessao.papeis.length === 1 && sessao.papeis[0] === "Financeiro";
+  return <>{soFinanceiro ? financeiro : padrao}</>;
+}
 const PAPEIS_ADMIN = ["Admin", "GestorMaster", "SupervisorComercial"];
 const PAPEIS_MARKETING = ["Admin", "Marketing"];
 /** Backups do banco: só administradores (o arquivo é a base inteira). */
@@ -84,8 +96,8 @@ export default function App() {
       <Route
         path="/app/crm/gestao"
         element={
-          <RotaProtegida papeis={PAPEIS_GESTAO}>
-            <ManagementPage />
+          <RotaProtegida papeis={PAPEIS_GESTAO_FINANCEIRA}>
+            <PorPerfil financeiro={<GestaoFinanceiraPage />} padrao={<ManagementPage />} />
           </RotaProtegida>
         }
       />
@@ -108,8 +120,16 @@ export default function App() {
       <Route
         path="/app/crm/usuarios"
         element={
-          <RotaProtegida papeis={PAPEIS_GESTAO}>
-            <UsersPage />
+          <RotaProtegida papeis={PAPEIS_GESTAO_FINANCEIRA}>
+            <PorPerfil financeiro={<UsuariosFinanceiroPage />} padrao={<UsersPage />} />
+          </RotaProtegida>
+        }
+      />
+      <Route
+        path="/app/crm/avisos-pagamento"
+        element={
+          <RotaProtegida papeis={PAPEIS_GESTAO_FINANCEIRA}>
+            <AvisosPagamentoPage />
           </RotaProtegida>
         }
       />
