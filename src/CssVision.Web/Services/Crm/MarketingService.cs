@@ -432,7 +432,7 @@ public sealed class MarketingService(ApplicationDbContext db, ICurrentUserServic
     /// vem do Notion/formulário com variações).
     /// </summary>
     internal static string? NormalizarRegional(string? regional) =>
-        string.IsNullOrWhiteSpace(regional) ? null : new string(regional.Where(c => !char.IsWhiteSpace(c)).ToArray()).ToUpperInvariant();
+        NomeDeRegional.Normalizar(regional);
 
     private static string? Vazio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
 

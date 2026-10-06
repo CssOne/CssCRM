@@ -24,7 +24,9 @@ public record PublicLeadCreateRequest(
     string? UtmSource = null,
     string? UtmMedium = null,
     string? UtmTerm = null,
-    string? UtmCampaign = null);
+    string? UtmCampaign = null,
+    /// <summary>Regional do lead (ex.: MG134): o rodízio escolhe só entre consultores dela. Sem regional, vale o rodízio geral.</summary>
+    string? Regional = null);
 
 /// <summary>Devolvido ao formulário pra montar a página de obrigado com foto + WhatsApp do consultor sorteado.</summary>
 public record PublicLeadResultDto(

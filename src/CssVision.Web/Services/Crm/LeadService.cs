@@ -266,7 +266,7 @@ public sealed class LeadService(
         }
         else
         {
-            responsavelId = await assignment.ProximoResponsavelAsync(request.ProdutoInteresse, ct);
+            responsavelId = await assignment.ProximoResponsavelAsync(request.ProdutoInteresse, request.Regional, ct);
         }
 
         // Leads automáticos (Meta Ads, site) ficam de propósito sem etapa — "ninguém pegou
