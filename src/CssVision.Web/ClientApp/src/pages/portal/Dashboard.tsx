@@ -96,7 +96,7 @@ export function PortalDashboardPage() {
 
   const { indicadores, meta, evolucaoVendas, desempenhoPorVendedor } = dashboard;
   const primeiroNome = sessao?.nomeCompleto.split(" ")[0] ?? "";
-  const comissaoPrevista = indicadores.vendasGanhasAdesaoValor;
+  const valorGanho = indicadores.vendasGanhasAdesaoValor;
   const ranking = [...desempenhoPorVendedor].sort((a, b) => b.valorAdesao - a.valorAdesao).slice(0, 5);
   const medalhas = [Trophy, Medal, Medal];
 
@@ -125,10 +125,10 @@ export function PortalDashboardPage() {
         />
         <PortalStatCard titulo="Vendas realizadas" valor={String(indicadores.vendasGanhasQuantidade)} icone={ShoppingCart} subtitulo="No período atual" />
         <PortalStatCard
-          titulo="Comissão prevista"
-          valor={formatarMoeda(comissaoPrevista)}
+          titulo="Valor ganho"
+          valor={formatarMoeda(valorGanho)}
           icone={Coins}
-          subtitulo="Estimativa (100% do valor da adesão)"
+          subtitulo="Adesão recebida nas vendas do período"
         />
       </div>
 

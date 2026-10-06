@@ -1,7 +1,7 @@
 import { ArrowRightLeft, Car, Clock, Mail, Phone, Trash2, UserCog, XCircle } from "lucide-react";
 import type { DragEvent, MouseEvent, ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { diasRelativos, formatarDataHora, formatarTelefone } from "../../lib/format";
+import { diasRelativos, formatarDataHora, formatarMoeda, formatarTelefone } from "../../lib/format";
 import type { LeadKanbanCard } from "../../lib/types";
 import { TIPO_INDICACAO_LEAD } from "../../lib/opcoesLead";
 import { Avatar, Badge } from "../ui";
@@ -44,6 +44,7 @@ export function CartaoLead({
   podeGerir,
   podeExcluir,
   podeVerOrigem,
+  mostrarAdesao = false,
   onAbrir,
   onMover,
   onTrocarResponsavel,
@@ -56,6 +57,8 @@ export function CartaoLead({
   podeGerir: boolean;
   podeExcluir: boolean;
   podeVerOrigem: boolean;
+  /** Coluna "Cotação": mostra o valor da adesão informado ao mover o lead para lá. */
+  mostrarAdesao?: boolean;
   onAbrir: () => void;
   onMover: () => void;
   onTrocarResponsavel: () => void;
@@ -124,6 +127,12 @@ export function CartaoLead({
         {cartao.semContato && <Badge variant="warning">Sem contato</Badge>}
         {cartao.arquivado && <Badge variant="neutral">Arquivado</Badge>}
       </div>
+
+      {mostrarAdesao && cartao.valorAdesao != null && (
+        <p className="mt-2 text-xs text-[var(--fg-muted)]" title="Valor da adesão informado na cotação">
+          Adesão: <span className="font-semibold text-[var(--fg)]">{formatarMoeda(cartao.valorAdesao)}</span>
+        </p>
+      )}
 
       {/* Contato */}
       <div className="mt-2 space-y-0.5 text-xs text-[var(--fg-muted)]">
