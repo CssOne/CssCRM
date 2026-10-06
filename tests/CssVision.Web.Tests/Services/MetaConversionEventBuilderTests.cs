@@ -156,4 +156,22 @@ public class MetaConversionEventBuilderTests
 
         Assert.Equal(nomeEsperado, payload.Data[0].EventName);
     }
+
+    [Fact]
+    public void BuildVendaGanhaPayload_DeveUsarPagamentoDeAdesaoComoValor_QuandoValorFinalZerado()
+    {
+        var lead = new CrmLead { Id = Guid.NewGuid(), NomeOuRazaoSocial = "Wellington", TipoPessoa = TipoPessoa.Fisica };
+        var opportunity = new CrmOpportunity { Id = Guid.NewGuid(), LeadId = lead.Id, Titulo = "Venda", ValorFinal = 0m, PagamentoAdesao = 1495m };
+
+        var payload = MetaConversionEventBuilder.BuildVendaGanhaPayload(lead, opportunity, new MetaCapiOptions());
+
+        Assert.All(payload.Data, e => Assert.Equal(1495m, e.CustomData.Value));
+    }
+
+    [Fact]
+    public void ValorDaVenda_DeveCairNoValorFinal_QuandoNaoHaAdesao()
+    {
+        Assert.Equal(100m, MetaConversionEventBuilder.ValorDaVenda(new CrmOpportunity { ValorFinal = 100m }));
+        Assert.Null(MetaConversionEventBuilder.ValorDaVenda(new CrmOpportunity { ValorFinal = 0m, PagamentoAdesao = 0m }));
+    }
 }

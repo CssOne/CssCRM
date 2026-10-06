@@ -26,10 +26,21 @@ public static partial class MetaConversionEventBuilder
     [GeneratedRegex(@"\s+")]
     private static partial Regex EspacosRegex();
 
+    /// <summary>
+    /// Valor da venda pro pixel: o pagamento de adesão, que é o dinheiro que entrou. Na falta dele, o
+    /// ValorFinal da oportunidade (que muitas vezes fica zerado quando a venda é lançada pelo quadro).
+    /// </summary>
+    internal static decimal? ValorDaVenda(CrmOpportunity opportunity)
+    {
+        if (opportunity.PagamentoAdesao is > 0) return opportunity.PagamentoAdesao;
+        return opportunity.ValorFinal is > 0 ? opportunity.ValorFinal : null;
+    }
+
     public static MetaCapiPayload BuildVendaGanhaPayload(CrmLead lead, CrmOpportunity opportunity, MetaCapiOptions options)
     {
         var eventTime = ToUnixTime(opportunity.DataEfetivaFechamento ?? DateTimeOffset.UtcNow);
         var userData = BuildUserData(lead);
+        var valor = ValorDaVenda(opportunity);
 
         var eventoCustomizado = new MetaCapiEvent(
             options.EventoCustomizadoNome,
@@ -37,7 +48,7 @@ public static partial class MetaConversionEventBuilder
             ActionSource,
             $"custom_{opportunity.Id}",
             userData,
-            new MetaCapiCustomData(options.EventSourceLabel, options.EventSourceLabel, opportunity.ValorFinal, DefaultCurrency));
+            new MetaCapiCustomData(options.EventSourceLabel, options.EventSourceLabel, valor, DefaultCurrency));
 
         var eventoPurchase = new MetaCapiEvent(
             PurchaseEventName,
@@ -45,7 +56,7 @@ public static partial class MetaConversionEventBuilder
             ActionSource,
             $"purchase_{opportunity.Id}",
             userData,
-            new MetaCapiCustomData(options.EventSourceLabel, options.EventSourceLabel, opportunity.ValorFinal, DefaultCurrency));
+            new MetaCapiCustomData(options.EventSourceLabel, options.EventSourceLabel, valor, DefaultCurrency));
 
         return new MetaCapiPayload([eventoCustomizado, eventoPurchase]);
     }
