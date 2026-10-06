@@ -78,6 +78,36 @@ public class TvComercialServiceTests
     }
 
     [Fact]
+    public async Task Painel_NaoContaVendaComDataFutura_NemDeOutroMes()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var admin = await factory.CriarUsuarioAsync(db, "Admin");
+        var ana = await factory.CriarUsuarioAsync(db, "Ana");
+        var ganho = await factory.CriarEtapaAsync(db, "Ganho", 9, TipoEtapaPipeline.Ganho);
+        var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id };
+        db.CrmLeads.Add(lead);
+        await db.SaveChangesAsync();
+        CrmOpportunity V(DateTimeOffset data, decimal adesao) => new()
+        {
+            LeadId = lead.Id, Titulo = "V", ResponsavelId = ana.Id, EtapaId = ganho.Id, PagamentoAdesao = adesao, DataEfetivaFechamento = data,
+        };
+        var hoje = HorarioBrasilia.Hoje;
+        db.CrmOpportunities.AddRange(
+            V(HorarioBrasilia.Inicio(hoje).AddHours(12), 100),                                   // hoje: conta
+            V(HorarioBrasilia.Inicio(hoje.AddDays(1)).AddHours(12), 999),                         // amanhã: venda futura, não conta
+            V(HorarioBrasilia.Inicio(HorarioBrasilia.PrimeiroDiaDoMes(hoje)).AddDays(-2), 888));  // mês passado: não conta
+        await db.SaveChangesAsync();
+
+        var r = await Servico(db, admin.Id).ObterAsync(null, null, CancellationToken.None);
+
+        Assert.Equal(1, r.Resumo.VendasNoMes);
+        Assert.Equal(100m, r.Resumo.ValorNoMes);
+        Assert.Equal(1, r.RankingConsultores.Single().QuantidadeVendas);
+        Assert.Equal(r.Resumo.VendasNoMes, r.EvolucaoMensal.Last().QuantidadeAcumulada); // total e evolução diária batem
+    }
+
+    [Fact]
     public async Task Painel_GestorRegionalSoVeAPropriaRegional()
     {
         using var factory = new TestDbContextFactory();
