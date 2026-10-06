@@ -179,7 +179,8 @@ public sealed class TvNotionFonte(IOptions<NotionSyncOptions> opcoes, IMemoryCac
         {
             var doIndicador = registros.Where(r => r.Indicador == def.Id).OrderByDescending(r => r.Criado).ToList();
             return new TvAdministrativoIndicadorDto(def.Id, def.Rotulo, def.Acao, doIndicador.Count,
-                doIndicador.Count(r => HorarioBrasilia.Dia(r.Criado) == diaBrasilia), doIndicador.FirstOrDefault().Registro);
+                doIndicador.Count(r => HorarioBrasilia.Dia(r.Criado) == diaBrasilia), doIndicador.FirstOrDefault().Registro,
+                doIndicador.Select(r => r.Registro with { Hoje = HorarioBrasilia.Dia(r.Criado) == diaBrasilia }).ToList());
         }).ToList();
         return new TvAdministrativoDto(indicadores);
     }

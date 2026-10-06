@@ -172,8 +172,15 @@ public sealed class TvComercialService(
                 return new TvVendaDto(v.Id, p.NomeCompleto, p.FotoUrl, p.Regional ?? SemRegional, v.Cliente, v.Placa, v.Origem, v.Adesao, v.Data, v.Atualizada);
             }).ToList();
 
+        var vendasDoMes = vendas.OrderByDescending(v => v.Data)
+            .Select(v =>
+            {
+                var p = pessoas[v.ResponsavelId];
+                return new TvVendaMesDto(v.Id, v.ResponsavelId, p.NomeCompleto, p.FotoUrl, p.Regional ?? SemRegional, v.Cliente, v.Placa, v.Origem, v.Adesao, v.Data);
+            }).ToList();
+
         return new TvComercialDto(new TvPeriodoDto(primeiro.Month, primeiro.Year), resumo, rankingVendas, rankingAdesao, rankingConversao,
-            rankingRegionais, evolucao, ultimas, DateTimeOffset.UtcNow, administrativo, vendas.Count(v => v.SoNoNotion));
+            rankingRegionais, evolucao, ultimas, DateTimeOffset.UtcNow, administrativo, vendas.Count(v => v.SoNoNotion), vendasDoMes);
     }
 
     /// <summary>

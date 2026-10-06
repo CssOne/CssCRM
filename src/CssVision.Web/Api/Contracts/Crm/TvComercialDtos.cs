@@ -21,6 +21,11 @@ public record TvVendaDto(
     Guid VendaId, string Consultor, string? FotoUrl, string Regional, string? Cliente, string? NumeroContrato,
     string? Origem, decimal Valor, DateTimeOffset DataVenda, DateTimeOffset AtualizadaEm);
 
+/// <summary>Venda do mês com o consultor (id incluso): base dos detalhes por consultor ao clicar nos cards do painel.</summary>
+public record TvVendaMesDto(
+    Guid VendaId, Guid ConsultorId, string Consultor, string? FotoUrl, string Regional, string? Cliente, string? Placa,
+    string? Origem, decimal Valor, DateTimeOffset DataVenda);
+
 public record TvEvolucaoDto(
     DateOnly Data, int QuantidadeVendasDia, decimal ValorVendidoDia, int QuantidadeAcumulada, decimal ValorAcumulado);
 
@@ -38,11 +43,16 @@ public record TvComercialDto(
     /// <summary>Indicadores administrativos do Notion; nulo se o Notion não respondeu.</summary>
     TvAdministrativoDto? Administrativo = null,
     /// <summary>Quantas das vendas do painel vêm só do Notion (base MG134), já sem as que o CRM também tem.</summary>
-    int VendasSoNoNotion = 0);
+    int VendasSoNoNotion = 0,
+    /// <summary>Todas as vendas do mês exibido (as do CRM e as só do Notion), da mais recente para a mais antiga.</summary>
+    IReadOnlyList<TvVendaMesDto>? VendasDoMes = null);
 
-public record TvAdministrativoRegistroDto(string Pessoa, string? FotoUrl, string? Cliente, string? Placa, string? TipoEvento, string Data);
+public record TvAdministrativoRegistroDto(string Pessoa, string? FotoUrl, string? Cliente, string? Placa, string? TipoEvento, string Data, bool Hoje = false);
 
-public record TvAdministrativoIndicadorDto(string Id, string Rotulo, string Acao, int Total, int Hoje, TvAdministrativoRegistroDto? Ultimo);
+public record TvAdministrativoIndicadorDto(
+    string Id, string Rotulo, string Acao, int Total, int Hoje, TvAdministrativoRegistroDto? Ultimo,
+    /// <summary>Todos os registros do mês, do mais recente para o mais antigo (detalhe por pessoa ao clicar no card).</summary>
+    IReadOnlyList<TvAdministrativoRegistroDto>? Registros = null);
 
 /// <summary>Reintegrações, eventos finalizados e rastreadores do mês, direto da base operacional do Notion.</summary>
 public record TvAdministrativoDto(IReadOnlyList<TvAdministrativoIndicadorDto> Indicadores);
