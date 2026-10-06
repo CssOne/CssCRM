@@ -52,7 +52,11 @@ public sealed class TvComercialService(
         DateOnly primeiro, DateOnly hoje, List<Guid>? visiveis, IReadOnlyList<TvNotionVenda> vendasNotion, TvAdministrativoDto? administrativo, CancellationToken ct)
     {
         var inicioMes = HorarioBrasilia.Inicio(primeiro);
+        // Só vendas do mês exibido e que já aconteceram: no mês corrente o limite é o fim de hoje. Venda com data futura (data digitada
+        // errada) não conta nos totais, nos rankings nem na meta — antes entrava só porque a data ainda cai dentro do mês.
         var fimMes = HorarioBrasilia.Inicio(primeiro.AddMonths(1));
+        var fimDeHoje = HorarioBrasilia.Inicio(hoje.AddDays(1));
+        if (fimDeHoje < fimMes) fimMes = fimDeHoje;
 
         var vendasQuery = db.CrmOpportunities.AsNoTracking()
             .Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho
@@ -73,6 +77,8 @@ public sealed class TvComercialService(
 
         // ----- vendas que existem só no Notion (base MG134), sem repetir as que o CRM já tem -----
         var regionais = await db.CrmRegionais.AsNoTracking().Where(r => r.Ativa).Select(r => new { r.Id, r.Nome }).ToListAsync(ct);
+        // O Notion também é conferido aqui (a consulta dele filtra por data, mas o painel não confia só nisso).
+        vendasNotion = vendasNotion.Where(v => v.DataVenda >= inicioMes && v.DataVenda < fimMes).ToList();
         var (vendasSoNoNotion, pessoasDoNotion) = await VendasSoNoNotionAsync(vendasNotion, vendas, visiveis, regionais.FirstOrDefault(r => r.Nome == "MG134")?.Id, ct);
         vendas = vendas.Concat(vendasSoNoNotion).ToList();
 
