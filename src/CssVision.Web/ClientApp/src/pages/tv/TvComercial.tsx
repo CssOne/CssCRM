@@ -5,6 +5,8 @@ import type { ApexOptions } from "apexcharts";
 import { api, isAbortError } from "../../lib/api";
 import { useAtualizarAoVivo } from "../../lib/useAoVivo";
 import type { TvAdministrativoIndicador, TvComercial, TvConversao, TvRanking, TvRegional, TvVenda } from "../../lib/types";
+import { TvDetalhes, type Detalhe } from "./TvDetalhes";
+import { dataBr, diaBrasilia, Foto, horaBr, moeda, moedaExata } from "./tvComum";
 import "./tv.css";
 
 type ModoRanking = "vendas" | "adesao" | "conversao";
@@ -33,34 +35,17 @@ const PALETA: Record<Tema, Record<"grid" | "axis" | "line" | "fill" | "tipBg" | 
   dark: { grid: "rgba(148,184,224,.16)", axis: "#8099b5", line: "#4fc3f7", fill: "#4fc3f7", tipBg: "#0e2038", tipText: "#f0f6fd", tipBorder: "rgba(148,184,224,.22)" },
 };
 
-const moeda = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
-const moedaExata = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const diaBrasilia = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
-const dataBr = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric" });
-const horaBr = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
-
-const iniciais = (nome: string) => nome.split(" ").filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("");
 function ha(valor: string, agora: Date) {
   const min = Math.max(0, Math.round((agora.getTime() - new Date(valor).getTime()) / 60000));
   return min < 1 ? "agora" : min < 60 ? `há ${min} min` : min < 1440 ? `há ${Math.floor(min / 60)}h` : `há ${Math.floor(min / 1440)}d`;
 }
 const diaDoMes = (iso: string) => Number(iso.slice(8, 10));
 
-function Foto({ nome, url, grande = false }: { nome: string; url?: string | null; grande?: boolean }) {
-  const [falhou, setFalhou] = useState<string>();
-  const mostrar = Boolean(url && falhou !== url);
-  return (
-    <div className={`avatar ${grande ? "avatar-large" : ""}`} title={mostrar ? nome : `${nome} · foto indisponível`} aria-label={nome}>
-      {mostrar ? <img src={url!} alt={nome} width={grande ? 90 : 35} height={grande ? 90 : 35} referrerPolicy="no-referrer" onError={() => setFalhou(url ?? undefined)} /> : <span aria-hidden="true">{iniciais(nome)}</span>}
-    </div>
-  );
-}
-
-function Metrica({ rotulo, valor, dica, icone: Icone, comparacao }: { rotulo: string; valor: string; dica: string; icone: typeof ShoppingBag; comparacao?: { delta: number; rotulo: string } }) {
+function Metrica({ rotulo, valor, dica, icone: Icone, comparacao, aoAbrir }: { rotulo: string; valor: string; dica: string; icone: typeof ShoppingBag; comparacao?: { delta: number; rotulo: string }; aoAbrir: () => void }) {
   const sobe = comparacao && comparacao.delta > 0.05;
   const desce = comparacao && comparacao.delta < -0.05;
   return (
-    <div className="metric">
+    <button type="button" className="metric" onClick={aoAbrir} aria-label={`${rotulo}: ${valor}. Abrir detalhes por consultor`}>
       <div className="metric-icon"><Icone size={26} /></div>
       <div>
         <span>{rotulo}</span>
@@ -74,16 +59,16 @@ function Metrica({ rotulo, valor, dica, icone: Icone, comparacao }: { rotulo: st
           </div>
         )}
       </div>
-    </div>
+    </button>
   );
 }
 
-function LinhaRanking({ item, modo, maxAdesao }: { item: TvRanking | TvConversao; modo: ModoRanking; maxAdesao: number }) {
+function LinhaRanking({ item, modo, maxAdesao, aoAbrir }: { item: TvRanking | TvConversao; modo: ModoRanking; maxAdesao: number; aoAbrir: () => void }) {
   const v = item as TvRanking;
   const c = item as TvConversao;
   const progresso = modo === "vendas" ? v.percentualMeta ?? 0 : modo === "adesao" ? (maxAdesao ? (v.valorVendido * 100) / maxAdesao : 0) : c.taxaConversao;
   return (
-    <div className={`rank-row rank-row-${modo === "vendas" ? "sales" : modo === "adesao" ? "value" : "conversion"}${item.posicao <= 3 ? ` top-${item.posicao}` : ""}`}>
+    <button type="button" className={`rank-row rank-row-${modo === "vendas" ? "sales" : modo === "adesao" ? "value" : "conversion"}${item.posicao <= 3 ? ` top-${item.posicao}` : ""}`} onClick={aoAbrir} aria-label={`${item.nome}. Abrir detalhes`}>
       <div className="rank-position">{MEDALHAS[item.posicao - 1] ?? String(item.posicao).padStart(2, "0")}</div>
       <Foto nome={item.nome} url={item.fotoUrl} />
       <div className="rank-person"><strong>{item.nome}</strong><span>{item.regional}</span></div>
@@ -106,11 +91,11 @@ function LinhaRanking({ item, modo, maxAdesao }: { item: TvRanking | TvConversao
           </div>
         </>
       )}
-    </div>
+    </button>
   );
 }
 
-function PainelRankingsBase({ dados, periodo }: { dados: TvComercial; periodo: string }) {
+function PainelRankingsBase({ dados, periodo, aoAbrir }: { dados: TvComercial; periodo: string; aoAbrir: (d: Detalhe) => void }) {
   const [modo, setModo] = useState<ModoRanking>("vendas");
   const [pausado, setPausado] = useState(false);
   const lista = useRef<HTMLDivElement>(null);
@@ -165,7 +150,7 @@ function PainelRankingsBase({ dados, periodo }: { dados: TvComercial; periodo: s
       </div>
       <div className={`ranking-auto-status${pausado ? " paused" : ""}`}><span>{pausado ? "Rolagem pausada" : "Rolagem automática"}</span><i aria-hidden="true" /></div>
       <div className="ranking-list" ref={lista}>
-        {itens.map((i) => <LinhaRanking key={i.consultorId} item={i} modo={modo} maxAdesao={maxAdesao} />)}
+        {itens.map((i) => <LinhaRanking key={i.consultorId} item={i} modo={modo} maxAdesao={maxAdesao} aoAbrir={() => aoAbrir({ tipo: "consultor", id: i.consultorId })} />)}
         {!itens.length && <div className="empty">{modo === "conversao" ? "Nenhum lead recebido neste período" : "Nenhuma venda neste período"}</div>}
       </div>
     </div>
@@ -175,10 +160,10 @@ const PainelRankings = memo(PainelRankingsBase);
 
 const ICONES_ADMINISTRATIVO: Record<string, typeof Activity> = { reintegration: RefreshCw, claim: CheckCircle2, tracker: Satellite };
 
-function CartaoAdministrativo({ item }: { item: TvAdministrativoIndicador }) {
+function CartaoAdministrativo({ item, aoAbrir }: { item: TvAdministrativoIndicador; aoAbrir: () => void }) {
   const Icone = ICONES_ADMINISTRATIVO[item.id] ?? Activity;
   return (
-    <div className={`administrative-card administrative-card-${item.id}`} aria-label={`${item.rotulo}: ${item.total}`}>
+    <button type="button" className={`administrative-card administrative-card-${item.id}`} onClick={aoAbrir} aria-label={`${item.rotulo}: ${item.total}. Abrir detalhes`}>
       <div className="administrative-icon"><Icone /></div>
       <div className="administrative-card-main">
         <span>{item.rotulo}</span>
@@ -186,11 +171,11 @@ function CartaoAdministrativo({ item }: { item: TvAdministrativoIndicador }) {
         <small>{item.hoje} {item.hoje === 1 ? "registro hoje" : "registros hoje"}</small>
       </div>
       <div className="administrative-person"><span>Último registro</span><strong>{item.ultimo?.pessoa || "Sem registros"}</strong></div>
-    </div>
+    </button>
   );
 }
 
-function PainelAdministrativo({ indicadores }: { indicadores?: TvAdministrativoIndicador[] | null }) {
+function PainelAdministrativo({ indicadores, aoAbrir }: { indicadores?: TvAdministrativoIndicador[] | null; aoAbrir: (d: Detalhe) => void }) {
   return (
     <div className="panel administrative">
       <div className="panel-title compact-title">
@@ -198,19 +183,19 @@ function PainelAdministrativo({ indicadores }: { indicadores?: TvAdministrativoI
         <span className={`administrative-hint${indicadores ? "" : " error"}`}>{indicadores ? "Dados do Notion" : "Notion indisponível"}</span>
       </div>
       <div className="administrative-grid">
-        {(indicadores ?? []).map((i) => <CartaoAdministrativo key={i.id} item={i} />)}
+        {(indicadores ?? []).map((i) => <CartaoAdministrativo key={i.id} item={i} aoAbrir={() => aoAbrir({ tipo: "admin", id: i.id })} />)}
       </div>
     </div>
   );
 }
 
-function PainelRegionais({ itens, compacto = false }: { itens: TvRegional[]; compacto?: boolean }) {
+function PainelRegionais({ itens, compacto = false, aoAbrir }: { itens: TvRegional[]; compacto?: boolean; aoAbrir: (d: Detalhe) => void }) {
   return (
     <div className={`panel regions${compacto ? " regions-compact" : ""}`}>
       <div className="panel-title compact-title"><div><span className="eyebrow">PERFORMANCE</span><h1>Ranking regional</h1></div></div>
       <div className="region-list">
         {itens.slice(0, compacto ? 2 : 4).map((x) => (
-          <div className="region-row" key={x.regionalId}>
+          <button type="button" className="region-row" key={x.regionalId} onClick={() => aoAbrir({ tipo: "regional", id: x.regionalId })} aria-label={`Regional ${x.nome}. Abrir detalhes`}>
             <b>{x.posicao}</b>
             <div>
               <strong>{x.nome}</strong>
@@ -218,7 +203,7 @@ function PainelRegionais({ itens, compacto = false }: { itens: TvRegional[]; com
               <i><em style={{ width: `${Math.min(x.percentualMeta ?? x.percentualParticipacao, 100)}%` }} /></i>
             </div>
             <strong>{x.percentualMeta == null ? `${x.percentualParticipacao.toFixed(0)}%` : `${x.percentualMeta.toFixed(1)}%`}</strong>
-          </div>
+          </button>
         ))}
         {!itens.length && <div className="empty">Sem regionais no período</div>}
       </div>
@@ -226,17 +211,17 @@ function PainelRegionais({ itens, compacto = false }: { itens: TvRegional[]; com
   );
 }
 
-function PainelUltimas({ itens, agora }: { itens: TvVenda[]; agora: Date }) {
+function PainelUltimas({ itens, agora, aoAbrir }: { itens: TvVenda[]; agora: Date; aoAbrir: (d: Detalhe) => void }) {
   return (
     <div className="panel latest">
       <div className="panel-title compact-title"><div><span className="eyebrow">TEMPO REAL</span><h1>Últimas vendas</h1></div><Activity size={20} className="pulse" /></div>
       <div className="sales-list">
         {itens.slice(0, 5).map((x) => (
-          <div className="sale-row" key={x.vendaId}>
+          <button type="button" className="sale-row" key={x.vendaId} onClick={() => aoAbrir({ tipo: "venda", id: x.vendaId })} aria-label={`Venda de ${x.consultor}. Abrir detalhes`}>
             <Foto nome={x.consultor} url={x.fotoUrl} />
             <div><strong>{x.consultor}</strong><span>{x.regional}{x.cliente ? ` · ${x.cliente}` : ""}</span></div>
             <div><strong>{moeda.format(x.valor)}</strong><span>{ha(x.atualizadaEm, agora)}</span></div>
-          </div>
+          </button>
         ))}
         {!itens.length && <div className="empty">Nenhuma venda neste período</div>}
       </div>
@@ -293,6 +278,11 @@ export function TvComercialPage() {
   const [recarregar, setRecarregar] = useState(0);
   const [agora, setAgora] = useState(new Date());
   const [fila, setFila] = useState<Array<{ venda: TvVenda; posicao: number; vendasNoMes: number }>>([]);
+  // Janela de detalhes: pilha, para navegar de um card ao consultor/venda e voltar.
+  const [pilha, setPilha] = useState<Detalhe[]>([]);
+  const abrirDetalhe = useCallback((d: Detalhe) => setPilha((p) => [...p, d]), []);
+  const voltarDetalhe = useCallback(() => setPilha((p) => p.slice(0, -1)), []);
+  const fecharDetalhe = useCallback(() => setPilha([]), []);
   const [forcado] = useState(() => new URLSearchParams(window.location.search).get("tema"));
   const vistas = useRef<Set<string> | null>(null);
   const audio = useRef<HTMLAudioElement>(null);
@@ -440,15 +430,16 @@ export function TvComercialPage() {
         </header>
         {erro && <div className="stale">Exibindo os últimos dados válidos · atualização automática em andamento</div>}
         <section className="content">
-          <div className="left-column"><PainelRankings dados={dados} periodo={periodoRotulo} /></div>
+          <div className="left-column"><PainelRankings dados={dados} periodo={periodoRotulo} aoAbrir={abrirDetalhe} /></div>
           <div className="right-column">
             <div className="metrics">
-              <Metrica rotulo="VENDAS HOJE" valor={String(dados.resumo.vendasHoje)} dica="negócios confirmados" icone={ShoppingBag} comparacao={cmp(comparacoes?.vendasHoje, "vs mesmo dia, mês anterior")} />
-              <Metrica rotulo="VENDAS NO MÊS" valor={String(dados.resumo.vendasNoMes)} dica="volume acumulado" icone={TrendingUp} comparacao={cmp(comparacoes?.vendasMes, "vs mês anterior")} />
-              <Metrica rotulo="VALOR HOJE" valor={moeda.format(dados.resumo.valorHoje)} dica="faturamento do dia" icone={CircleDollarSign} comparacao={cmp(comparacoes?.valorHoje, "vs mesmo dia, mês anterior")} />
-              <Metrica rotulo="VALOR NO MÊS" valor={moeda.format(dados.resumo.valorNoMes)} dica="faturamento acumulado" icone={ArrowUpRight} comparacao={cmp(comparacoes?.valorMes, "vs mês anterior")} />
+              <Metrica rotulo="VENDAS HOJE" valor={String(dados.resumo.vendasHoje)} dica="negócios confirmados" icone={ShoppingBag} comparacao={cmp(comparacoes?.vendasHoje, "vs mesmo dia, mês anterior")} aoAbrir={() => abrirDetalhe({ tipo: "metrica", id: "vendasHoje" })} />
+              <Metrica rotulo="VENDAS NO MÊS" valor={String(dados.resumo.vendasNoMes)} dica="volume acumulado" icone={TrendingUp} comparacao={cmp(comparacoes?.vendasMes, "vs mês anterior")} aoAbrir={() => abrirDetalhe({ tipo: "metrica", id: "vendasMes" })} />
+              <Metrica rotulo="VALOR HOJE" valor={moeda.format(dados.resumo.valorHoje)} dica="faturamento do dia" icone={CircleDollarSign} comparacao={cmp(comparacoes?.valorHoje, "vs mesmo dia, mês anterior")} aoAbrir={() => abrirDetalhe({ tipo: "metrica", id: "valorHoje" })} />
+              <Metrica rotulo="VALOR NO MÊS" valor={moeda.format(dados.resumo.valorNoMes)} dica="faturamento acumulado" icone={ArrowUpRight} comparacao={cmp(comparacoes?.valorMes, "vs mês anterior")} aoAbrir={() => abrirDetalhe({ tipo: "metrica", id: "valorMes" })} />
             </div>
-            <div className="panel evolution">
+            <div className="panel evolution" role="button" tabIndex={0} style={{ cursor: "pointer" }} aria-label="Evolução das vendas. Abrir detalhes por consultor"
+              onClick={() => abrirDetalhe({ tipo: "evolucao" })} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); abrirDetalhe({ tipo: "evolucao" }); } }}>
               <div className="panel-title">
                 <div><span className="eyebrow">RITMO DO MÊS</span><h1>Evolução das vendas</h1></div>
                 <div className="goal"><Target size={18} /><b>{dados.resumo.percentualMetaGeral == null ? "—" : `${dados.resumo.percentualMetaGeral.toFixed(1)}%`}</b><span>da meta geral</span></div>
@@ -474,10 +465,10 @@ export function TvComercialPage() {
             </div>
             <div className="bottom-grid bottom-grid-administrative">
               <div className="operational-stack">
-                <PainelAdministrativo indicadores={dados.administrativo?.indicadores} />
-                <PainelRegionais itens={dados.rankingRegionais} compacto />
+                <PainelAdministrativo indicadores={dados.administrativo?.indicadores} aoAbrir={abrirDetalhe} />
+                <PainelRegionais itens={dados.rankingRegionais} compacto aoAbrir={abrirDetalhe} />
               </div>
-              <PainelUltimas itens={dados.ultimasVendas} agora={agora} />
+              <PainelUltimas itens={dados.ultimasVendas} agora={agora} aoAbrir={abrirDetalhe} />
             </div>
           </div>
         </section>
@@ -486,6 +477,10 @@ export function TvComercialPage() {
           <span>CSS Brasil · Inteligência comercial</span>
         </footer>
         <audio ref={audio} src="/sounds/nova-venda.mp3" preload="auto" />
+        {pilha.length > 0 && !ativa && (
+          <TvDetalhes dados={dados} detalhe={pilha[pilha.length - 1]} mediaPorDia={mediaPorDia} projecao={projecao}
+            aoAbrir={abrirDetalhe} aoVoltar={pilha.length > 1 ? voltarDetalhe : undefined} aoFechar={fecharDetalhe} />
+        )}
         {ativa && <Comemoracao key={ativa.venda.vendaId} venda={ativa.venda} posicao={ativa.posicao} vendasNoMes={ativa.vendasNoMes} aoFechar={fecharAtiva} />}
       </main>
     </div>

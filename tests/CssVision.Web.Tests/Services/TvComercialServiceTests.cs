@@ -1,3 +1,4 @@
+using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
 using CssVision.Web.Services.Crm;
@@ -67,6 +68,13 @@ public class TvComercialServiceTests
         Assert.Equal(HorarioBrasilia.Hoje.Day, r.EvolucaoMensal.Count);
         Assert.Equal(3, r.EvolucaoMensal.Last().QuantidadeAcumulada);
         Assert.Equal(3, r.UltimasVendas.Count);
+
+        // Detalhe ao clicar nos cards: todas as vendas do mês com o consultor, e o total bate com o resumo e com os rankings.
+        var doMes = Assert.IsAssignableFrom<IReadOnlyList<TvVendaMesDto>>(r.VendasDoMes);
+        Assert.Equal(r.Resumo.VendasNoMes, doMes.Count);
+        Assert.Equal(r.Resumo.ValorNoMes, doMes.Sum(v => v.Valor));
+        foreach (var consultor in r.RankingConsultores)
+            Assert.Equal(consultor.QuantidadeVendas, doMes.Count(v => v.ConsultorId == consultor.ConsultorId));
     }
 
     [Fact]

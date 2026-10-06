@@ -240,6 +240,8 @@ export interface TvAdministrativoRegistro {
   placa?: string | null;
   tipoEvento?: string | null;
   data: string;
+  /** O registro foi criado hoje. */
+  hoje?: boolean;
 }
 
 export interface TvAdministrativoIndicador {
@@ -249,6 +251,8 @@ export interface TvAdministrativoIndicador {
   total: number;
   hoje: number;
   ultimo?: TvAdministrativoRegistro | null;
+  /** Todos os registros do mês (detalhe por pessoa). */
+  registros?: TvAdministrativoRegistro[] | null;
 }
 
 export interface TvComercial {
@@ -265,6 +269,21 @@ export interface TvComercial {
   administrativo?: { indicadores: TvAdministrativoIndicador[] } | null;
   /** Vendas do painel que existem só no Notion (base MG134), já sem as que o CRM também tem. */
   vendasSoNoNotion?: number;
+  /** Todas as vendas do mês exibido, com o consultor (detalhes ao clicar nos cards). */
+  vendasDoMes?: TvVendaMes[] | null;
+}
+
+export interface TvVendaMes {
+  vendaId: string;
+  consultorId: string;
+  consultor: string;
+  fotoUrl?: string | null;
+  regional: string;
+  cliente?: string | null;
+  placa?: string | null;
+  origem?: string | null;
+  valor: number;
+  dataVenda: string;
 }
 
 export interface LeadTotais {
