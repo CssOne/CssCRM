@@ -655,7 +655,7 @@ public sealed class LeadService(
         if (novaEtapa is not null)
         {
             var valorConversao = novaEtapa.Nome.StartsWith(EtapaLeadVendaConcluida, StringComparison.OrdinalIgnoreCase)
-                ? await ObterPagamentoAdesaoAsync(lead.Id, ct)
+                ? EscolherValorConversao(await ObterPagamentoAdesaoAsync(lead.Id, ct), lead.ValorAdesao)
                 : null;
             await conversion.EnviarEventoEtapaAsync(lead, novaEtapa.Id, novaEtapa.Nome, ct, valorConversao);
         }
@@ -669,6 +669,17 @@ public sealed class LeadService(
     /// ter mais de uma oportunidade (raro); pega a mais recente por ser a mais provável de ser a
     /// que motivou essa mudança de etapa.
     /// </summary>
+    /// <summary>
+    /// Valor que vai pro pixel na venda concluída: o pagamento de adesão da oportunidade, quando existe;
+    /// senão o valor da adesão do próprio lead (obrigatório na etapa Cotação). Antes só olhava a oportunidade,
+    /// e quem fecha direto pelo quadro de leads não tem oportunidade — o evento saía sem valor.
+    /// </summary>
+    internal static decimal? EscolherValorConversao(decimal? pagamentoOportunidade, decimal? valorAdesaoLead)
+    {
+        if (pagamentoOportunidade is > 0) return pagamentoOportunidade;
+        return valorAdesaoLead is > 0 ? valorAdesaoLead : null;
+    }
+
     private async Task<decimal?> ObterPagamentoAdesaoAsync(Guid leadId, CancellationToken ct)
     {
         return await db.CrmOpportunities.AsNoTracking()
