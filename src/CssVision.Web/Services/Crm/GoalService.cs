@@ -20,6 +20,8 @@ public sealed class GoalService(
     /// quando ainda não há), em vez de só quem já tem uma <see cref="CrmSalesGoal"/> — senão um
     /// administrador/gestor não enxerga quem ainda está sem meta definida.
     /// </summary>
+    // A meta de valor é em valor de ADESÃO recebido nas vendas do mês (PagamentoAdesao). ValorFinal/ValorEstimado ficam zerados nas
+    // vendas lançadas pela "Venda concluída", por isso a meta aparecia em R$ 0,00.
     public async Task<IReadOnlyList<SalesGoalDto>> ListarAsync(DateOnly? mesReferencia, CancellationToken ct)
     {
         var mes = NormalizarMes(mesReferencia ?? HorarioBrasilia.Hoje);
@@ -42,7 +44,7 @@ public sealed class GoalService(
             .Where(o => vendedorIds.Contains(o.ResponsavelId) && o.Etapa.Tipo == TipoEtapaPipeline.Ganho &&
                         o.DataEfetivaFechamento >= inicioMes && o.DataEfetivaFechamento < fimMes)
             .GroupBy(o => o.ResponsavelId)
-            .Select(g => new { VendedorId = g.Key, Valor = g.Sum(o => o.ValorFinal ?? o.ValorEstimado), Quantidade = g.Count() })
+            .Select(g => new { VendedorId = g.Key, Valor = g.Sum(o => o.PagamentoAdesao) ?? 0m, Quantidade = g.Count() })
             .ToListAsync(ct);
 
         var realizadoMap = realizadoPorVendedor.ToDictionary(r => r.VendedorId);
@@ -99,7 +101,9 @@ public sealed class GoalService(
 
         await db.SaveChangesAsync(ct);
 
-        return new SalesGoalDto(meta.Id, meta.VendedorId, meta.Vendedor.NomeCompleto, meta.MesReferencia, meta.MetaQuantidadeVendas, meta.MetaValor, 0m, 0);
+        // Devolve já com o realizado do mês (antes voltava zerado até a tela recarregar).
+        var atual = (await ListarAsync(mes, ct)).FirstOrDefault(d => d.VendedorId == meta.VendedorId);
+        return atual ?? new SalesGoalDto(meta.Id, meta.VendedorId, meta.Vendedor.NomeCompleto, meta.MesReferencia, meta.MetaQuantidadeVendas, meta.MetaValor, 0m, 0);
     }
 
     /// <summary>
@@ -135,7 +139,7 @@ public sealed class GoalService(
                         o.DataEfetivaFechamento >= inicioMes && o.DataEfetivaFechamento < fimMes &&
                         o.Responsavel.RegionalId != null && regionalIds.Contains(o.Responsavel.RegionalId.Value))
             .GroupBy(o => o.Responsavel.RegionalId!.Value)
-            .Select(g => new { RegionalId = g.Key, Valor = g.Sum(o => o.ValorFinal ?? o.ValorEstimado), Quantidade = g.Count() })
+            .Select(g => new { RegionalId = g.Key, Valor = g.Sum(o => o.PagamentoAdesao) ?? 0m, Quantidade = g.Count() })
             .ToListAsync(ct);
 
         var realizadoMap = realizadoPorRegional.ToDictionary(r => r.RegionalId);
@@ -191,7 +195,8 @@ public sealed class GoalService(
 
         await db.SaveChangesAsync(ct);
 
-        return new RegionalGoalDto(meta.Id, meta.RegionalId, meta.Regional.Nome, meta.MesReferencia, meta.MetaQuantidadeVendas, meta.MetaValor, 0m, 0);
+        var atualRegional = (await ListarRegionaisAsync(mes, ct)).FirstOrDefault(d => d.RegionalId == meta.RegionalId);
+        return atualRegional ?? new RegionalGoalDto(meta.Id, meta.RegionalId, meta.Regional.Nome, meta.MesReferencia, meta.MetaQuantidadeVendas, meta.MetaValor, 0m, 0);
     }
 
     private static DateOnly NormalizarMes(DateOnly data) => new(data.Year, data.Month, 1);

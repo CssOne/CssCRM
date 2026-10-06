@@ -112,7 +112,7 @@ public class ManagementServiceConsultoresTests
         db.CrmOpportunities.Add(new CrmOpportunity
         {
             LeadId = lead.Id, Titulo = "Venda", ResponsavelId = consultor.Id, EtapaId = etapaGanho.Id,
-            ValorEstimado = 1000m, ValorFinal = 1200m, DataEfetivaFechamento = agora
+            ValorEstimado = 1000m, ValorFinal = 1200m, PagamentoAdesao = 1200m, DataEfetivaFechamento = agora
         });
         var mesReferencia = new DateOnly(agora.Year, agora.Month, 1);
         db.CrmSalesGoals.Add(new CrmSalesGoal { VendedorId = consultor.Id, MesReferencia = mesReferencia, MetaValor = 2400m });
@@ -128,6 +128,7 @@ public class ManagementServiceConsultoresTests
         Assert.Equal(1, ficha.VendasGanhas);
         Assert.Equal(1200m, ficha.ValorGanho);
         Assert.Equal(2400m, ficha.MetaValor);
-        Assert.Equal(50m, ficha.PercentualMeta);
+        Assert.Equal(50m, ficha.PercentualMeta); // a meta de valor acompanha a adesão recebida
+        Assert.Equal(1200m, ficha.RealizadoValor);
     }
 }

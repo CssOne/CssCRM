@@ -48,6 +48,39 @@ public class GoalServiceTests
     }
 
     [Fact]
+    public async Task MetaDeValor_AcompanhaAAdesaoRecebida_MesmoSemValorFinalNaVenda()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        await factory.SeedRolesAsync(db);
+        using var userManager = TestDbContextFactory.CreateUserManager(db);
+        var consultor = await factory.CriarUsuarioAsync(db, "Consultor");
+        await userManager.AddToRoleAsync(consultor, Roles.Comercial);
+        var admin = await factory.CriarUsuarioAsync(db, "Admin");
+        var ganho = await factory.CriarEtapaAsync(db, "Ganho", 9, TipoEtapaPipeline.Ganho);
+
+        var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = consultor.Id };
+        db.CrmLeads.Add(lead);
+        await db.SaveChangesAsync();
+        // Venda lançada pela "Venda concluída": tem adesão, mas ValorFinal/ValorEstimado ficam zerados.
+        var fechamento = MesAtual().ToDateTime(new TimeOnly(15, 0), DateTimeKind.Utc);
+        db.CrmOpportunities.AddRange(
+            new CrmOpportunity { LeadId = lead.Id, Titulo = "V1", ResponsavelId = consultor.Id, EtapaId = ganho.Id, PagamentoAdesao = 300m, DataEfetivaFechamento = fechamento },
+            new CrmOpportunity { LeadId = lead.Id, Titulo = "V2", ResponsavelId = consultor.Id, EtapaId = ganho.Id, PagamentoAdesao = 250m, DataEfetivaFechamento = fechamento });
+        await db.SaveChangesAsync();
+
+        var currentUser = TestDbContextFactory.MockCurrentUser(admin.Id, visaoTotal: true, podeGerir: true);
+        var service = new GoalService(db, currentUser.Object, new EquipeComercialService(db, currentUser.Object), userManager);
+
+        var definida = await service.DefinirMetaAsync(new SalesGoalUpsertRequest(consultor.Id, MesAtual(), 30, 6000m), CancellationToken.None);
+        Assert.Equal(550m, definida.RealizadoValor);
+        Assert.Equal(2, definida.RealizadoQuantidade);
+
+        var lista = Assert.Single(await service.ListarAsync(null, CancellationToken.None));
+        Assert.Equal(550m, lista.RealizadoValor);
+    }
+
+    [Fact]
     public async Task ListarAsync_GestorComercial_SoListaConsultoresDaPropriaEquipe()
     {
         using var factory = new TestDbContextFactory();

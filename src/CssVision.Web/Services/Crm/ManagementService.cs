@@ -162,12 +162,14 @@ public sealed class ManagementService(
                 var valorGanho = fechada?.ValorGanho ?? 0m;
                 metas.TryGetValue(c.Id, out var meta);
                 var metaValor = meta?.MetaValor ?? 0m;
-                var percentualMeta = metaValor == 0 ? 0m : Math.Round(100m * valorGanho / metaValor, 1);
+                // Meta de valor = adesão recebida nas vendas do mês.
+                var adesaoDoMes = fechada?.ValorAdesao ?? 0m;
+                var percentualMeta = metaValor == 0 ? 0m : Math.Round(100m * adesaoDoMes / metaValor, 1);
                 return new ConsultorDesempenhoDto(
                     c.Id, c.NomeCompleto, c.Email!, c.PhoneNumber, c.Regional?.Nome, c.Ativo,
                     leadsAtivos.GetValueOrDefault(c.Id), aberta.Quantidade, aberta.Valor, fechada?.Ganhas ?? 0, valorGanho,
                     ContagensPorVendedor.TaxaConversaoLeads(fechada?.Ganhas ?? 0, leadsDoMes.GetValueOrDefault(c.Id)),
-                    c.LimiteMensalLeads, recebidos.GetValueOrDefault(c.Id), metaValor, valorGanho, percentualMeta, trafegoNoMes.GetValueOrDefault(c.Id));
+                    c.LimiteMensalLeads, recebidos.GetValueOrDefault(c.Id), metaValor, adesaoDoMes, percentualMeta, trafegoNoMes.GetValueOrDefault(c.Id));
             })
             .OrderByDescending(r => r.ValorGanho)
             .ToList();
