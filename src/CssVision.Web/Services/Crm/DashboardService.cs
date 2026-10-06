@@ -120,7 +120,8 @@ public sealed class DashboardService(
 
         var ganhasDoMes = oportunidadesQuery.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho &&
             o.DataEfetivaFechamento >= HorarioBrasilia.Inicio(mesReferencia));
-        var realizadoMes = await ganhasDoMes.SumAsync(o => (decimal?)(o.ValorFinal ?? o.ValorEstimado), ct) ?? 0m;
+        // Meta de valor = adesão recebida (ver GoalService).
+        var realizadoMes = await ganhasDoMes.SumAsync(o => o.PagamentoAdesao, ct) ?? 0m;
         var realizadoQuantidadeMes = await ganhasDoMes.CountAsync(ct);
         var meta = new MetaResultadoDto(
             metaValor, realizadoMes,
