@@ -1,5 +1,17 @@
 namespace CssVision.Web.Api.Contracts.Crm;
 
+/// <summary>
+/// Filtros extras do relatório (os do Notion): datas próprias de chegada e de venda, "Indicação?" e tipo de indicação.
+/// Datas vazias usam o período principal; <c>Indicacao</c> nulo = todos.
+/// </summary>
+public record RelatorioFiltroExtra(
+    DateOnly? ChegadaInicio = null,
+    DateOnly? ChegadaFim = null,
+    DateOnly? VendaInicio = null,
+    DateOnly? VendaFim = null,
+    bool? Indicacao = null,
+    IReadOnlyCollection<string>? TiposIndicacao = null);
+
 /// <summary>Relatório comercial: os gráficos e tabelas dos "Relatórios" do Notion, calculados com os dados do CRM.</summary>
 public record RelatorioComercialDto(
     DateOnly DataInicio,

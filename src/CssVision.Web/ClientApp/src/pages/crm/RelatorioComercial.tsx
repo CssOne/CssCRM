@@ -6,7 +6,8 @@ import { formatarMoeda, formatarPercentual } from "../../lib/format";
 import { usePaginacao } from "../../lib/usePaginacao";
 import type { LeadStage, RelatorioComercial, VendedorResumo } from "../../lib/types";
 import { useTheme } from "../../context/ThemeContext";
-import { Card, ErrorState, Input, Pagination, Select, Skeleton } from "../../components/ui";
+import { Button, Card, ErrorState, Input, Pagination, Select, Skeleton } from "../../components/ui";
+import { OPCOES_FILTRO_TIPO_INDICACAO } from "../../lib/opcoesLead";
 import { MultiSelect } from "../../components/MultiSelect";
 import { useCrmEventos } from "../../lib/useCrmEventos";
 import { useMudancaDeDia } from "../../lib/useAoVivo";
@@ -102,6 +103,17 @@ export function RelatorioComercialPage() {
   const [recarregar, setRecarregar] = useState(0);
   const [consultorId, setConsultorId] = useState("");
   const [etapaIds, setEtapaIds] = useState<string[]>([]);
+  // Filtros extras (como no Notion). Datas vazias usam o período principal acima.
+  const [chegadaInicio, setChegadaInicio] = useState("");
+  const [chegadaFim, setChegadaFim] = useState("");
+  const [vendaInicio, setVendaInicio] = useState("");
+  const [vendaFim, setVendaFim] = useState("");
+  const [indicacao, setIndicacao] = useState<"" | "sim" | "nao">("");
+  const [tiposIndicacao, setTiposIndicacao] = useState<string[]>([]);
+  const temFiltroExtra = !!(chegadaInicio || chegadaFim || vendaInicio || vendaFim || indicacao || tiposIndicacao.length);
+  const limparExtras = () => {
+    setChegadaInicio(""); setChegadaFim(""); setVendaInicio(""); setVendaFim(""); setIndicacao(""); setTiposIndicacao([]);
+  };
   const [consultores, setConsultores] = useState<VendedorResumo[]>([]);
   const [etapas, setEtapas] = useState<LeadStage[]>([]);
 
@@ -119,13 +131,19 @@ export function RelatorioComercialPage() {
     if (consultorId) filtros.set("consultorId", consultorId);
     // "Sem etapa" (id nulo) vai como Guid vazio.
     etapaIds.forEach((id) => filtros.append("etapaId", id));
+    if (chegadaInicio) filtros.set("chegadaInicio", chegadaInicio);
+    if (chegadaFim) filtros.set("chegadaFim", chegadaFim);
+    if (vendaInicio) filtros.set("vendaInicio", vendaInicio);
+    if (vendaFim) filtros.set("vendaFim", vendaFim);
+    if (indicacao) filtros.set("indicacao", indicacao === "sim" ? "true" : "false");
+    tiposIndicacao.forEach((t) => filtros.append("tipoIndicacao", t));
     api
       .get<RelatorioComercial>(`/crm/relatorio-comercial?${filtros.toString()}`, controller.signal)
       .then(setDados)
       .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar o relatório."); })
       .finally(() => { if (!controller.signal.aborted) setCarregando(false); });
     return () => controller.abort();
-  }, [inicio, fim, consultorId, etapaIds, recarregar]);
+  }, [inicio, fim, consultorId, etapaIds, chegadaInicio, chegadaFim, vendaInicio, vendaFim, indicacao, tiposIndicacao, recarregar]);
 
   // Tempo real (vendas, leads, sincronização); na virada do dia, o período que terminava "hoje" passa a
   // terminar no dia novo — quem escolheu um período passado continua nele.
@@ -140,7 +158,7 @@ export function RelatorioComercialPage() {
   const paginaProdutos = usePaginacao(dados?.porProduto, 8);
 
   const filtro = (
-    <div className="flex flex-wrap items-end gap-2">
+    <div className="flex w-full flex-wrap items-end gap-2">
       <div className="flex flex-wrap gap-1.5">
         {atalhos.map((a) => (
           <button
@@ -190,6 +208,49 @@ export function RelatorioComercialPage() {
           />
         </div>
       </div>
+      <div className="w-52 text-xs text-[var(--fg-muted)]">
+        Tipo de indicação
+        <div className="mt-0.5">
+          <MultiSelect
+            ariaLabel="Tipo de indicação"
+            rotuloTodos="Todos"
+            opcoes={OPCOES_FILTRO_TIPO_INDICACAO.map((t) => ({ valor: t, rotulo: t }))}
+            valores={tiposIndicacao}
+            onChange={setTiposIndicacao}
+          />
+        </div>
+      </div>
+      <label className="text-xs text-[var(--fg-muted)]">
+        Indicação?
+        <Select className="mt-0.5 h-8 w-28" value={indicacao} onChange={(e) => setIndicacao(e.target.value as typeof indicacao)} aria-label="Indicação?">
+          <option value="">Todos</option>
+          <option value="sim">Sim</option>
+          <option value="nao">Não</option>
+        </Select>
+      </label>
+      <div className="flex items-end gap-1" title="Vazio = usa o período acima. Escolhendo, as vendas passam a ser só dos leads que chegaram nessas datas.">
+        <label className="text-xs text-[var(--fg-muted)]">
+          Chegada de
+          <Input type="date" className="mt-0.5 h-8 w-36" value={chegadaInicio} max={chegadaFim || undefined} onChange={(e) => setChegadaInicio(e.target.value)} />
+        </label>
+        <label className="text-xs text-[var(--fg-muted)]">
+          até
+          <Input type="date" className="mt-0.5 h-8 w-36" value={chegadaFim} min={chegadaInicio || undefined} onChange={(e) => setChegadaFim(e.target.value)} />
+        </label>
+      </div>
+      <div className="flex items-end gap-1" title="Vazio = usa o período acima.">
+        <label className="text-xs text-[var(--fg-muted)]">
+          Venda de
+          <Input type="date" className="mt-0.5 h-8 w-36" value={vendaInicio} max={vendaFim || undefined} onChange={(e) => setVendaInicio(e.target.value)} />
+        </label>
+        <label className="text-xs text-[var(--fg-muted)]">
+          até
+          <Input type="date" className="mt-0.5 h-8 w-36" value={vendaFim} min={vendaInicio || undefined} onChange={(e) => setVendaFim(e.target.value)} />
+        </label>
+      </div>
+      {temFiltroExtra && (
+        <Button size="sm" variant="ghost" onClick={limparExtras}>Redefinir filtros</Button>
+      )}
     </div>
   );
 

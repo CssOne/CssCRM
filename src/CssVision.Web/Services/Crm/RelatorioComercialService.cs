@@ -14,6 +14,9 @@ public interface IRelatorioComercialService
     /// <param name="consultorId">Só leads e vendas deste consultor (responsável).</param>
     /// <param name="etapaIds">Só leads nestas etapas do quadro de leads (Guid.Empty = "Sem etapa") e as vendas deles.</param>
     Task<RelatorioComercialDto> ObterAsync(DateOnly? dataInicio, DateOnly? dataFim, Guid? consultorId, IReadOnlyCollection<Guid>? etapaIds, CancellationToken ct);
+
+    /// <param name="extras">Datas próprias de chegada/venda, "Indicação?" e tipo de indicação.</param>
+    Task<RelatorioComercialDto> ObterAsync(DateOnly? dataInicio, DateOnly? dataFim, Guid? consultorId, IReadOnlyCollection<Guid>? etapaIds, RelatorioFiltroExtra? extras, CancellationToken ct);
 }
 
 /// <summary>
@@ -42,7 +45,11 @@ public sealed class RelatorioComercialService(
         (decimal.MaxValue, "Acima de R$ 200 mil"),
     ];
 
-    public async Task<RelatorioComercialDto> ObterAsync(DateOnly? dataInicio, DateOnly? dataFim, Guid? consultorId, IReadOnlyCollection<Guid>? etapaIds, CancellationToken ct)
+    public Task<RelatorioComercialDto> ObterAsync(DateOnly? dataInicio, DateOnly? dataFim, Guid? consultorId, IReadOnlyCollection<Guid>? etapaIds, CancellationToken ct) =>
+        ObterAsync(dataInicio, dataFim, consultorId, etapaIds, null, ct);
+
+    public async Task<RelatorioComercialDto> ObterAsync(
+        DateOnly? dataInicio, DateOnly? dataFim, Guid? consultorId, IReadOnlyCollection<Guid>? etapaIds, RelatorioFiltroExtra? extras, CancellationToken ct)
     {
         if (!currentUser.PodeGerirComercial)
         {
@@ -59,9 +66,12 @@ public sealed class RelatorioComercialService(
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
         var etapas = etapaIds is { Count: > 0 } ? etapaIds.Distinct().Order().ToList() : null;
+        // Tipos de indicação sem maiúsculas/minúsculas (o dado veio de épocas com grafias diferentes), ordenados para a chave do cache.
+        var tipos = (extras?.TiposIndicacao ?? []).Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim().ToLower()).Distinct().Order().ToList();
+        var filtroExtra = new RelatorioFiltroExtra(extras?.ChegadaInicio, extras?.ChegadaFim, extras?.VendaInicio, extras?.VendaFim, extras?.Indicacao, tipos);
         return await RespostaEmCache.ObterAsync(cache, eventos, "relatorio-comercial",
-            new { escopo = RespostaEmCache.Escopo(visiveis), inicio, fim, consultorId, etapas },
-            () => CalcularAsync(inicio, fim, visiveis, consultorId, etapas, ct));
+            new { escopo = RespostaEmCache.Escopo(visiveis), inicio, fim, consultorId, etapas, extras = new { filtroExtra.ChegadaInicio, filtroExtra.ChegadaFim, filtroExtra.VendaInicio, filtroExtra.VendaFim, filtroExtra.Indicacao, tipos } },
+            () => CalcularAsync(inicio, fim, visiveis, consultorId, etapas, filtroExtra, tipos, ct));
     }
 
     private sealed record LeadLinha(DateTimeOffset Chegada, string? Origem, string? Estado, string? Produto, Guid? ResponsavelId, string? Responsavel, bool Perdido,
@@ -71,18 +81,28 @@ public sealed class RelatorioComercialService(
         DateTimeOffset Data, Guid ResponsavelId, string Responsavel, string? Origem, string? Estado, string? Produto,
         decimal Adesao, decimal Mensalidade, decimal Rastreador, decimal Vistoria, decimal Indicacao, bool Indicada, decimal? Fipe);
 
-    private async Task<RelatorioComercialDto> CalcularAsync(DateOnly inicio, DateOnly fim, List<Guid>? visiveis, Guid? consultorId, List<Guid>? etapaIds, CancellationToken ct)
+    private async Task<RelatorioComercialDto> CalcularAsync(DateOnly inicio, DateOnly fim, List<Guid>? visiveis, Guid? consultorId, List<Guid>? etapaIds,
+        RelatorioFiltroExtra extras, List<string> tiposIndicacao, CancellationToken ct)
     {
         // Datas do relatório em horário de Brasília (UTC-3), como o resto do CRM.
-        var inicioUtc = new DateTimeOffset(inicio.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddHours(3);
-        var fimUtc = new DateTimeOffset(fim.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddHours(3);
+        static DateTimeOffset InicioDoDia(DateOnly d) => new DateTimeOffset(d.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddHours(3);
+        // Chegada e venda têm datas próprias (como no Notion); sem elas valem o período principal.
+        var chegadaDe = InicioDoDia(extras.ChegadaInicio ?? inicio);
+        var chegadaAte = InicioDoDia((extras.ChegadaFim ?? fim).AddDays(1));
+        var vendaDe = InicioDoDia(extras.VendaInicio ?? inicio);
+        var vendaAte = InicioDoDia((extras.VendaFim ?? fim).AddDays(1));
 
         var leadsQuery = db.CrmLeads.AsNoTracking()
             // Veículo adicional repete o cliente: não é um lead a mais.
-            .Where(l => !l.Arquivado && l.VeiculoAdicionalDeLeadId == null && l.CriadoEm >= inicioUtc && l.CriadoEm < fimUtc);
+            .Where(l => !l.Arquivado && l.VeiculoAdicionalDeLeadId == null && l.CriadoEm >= chegadaDe && l.CriadoEm < chegadaAte);
         var vendasQuery = db.CrmOpportunities.AsNoTracking()
             .Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho
-                && o.DataEfetivaFechamento >= inicioUtc && o.DataEfetivaFechamento < fimUtc);
+                && o.DataEfetivaFechamento >= vendaDe && o.DataEfetivaFechamento < vendaAte);
+        // Se o gestor escolheu a data de chegada, as vendas também são só dos leads que chegaram nela.
+        if (extras.ChegadaInicio is not null || extras.ChegadaFim is not null)
+        {
+            vendasQuery = vendasQuery.Where(o => o.Lead.CriadoEm >= chegadaDe && o.Lead.CriadoEm < chegadaAte);
+        }
         if (visiveis is not null)
         {
             leadsQuery = leadsQuery.Where(l => visiveis.Contains(l.ResponsavelId ?? Guid.Empty));
@@ -100,6 +120,23 @@ public sealed class RelatorioComercialService(
             var ids = etapaIds.Where(id => id != Guid.Empty).Select(id => (Guid?)id).ToList();
             leadsQuery = leadsQuery.Where(l => (l.EtapaId != null && ids.Contains(l.EtapaId)) || (semEtapa && l.EtapaId == null));
             vendasQuery = vendasQuery.Where(o => (o.Lead.EtapaId != null && ids.Contains(o.Lead.EtapaId)) || (semEtapa && o.Lead.EtapaId == null));
+        }
+
+        if (extras.Indicacao is { } indicacao)
+        {
+            // Mesma regra do quadro de leads: indicação = qualquer tipo que não seja "Lead". Na venda, também vale o campo da própria venda.
+            leadsQuery = indicacao
+                ? leadsQuery.Where(l => l.TipoIndicacao != null && l.TipoIndicacao.ToLower() != "lead")
+                : leadsQuery.Where(l => l.TipoIndicacao == null || l.TipoIndicacao.ToLower() == "lead");
+            vendasQuery = indicacao
+                ? vendasQuery.Where(o => o.Indicacao == true || o.ValorIndicacao > 0)
+                : vendasQuery.Where(o => o.Indicacao != true && !(o.ValorIndicacao > 0));
+        }
+        if (tiposIndicacao.Count > 0)
+        {
+            leadsQuery = leadsQuery.Where(l => l.TipoIndicacao != null && tiposIndicacao.Contains(l.TipoIndicacao.ToLower()));
+            vendasQuery = vendasQuery.Where(o => (o.TipoIndicacao != null && tiposIndicacao.Contains(o.TipoIndicacao.ToLower()))
+                || (o.Lead.TipoIndicacao != null && tiposIndicacao.Contains(o.Lead.TipoIndicacao.ToLower())));
         }
 
         var leads = await leadsQuery

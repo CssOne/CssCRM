@@ -14,6 +14,10 @@ public class CrmRelatorioComercialController(IRelatorioComercialService relatori
     [HttpGet]
     public async Task<ActionResult<RelatorioComercialDto>> Obter(
         [FromQuery] DateOnly? dataInicio, [FromQuery] DateOnly? dataFim,
-        [FromQuery] Guid? consultorId, [FromQuery] Guid[]? etapaId, CancellationToken ct) =>
-        Ok(await relatorio.ObterAsync(dataInicio, dataFim, consultorId, etapaId, ct));
+        [FromQuery] Guid? consultorId, [FromQuery] Guid[]? etapaId,
+        [FromQuery] DateOnly? chegadaInicio, [FromQuery] DateOnly? chegadaFim,
+        [FromQuery] DateOnly? vendaInicio, [FromQuery] DateOnly? vendaFim,
+        [FromQuery] bool? indicacao, [FromQuery] string[]? tipoIndicacao, CancellationToken ct) =>
+        Ok(await relatorio.ObterAsync(dataInicio, dataFim, consultorId, etapaId,
+            new RelatorioFiltroExtra(chegadaInicio, chegadaFim, vendaInicio, vendaFim, indicacao, tipoIndicacao), ct));
 }
