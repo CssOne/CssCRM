@@ -11,6 +11,7 @@ const PAPEL_LABEL: Record<string, string> = {
   SupervisorComercial: "Supervisor comercial",
   Comercial: "Consultor comercial",
   Marketing: "Marketing",
+  Financeiro: "Financeiro",
 };
 
 export interface UserFormValues {
@@ -176,7 +177,7 @@ export function UserForm({
     if (!valores.nomeCompleto.trim()) novosErros.nome = "Informe o nome completo.";
     if (!valores.email.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(valores.email)) novosErros.email = "E-mail inválido.";
     if (!modoEdicao && valores.senha.length < 8) novosErros.senha = "A senha deve ter ao menos 8 caracteres.";
-    if (podeGerenciarTudo && (valores.papel === "Comercial" || valores.papel === "GestorComercial") && !valores.regionalId) {
+    if (podeGerenciarTudo && (valores.papel === "Comercial" || valores.papel === "GestorComercial" || valores.papel === "Financeiro") && !valores.regionalId) {
       novosErros.regional = "Selecione a regional.";
     }
     setErros(novosErros);
@@ -188,7 +189,7 @@ export function UserForm({
     if (validar()) onSubmit(valores);
   }
 
-  const exibirRegionalEGestor = podeGerenciarTudo && (valores.papel === "Comercial" || valores.papel === "GestorComercial");
+  const exibirRegionalEGestor = podeGerenciarTudo && (valores.papel === "Comercial" || valores.papel === "GestorComercial" || valores.papel === "Financeiro");
   const exibirLimite = valores.papel === "Comercial";
 
   return (

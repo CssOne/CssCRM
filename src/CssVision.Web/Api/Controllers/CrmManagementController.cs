@@ -9,10 +9,11 @@ namespace CssVision.Web.Api.Controllers;
 
 [ApiController]
 [Route("api/crm/management")]
-[Authorize(Policy = PolicyNames.GestaoComercial)]
+[Authorize(Policy = PolicyNames.GestaoFinanceira)]
 public class CrmManagementController(IManagementService managementService, ILeadAssignmentService distribuicao) : ControllerBase
 {
     [HttpGet("summary")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<ActionResult<GestaoComercialResumoDto>> ObterResumo(
         [FromQuery] DateOnly? dataInicio, [FromQuery] DateOnly? dataFim, CancellationToken ct) =>
         Ok(await managementService.ObterResumoAsync(dataInicio, dataFim, ct));
@@ -29,6 +30,7 @@ public class CrmManagementController(IManagementService managementService, ILead
     }
 
     [HttpPut("vendedores/{id:guid}/limite")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<IActionResult> AtualizarLimiteMensal(Guid id, AtualizarLimiteMensalRequest request, CancellationToken ct)
     {
         await managementService.AtualizarLimiteMensalAsync(id, request, ct);
@@ -36,6 +38,7 @@ public class CrmManagementController(IManagementService managementService, ILead
     }
 
     [HttpPut("vendedores/{id:guid}/limite-diario")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<IActionResult> AtualizarLimiteDiario(Guid id, AtualizarLimiteDiarioRequest request, CancellationToken ct)
     {
         await managementService.AtualizarLimiteDiarioAsync(id, request, ct);
@@ -43,6 +46,7 @@ public class CrmManagementController(IManagementService managementService, ILead
     }
 
     [HttpPut("vendedores/{id:guid}/janela-recebimento")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<IActionResult> AtualizarJanelaRecebimento(Guid id, AtualizarJanelaRecebimentoRequest request, CancellationToken ct)
     {
         await managementService.AtualizarJanelaRecebimentoAsync(id, request, ct);
@@ -50,6 +54,7 @@ public class CrmManagementController(IManagementService managementService, ILead
     }
 
     [HttpPut("vendedores/{id:guid}/tipos-lead")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<IActionResult> AtualizarTiposLead(Guid id, AtualizarTiposLeadRequest request, CancellationToken ct)
     {
         await managementService.AtualizarTiposLeadAsync(id, request, ct);
@@ -58,10 +63,12 @@ public class CrmManagementController(IManagementService managementService, ILead
 
     /// <summary>Leads parados porque todos os consultores bateram o limite (e a decisão de continuar mesmo assim).</summary>
     [HttpGet("alerta-distribuicao")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<ActionResult<AlertaDistribuicaoDto>> ObterAlertaDistribuicao(CancellationToken ct) =>
         Ok(await distribuicao.ObterEstadoDistribuicaoAsync(ct));
 
     [HttpPut("continuar-distribuicao")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<ActionResult<AlertaDistribuicaoDto>> ContinuarDistribuicao(ContinuarDistribuicaoRequest request, CancellationToken ct)
     {
         await distribuicao.DefinirContinuarAposLimiteAsync(request.Continuar, ct);
@@ -70,16 +77,19 @@ public class CrmManagementController(IManagementService managementService, ILead
 
     /// <summary>Resumos guardados da sincronização com o Notion: último ciclo e importação completa por base.</summary>
     [HttpGet("sincronizacao-notion")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<ActionResult<IReadOnlyList<ResumoSincronizacaoDto>>> ObterResumosSincronizacao([FromServices] Data.ApplicationDbContext db, CancellationToken ct) =>
         Ok(await db.CrmParametros.AsNoTracking().Where(p => p.Chave.StartsWith("notion:")).OrderBy(p => p.Chave)
             .Select(p => new ResumoSincronizacaoDto(p.Chave.Substring(7), p.Valor)).ToListAsync(ct));
 
     [HttpGet("consultores")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<ActionResult<IReadOnlyList<ConsultorDesempenhoDto>>> ObterDesempenhoConsultores(
         [FromQuery] DateOnly? mesReferencia, CancellationToken ct) =>
         Ok(await managementService.ObterDesempenhoConsultoresAsync(mesReferencia, ct));
 
     [HttpGet("redistribuicoes")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<ActionResult<IReadOnlyList<RedistribuicaoHistoricoDto>>> ObterHistorico(CancellationToken ct) =>
         Ok(await managementService.ObterHistoricoRedistribuicoesAsync(ct));
 }

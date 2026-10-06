@@ -205,6 +205,34 @@ export interface TvEvolucao {
   valorAcumulado: number;
 }
 
+/** Aviso de pagamento em aberto (visão de quem envia). */
+export interface AvisoPagamento {
+  id: string;
+  consultorId: string;
+  consultorNome: string;
+  titulo: string;
+  mensagem: string;
+  valor?: number | null;
+  referencia?: string | null;
+  enviadoPorNome: string;
+  criadoEm: string;
+  status: "Aberto" | "Resolvido";
+  lidoEm?: string | null;
+  resolvidoEm?: string | null;
+}
+
+/** Aviso de pagamento visto pelo consultor (notificação e card "Avisos importantes"). */
+export interface MeuAviso {
+  id: string;
+  titulo: string;
+  mensagem: string;
+  valor?: number | null;
+  referencia?: string | null;
+  enviadoPorNome: string;
+  criadoEm: string;
+  lidoEm?: string | null;
+}
+
 export interface TvAdministrativoRegistro {
   pessoa: string;
   fotoUrl?: string | null;

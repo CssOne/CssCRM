@@ -8,6 +8,9 @@ public interface IUserManagementService
     Task<PagedResult<UserSummaryDto>> ListarAsync(UserFilterRequest filtro, CancellationToken ct);
     Task<UserSummaryDto> ObterPorIdAsync(Guid id, CancellationToken ct);
     Task<UserSummaryDto> CriarAsync(UserCreateRequest request, CancellationToken ct);
+    /// <summary>Ativa ou inativa a conta de um consultor (papel Comercial) dentro do escopo de quem chama.</summary>
+    Task<UserSummaryDto> AlterarAtivoAsync(Guid id, bool ativo, CancellationToken ct);
+
     Task<UserSummaryDto> AtualizarAsync(Guid id, UserUpdateRequest request, CancellationToken ct);
     Task RedefinirSenhaAsync(Guid id, ResetPasswordRequest request, CancellationToken ct);
     Task ExcluirAsync(Guid id, CancellationToken ct);

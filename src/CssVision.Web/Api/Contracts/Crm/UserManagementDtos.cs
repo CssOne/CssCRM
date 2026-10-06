@@ -62,6 +62,9 @@ public record UserUpdateRequest(
     IReadOnlyList<Guid>? RegionaisOcultasIds = null,
     bool AlterarRegionaisOcultas = false);
 
+/// <summary>Ativar/inativar a conta de um consultor (tela de Usuários, também para o Financeiro).</summary>
+public record UserAtivoRequest(bool Ativo);
+
 public record ResetPasswordRequest(string NovaSenha);
 
 public record RegionalDto(Guid Id, string Nome, bool Ativa, int QuantidadeUsuarios);

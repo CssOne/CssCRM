@@ -13,13 +13,14 @@ import {
   Trophy,
   UserPlus,
   Users,
+  Wallet,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { Link } from "react-router-dom";
 import { api, isAbortError } from "../../lib/api";
 import { formatarDataHora, formatarMoeda } from "../../lib/format";
-import { TipoAnuncio, TipoAtividade, type Activity, type Announcement, type Dashboard } from "../../lib/types";
+import { TipoAnuncio, TipoAtividade, type Activity, type Announcement, type Dashboard, type MeuAviso } from "../../lib/types";
 import { useAuth } from "../../context/AuthContext";
 import { Badge, Card, ErrorState, Skeleton, useToast } from "../../components/ui";
 import { PortalStatCard } from "../../components/portal/PortalStatCard";
@@ -40,6 +41,7 @@ export function PortalDashboardPage() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [proximas, setProximas] = useState<Activity[]>([]);
   const [avisos, setAvisos] = useState<Announcement[]>([]);
+  const [pagamentos, setPagamentos] = useState<MeuAviso[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -53,11 +55,14 @@ export function PortalDashboardPage() {
       api.get<Dashboard>("/crm/dashboard", controller.signal),
       api.get<{ itens: Activity[] }>("/crm/activities?visao=3&tamanhoPagina=10", controller.signal),
       api.get<Announcement[]>(`/crm/portal/announcements?tipo=${TipoAnuncio.Aviso}`, controller.signal),
+      // Pagamentos em aberto avisados pelo financeiro/gestão: se falhar, o resto do painel segue.
+      api.get<MeuAviso[]>("/crm/avisos-pagamento/meus", controller.signal).catch(() => [] as MeuAviso[]),
     ])
-      .then(([dash, ativ, av]) => {
+      .then(([dash, ativ, av, pag]) => {
         setDashboard(dash);
         setProximas(ativ.itens);
         setAvisos(av);
+        setPagamentos(pag);
       })
       .catch((e) => {
         if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar o painel.");
@@ -198,9 +203,47 @@ export function PortalDashboardPage() {
 
         <Card className="p-5">
           <h2 className="mb-3 text-sm font-semibold text-[var(--fg)]">Avisos importantes</h2>
-          {avisos.length === 0 ? (
+          {pagamentos.length > 0 && (
+            <ul className="mb-3 space-y-2" aria-label="Pagamentos em aberto">
+              {pagamentos.map((p) => (
+                <li key={p.id} className="rounded-lg border border-[var(--warning)] bg-[var(--warning-soft)] p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--warning-soft)] text-[var(--warning)]">
+                      <Wallet className="size-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-[var(--fg)]">{p.titulo}</p>
+                      <p className="whitespace-pre-wrap break-words text-xs text-[var(--fg)]">{p.mensagem}</p>
+                      {(p.valor != null || p.referencia) && (
+                        <p className="mt-1 text-xs text-[var(--fg-muted)]">
+                          {p.valor != null && <span className="font-medium text-[var(--fg)]">{formatarMoeda(p.valor)}</span>}
+                          {p.valor != null && p.referencia && " · "}
+                          {p.referencia}
+                        </p>
+                      )}
+                      <p className="mt-1 text-xs text-[var(--fg-muted)]">
+                        {p.enviadoPorNome} · {formatarDataHora(p.criadoEm)}
+                      </p>
+                      {!p.lidoEm && (
+                        <button
+                          type="button"
+                          className="mt-1 cursor-pointer text-xs font-medium text-[var(--brand)] hover:underline"
+                          onClick={() => {
+                            api.put(`/crm/avisos-pagamento/meus/${p.id}/ciente`, {}).then(() => setRecarregar((n) => n + 1)).catch(() => {});
+                          }}
+                        >
+                          Estou ciente
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          {avisos.length === 0 && pagamentos.length === 0 ? (
             <p className="text-sm text-[var(--fg-muted)]">Nenhum aviso no momento.</p>
-          ) : (
+          ) : avisos.length === 0 ? null : (
             <ul className="space-y-3">
               {avisos.map((a) => (
                 <li key={a.id} className="flex items-start gap-3">

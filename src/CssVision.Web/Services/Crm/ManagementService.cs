@@ -61,7 +61,7 @@ public sealed class ManagementService(
 
     public async Task<IReadOnlyList<VendedorResumoDto>> ObterVendedoresAsync(CancellationToken ct, bool incluirInativos = false)
     {
-        ExigirGestaoComercial();
+        ExigirGestaoOuFinanceiro();
         var escopo = RespostaEmCache.Escopo(await equipe.ObterVendedoresVisiveisAsync(ct));
         return await RespostaEmCache.ObterAsync(cache, eventos, "gestao-vendedores", new { escopo, incluirInativos },
             () => CalcularVendedoresAsync(incluirInativos, ct));
@@ -283,7 +283,7 @@ public sealed class ManagementService(
 
     public async Task AtualizarRecebeLeadsAsync(Guid vendedorId, AtualizarRecebeLeadsRequest request, CancellationToken ct)
     {
-        ExigirGestaoComercial();
+        ExigirGestaoOuFinanceiro();
 
         if (!await equipe.PodeAcessarVendedorAsync(vendedorId, ct))
         {
@@ -312,6 +312,15 @@ public sealed class ManagementService(
         var fimMes = HorarioBrasilia.Inicio(primeiroDia.AddMonths(1));
         return ContagensPorVendedor.ContarLeadsAsync(
             leads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Where(l => !l.Arquivado && l.CriadoEm >= inicioMes && l.CriadoEm < fimMes), ct);
+    }
+
+    /// <summary>Carteira por consultor e "recebe lead": gestão comercial e Financeiro (que vê só a regional dele — o escopo vem do EquipeComercialService).</summary>
+    private void ExigirGestaoOuFinanceiro()
+    {
+        if (!currentUser.PodeGerirComercial && !currentUser.IsInRole(Authorization.Roles.Financeiro))
+        {
+            throw new Api.Contracts.Common.CrmForbiddenException("Apenas gestores comerciais e o financeiro podem acessar a gestão comercial.");
+        }
     }
 
     private void ExigirGestaoComercial()

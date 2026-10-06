@@ -24,8 +24,17 @@ public sealed class UserManagementService(
     internal static bool ProcurandoProvisorios(string? busca) =>
         !string.IsNullOrWhiteSpace(busca) && busca.Trim().StartsWith("Vendedor Notion", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Financeiro (sem papel de gestão): vê só consultores da própria regional e só ativa/inativa a conta deles.</summary>
+    private bool EhFinanceiro => currentUser.IsInRole(Roles.Financeiro) && !currentUser.PodeGerirComercial;
+
+    private void ExigirNaoFinanceiro()
+    {
+        if (EhFinanceiro) throw new CrmForbiddenException("O perfil financeiro só ativa ou inativa contas de consultores.");
+    }
+
     public async Task<PagedResult<UserSummaryDto>> ListarAsync(UserFilterRequest filtro, CancellationToken ct)
     {
+        if (EhFinanceiro) filtro = filtro with { Papel = Roles.Comercial };
         var query = db.Users.AsNoTracking()
             .Include(u => u.Regional)
             .Include(u => u.GestorComercial)
@@ -95,6 +104,7 @@ public sealed class UserManagementService(
 
     public async Task<UserSummaryDto> CriarAsync(UserCreateRequest request, CancellationToken ct)
     {
+        ExigirNaoFinanceiro();
         if (!Roles.All.Contains(request.Papel))
         {
             throw new CrmBusinessException("Papel inválido.", "papel_invalido");
@@ -119,7 +129,7 @@ public sealed class UserManagementService(
             // O Gestor regional fica como gestor do consultor que cadastra; o Supervisor não é gestor de equipe.
             gestorComercialId = EhSomenteSupervisor ? null : currentUser.UserId;
         }
-        else if (request.Papel is Roles.Comercial or Roles.GestorComercial && regionalId is null)
+        else if (request.Papel is Roles.Comercial or Roles.GestorComercial or Roles.Financeiro && regionalId is null)
         {
             throw new CrmBusinessException("Informe a regional deste usuário.", "regional_obrigatoria");
         }
@@ -170,8 +180,26 @@ public sealed class UserManagementService(
         return await ParaDtoAsync(usuario, ct);
     }
 
+    public async Task<UserSummaryDto> AlterarAtivoAsync(Guid id, bool ativo, CancellationToken ct)
+    {
+        if (id == currentUser.UserId) throw new CrmForbiddenException("Você não pode ativar ou inativar a própria conta.");
+
+        // O escopo (regional de quem chama, regionais ocultas) é o de sempre: CarregarComEscopoAsync.
+        var usuario = await CarregarComEscopoAsync(id, ct);
+        if (!await userManager.IsInRoleAsync(usuario, Roles.Comercial))
+        {
+            throw new CrmForbiddenException("Aqui só é possível ativar ou inativar contas de consultores.");
+        }
+
+        usuario.Ativo = ativo;
+        await db.SaveChangesAsync(ct);
+        await audit.RegistrarAsync(ativo ? "UsuarioAtivado" : "UsuarioInativado", nameof(ApplicationUser), usuario.Id, new { usuario.NomeCompleto }, ct);
+        return await ParaDtoAsync(usuario, ct);
+    }
+
     public async Task<UserSummaryDto> AtualizarAsync(Guid id, UserUpdateRequest request, CancellationToken ct)
     {
+        ExigirNaoFinanceiro();
         var usuario = await CarregarComEscopoAsync(id, ct);
 
         if (!Roles.All.Contains(request.Papel))
@@ -206,7 +234,7 @@ public sealed class UserManagementService(
         {
             throw new CrmBusinessException("Você não pode desativar a própria conta.", "auto_desativacao");
         }
-        else if (request.Papel is Roles.Comercial or Roles.GestorComercial && regionalId is null)
+        else if (request.Papel is Roles.Comercial or Roles.GestorComercial or Roles.Financeiro && regionalId is null)
         {
             // O Gestor regional só enxerga a própria regional: sem regional ele não veria ninguém.
             throw new CrmBusinessException("Informe a regional deste usuário.", "regional_obrigatoria");
@@ -265,6 +293,7 @@ public sealed class UserManagementService(
 
     public async Task RedefinirSenhaAsync(Guid id, ResetPasswordRequest request, CancellationToken ct)
     {
+        ExigirNaoFinanceiro();
         var usuario = await CarregarComEscopoAsync(id, ct);
 
         if (!GerenciaTodasAsRegionais && !await PossuiAlgumPapelAsync(usuario, PapeisQuePodeGerenciar))
@@ -284,6 +313,7 @@ public sealed class UserManagementService(
 
     public async Task ExcluirAsync(Guid id, CancellationToken ct)
     {
+        ExigirNaoFinanceiro();
         if (!currentUser.TemVisaoTotal)
         {
             throw new CrmForbiddenException("Apenas administradores podem excluir usuários.");

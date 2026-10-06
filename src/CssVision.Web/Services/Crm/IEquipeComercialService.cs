@@ -39,7 +39,7 @@ public sealed class EquipeComercialService(ApplicationDbContext db, ICurrentUser
             return visiveis;
         }
 
-        if (currentUser.IsGestorComercial)
+        if (currentUser.IsGestorComercial || currentUser.IsInRole(Authorization.Roles.Financeiro))
         {
             var regionalId = await db.Users.AsNoTracking()
                 .Where(u => u.Id == currentUser.UserId)

@@ -90,6 +90,7 @@ public static class ServiceCollectionExtensions
             .AddPolicy(PolicyNames.AreaAdministrativa, p => p.RequireRole(Roles.Administrativos))
             .AddPolicy(PolicyNames.AreaComercial, p => p.RequireRole(Roles.Comerciais))
             .AddPolicy(PolicyNames.GestaoComercial, p => p.RequireRole(Roles.GestaoComercial))
+            .AddPolicy(PolicyNames.GestaoFinanceira, p => p.RequireRole(Roles.GestaoFinanceira))
             .AddPolicy(PolicyNames.VisaoTotalComercial, p => p.RequireRole(Roles.VisaoTotal))
             .AddPolicy(PolicyNames.AreaMarketing, p => p.RequireRole(Roles.AreaMarketing));
 
@@ -128,6 +129,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserManagementService, UserManagementService>();
         services.AddScoped<IAnnouncementService, AnnouncementService>();
         services.AddScoped<ISuporteService, SuporteService>();
+        services.AddScoped<IAvisosPagamentoService, AvisosPagamentoService>();
         services.AddScoped<IMarketingService, MarketingService>();
 
         return services;
