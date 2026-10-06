@@ -14,15 +14,18 @@ public sealed class LeadAssignmentService(
     private HashSet<string> RegionaisExclusivas =>
         (opcoes?.Value.RegionaisExclusivas ?? []).Select(NomeDeRegional.Normalizar).Where(r => r is not null).Select(r => r!).ToHashSet();
 
-    /// <summary>Leads que contam no limite mensal: só os do tráfego pago, sem os do Notion.</summary>
+    /// <summary>
+    /// Leads que contam no limite mensal: só os do tráfego pago, sem os do Notion. Lead excluído (arquivado) não conta: a vez do
+    /// consultor que o recebeu não foi "gasta", então ele volta a ser o próximo do rodízio.
+    /// </summary>
     private IQueryable<CrmLead> LeadsDoTrafegoNoMes() =>
-        db.CrmLeads.AsNoTracking().Where(OrigemLead.VeioDoTrafegoPago).Where(l => l.CriadoEm >= InicioDoMes());
+        db.CrmLeads.AsNoTracking().Where(OrigemLead.VeioDoTrafegoPago).Where(l => !l.Arquivado && l.CriadoEm >= InicioDoMes());
 
     /// <summary>Leads do tráfego pago que o vendedor recebeu hoje (horário de Brasília) — contam no limite diário.</summary>
     private IQueryable<CrmLead> LeadsDoTrafegoHoje()
     {
         var inicioDia = InicioDoDia();
-        return db.CrmLeads.AsNoTracking().Where(OrigemLead.VeioDoTrafegoPago)
+        return db.CrmLeads.AsNoTracking().Where(OrigemLead.VeioDoTrafegoPago).Where(l => !l.Arquivado)
             .Where(l => (l.ResponsavelAtribuidoEm ?? l.CriadoEm) >= inicioDia);
     }
 
@@ -106,13 +109,24 @@ public sealed class LeadAssignmentService(
             .Select(g => new { ResponsavelId = g.Key, Quantidade = g.Count() })
             .ToDictionaryAsync(x => x.ResponsavelId, x => x.Quantidade, ct);
 
+        // Último lead (não excluído) que cada um recebeu: no empate, quem espera há mais tempo (ou nunca recebeu) vem primeiro.
+        var ultimaAtribuicao = (await db.CrmLeads.AsNoTracking()
+                .Where(OrigemLead.VeioDoTrafegoPago)
+                .Where(l => !l.Arquivado && l.ResponsavelId != null && ids.Contains(l.ResponsavelId.Value))
+                .GroupBy(l => l.ResponsavelId!.Value)
+                .Select(g => new { ResponsavelId = g.Key, Ultima = g.Max(l => l.ResponsavelAtribuidoEm ?? l.CriadoEm) })
+                .ToListAsync(ct))
+            .ToDictionary(x => x.ResponsavelId, x => x.Ultima);
+
         return vendedores
-            .Select(v => new { v.Id, v.NomeCompleto, v.LimiteMensalLeads, v.LimiteDiarioLeads, v.Especialista, Recebidos = recebidosNoMes.GetValueOrDefault(v.Id), Hoje = recebidosHoje.GetValueOrDefault(v.Id) })
+            .Select(v => new { v.Id, v.NomeCompleto, v.LimiteMensalLeads, v.LimiteDiarioLeads, v.Especialista, Recebidos = recebidosNoMes.GetValueOrDefault(v.Id), Hoje = recebidosHoje.GetValueOrDefault(v.Id), Ultima = ultimaAtribuicao.TryGetValue(v.Id, out var u) ? u : DateTimeOffset.MinValue })
             .Where(v => ignorarLimites || v.LimiteMensalLeads is null || v.Recebidos < v.LimiteMensalLeads)
             .Where(v => ignorarLimites || v.LimiteDiarioLeads is null || v.Hoje < v.LimiteDiarioLeads)
             .OrderBy(v => v.Recebidos)
             // Empate: o especialista (que só pode receber esse tipo) vem primeiro.
             .ThenByDescending(v => v.Especialista)
+            // Depois, quem recebeu o último lead há mais tempo; o nome só desempata quem nunca recebeu / recebeu no mesmo instante.
+            .ThenBy(v => v.Ultima)
             .ThenBy(v => v.NomeCompleto, StringComparer.OrdinalIgnoreCase)
             .Select(v => (Guid?)v.Id)
             .FirstOrDefault();
