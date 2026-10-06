@@ -18,6 +18,14 @@ public interface ILeadAssignmentService
     Task<Guid?> ProximoResponsavelAsync(string? oQue, CancellationToken ct);
 
     /// <summary>
+    /// Igual ao rodízio acima, considerando a regional do lead (a que o formulário mandou, ex.: MG134):
+    /// com regional, só concorrem consultores dessa regional; sem regional, ficam de fora os consultores de regionais
+    /// exclusivas (<see cref="DistribuicaoOptions.RegionaisExclusivas"/>). Sem ninguém elegível retorna null — o lead fica sem
+    /// responsável e é distribuído quando alguém ficar disponível, nunca para outra equipe.
+    /// </summary>
+    Task<Guid?> ProximoResponsavelAsync(string? oQue, string? regional, CancellationToken ct) => ProximoResponsavelAsync(oQue, ct);
+
+    /// <summary>
     /// Se um usuário específico pode receber mais um lead que está chegando (sincronização do Notion
     /// pelo "Vendedor" do card, planilha com o e-mail do responsável): precisa estar ativo e abaixo do
     /// LimiteMensalLeads definido pelo administrador — mesma contagem usada no rodízio.

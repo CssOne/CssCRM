@@ -3,11 +3,17 @@ using CssVision.Web.Authorization;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace CssVision.Web.Services.Crm;
 
-public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub? eventos = null, TimeProvider? relogio = null) : ILeadAssignmentService
+public sealed class LeadAssignmentService(
+    ApplicationDbContext db, ICrmEventHub? eventos = null, TimeProvider? relogio = null, IOptions<DistribuicaoOptions>? opcoes = null) : ILeadAssignmentService
 {
+    /// <summary>Regionais exclusivas (nomes normalizados): seus consultores só recebem leads marcados com a regional.</summary>
+    private HashSet<string> RegionaisExclusivas =>
+        (opcoes?.Value.RegionaisExclusivas ?? []).Select(NomeDeRegional.Normalizar).Where(r => r is not null).Select(r => r!).ToHashSet();
+
     /// <summary>Leads que contam no limite mensal: só os do tráfego pago, sem os do Notion.</summary>
     private IQueryable<CrmLead> LeadsDoTrafegoNoMes() =>
         db.CrmLeads.AsNoTracking().Where(OrigemLead.VeioDoTrafegoPago).Where(l => l.CriadoEm >= InicioDoMes());
@@ -41,19 +47,32 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
             : null;
     }
 
-    public async Task<Guid?> ProximoResponsavelAsync(string? oQue, CancellationToken ct)
+    public Task<Guid?> ProximoResponsavelAsync(string? oQue, CancellationToken ct) => ProximoResponsavelAsync(oQue, null, ct);
+
+    public async Task<Guid?> ProximoResponsavelAsync(string? oQue, string? regional, CancellationToken ct)
     {
         // "Continuar distribuindo" do gestor vale para os limites e para o dia/horário de recebimento.
         var continuar = await ContinuarAteAsync(ct) is not null;
-        return await ProximoAsync(oQue, continuar, continuar, ct);
+        return await ProximoAsync(oQue, regional, continuar, continuar, ct);
     }
 
-    private async Task<Guid?> ProximoAsync(string? oQue, bool ignorarLimites, bool ignorarHorario, CancellationToken ct)
+    private async Task<Guid?> ProximoAsync(string? oQue, string? regional, bool ignorarLimites, bool ignorarHorario, CancellationToken ct)
     {
         var todos = await db.UserRoles
             .Join(db.Roles.Where(r => r.Name == Roles.Comercial), ur => ur.RoleId, r => r.Id, (ur, _) => ur.UserId)
-            .Join(db.Users.Where(u => u.Ativo && u.RecebeLeads), id => id, u => u.Id, (_, u) => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.RecebeSomenteOQue, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads })
+            .Join(db.Users.Where(u => u.Ativo && u.RecebeLeads), id => id, u => u.Id, (_, u) => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.RecebeSomenteOQue, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads, RegionalNome = u.Regional != null ? u.Regional.Nome : null })
             .ToListAsync(ct);
+
+        // Regional do lead: com ela, só concorrem os consultores dela. Sem ela, ficam de fora os das regionais exclusivas.
+        var regionalDoLead = NomeDeRegional.Normalizar(regional);
+        var exclusivas = RegionaisExclusivas;
+        todos = todos.Where(v =>
+        {
+            var regionalDoConsultor = NomeDeRegional.Normalizar(v.RegionalNome);
+            return regionalDoLead is not null
+                ? regionalDoConsultor == regionalDoLead
+                : regionalDoConsultor is null || !exclusivas.Contains(regionalDoConsultor);
+        }).ToList();
 
         // "Recebe somente leads de..." só RESTRINGE: quem tem a restrição entra no rodízio apenas dos
         // leads daqueles tipos, em pé de igualdade com os demais (recebe quem pegou menos no mês).
@@ -127,10 +146,15 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
             .ToListAsync(ct);
 
         var distribuidos = 0;
+        // Combinações (tipo, regional) sem ninguém disponível neste ciclo: não repete a consulta, e um lead de uma equipe parada não
+        // trava os das outras (ficam para o próximo ciclo).
+        var semDisponivel = new HashSet<(string?, string?)>();
         foreach (var lead in pendentes)
         {
-            var responsavelId = await ProximoResponsavelAsync(lead.ProdutoInteresse, ct);
-            if (responsavelId is null) break; // ninguém disponível agora: tenta de novo no próximo ciclo
+            var chave = (lead.ProdutoInteresse, NomeDeRegional.Normalizar(lead.Regional));
+            if (semDisponivel.Contains(chave)) continue;
+            var responsavelId = await ProximoResponsavelAsync(lead.ProdutoInteresse, lead.Regional, ct);
+            if (responsavelId is null) { semDisponivel.Add(chave); continue; } // tenta de novo no próximo ciclo
             lead.ResponsavelId = responsavelId;
             await db.SaveChangesAsync(ct); // um por vez: o rodízio olha quantos cada um já recebeu
             distribuidos++;
@@ -146,9 +170,9 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
         var porTipo = (await db.CrmLeads.AsNoTracking()
                 .Where(OrigemLead.VeioDoTrafegoPago)
                 .Where(l => l.ResponsavelId == null && !l.Arquivado)
-                .Select(l => l.ProdutoInteresse)
+                .Select(l => new { l.ProdutoInteresse, l.Regional })
                 .ToListAsync(ct))
-            .GroupBy(oQue => oQue)
+            .GroupBy(l => (OQue: l.ProdutoInteresse, Regional: NomeDeRegional.Normalizar(l.Regional)))
             .ToList();
         var semResponsavel = porTipo.Sum(g => g.Count());
 
@@ -159,13 +183,13 @@ public sealed class LeadAssignmentService(ApplicationDbContext db, ICrmEventHub?
         {
             foreach (var grupo in porTipo)
             {
-                if (await ProximoAsync(grupo.Key, false, false, ct) is not null) continue;
-                if (await ProximoAsync(grupo.Key, true, true, ct) is null) continue;
+                if (await ProximoAsync(grupo.Key.OQue, grupo.Key.Regional, false, false, ct) is not null) continue;
+                if (await ProximoAsync(grupo.Key.OQue, grupo.Key.Regional, true, true, ct) is null) continue;
 
                 var quantidade = grupo.Count();
                 bloqueados += quantidade;
-                var soLimite = await ProximoAsync(grupo.Key, true, false, ct) is not null;
-                var soHorario = await ProximoAsync(grupo.Key, false, true, ct) is not null;
+                var soLimite = await ProximoAsync(grupo.Key.OQue, grupo.Key.Regional, true, false, ct) is not null;
+                var soHorario = await ProximoAsync(grupo.Key.OQue, grupo.Key.Regional, false, true, ct) is not null;
                 if (soLimite || !soHorario) porLimite += quantidade;
                 if (soHorario || !soLimite) porHorario += quantidade;
             }

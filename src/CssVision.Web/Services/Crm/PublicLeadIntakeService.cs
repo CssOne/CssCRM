@@ -45,6 +45,7 @@ public sealed class PublicLeadIntakeService(
             UtmMedium = Cortar(request.UtmMedium, 120),
             UtmTerm = Cortar(request.UtmTerm, 120),
             UtmCampaign = Cortar(request.UtmCampaign, 200),
+            Regional = NomeDeRegional.Normalizar(Cortar(request.Regional, 50)),
         };
 
         // Mesmo Meta Lead ID = mesmo lead, mesmo se já tiver sido excluído (arquivado): o reenvio da
@@ -77,7 +78,7 @@ public sealed class PublicLeadIntakeService(
                 string.IsNullOrWhiteSpace(request.Veiculo) ? null : $"Veículo: {request.Veiculo}",
             }.Where(s => s is not null));
 
-        var responsavelId = await ResolverResponsavelAsync(request.Projeto, request.Oque, ct);
+        var responsavelId = await ResolverResponsavelAsync(request.Projeto, request.Oque, request.Regional, ct);
 
         var lead = new CrmLead
         {
@@ -112,6 +113,7 @@ public sealed class PublicLeadIntakeService(
             ConsentimentoDataEm = DateTimeOffset.UtcNow,
             ConsentimentoOrigem = OrigemLead.MarcadorFormularioSite,
             ResponsavelId = responsavelId,
+            Regional = request.Regional,
             CriadoManualmente = false,
         };
 
@@ -194,7 +196,9 @@ public sealed class PublicLeadIntakeService(
 
         if (existente.ResponsavelId is null)
         {
-            existente.ResponsavelId = await ResolverResponsavelAsync(request.Projeto, request.Oque, ct);
+            // A regional que o formulário mandou vale também para um contato já existente que ainda não tem dono.
+            if (existente.Regional is null && request.Regional is not null) existente.Regional = request.Regional;
+            existente.ResponsavelId = await ResolverResponsavelAsync(request.Projeto, request.Oque, request.Regional ?? existente.Regional, ct);
             mudou = true;
         }
 
@@ -298,11 +302,11 @@ public sealed class PublicLeadIntakeService(
     /// pela regra normal: recebe quem pegou menos no mês, respeitando os limites). Antes iam fixos
     /// para a Samys; desde 02/10/2026 a Caroline Aguiar também recebe.
     /// </summary>
-    private async Task<Guid?> ResolverResponsavelAsync(string? projeto, string? oQue, CancellationToken ct)
+    private async Task<Guid?> ResolverResponsavelAsync(string? projeto, string? oQue, string? regional, CancellationToken ct)
     {
         var formId = projeto?.StartsWith("meta-instant-") == true ? projeto["meta-instant-".Length..] : null;
         var ehCaminhao = formId is not null && FormsCaminhao.Contains(formId);
-        return await assignment.ProximoResponsavelAsync(ehCaminhao ? AgvTruck : oQue, ct);
+        return await assignment.ProximoResponsavelAsync(ehCaminhao ? AgvTruck : oQue, regional, ct);
     }
 
     private static string? Cortar(string? texto, int maximo)
