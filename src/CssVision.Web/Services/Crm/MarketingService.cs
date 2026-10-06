@@ -144,11 +144,11 @@ public sealed class MarketingService(ApplicationDbContext db, ICurrentUserServic
                 l.EtapaNome ?? SemEtapa, l.EtapaCor, l.EtapaOrdem, l.ResponsavelId, l.ResponsavelNome,
                 l.CriadoEm, l.ResponsavelAtribuidoEm ?? l.CriadoEm, l.MotivoPerda,
                 // Regional do próprio lead (MG132, MG134...); sem ela, a do consultor responsável.
-                Vazio(l.RegionalDoLead)?.ToUpperInvariant() ?? Vazio(l.RegionalDoResponsavel)?.ToUpperInvariant() ?? SemRegional))
+                NormalizarRegional(l.RegionalDoLead) ?? NormalizarRegional(l.RegionalDoResponsavel) ?? SemRegional))
             .ToList();
 
         // Administrador com regionais ocultas: o resto da tela (opções, números, lista) não conhece os leads delas.
-        if (Lista(filtro.RegionaisOcultas)?.Select(r => r.ToUpperInvariant()).ToHashSet() is { } ocultas)
+        if (Lista(filtro.RegionaisOcultas)?.Select(r => NormalizarRegional(r) ?? r).ToHashSet() is { } ocultas)
         {
             todas = todas.Where(l => !ocultas.Contains(l.Regional)).ToList();
         }
@@ -310,7 +310,7 @@ public sealed class MarketingService(ApplicationDbContext db, ICurrentUserServic
         if (estados is not null) q = q.Where(l => estados.Contains(l.Estado ?? NaoInformado));
         var etapas = Lista(filtro.Etapa)?.ToHashSet();
         if (etapas is not null) q = q.Where(l => etapas.Contains(l.EtapaNome));
-        var regionais = Lista(filtro.Regional)?.Select(r => r.ToUpperInvariant()).ToHashSet();
+        var regionais = Lista(filtro.Regional)?.Select(r => NormalizarRegional(r) ?? r).ToHashSet();
         if (regionais is not null) q = q.Where(l => regionais.Contains(l.Regional));
         if (filtro.ResponsavelId is { Length: > 0 } responsaveis)
         {
@@ -426,6 +426,13 @@ public sealed class MarketingService(ApplicationDbContext db, ICurrentUserServic
 
     /// <summary>"2026-09" — mês da chegada no horário de Brasília.</summary>
     private static string MesBrasilia(DateTimeOffset instante) => instante.ToOffset(Brasilia).ToString("yyyy-MM");
+
+    /// <summary>
+    /// Nome da regional sem espaços e em maiúsculas: "MG 132", "mg132" e "MG132" são a mesma regional (o campo do lead é texto livre e
+    /// vem do Notion/formulário com variações).
+    /// </summary>
+    internal static string? NormalizarRegional(string? regional) =>
+        string.IsNullOrWhiteSpace(regional) ? null : new string(regional.Where(c => !char.IsWhiteSpace(c)).ToArray()).ToUpperInvariant();
 
     private static string? Vazio(string? texto) => string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
 
