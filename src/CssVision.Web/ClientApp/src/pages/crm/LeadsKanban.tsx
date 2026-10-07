@@ -5,6 +5,7 @@ import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api
 import {
   TipoEtapaPipeline,
   type LeadCreateRequest,
+  type LeadDetail,
   type LeadDuplicateWarning,
   type LeadKanbanBoard,
   type LeadKanbanCard,
@@ -467,6 +468,24 @@ export function LeadsKanbanPage() {
     // "Venda concluída" (depois de mover, pra o card novo herdar a etiqueta já atualizada).
     if (resultado && resultado.veiculosAdicionais > 0) {
       setOutroVeiculo({ leadId: cartao.leadId, atual: 1, total: resultado.veiculosAdicionais });
+    }
+  }
+
+  /**
+   * Venda de "Outro veículo" marcada como indicação: o card novo nasce em "Venda concluída (Leads)"
+   * (herda a etiqueta do cliente) e precisa ir para a coluna das indicações, como acontece no card
+   * principal — o servidor põe a etiqueta "Indicação Lead".
+   */
+  async function moverVeiculoNovoParaIndicacao(resultado?: ResultadoVendaConcluida) {
+    const colunaIndicacao = colunasVendaConcluida[1]?.etapa.id;
+    if (!resultado?.indicacao || !resultado.novoLeadId || !colunaIndicacao) return;
+    try {
+      const lead = await api.get<LeadDetail>(`/crm/leads/${resultado.novoLeadId}`);
+      if (lead.tipoIndicacao?.trim().toLowerCase() !== "lead") return;
+      await api.post(`/crm/leads/${lead.id}/stage`, { novaEtapaId: colunaIndicacao, rowVersion: lead.rowVersion });
+      carregar(undefined, true);
+    } catch {
+      notificar("error", "A venda foi registrada, mas não foi possível mover o card para \"Venda concluída (Indicação)\". Mova-o manualmente.");
     }
   }
 
@@ -1012,8 +1031,9 @@ export function LeadsKanbanPage() {
           setOutroVeiculo(null);
           carregar(undefined, true);
         }}
-        onConcluido={() => {
+        onConcluido={(resultado) => {
           notificar("success", "Venda do outro veículo registrada — card novo em \"Venda concluída\".");
+          void moverVeiculoNovoParaIndicacao(resultado);
           setOutroVeiculo((atual) => (atual && atual.atual < atual.total ? { ...atual, atual: atual.atual + 1 } : null));
           carregar(undefined, true);
         }}
