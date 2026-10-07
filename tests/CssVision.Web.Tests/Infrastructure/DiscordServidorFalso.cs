@@ -15,6 +15,9 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
 
     public bool SemPermissao { get; set; }
 
+    /// <summary>Só a criação de conversas (threads privadas) falha, por falta de permissão do bot.</summary>
+    public bool SemPermissaoParaThreads { get; set; }
+
     /// <summary>Mensagens por canal, da mais antiga para a mais nova.</summary>
     public Dictionary<string, List<DiscordMensagem>> Mensagens { get; } = [];
 
@@ -75,13 +78,42 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
         return Task.FromResult<IReadOnlyList<DiscordMensagem>>(anteriores.TakeLast(limite).ToList());
     }
 
-    public Task<DiscordMensagem> EnviarMensagemAsync(string canalId, string nome, string? fotoUrl, string texto, CancellationToken ct)
+    /// <summary>Threads privadas criadas: id da thread → ids do Discord de quem foi adicionado.</summary>
+    public Dictionary<string, List<string>> Threads { get; } = [];
+
+    public List<(string CanalPaiId, string Nome)> ThreadsCriadas { get; } = [];
+
+    public Task<DiscordMensagem> EnviarMensagemAsync(string canalId, string nome, string? fotoUrl, string texto, CancellationToken ct, string? threadId = null)
     {
         if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para enviar a mensagem.");
-        Enviadas.Add((canalId, nome, fotoUrl, texto));
+        Enviadas.Add((threadId ?? canalId, nome, fotoUrl, texto));
         var mensagem = new DiscordMensagem(Novo(), nome, fotoUrl, texto, DateTimeOffset.UtcNow, [], true);
-        if (!Mensagens.TryGetValue(canalId, out var lista)) Mensagens[canalId] = lista = [];
+        var onde = threadId ?? canalId;
+        if (!Mensagens.TryGetValue(onde, out var lista)) Mensagens[onde] = lista = [];
         lista.Add(mensagem);
         return Task.FromResult(mensagem);
+    }
+
+    public Task<string> CriarCanalDeConversasAsync(string nome, string categoriaId, string cargoId, CancellationToken ct)
+    {
+        if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para criar o canal de conversas.");
+        var id = Novo();
+        Canais.Add(id);
+        return Task.FromResult(id);
+    }
+
+    public Task<string> CriarConversaPrivadaAsync(string canalPaiId, string nome, CancellationToken ct)
+    {
+        if (SemPermissaoParaThreads) throw new DiscordApiException("O bot não tem permissão para criar a conversa.");
+        var id = Novo();
+        Threads[id] = [];
+        ThreadsCriadas.Add((canalPaiId, nome));
+        return Task.FromResult(id);
+    }
+
+    public Task AdicionarAThreadAsync(string threadId, string discordUserId, CancellationToken ct)
+    {
+        Threads[threadId].Add(discordUserId);
+        return Task.CompletedTask;
     }
 }

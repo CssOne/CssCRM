@@ -39,10 +39,13 @@ public sealed class DiscordGruposService(
     public const string ChaveGeral = "geral";
     public const string ChaveGestao = "gestao";
 
+    /// <summary>Canal onde moram as threads privadas das conversas 1:1 (não é um grupo: fica fora das listas de grupos e do chat).</summary>
+    public const string ChaveConversas = "conversas";
+
     private sealed record Desejado(string Chave, string Nome, string NomeCanal, string NomeCargo, string Topico);
 
     public async Task<IReadOnlyList<DiscordCanalDto>> ListarCanaisAsync(CancellationToken ct) =>
-        (await db.CrmDiscordCanais.AsNoTracking().ToListAsync(ct))
+        (await db.CrmDiscordCanais.AsNoTracking().Where(c => c.Chave != ChaveConversas).ToListAsync(ct))
             .OrderBy(c => c.Chave == ChaveGeral ? 0 : c.Chave == ChaveGestao ? 1 : 2).ThenBy(c => c.Nome)
             .Select(c => new DiscordCanalDto(c.Chave, c.Nome, c.Ativo))
             .ToList();
@@ -112,8 +115,17 @@ public sealed class DiscordGruposService(
             }
         }
 
+        try
+        {
+            if (await GarantirCanalDeConversasAsync(mapa, categoriaId, ct)) canaisCriados++;
+        }
+        catch (DiscordApiException ex)
+        {
+            falhas.Add($"Conversas diretas: {ex.Message}");
+        }
+
         // Regional ou grupo que não existe mais no CRM: o canal fica no Discord, mas ninguém novo entra.
-        foreach (var obsoleto in mapa.Values.Where(m => desejados.All(d => d.Chave != m.Chave))) obsoleto.Ativo = false;
+        foreach (var obsoleto in mapa.Values.Where(m => m.Chave != ChaveConversas && desejados.All(d => d.Chave != m.Chave))) obsoleto.Ativo = false;
         await db.SaveChangesAsync(ct);
 
         var (atualizados, foraDoServidor) = await SincronizarMembrosAsync(mapa, falhas, ct);
@@ -146,6 +158,34 @@ public sealed class DiscordGruposService(
         }
 
         return lista;
+    }
+
+    /// <summary>Cria o canal das conversas 1:1 (visível a todos os que têm o cargo "geral"). Devolve se criou.</summary>
+    private async Task<bool> GarantirCanalDeConversasAsync(Dictionary<string, CrmDiscordCanal> mapa, string categoriaId, CancellationToken ct)
+    {
+        if (!mapa.TryGetValue(ChaveGeral, out var geral) || string.IsNullOrEmpty(geral.DiscordCargoId)) return false; // sem o grupo geral não há cargo para dar acesso
+
+        mapa.TryGetValue(ChaveConversas, out var existente);
+        if (existente is not null && await api.CanalExisteAsync(existente.DiscordCanalId, ct))
+        {
+            existente.Ativo = true;
+            return false;
+        }
+
+        var canalId = await api.CriarCanalDeConversasAsync("conversas-diretas", categoriaId, geral.DiscordCargoId, ct);
+        if (existente is null)
+        {
+            existente = new CrmDiscordCanal { Chave = ChaveConversas };
+            db.CrmDiscordCanais.Add(existente);
+            mapa[ChaveConversas] = existente;
+        }
+
+        existente.Nome = "Conversas diretas";
+        existente.DiscordCanalId = canalId;
+        existente.DiscordCargoId = geral.DiscordCargoId;
+        existente.Ativo = true;
+        await db.SaveChangesAsync(ct);
+        return true;
     }
 
     private async Task<string> GarantirCategoriaAsync(CancellationToken ct)

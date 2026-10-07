@@ -58,8 +58,8 @@ public class DiscordGruposServiceTests
 
         var resultado = await Montar(db, servidor).SincronizarAsync(CancellationToken.None);
 
-        // geral + gestão + 1 regional + 1 grupo
-        Assert.Equal(4, resultado.CanaisCriados);
+        // geral + gestão + 1 regional + 1 grupo + o canal das conversas diretas (esse não tem cargo próprio)
+        Assert.Equal(5, resultado.CanaisCriados);
         Assert.Equal(4, resultado.CargosCriados);
         Assert.Empty(resultado.Falhas);
         var canais = await db.CrmDiscordCanais.AsNoTracking().Select(c => c.Chave).ToListAsync();
@@ -82,7 +82,7 @@ public class DiscordGruposServiceTests
 
         Assert.Equal(0, segunda.CanaisCriados);
         Assert.Equal(0, segunda.CargosCriados);
-        Assert.Equal(3, await db.CrmDiscordCanais.CountAsync());
+        Assert.Equal(4, await db.CrmDiscordCanais.CountAsync()); // geral, gestão, a regional e o canal das conversas
     }
 
     [Fact]

@@ -1516,6 +1516,17 @@ export interface AlertaDistribuicao {
 export interface DiscordChatCanal {
   chave: string;
   nome: string;
+  /** "grupo" ou "direta" (conversa 1:1: o nome é o da outra pessoa). */
+  tipo: "grupo" | "direta";
+  fotoUrl?: string | null;
+}
+
+/** Pessoa com quem dá para iniciar uma conversa 1:1. */
+export interface DiscordChatContato {
+  id: string;
+  nome: string;
+  fotoUrl?: string | null;
+  regional?: string | null;
 }
 
 export interface DiscordChatAnexo {

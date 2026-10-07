@@ -24,7 +24,13 @@ public record DiscordCanalDto(string Chave, string Nome, bool Ativo);
 public record DiscordSincronizacaoDto(int CanaisCriados, int CargosCriados, int MembrosAtualizados, int MembrosForaDoServidor, IReadOnlyList<string> Falhas);
 
 /// <summary>Grupo de conversa que o usuário pode abrir no chat do CRM.</summary>
-public record DiscordChatCanalDto(string Chave, string Nome);
+/// <param name="Tipo"><c>grupo</c> ou <c>direta</c> (conversa 1:1: o nome é o da outra pessoa).</param>
+public record DiscordChatCanalDto(string Chave, string Nome, string Tipo = "grupo", string? FotoUrl = null);
+
+/// <summary>Pessoa com quem dá para iniciar uma conversa 1:1.</summary>
+public record DiscordChatContatoDto(Guid Id, string Nome, string? FotoUrl, string? Regional);
+
+public record DiscordChatIniciarRequest(Guid UsuarioId);
 
 public record DiscordChatAnexoDto(string Nome, string Url, bool Imagem);
 
