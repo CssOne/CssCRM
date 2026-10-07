@@ -30,9 +30,10 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { mostrarNotificacao, somLigado, tocarPlim } from "../lib/avisosDoChat";
 import { usePresenca } from "../lib/usePresenca";
 import { rotuloNaoLidas, useChatNaoLidas } from "../lib/useChatNaoLidas";
 import { useTheme } from "../context/ThemeContext";
@@ -117,6 +118,17 @@ export function Shell({ children }: { children: ReactNode }) {
   useEffect(() => {
     localStorage.setItem("crm-sidebar-colapsado", colapsado ? "1" : "0");
   }, [colapsado]);
+
+  // Mensagem nova (o total subiu desde a consulta anterior): "plim" e, com a aba em segundo plano, notificação do navegador. A 1ª consulta
+  // só registra o ponto de partida (abrir o CRM com mensagens antigas não deve tocar).
+  const totalAnterior = useRef<number | null>(null);
+  useEffect(() => {
+    const antes = totalAnterior.current;
+    totalAnterior.current = chatNaoLidas.total;
+    if (antes === null || chatNaoLidas.total <= antes) return;
+    if (somLigado()) tocarPlim();
+    mostrarNotificacao(chatNaoLidas.total, () => navigate("/app/chat"));
+  }, [chatNaoLidas.total, navigate]);
 
   useEffect(() => {
     if (chatNaoLidas.total === 0) return;

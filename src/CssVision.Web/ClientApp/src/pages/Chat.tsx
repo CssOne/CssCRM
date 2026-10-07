@@ -3,10 +3,11 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api, ApiRequestError, isAbortError } from "../lib/api";
+import { desligarNotificacao, definirSom, ligarNotificacao, notificacaoLigada, notificacaoSuportada, somLigado } from "../lib/avisosDoChat";
 import { formatarDataHora } from "../lib/format";
 import { rotuloNaoLidas, useChatNaoLidas } from "../lib/useChatNaoLidas";
 import type { DiscordChatCanal, DiscordChatChamada, DiscordChatContato, DiscordChatMensagem, DiscordChatMensagens, DiscordChatOnline } from "../lib/types";
-import { Avatar, Badge, Button, Card, EmptyState, ErrorState, Input, Modal, Skeleton, useToast } from "../components/ui";
+import { Avatar, Badge, Button, Card, Checkbox, EmptyState, ErrorState, Input, Modal, Skeleton, useToast } from "../components/ui";
 
 const LIMITE_TEXTO = 2000;
 const INTERVALO_MS = 4000;
@@ -218,6 +219,7 @@ export function ChatPage() {
           <MessagesSquare className="size-5 text-[var(--brand)]" aria-hidden /> Chat
         </h1>
         <p className="text-sm text-[var(--fg-muted)]">Conversa com os grupos da empresa. As mensagens também aparecem no Discord, inclusive no celular.</p>
+        <PreferenciasDeAviso />
       </div>
 
       {erro ? (
@@ -497,5 +499,39 @@ function comLinks(texto: string) {
     ) : (
       parte
     )
+  );
+}
+
+/** Som e notificação do navegador para mensagem nova (preferências deste navegador). */
+function PreferenciasDeAviso() {
+  const { notificar } = useToast();
+  const [som, setSom] = useState(somLigado);
+  const [notificacao, setNotificacao] = useState(notificacaoLigada);
+
+  async function alternarNotificacao(ligar: boolean) {
+    if (!ligar) {
+      desligarNotificacao();
+      setNotificacao(false);
+      return;
+    }
+    const ok = await ligarNotificacao();
+    setNotificacao(ok);
+    if (!ok) notificar("error", "O navegador não permitiu as notificações. Libere nas configurações do site e tente de novo.");
+  }
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1">
+      <Checkbox
+        label="Som de mensagem nova"
+        checked={som}
+        onChange={(e) => {
+          definirSom(e.target.checked);
+          setSom(e.target.checked);
+        }}
+      />
+      {notificacaoSuportada() && (
+        <Checkbox label="Avisar pelo navegador (com a aba em segundo plano)" checked={notificacao} onChange={(e) => void alternarNotificacao(e.target.checked)} />
+      )}
+    </div>
   );
 }
