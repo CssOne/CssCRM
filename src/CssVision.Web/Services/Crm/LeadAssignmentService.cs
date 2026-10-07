@@ -122,7 +122,10 @@ public sealed class LeadAssignmentService(
             .Select(v => new { v.Id, v.NomeCompleto, v.LimiteMensalLeads, v.LimiteDiarioLeads, v.Especialista, Recebidos = recebidosNoMes.GetValueOrDefault(v.Id), Hoje = recebidosHoje.GetValueOrDefault(v.Id), Ultima = ultimaAtribuicao.TryGetValue(v.Id, out var u) ? u : DateTimeOffset.MinValue })
             .Where(v => ignorarLimites || v.LimiteMensalLeads is null || v.Recebidos < v.LimiteMensalLeads)
             .Where(v => ignorarLimites || v.LimiteDiarioLeads is null || v.Hoje < v.LimiteDiarioLeads)
-            .OrderBy(v => v.Recebidos)
+            // Quem ainda não recebeu hoje vem antes de quem já recebeu: todos entram no rodízio do dia, mesmo quem pegou mais
+            // no mês (antes, só quem estava abaixo na contagem do mês recebia, e quem estava na frente passava o dia sem lead).
+            .OrderBy(v => v.Hoje)
+            .ThenBy(v => v.Recebidos)
             // Empate: o especialista (que só pode receber esse tipo) vem primeiro.
             .ThenByDescending(v => v.Especialista)
             // Depois, quem recebeu o último lead há mais tempo; o nome só desempata quem nunca recebeu / recebeu no mesmo instante.
