@@ -85,7 +85,7 @@ public class OpportunityServiceTests
 
         var atualizada = await service.MudarEtapaAsync(
             oportunidade.Id,
-            new ChangeStageRequest(ganho.Id, oportunidade.RowVersion, null, null, 1200m, DateOnly.FromDateTime(DateTime.UtcNow)),
+            new ChangeStageRequest(ganho.Id, oportunidade.RowVersion, null, null, 1200m, HorarioBrasilia.Hoje),
             CancellationToken.None);
 
         Assert.Equal(ganho.Id, atualizada.EtapaId);
@@ -114,7 +114,7 @@ public class OpportunityServiceTests
             CancellationToken.None);
 
         var ganha = await service.MudarEtapaAsync(
-            oportunidade.Id, new ChangeStageRequest(ganho.Id, oportunidade.RowVersion, null, null, 1000m, DateOnly.FromDateTime(DateTime.UtcNow)), CancellationToken.None);
+            oportunidade.Id, new ChangeStageRequest(ganho.Id, oportunidade.RowVersion, null, null, 1000m, HorarioBrasilia.Hoje), CancellationToken.None);
 
         await Assert.ThrowsAsync<CrmBusinessException>(() =>
             service.MudarEtapaAsync(oportunidade.Id, new ChangeStageRequest(perdido.Id, ganha.RowVersion, motivo.Id, null, null, null), CancellationToken.None));

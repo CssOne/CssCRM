@@ -170,6 +170,11 @@ public sealed class OpportunityService(
             throw new CrmBusinessException("O valor estimado não pode ser negativo.", "valor_invalido");
         }
 
+        if (request.DataEfetivaFechamento is { } dataDaVenda)
+        {
+            ExigirDataDeVendaNaoFutura(dataDaVenda);
+        }
+
         opportunity.Titulo = request.Titulo.Trim();
         opportunity.ResponsavelId = request.ResponsavelId;
         opportunity.ProdutoOuServico = request.ProdutoOuServico;
@@ -257,6 +262,8 @@ public sealed class OpportunityService(
             {
                 throw new CrmBusinessException("Informe o valor final e a data de fechamento ao marcar como 'Ganho'.", "fechamento_incompleto");
             }
+
+            ExigirDataDeVendaNaoFutura(request.DataEfetivaFechamento.Value);
 
             opportunity.ValorFinal = request.ValorFinal;
             opportunity.DataEfetivaFechamento = DataDaVendaAoMeioDia(request.DataEfetivaFechamento.Value);
@@ -394,6 +401,21 @@ public sealed class OpportunityService(
     /// hoje contava como de ontem (e a do dia 1º, como do mês passado). Ao meio-dia UTC (9h em Brasília) cai sempre no dia certo.
     /// </summary>
     internal static DateTimeOffset DataDaVendaAoMeioDia(DateOnly dia) => new(dia.ToDateTime(new TimeOnly(12, 0)), TimeSpan.Zero);
+
+    /// <summary>
+    /// Venda não acontece no futuro: a data da venda é o dia em que ela foi fechada. Uma data futura (digitada errada, ou a de
+    /// ativação/pagamento no lugar da data da venda) entrava nos totais, rankings e metas do mês antes de acontecer. "Hoje" é o dia
+    /// de Brasília, como no resto do CRM — comparar com a data em UTC bloquearia vendas legítimas feitas depois das 21h.
+    /// </summary>
+    internal static void ExigirDataDeVendaNaoFutura(DateOnly dia)
+    {
+        if (dia > HorarioBrasilia.Hoje)
+        {
+            throw new CrmBusinessException(
+                "A data da venda não pode ser uma data futura. Informe o dia em que a venda foi fechada (a data de ativação ou do pagamento da adesão é outro campo).",
+                "data_venda_futura");
+        }
+    }
 
     private async Task<CrmOpportunity> CarregarComEscopoAsync(Guid id, CancellationToken ct)
     {
