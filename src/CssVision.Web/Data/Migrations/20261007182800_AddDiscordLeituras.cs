@@ -1,0 +1,47 @@
+﻿using System;
+using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace CssVision.Web.Data.Migrations
+{
+    /// <inheritdoc />
+    public partial class AddDiscordLeituras : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.CreateTable(
+                name: "CrmDiscordLeituras",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    UsuarioId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Chave = table.Column<string>(type: "character varying(80)", maxLength: 80, nullable: false),
+                    UltimaLidaId = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    CriadoEm = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
+                    CriadoPorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    AtualizadoEm = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    AtualizadoPorId = table.Column<Guid>(type: "uuid", nullable: true),
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_CrmDiscordLeituras", x => x.Id);
+                });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_CrmDiscordLeituras_UsuarioId_Chave",
+                table: "CrmDiscordLeituras",
+                columns: new[] { "UsuarioId", "Chave" },
+                unique: true);
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.DropTable(
+                name: "CrmDiscordLeituras");
+        }
+    }
+}

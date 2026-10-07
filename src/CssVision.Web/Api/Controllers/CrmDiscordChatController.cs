@@ -16,6 +16,11 @@ public class CrmDiscordChatController(IDiscordChatService chat, ICurrentUserServ
     public async Task<ActionResult<IReadOnlyList<DiscordChatCanalDto>>> Canais(CancellationToken ct) =>
         Ok(await chat.ListarCanaisAsync(currentUser.UserId, ct));
 
+    /// <summary>Mensagens não lidas de cada conversa (para o número do menu e as marcas na lista). Barato: pode ser chamado a cada poucos segundos.</summary>
+    [HttpGet("nao-lidas")]
+    public async Task<ActionResult<DiscordChatNaoLidasDto>> NaoLidas(CancellationToken ct) =>
+        Ok(await chat.ContarNaoLidasAsync(currentUser.UserId, ct));
+
     /// <summary>Pessoas com quem dá para iniciar uma conversa 1:1 (quem vinculou o Discord e já está no servidor).</summary>
     [HttpGet("contatos")]
     public async Task<ActionResult<IReadOnlyList<DiscordChatContatoDto>>> Contatos([FromQuery] string? busca, CancellationToken ct) =>

@@ -25,6 +25,12 @@ public interface IDiscordChatService
 
     /// <summary>Abre a conversa 1:1 com a pessoa (cria a thread privada na primeira vez) e devolve a conversa.</summary>
     Task<DiscordChatCanalDto> IniciarConversaAsync(Guid usuarioId, Guid outraPessoaId, CancellationToken ct);
+
+    /// <summary>
+    /// Mensagens não lidas por conversa. Abrir a conversa (ler as últimas mensagens) ou enviar nela marca como lida. Sem Discord ativado,
+    /// ou sem conversas, devolve zero (nunca erro): é chamado em segundo plano pelo menu.
+    /// </summary>
+    Task<DiscordChatNaoLidasDto> ContarNaoLidasAsync(Guid usuarioId, CancellationToken ct);
 }
 
 /// <summary>
@@ -50,6 +56,14 @@ public sealed class DiscordChatService(
     private sealed record Destino(string LeituraId, string CanalDoWebhook, string? ThreadId);
 
     private static string ChaveDeCache(string leituraId) => $"discord:chat:{leituraId}";
+
+    // O "tem novidade?" do menu é consultado com mais folga que a conversa aberta: guarda só o id da última mensagem de cada conversa.
+    private static readonly TimeSpan ValidadeDaUltima = TimeSpan.FromSeconds(20);
+
+    private static string ChaveDaUltima(string leituraId) => $"discord:ultima:{leituraId}";
+
+    /// <summary>Os ids do Discord são números que crescem com o tempo: com o mesmo tamanho, a comparação do texto vale a do número.</summary>
+    internal static bool Maior(string a, string b) => a.Length != b.Length ? a.Length > b.Length : string.CompareOrdinal(a, b) > 0;
 
     public async Task<IReadOnlyList<DiscordChatCanalDto>> ListarCanaisAsync(Guid usuarioId, CancellationToken ct)
     {
@@ -81,11 +95,9 @@ public sealed class DiscordChatService(
         IReadOnlyList<DiscordMensagem> mensagens;
         if (antesDeId is null)
         {
-            mensagens = await cache.GetOrCreateAsync(ChaveDeCache(destino.LeituraId), async entrada =>
-            {
-                entrada.AbsoluteExpirationRelativeToNow = ValidadeDaLeitura;
-                return await LerAsync(() => api.ListarMensagensAsync(destino.LeituraId, MensagensPorPagina, null, ct));
-            }) ?? [];
+            mensagens = await LerRecentesAsync(destino, ct);
+            // Quem abre a conversa (e a deixa aberta, atualizando) está lendo: tudo até a última mensagem fica como lido.
+            if (mensagens.Count > 0) await MarcarComoLidaAsync(usuarioId, chave, mensagens[^1].Id, ct);
         }
         else
         {
@@ -120,7 +132,113 @@ public sealed class DiscordChatService(
 
         var enviada = await LerAsync(async () => await api.EnviarMensagemAsync(destino.CanalDoWebhook, pessoa.NomeCompleto, FotoAbsoluta(pessoa.FotoUrl), texto, ct, destino.ThreadId));
         cache.Remove(ChaveDeCache(destino.LeituraId));
+        cache.Remove(ChaveDaUltima(destino.LeituraId));
+        await MarcarComoLidaAsync(usuarioId, chave, enviada.Id, ct); // a mensagem que a própria pessoa mandou nunca é "não lida" para ela
         return Converter(enviada);
+    }
+
+    public async Task<DiscordChatNaoLidasDto> ContarNaoLidasAsync(Guid usuarioId, CancellationToken ct)
+    {
+        var vazio = new DiscordChatNaoLidasDto(0, new Dictionary<string, int>());
+        if (!options.Value.Configurado) return vazio;
+
+        var destinos = new List<(string Chave, Destino Destino)>();
+        foreach (var canal in await CanaisDaPessoaAsync(usuarioId, ct)) destinos.Add((canal.Chave, new Destino(canal.DiscordCanalId, canal.DiscordCanalId, null)));
+
+        var conversas = await db.CrmDiscordConversas.AsNoTracking().Where(c => c.UsuarioAId == usuarioId || c.UsuarioBId == usuarioId).ToListAsync(ct);
+        foreach (var c in conversas) destinos.Add(($"{PrefixoConversa}{c.Id}", new Destino(c.DiscordThreadId, "", c.DiscordThreadId)));
+        if (destinos.Count == 0) return vazio;
+
+        var chaves = destinos.Select(d => d.Chave).ToList();
+        var lidas = await db.CrmDiscordLeituras.Where(l => l.UsuarioId == usuarioId && chaves.Contains(l.Chave)).ToDictionaryAsync(l => l.Chave, ct);
+
+        var porConversa = new Dictionary<string, int>();
+        var alterou = false;
+        foreach (var (chave, destino) in destinos)
+        {
+            string? ultima;
+            try
+            {
+                ultima = await UltimaMensagemIdAsync(destino, ct);
+            }
+            catch (CrmBusinessException ex) when (ex.Codigo == "discord_indisponivel")
+            {
+                continue; // uma conversa que o Discord não entregou agora não derruba o contador das outras
+            }
+
+            if (ultima is null) continue; // conversa sem mensagens
+
+            if (!lidas.TryGetValue(chave, out var leitura))
+            {
+                // Primeira vez que esta pessoa aparece nesta conversa. Grupo: o passado conta como lido (senão todo o histórico viraria "não lido").
+                // Conversa 1:1: nada foi lido ainda — as mensagens de quem a abriu são novidade para quem acabou de ser convidado.
+                var inicial = chave.StartsWith(PrefixoConversa, StringComparison.Ordinal) ? "0" : ultima;
+                leitura = new CrmDiscordLeitura { UsuarioId = usuarioId, Chave = chave, UltimaLidaId = inicial };
+                db.CrmDiscordLeituras.Add(leitura);
+                lidas[chave] = leitura;
+                alterou = true;
+            }
+
+            if (!Maior(ultima, leitura.UltimaLidaId)) continue;
+
+            // Há novidade: conta olhando as mensagens recentes (a mesma leitura que a conversa aberta usa, guardada por poucos segundos).
+            IReadOnlyList<DiscordMensagem> recentes;
+            try
+            {
+                recentes = await LerRecentesAsync(destino, ct);
+            }
+            catch (CrmBusinessException ex) when (ex.Codigo == "discord_indisponivel")
+            {
+                continue;
+            }
+
+            porConversa[chave] = Math.Max(1, recentes.Count(m => Maior(m.Id, leitura.UltimaLidaId)));
+        }
+
+        if (alterou) await db.SaveChangesAsync(ct);
+        return new DiscordChatNaoLidasDto(porConversa.Values.Sum(), porConversa);
+    }
+
+    private async Task<IReadOnlyList<DiscordMensagem>> LerRecentesAsync(Destino destino, CancellationToken ct) =>
+        await cache.GetOrCreateAsync(ChaveDeCache(destino.LeituraId), async entrada =>
+        {
+            entrada.AbsoluteExpirationRelativeToNow = ValidadeDaLeitura;
+            return await LerAsync(() => api.ListarMensagensAsync(destino.LeituraId, MensagensPorPagina, null, ct));
+        }) ?? [];
+
+    private async Task<string?> UltimaMensagemIdAsync(Destino destino, CancellationToken ct) =>
+        await cache.GetOrCreateAsync(ChaveDaUltima(destino.LeituraId), async entrada =>
+        {
+            entrada.AbsoluteExpirationRelativeToNow = ValidadeDaUltima;
+            var ultima = await LerAsync(() => api.ListarMensagensAsync(destino.LeituraId, 1, null, ct));
+            return ultima.Count == 0 ? null : ultima[^1].Id;
+        });
+
+    /// <summary>Guarda "li até aqui" (só avança, nunca volta atrás).</summary>
+    private async Task MarcarComoLidaAsync(Guid usuarioId, string chave, string ultimaId, CancellationToken ct)
+    {
+        var leitura = await db.CrmDiscordLeituras.FirstOrDefaultAsync(l => l.UsuarioId == usuarioId && l.Chave == chave, ct);
+        if (leitura is null)
+        {
+            db.CrmDiscordLeituras.Add(new CrmDiscordLeitura { UsuarioId = usuarioId, Chave = chave, UltimaLidaId = ultimaId });
+        }
+        else if (Maior(ultimaId, leitura.UltimaLidaId))
+        {
+            leitura.UltimaLidaId = ultimaId;
+        }
+        else
+        {
+            return;
+        }
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Duas leituras ao mesmo tempo criaram a marca juntas: a outra já guardou — não vale derrubar a conversa por isso.
+        }
     }
 
     public async Task<IReadOnlyList<DiscordChatContatoDto>> ListarContatosAsync(Guid usuarioId, string? busca, CancellationToken ct)

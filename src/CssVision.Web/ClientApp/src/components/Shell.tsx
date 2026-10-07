@@ -33,6 +33,7 @@ import {
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { rotuloNaoLidas, useChatNaoLidas } from "../lib/useChatNaoLidas";
 import { useTheme } from "../context/ThemeContext";
 import { Avatar, IconButton, useToast } from "./ui";
 import { LembretesAdesao } from "./crm/LembretesAdesao";
@@ -107,10 +108,22 @@ export function Shell({ children }: { children: ReactNode }) {
   const [menuAberto, setMenuAberto] = useState(false);
   const [colapsado, setColapsado] = useState(() => localStorage.getItem("crm-sidebar-colapsado") === "1");
   const [busca, setBusca] = useState("");
+  // Número de mensagens não lidas do chat no menu e no título da aba (só consulta quem tem o Chat no menu).
+  const temChat = !!sessao?.menu.some((m) => m.chave === "chat");
+  const chatNaoLidas = useChatNaoLidas(temChat, 30000);
 
   useEffect(() => {
     localStorage.setItem("crm-sidebar-colapsado", colapsado ? "1" : "0");
   }, [colapsado]);
+
+  useEffect(() => {
+    if (chatNaoLidas.total === 0) return;
+    const original = document.title;
+    document.title = `(${rotuloNaoLidas(chatNaoLidas.total)}) ${original}`;
+    return () => {
+      document.title = original;
+    };
+  }, [chatNaoLidas.total]);
 
   const emPortal = location.pathname.startsWith("/app/portal");
   // Financeiro "puro": só gestão da carteira, usuários e avisos — nada de leads, atividades nem avisos de lead novo.
@@ -179,7 +192,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 onClick={() => setMenuAberto(false)}
                 title={colapsado ? item.rotulo : undefined}
                 className={({ isActive }) =>
-                  `focus-ring flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  `focus-ring relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                     colapsado ? "lg:justify-center lg:px-2" : ""
                   } ${
                     isActive
@@ -190,6 +203,14 @@ export function Shell({ children }: { children: ReactNode }) {
               >
                 <item.icone className="size-4 shrink-0" aria-hidden />
                 <span className={colapsado ? "lg:hidden" : undefined}>{item.rotulo}</span>
+                {item.chave === "chat" && chatNaoLidas.total > 0 && (
+                  <span
+                    className={`ml-auto rounded-full bg-[var(--brand)] px-1.5 text-xs font-semibold text-white ${colapsado ? "lg:absolute lg:right-1 lg:top-1 lg:ml-0 lg:px-1 lg:text-[10px]" : ""}`}
+                    aria-label={`${chatNaoLidas.total} mensagens não lidas`}
+                  >
+                    {rotuloNaoLidas(chatNaoLidas.total)}
+                  </span>
+                )}
               </NavLink>
               )}
               {item.divisor && <div className="my-2 border-t border-[var(--sidebar-border)]" />}
