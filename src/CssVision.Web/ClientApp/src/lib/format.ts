@@ -3,6 +3,16 @@ const numero = new Intl.NumberFormat("pt-BR");
 const dataHora = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
 const dataCurta = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
 
+const diaBrasilia = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" });
+
+/**
+ * O dia de hoje em Brasília ("2026-10-07"), o mesmo "hoje" do servidor. `new Date().toISOString()` é o dia em UTC, que depois das
+ * 21h de Brasília já é o dia seguinte; e a data local do computador pode estar em outro fuso.
+ */
+export function hojeBrasilia(): string {
+  return diaBrasilia.format(new Date());
+}
+
 export function formatarMoeda(valor: number | null | undefined): string {
   return moeda.format(valor ?? 0);
 }

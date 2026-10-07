@@ -4,7 +4,7 @@ import { Paperclip } from "lucide-react";
 import { api, ApiRequestError, isAbortError, uploadFile } from "../../lib/api";
 import { TipoEtapaPipeline, type ChangeStageRequest, type LeadDetail, type Opportunity, type OpportunityCreateRequest, type OpportunityUpdateRequest, type PipelineBoard } from "../../lib/types";
 import { ESTADOS_BRASIL } from "../../lib/estados";
-import { formatarData } from "../../lib/format";
+import { formatarData, hojeBrasilia } from "../../lib/format";
 import { Button, Checkbox, CpfInput, Input, Label, Modal, MoneyInput, Select, useToast } from "../ui";
 import { useAuth } from "../../context/AuthContext";
 
@@ -25,7 +25,7 @@ const MAXIMO_VEICULOS_ADICIONAIS = 10;
 const valoresIniciais: DadosVendaConcluida = {
   rowVersion: 0,
   valorFinal: 0,
-  dataEfetivaFechamento: new Date().toISOString().slice(0, 10),
+  dataEfetivaFechamento: hojeBrasilia(),
   cpf: "",
   estado: "",
   indicacao: false,
@@ -191,7 +191,7 @@ export function VendaConcluidaDialog({
       setValores({
         rowVersion: oportunidadeEditar.rowVersion,
         valorFinal: oportunidadeEditar.valorFinal ?? oportunidadeEditar.valorEstimado,
-        dataEfetivaFechamento: oportunidadeEditar.dataEfetivaFechamento?.slice(0, 10) ?? new Date().toISOString().slice(0, 10),
+        dataEfetivaFechamento: oportunidadeEditar.dataEfetivaFechamento?.slice(0, 10) ?? hojeBrasilia(),
         cpf: oportunidadeEditar.cpf ?? "",
         estado: oportunidadeEditar.estado ?? "",
         indicacao: oportunidadeEditar.indicacao ?? false,
@@ -312,10 +312,14 @@ export function VendaConcluidaDialog({
   const pagamentoAgendado = !!valores.dataPagamentoAdesaoPrevista;
   const temComprovantePagamento = !!pagamentoArquivo || !!oportunidadeEditar?.pagamentoAdesaoArquivoUrl;
 
+  // Datas "AAAA-MM-DD" comparam certo como texto. O servidor também recusa (data_venda_futura).
+  const dataDaVendaFutura = ehVenda && !!valores.dataEfetivaFechamento && valores.dataEfetivaFechamento > hojeBrasilia();
+
   const podeConfirmar = !ehVenda
     ? !!nomeCliente.trim() && !enviandoArquivos && !enviando
     : (valores.valorFinal ?? -1) >= 0 &&
     !!valores.dataEfetivaFechamento &&
+    !dataDaVendaFutura &&
     !!valores.cpf &&
     !!valores.estado &&
     (valores.porcentagem ?? -1) >= 0 &&
@@ -558,7 +562,19 @@ export function VendaConcluidaDialog({
                 <Label htmlFor="venda-data" required={ehVenda}>
                   Data da venda
                 </Label>
-                <Input id="venda-data" type="date" value={valores.dataEfetivaFechamento ?? ""} onChange={(e) => set("dataEfetivaFechamento", e.target.value)} />
+                <Input
+                  id="venda-data"
+                  type="date"
+                  max={hojeBrasilia()}
+                  aria-invalid={dataDaVendaFutura}
+                  value={valores.dataEfetivaFechamento ?? ""}
+                  onChange={(e) => set("dataEfetivaFechamento", e.target.value)}
+                />
+                {dataDaVendaFutura && (
+                  <p role="alert" className="mt-1 text-xs text-[var(--danger)]">
+                    A data da venda não pode ser futura. Informe o dia em que a venda foi fechada.
+                  </p>
+                )}
               </div>
             ) : (
               <div>
