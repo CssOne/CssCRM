@@ -65,6 +65,11 @@ public class CrmDiscordChatController(IDiscordChatService chat, ICurrentUserServ
     public async Task<ActionResult<DiscordChatMensagemDto>> Enviar(string chave, DiscordChatEnviarRequest request, CancellationToken ct) =>
         Ok(await chat.EnviarAsync(currentUser.UserId, chave, request.Texto, ct, request.Mencoes));
 
+    /// <summary>Compartilha um lead (resumo + link) na conversa, para a equipe conversar sobre ele.</summary>
+    [HttpPost("canais/{chave}/lead")]
+    public async Task<ActionResult<DiscordChatMensagemDto>> CompartilharLead(string chave, DiscordChatLeadRequest request, CancellationToken ct) =>
+        Ok(await chat.CompartilharLeadAsync(currentUser.UserId, chave, request.LeadId, request.Comentario, ct));
+
     /// <summary>Edita uma mensagem da própria pessoa (publicada pelo CRM).</summary>
     [HttpPut("canais/{chave}/mensagens/{mensagemId}")]
     public async Task<IActionResult> Editar(string chave, string mensagemId, DiscordChatEditarRequest request, CancellationToken ct)

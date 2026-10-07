@@ -47,6 +47,9 @@ public record DiscordChatEnviarRequest(string Texto, IReadOnlyList<Guid>? Mencoe
 
 public record DiscordChatEditarRequest(string Texto);
 
+/// <param name="Comentario">Texto opcional da pessoa, publicado junto do lead (até 500 caracteres).</param>
+public record DiscordChatLeadRequest(Guid LeadId, string? Comentario = null);
+
 /// <summary>Quais avisos automáticos o CRM publica nos canais das regionais (todos desligados até o administrador ligar).</summary>
 /// <param name="Venda">"Fulano fechou uma venda".</param>
 /// <param name="MetaBatida">"A regional bateu a meta do mês" (uma vez por mês).</param>

@@ -232,6 +232,7 @@ public static class ServiceCollectionExtensions
             http.Timeout = TimeSpan.FromSeconds(15);
         });
         services.AddScoped<Services.Discord.IDiscordGruposService, Services.Discord.DiscordGruposService>();
+        services.AddScoped<ILeadCompartilhavel, LeadCompartilhavelService>();
         services.AddScoped<Services.Discord.IDiscordChatService, Services.Discord.DiscordChatService>();
         services.AddScoped<Services.Discord.IDiscordAvisosNosCanaisService, Services.Discord.DiscordAvisosNosCanaisService>();
         services.AddScoped<IVendaPublicador>(sp => sp.GetRequiredService<Services.Discord.IDiscordAvisosNosCanaisService>());

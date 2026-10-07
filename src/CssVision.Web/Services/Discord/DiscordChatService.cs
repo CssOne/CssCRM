@@ -1,3 +1,4 @@
+using System.Text;
 using CssVision.Web.Api.Contracts.Common;
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Authorization;
@@ -19,6 +20,12 @@ public interface IDiscordChatService
 
     /// <summary>Publica na conversa, no Discord, com o nome e a foto da pessoa. <paramref name="mencoes"/>: pessoas "@marcadas" (recebem aviso no Discord).</summary>
     Task<DiscordChatMensagemDto> EnviarAsync(Guid usuarioId, string chave, string texto, CancellationToken ct, IReadOnlyList<Guid>? mencoes = null);
+
+    /// <summary>
+    /// Publica na conversa um resumo do lead (nome, etapa, responsável e produto — sem telefone, e-mail nem documento) com o link para abri-lo
+    /// no CRM. Só vale para um lead que a própria pessoa pode ver.
+    /// </summary>
+    Task<DiscordChatMensagemDto> CompartilharLeadAsync(Guid usuarioId, string chave, Guid leadId, string? comentario, CancellationToken ct);
 
     /// <summary>Troca o texto de uma mensagem da própria pessoa (só as publicadas pelo CRM).</summary>
     Task EditarMensagemAsync(Guid usuarioId, string chave, string mensagemId, string texto, CancellationToken ct);
@@ -61,7 +68,8 @@ public sealed class DiscordChatService(
     IDiscordGuildApi api,
     IMemoryCache cache,
     IOptions<DiscordOptions> options,
-    Crm.IPresencaService? presenca = null) : IDiscordChatService
+    Crm.IPresencaService? presenca = null,
+    Crm.ILeadCompartilhavel? leads = null) : IDiscordChatService
 {
     public const int LimiteDoTexto = 2000;
 
@@ -195,6 +203,39 @@ public sealed class DiscordChatService(
         }
 
         return (texto, discordIds);
+    }
+
+    public const int LimiteDoComentario = 500;
+
+    public async Task<DiscordChatMensagemDto> CompartilharLeadAsync(Guid usuarioId, string chave, Guid leadId, string? comentario, CancellationToken ct)
+    {
+        ExigirConfigurado();
+        comentario = (comentario ?? "").Trim();
+        if (comentario.Length > LimiteDoComentario)
+        {
+            throw new CrmBusinessException($"O comentário pode ter no máximo {LimiteDoComentario} caracteres.", "comentario_longo");
+        }
+
+        if (leads is null) throw new CrmBusinessException("Compartilhar lead não está disponível.", "indisponivel");
+
+        // Primeiro a conversa (quem não participa dela não descobre nada), depois o lead (quem não enxerga o lead não o compartilha).
+        _ = await ObterDestinoPermitidoAsync(usuarioId, chave, ct);
+        var lead = await leads.ObterAsync(leadId, ct);
+
+        var detalhes = new List<string>();
+        if (!string.IsNullOrWhiteSpace(lead.Etapa)) detalhes.Add($"etapa: {lead.Etapa}");
+        if (!string.IsNullOrWhiteSpace(lead.Responsavel)) detalhes.Add($"responsável: {lead.Responsavel}");
+        if (!string.IsNullOrWhiteSpace(lead.Produto)) detalhes.Add($"produto: {lead.Produto}");
+        if (!string.IsNullOrWhiteSpace(lead.Regional)) detalhes.Add(lead.Regional!);
+
+        var nome = lead.Nome.Length > 100 ? lead.Nome[..100] : lead.Nome;
+        var texto = new StringBuilder($"🔗 Lead para conversar: **{nome}**");
+        if (detalhes.Count > 0) texto.Append($" ({string.Join(" · ", detalhes)})");
+        if (comentario.Length > 0) texto.Append('\n').Append(comentario);
+        var baseUrl = options.Value.UrlPublica.TrimEnd('/');
+        if (baseUrl.Length > 0) texto.Append('\n').Append($"{baseUrl}/app/crm/leads/{lead.Id}");
+
+        return await EnviarAsync(usuarioId, chave, texto.ToString(), ct);
     }
 
     public async Task EditarMensagemAsync(Guid usuarioId, string chave, string mensagemId, string texto, CancellationToken ct)
