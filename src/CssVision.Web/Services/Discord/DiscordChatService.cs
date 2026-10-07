@@ -17,8 +17,14 @@ public interface IDiscordChatService
     /// <summary>Últimas mensagens da conversa (ou as anteriores a <paramref name="antesDeId"/>).</summary>
     Task<DiscordChatMensagensDto> ListarMensagensAsync(Guid usuarioId, string chave, string? antesDeId, CancellationToken ct);
 
-    /// <summary>Publica na conversa, no Discord, com o nome e a foto da pessoa.</summary>
-    Task<DiscordChatMensagemDto> EnviarAsync(Guid usuarioId, string chave, string texto, CancellationToken ct);
+    /// <summary>Publica na conversa, no Discord, com o nome e a foto da pessoa. <paramref name="mencoes"/>: pessoas "@marcadas" (recebem aviso no Discord).</summary>
+    Task<DiscordChatMensagemDto> EnviarAsync(Guid usuarioId, string chave, string texto, CancellationToken ct, IReadOnlyList<Guid>? mencoes = null);
+
+    /// <summary>Troca o texto de uma mensagem da própria pessoa (só as publicadas pelo CRM).</summary>
+    Task EditarMensagemAsync(Guid usuarioId, string chave, string mensagemId, string texto, CancellationToken ct);
+
+    /// <summary>Apaga uma mensagem da própria pessoa (só as publicadas pelo CRM).</summary>
+    Task ApagarMensagemAsync(Guid usuarioId, string chave, string mensagemId, CancellationToken ct);
 
     /// <summary>Publica um arquivo (imagem, PDF, planilha...) na conversa, com legenda opcional.</summary>
     Task<DiscordChatMensagemDto> EnviarArquivoAsync(Guid usuarioId, string chave, string? texto, string nomeDoArquivo, string tipoDeConteudo, byte[] conteudo, CancellationToken ct);
@@ -136,7 +142,7 @@ public sealed class DiscordChatService(
             ConteudoOculto: conteudoOculto);
     }
 
-    public async Task<DiscordChatMensagemDto> EnviarAsync(Guid usuarioId, string chave, string texto, CancellationToken ct)
+    public async Task<DiscordChatMensagemDto> EnviarAsync(Guid usuarioId, string chave, string texto, CancellationToken ct, IReadOnlyList<Guid>? mencoes = null)
     {
         texto = (texto ?? "").Trim();
         if (texto.Length == 0)
@@ -152,11 +158,97 @@ public sealed class DiscordChatService(
         var destino = await ObterDestinoPermitidoAsync(usuarioId, chave, ct);
         var pessoa = await db.Users.AsNoTracking().Where(u => u.Id == usuarioId).Select(u => new { u.NomeCompleto, u.FotoUrl }).FirstAsync(ct);
 
-        var enviada = await LerAsync(async () => await api.EnviarMensagemAsync(destino.CanalDoWebhook, pessoa.NomeCompleto, FotoAbsoluta(pessoa.FotoUrl), texto, ct, destino.ThreadId));
+        var (textoFinal, discordIds) = await ResolverMencoesAsync(texto, mencoes, ct);
+        if (textoFinal.Length > LimiteDoTexto)
+        {
+            throw new CrmBusinessException($"A mensagem pode ter no máximo {LimiteDoTexto} caracteres.", "mensagem_longa");
+        }
+
+        var enviada = await LerAsync(async () => await api.EnviarMensagemAsync(destino.CanalDoWebhook, pessoa.NomeCompleto, FotoAbsoluta(pessoa.FotoUrl), textoFinal, ct, destino.ThreadId, discordIds));
         cache.Remove(ChaveDeCache(destino.LeituraId));
         cache.Remove(ChaveDaUltima(destino.LeituraId));
         await MarcarComoLidaAsync(usuarioId, chave, enviada.Id, ct); // a mensagem que a própria pessoa mandou nunca é "não lida" para ela
         return Converter(enviada);
+    }
+
+    /// <summary>
+    /// Troca "@Nome" pela menção do Discord (<c>&lt;@id&gt;</c>) das pessoas escolhidas na lista, para elas receberem o aviso. Só vale para quem vinculou
+    /// o Discord e já está no servidor; as demais ficam como texto "@Nome". Nada além dessas pessoas é marcado.
+    /// </summary>
+    private async Task<(string Texto, IReadOnlyList<string> DiscordIds)> ResolverMencoesAsync(string texto, IReadOnlyList<Guid>? mencoes, CancellationToken ct)
+    {
+        if (mencoes is null || mencoes.Count == 0) return (texto, []);
+
+        var ids = mencoes.Distinct().Take(20).ToList();
+        var marcadas = await db.CrmDiscordVinculos.AsNoTracking().Where(v => ids.Contains(v.UsuarioId) && v.NoServidor)
+            .Join(db.Users.AsNoTracking().Where(u => u.Ativo), v => v.UsuarioId, u => u.Id, (v, u) => new { u.NomeCompleto, v.DiscordUserId })
+            .ToListAsync(ct);
+
+        var discordIds = new List<string>();
+        // Nomes maiores primeiro: "@Ana Maria" não pode virar "@Ana" + " Maria".
+        foreach (var pessoa in marcadas.OrderByDescending(p => p.NomeCompleto.Length))
+        {
+            var marca = $"@{pessoa.NomeCompleto}";
+            if (!texto.Contains(marca, StringComparison.Ordinal)) continue;
+            texto = texto.Replace(marca, $"<@{pessoa.DiscordUserId}>", StringComparison.Ordinal);
+            discordIds.Add(pessoa.DiscordUserId);
+        }
+
+        return (texto, discordIds);
+    }
+
+    public async Task EditarMensagemAsync(Guid usuarioId, string chave, string mensagemId, string texto, CancellationToken ct)
+    {
+        texto = (texto ?? "").Trim();
+        if (texto.Length == 0)
+        {
+            throw new CrmBusinessException("Escreva uma mensagem.", "mensagem_vazia");
+        }
+
+        if (texto.Length > LimiteDoTexto)
+        {
+            throw new CrmBusinessException($"A mensagem pode ter no máximo {LimiteDoTexto} caracteres.", "mensagem_longa");
+        }
+
+        var destino = await ObterMensagemDaPessoaAsync(usuarioId, chave, mensagemId, ct);
+        await LerAsync(async () =>
+        {
+            await api.EditarMensagemAsync(destino.CanalDoWebhook, destino.ThreadId, mensagemId, texto, ct);
+            return true;
+        });
+        cache.Remove(ChaveDeCache(destino.LeituraId));
+    }
+
+    public async Task ApagarMensagemAsync(Guid usuarioId, string chave, string mensagemId, CancellationToken ct)
+    {
+        var destino = await ObterMensagemDaPessoaAsync(usuarioId, chave, mensagemId, ct);
+        await LerAsync(async () =>
+        {
+            await api.ApagarMensagemAsync(destino.CanalDoWebhook, destino.ThreadId, mensagemId, ct);
+            return true;
+        });
+        cache.Remove(ChaveDeCache(destino.LeituraId));
+        cache.Remove(ChaveDaUltima(destino.LeituraId));
+    }
+
+    /// <summary>Confere que a pessoa pode abrir a conversa e que a mensagem é dela (publicada pelo CRM com o nome dela) antes de mexer.</summary>
+    private async Task<Destino> ObterMensagemDaPessoaAsync(Guid usuarioId, string chave, string mensagemId, CancellationToken ct)
+    {
+        // O id vira parte do endereço do Discord: só números (os ids do Discord são números).
+        if (mensagemId.Length is 0 or > 25 || !mensagemId.All(char.IsAsciiDigit))
+        {
+            throw new CrmBusinessException("Mensagem inválida.", "mensagem_invalida");
+        }
+
+        var destino = await ObterDestinoPermitidoAsync(usuarioId, chave, ct);
+        var nome = await db.Users.AsNoTracking().Where(u => u.Id == usuarioId).Select(u => u.NomeCompleto).FirstAsync(ct);
+        var mensagem = await LerAsync(() => api.ObterMensagemAsync(destino.LeituraId, mensagemId, ct));
+        if (!mensagem.DoCrm || mensagem.AutorNome != nome)
+        {
+            throw new CrmForbiddenException("Você só pode alterar as suas próprias mensagens enviadas pelo CRM.");
+        }
+
+        return destino;
     }
 
     public async Task<DiscordChatMensagemDto> EnviarArquivoAsync(Guid usuarioId, string chave, string? texto, string nomeDoArquivo, string tipoDeConteudo, byte[] conteudo, CancellationToken ct)
@@ -585,5 +677,5 @@ public sealed class DiscordChatService(
     }
 
     private static DiscordChatMensagemDto Converter(DiscordMensagem m) =>
-        new(m.Id, m.AutorNome, m.AutorFotoUrl, m.Conteudo, m.CriadaEm, m.Anexos.Select(a => new DiscordChatAnexoDto(a.Nome, a.Url, a.Imagem)).ToList(), m.DoCrm);
+        new(m.Id, m.AutorNome, m.AutorFotoUrl, m.Conteudo, m.CriadaEm, m.Anexos.Select(a => new DiscordChatAnexoDto(a.Nome, a.Url, a.Imagem)).ToList(), m.DoCrm, m.Editada);
 }

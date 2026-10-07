@@ -1,4 +1,4 @@
-import { ChevronUp, Hash, MessagesSquare, Paperclip, Phone, Plus, Search, Send, X } from "lucide-react";
+import { ChevronUp, CornerUpLeft, Hash, MessagesSquare, Paperclip, Pencil, Phone, Plus, Search, Send, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -7,7 +7,7 @@ import { desligarNotificacao, definirSom, ligarNotificacao, notificacaoLigada, n
 import { formatarDataHora } from "../lib/format";
 import { rotuloNaoLidas, useChatNaoLidas } from "../lib/useChatNaoLidas";
 import type { DiscordChatCanal, DiscordChatChamada, DiscordChatContato, DiscordChatMensagem, DiscordChatMensagens, DiscordChatOnline } from "../lib/types";
-import { Avatar, Badge, Button, Card, Checkbox, EmptyState, ErrorState, Input, Modal, Skeleton, useToast } from "../components/ui";
+import { Avatar, Badge, Button, Card, Checkbox, ConfirmDialog, EmptyState, ErrorState, Input, Modal, Skeleton, useToast } from "../components/ui";
 
 const LIMITE_TEXTO = 2000;
 const LIMITE_ARQUIVO = 10 * 1024 * 1024;
@@ -33,6 +33,15 @@ export function ChatPage() {
   const [novaConversa, setNovaConversa] = useState(false);
   const [ligando, setLigando] = useState(false);
   const [arquivo, setArquivo] = useState<File | null>(null);
+  const [respondendo, setRespondendo] = useState<DiscordChatMensagem | null>(null);
+  const [mencoes, setMencoes] = useState<{ id: string; nome: string }[]>([]);
+  const [mencaoAtiva, setMencaoAtiva] = useState<{ inicio: number; fim: number; termo: string } | null>(null);
+  const [sugestoes, setSugestoes] = useState<DiscordChatContato[]>([]);
+  const [editando, setEditando] = useState<{ id: string; texto: string } | null>(null);
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [apagando, setApagando] = useState<DiscordChatMensagem | null>(null);
+  const [apagandoEmAndamento, setApagandoEmAndamento] = useState(false);
+  const campoDeTexto = useRef<HTMLTextAreaElement>(null);
   const seletorDeArquivo = useRef<HTMLInputElement>(null);
   const [online, setOnline] = useState<DiscordChatOnline["pessoas"]>([]);
   const [linkDaChamada, setLinkDaChamada] = useState<string | null>(null);
@@ -147,11 +156,17 @@ export function ChatPage() {
     if (!chave || (!conteudo && !arquivo) || enviando) return;
     setEnviando(true);
     try {
+      // Resposta = citação no começo ("> Fulano: trecho"): o Discord não deixa o CRM responder "de verdade" por webhook, mas a citação aparece nos dois.
+      const citacao = respondendo ? `> ${respondendo.autorNome}: ${trechoParaCitar(respondendo.conteudo)}\n` : "";
+      const marcadas = mencoes.filter((m) => conteudo.includes(`@${m.nome}`)).map((m) => m.id);
       const nova = arquivo
-        ? await uploadFile<DiscordChatMensagem>(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/anexos`, arquivo, conteudo ? { texto: conteudo } : {})
-        : await api.post<DiscordChatMensagem>(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/mensagens`, { texto: conteudo });
+        ? await uploadFile<DiscordChatMensagem>(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/anexos`, arquivo, conteudo ? { texto: citacao + conteudo } : {})
+        : await api.post<DiscordChatMensagem>(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/mensagens`, { texto: citacao + conteudo, mencoes: marcadas });
       setTexto("");
       setArquivo(null);
+      setRespondendo(null);
+      setMencoes([]);
+      setMencaoAtiva(null);
       colarNoFim.current = true;
       setDados((atual) => ({ mensagens: [...(atual?.mensagens ?? []), nova], temMais: atual?.temMais ?? false, conteudoOculto: atual?.conteudoOculto ?? false }));
     } catch (e) {
@@ -185,7 +200,78 @@ export function ChatPage() {
   useEffect(() => {
     setLinkDaChamada(null);
     setArquivo(null);
+    setRespondendo(null);
+    setMencoes([]);
+    setMencaoAtiva(null);
+    setEditando(null);
   }, [chave]);
+
+  // Lista de menção: busca as pessoas pelo que foi digitado depois do "@" (só quem pode receber o aviso: vinculou o Discord).
+  const termoDaMencao = mencaoAtiva?.termo;
+  useEffect(() => {
+    if (termoDaMencao === undefined) {
+      setSugestoes([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const consulta = termoDaMencao ? `?busca=${encodeURIComponent(termoDaMencao)}` : "";
+      api
+        .get<DiscordChatContato[]>(`/crm/discord/chat/contatos${consulta}`, controller.signal)
+        .then((lista) => setSugestoes(lista.slice(0, 5)))
+        .catch(() => undefined);
+    }, 200);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [termoDaMencao]);
+
+  function aoDigitar(valor: string, cursor: number) {
+    setTexto(valor);
+    // "@" no começo ou depois de espaço, seguido de até 30 letras sem espaço, logo antes do cursor.
+    const m = /(^|\s)@([^\s@]{0,30})$/.exec(valor.slice(0, cursor));
+    setMencaoAtiva(m ? { inicio: cursor - m[2].length - 1, fim: cursor, termo: m[2] } : null);
+  }
+
+  function escolherMencao(pessoa: DiscordChatContato) {
+    if (!mencaoAtiva) return;
+    const novo = `${texto.slice(0, mencaoAtiva.inicio)}@${pessoa.nome} ${texto.slice(mencaoAtiva.fim)}`;
+    setTexto(novo);
+    setMencoes((atual) => (atual.some((m) => m.id === pessoa.id) ? atual : [...atual, { id: pessoa.id, nome: pessoa.nome }]));
+    setMencaoAtiva(null);
+    window.setTimeout(() => campoDeTexto.current?.focus(), 0);
+  }
+
+  async function salvarEdicao() {
+    if (!chave || !editando || salvandoEdicao) return;
+    const novoTexto = editando.texto.trim();
+    if (!novoTexto) return;
+    setSalvandoEdicao(true);
+    try {
+      await api.put(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/mensagens/${editando.id}`, { texto: novoTexto });
+      setDados((atual) => atual && { ...atual, mensagens: atual.mensagens.map((m) => (m.id === editando.id ? { ...m, conteudo: novoTexto, editada: true } : m)) });
+      setEditando(null);
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível editar a mensagem.");
+    } finally {
+      setSalvandoEdicao(false);
+    }
+  }
+
+  async function apagarMensagem() {
+    if (!chave || !apagando) return;
+    setApagandoEmAndamento(true);
+    try {
+      await api.del(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/mensagens/${apagando.id}`);
+      setDados((atual) => atual && { ...atual, mensagens: atual.mensagens.filter((m) => m.id !== apagando.id) });
+      setApagando(null);
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível apagar a mensagem.");
+    } finally {
+      setApagandoEmAndamento(false);
+    }
+  }
 
   /**
    * O Discord não deixa embutir a chamada: pede o canal de voz da conversa (o servidor também avisa a conversa de que você está numa chamada)
@@ -324,12 +410,38 @@ export function ChatPage() {
                     </div>
                   )}
                   {dados.mensagens.map((m) => (
-                    <Balao key={m.id} mensagem={m} minha={m.doCrm && m.autorNome === sessao?.nomeCompleto} />
+                    <Balao
+                      key={m.id}
+                      mensagem={m}
+                      minha={m.doCrm && m.autorNome === sessao?.nomeCompleto}
+                      aoResponder={() => {
+                        setRespondendo(m);
+                        campoDeTexto.current?.focus();
+                      }}
+                      aoEditar={() => setEditando({ id: m.id, texto: m.conteudo })}
+                      aoApagar={() => setApagando(m)}
+                      edicao={editando?.id === m.id ? editando.texto : null}
+                      aoMudarEdicao={(t) => setEditando({ id: m.id, texto: t })}
+                      aoSalvarEdicao={() => void salvarEdicao()}
+                      aoCancelarEdicao={() => setEditando(null)}
+                      salvandoEdicao={salvandoEdicao}
+                    />
                   ))}
                 </>
               )}
             </div>
 
+            {respondendo && (
+              <div className="flex items-center gap-2 border-t border-[var(--border)] px-3 pt-2 text-xs text-[var(--fg)]">
+                <CornerUpLeft className="size-3.5 text-[var(--fg-muted)]" aria-hidden />
+                <span className="truncate">
+                  Respondendo a <strong>{respondendo.autorNome}</strong>: {trechoParaCitar(respondendo.conteudo)}
+                </span>
+                <button type="button" onClick={() => setRespondendo(null)} aria-label="Cancelar resposta" className="ml-auto rounded p-0.5 hover:bg-[var(--bg-muted)]">
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            )}
             {arquivo && (
               <div className="flex items-center gap-2 border-t border-[var(--border)] px-3 pt-2 text-xs text-[var(--fg)]">
                 <Paperclip className="size-3.5 text-[var(--fg-muted)]" aria-hidden />
@@ -363,10 +475,38 @@ export function ChatPage() {
               <Button type="button" variant="ghost" onClick={() => seletorDeArquivo.current?.click()} aria-label="Anexar arquivo" title="Anexar imagem, PDF, planilha ou documento (até 10 MB)">
                 <Paperclip className="size-4" />
               </Button>
+              <div className="relative flex-1">
+              {mencaoAtiva && sugestoes.length > 0 && (
+                <ul role="listbox" aria-label="Marcar pessoa" className="absolute bottom-full left-0 z-10 mb-1 w-64 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg)] shadow-lg">
+                  {sugestoes.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected="false"
+                        onMouseDown={(e) => {
+                          e.preventDefault(); // não tira o foco do campo de texto
+                          escolherMencao(p);
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--bg-muted)]"
+                      >
+                        <Avatar nome={p.nome} fotoUrl={p.fotoUrl} className="size-6 text-[10px]" />
+                        <span className="flex-1 truncate">{p.nome}</span>
+                        {p.online && <span className="size-2 rounded-full bg-[var(--success)]" aria-label="online" />}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <textarea
+                ref={campoDeTexto}
                 value={texto}
-                onChange={(e) => setTexto(e.target.value)}
+                onChange={(e) => aoDigitar(e.target.value, e.target.selectionStart)}
                 onKeyDown={(e) => {
+                  if (e.key === "Escape" && mencaoAtiva) {
+                    setMencaoAtiva(null);
+                    return;
+                  }
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     void enviar();
@@ -377,8 +517,9 @@ export function ChatPage() {
                 placeholder="Escreva uma mensagem…"
                 title="Enter envia; Shift+Enter quebra a linha"
                 aria-label={`Mensagem para ${nomeDoGrupo ?? "o grupo"}`}
-                className="min-h-10 flex-1 resize-none rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--fg)] outline-none focus:border-[var(--brand)]"
+                className="min-h-10 w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--fg)] outline-none focus:border-[var(--brand)]"
               />
+              </div>
               <Button type="submit" loading={enviando} disabled={!texto.trim() && !arquivo}>
                 <Send className="size-4" /> Enviar
               </Button>
@@ -388,6 +529,17 @@ export function ChatPage() {
       )}
 
       <NovaConversa aberta={novaConversa} aoFechar={() => setNovaConversa(false)} aoAbrir={aoAbrirConversa} />
+
+      <ConfirmDialog
+        open={!!apagando}
+        title="Apagar mensagem"
+        message="A mensagem será apagada para todos, também no Discord. Não dá para desfazer."
+        confirmLabel="Apagar"
+        danger
+        loading={apagandoEmAndamento}
+        onConfirm={() => void apagarMensagem()}
+        onCancel={() => setApagando(null)}
+      />
     </div>
   );
 }
@@ -496,17 +648,70 @@ function NovaConversa({ aberta, aoFechar, aoAbrir }: { aberta: boolean; aoFechar
   );
 }
 
-function Balao({ mensagem, minha }: { mensagem: DiscordChatMensagem; minha: boolean }) {
+function Balao({
+  mensagem,
+  minha,
+  aoResponder,
+  aoEditar,
+  aoApagar,
+  edicao,
+  aoMudarEdicao,
+  aoSalvarEdicao,
+  aoCancelarEdicao,
+  salvandoEdicao,
+}: {
+  mensagem: DiscordChatMensagem;
+  minha: boolean;
+  aoResponder: () => void;
+  aoEditar: () => void;
+  aoApagar: () => void;
+  /** Texto em edição (null = não está editando esta mensagem). */
+  edicao: string | null;
+  aoMudarEdicao: (texto: string) => void;
+  aoSalvarEdicao: () => void;
+  aoCancelarEdicao: () => void;
+  salvandoEdicao: boolean;
+}) {
   return (
-    <div className={`flex items-start gap-2 ${minha ? "flex-row-reverse" : ""}`}>
+    <div className={`group flex items-start gap-2 ${minha ? "flex-row-reverse" : ""}`}>
       <Avatar nome={mensagem.autorNome} fotoUrl={mensagem.autorFotoUrl} className="size-8 text-xs" />
       <div className={`max-w-[80%] rounded-xl px-3 py-2 ${minha ? "bg-[var(--brand)]/15" : "bg-[var(--bg-muted)]"}`}>
         <p className="flex flex-wrap items-center gap-x-2 text-xs text-[var(--fg-muted)]">
           <span className="font-semibold text-[var(--fg)]">{mensagem.autorNome}</span>
           {!mensagem.doCrm && <Badge variant="neutral">Discord</Badge>}
           <span>{formatarDataHora(mensagem.criadaEm)}</span>
+          {mensagem.editada && <span>(editada)</span>}
         </p>
-        {mensagem.conteudo && <p className="whitespace-pre-wrap break-words text-sm text-[var(--fg)]">{comLinks(mensagem.conteudo)}</p>}
+        {edicao !== null ? (
+          <div className="mt-1 space-y-2">
+            <textarea
+              value={edicao}
+              onChange={(e) => aoMudarEdicao(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") aoCancelarEdicao();
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  aoSalvarEdicao();
+                }
+              }}
+              maxLength={LIMITE_TEXTO}
+              rows={2}
+              autoFocus
+              aria-label="Editar mensagem"
+              className="w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--bg)] px-2 py-1 text-sm text-[var(--fg)] outline-none focus:border-[var(--brand)]"
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={aoCancelarEdicao} disabled={salvandoEdicao}>
+                Cancelar
+              </Button>
+              <Button size="sm" onClick={aoSalvarEdicao} loading={salvandoEdicao} disabled={!edicao.trim()}>
+                Salvar
+              </Button>
+            </div>
+          </div>
+        ) : (
+          mensagem.conteudo && <ConteudoDaMensagem texto={mensagem.conteudo} />
+        )}
         {mensagem.anexos.map((a) =>
           a.url.startsWith("https://") ? (
             a.imagem ? (
@@ -520,7 +725,59 @@ function Balao({ mensagem, minha }: { mensagem: DiscordChatMensagem; minha: bool
             )
           ) : null
         )}
+        {edicao === null && (
+          <div className="mt-1 flex gap-1 opacity-60 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+            <button type="button" onClick={aoResponder} aria-label="Responder" title="Responder" className="rounded p-1 text-[var(--fg-muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]">
+              <CornerUpLeft className="size-3.5" />
+            </button>
+            {minha && mensagem.doCrm && (
+              <>
+                <button type="button" onClick={aoEditar} aria-label="Editar" title="Editar" className="rounded p-1 text-[var(--fg-muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]">
+                  <Pencil className="size-3.5" />
+                </button>
+                <button type="button" onClick={aoApagar} aria-label="Apagar" title="Apagar" className="rounded p-1 text-[var(--fg-muted)] hover:bg-[var(--bg)] hover:text-[var(--danger)]">
+                  <Trash2 className="size-3.5" />
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+/** Uma só linha, curta, para citar numa resposta (tira quebras de linha, citações antigas e o excesso). */
+function trechoParaCitar(texto: string): string {
+  const semCitacao = texto.split("\n").filter((l) => !l.startsWith("> ")).join(" ").replace(/\s+/g, " ").trim();
+  const base = semCitacao || "(anexo)";
+  return base.length > 80 ? `${base.slice(0, 80)}…` : base;
+}
+
+/** Texto da mensagem: linhas que começam com "> " viram citação; endereços viram links; o resto é texto puro. */
+function ConteudoDaMensagem({ texto }: { texto: string }) {
+  const blocos: { citacao: boolean; linhas: string[] }[] = [];
+  for (const linha of texto.split("\n")) {
+    const citacao = linha.startsWith("> ");
+    const ultimo = blocos[blocos.length - 1];
+    const conteudo = citacao ? linha.slice(2) : linha;
+    if (ultimo && ultimo.citacao === citacao) ultimo.linhas.push(conteudo);
+    else blocos.push({ citacao, linhas: [conteudo] });
+  }
+
+  return (
+    <div className="space-y-1 break-words text-sm text-[var(--fg)]">
+      {blocos.map((b, i) =>
+        b.citacao ? (
+          <blockquote key={i} className="whitespace-pre-wrap border-l-2 border-[var(--brand)]/50 pl-2 text-xs text-[var(--fg-muted)]">
+            {comLinks(b.linhas.join("\n"))}
+          </blockquote>
+        ) : (
+          <p key={i} className="whitespace-pre-wrap">
+            {comLinks(b.linhas.join("\n"))}
+          </p>
+        )
+      )}
     </div>
   );
 }

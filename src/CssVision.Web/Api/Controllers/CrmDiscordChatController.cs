@@ -63,5 +63,21 @@ public class CrmDiscordChatController(IDiscordChatService chat, ICurrentUserServ
 
     [HttpPost("canais/{chave}/mensagens")]
     public async Task<ActionResult<DiscordChatMensagemDto>> Enviar(string chave, DiscordChatEnviarRequest request, CancellationToken ct) =>
-        Ok(await chat.EnviarAsync(currentUser.UserId, chave, request.Texto, ct));
+        Ok(await chat.EnviarAsync(currentUser.UserId, chave, request.Texto, ct, request.Mencoes));
+
+    /// <summary>Edita uma mensagem da própria pessoa (publicada pelo CRM).</summary>
+    [HttpPut("canais/{chave}/mensagens/{mensagemId}")]
+    public async Task<IActionResult> Editar(string chave, string mensagemId, DiscordChatEditarRequest request, CancellationToken ct)
+    {
+        await chat.EditarMensagemAsync(currentUser.UserId, chave, mensagemId, request.Texto, ct);
+        return NoContent();
+    }
+
+    /// <summary>Apaga uma mensagem da própria pessoa (publicada pelo CRM).</summary>
+    [HttpDelete("canais/{chave}/mensagens/{mensagemId}")]
+    public async Task<IActionResult> Apagar(string chave, string mensagemId, CancellationToken ct)
+    {
+        await chat.ApagarMensagemAsync(currentUser.UserId, chave, mensagemId, ct);
+        return NoContent();
+    }
 }

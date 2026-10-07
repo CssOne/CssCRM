@@ -1548,6 +1548,7 @@ export interface DiscordChatMensagem {
   anexos: DiscordChatAnexo[];
   /** Publicada pelo CRM (a tela alinha à direita as do próprio usuário). */
   doCrm: boolean;
+  editada?: boolean;
 }
 
 export interface DiscordChatMensagens {

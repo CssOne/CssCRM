@@ -36,13 +36,16 @@ public record DiscordChatIniciarRequest(Guid UsuarioId);
 public record DiscordChatAnexoDto(string Nome, string Url, bool Imagem);
 
 /// <param name="DoCrm">Publicada pelo CRM (a tela alinha as mensagens do próprio usuário à direita pelo nome do autor).</param>
-public record DiscordChatMensagemDto(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordChatAnexoDto> Anexos, bool DoCrm);
+public record DiscordChatMensagemDto(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordChatAnexoDto> Anexos, bool DoCrm, bool Editada = false);
 
 /// <param name="TemMais">Pode haver mensagens mais antigas (pedir de novo com <c>antes</c>).</param>
 /// <param name="ConteudoOculto">O Discord entregou as mensagens sem texto: falta ligar "Message Content Intent" no portal do desenvolvedor.</param>
 public record DiscordChatMensagensDto(IReadOnlyList<DiscordChatMensagemDto> Mensagens, bool TemMais, bool ConteudoOculto);
 
-public record DiscordChatEnviarRequest(string Texto);
+/// <param name="Mencoes">Pessoas escolhidas na lista de menção (o texto traz "@Nome" de cada uma); só entram as que vincularam o Discord.</param>
+public record DiscordChatEnviarRequest(string Texto, IReadOnlyList<Guid>? Mencoes = null);
+
+public record DiscordChatEditarRequest(string Texto);
 
 /// <summary>Quais avisos automáticos o CRM publica nos canais das regionais (todos desligados até o administrador ligar).</summary>
 /// <param name="Venda">"Fulano fechou uma venda".</param>
