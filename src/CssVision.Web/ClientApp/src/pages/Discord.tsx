@@ -1,5 +1,5 @@
 import { CheckCircle2, MessageCircle, Send, Smartphone, Unlink } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, ApiRequestError, isAbortError } from "../lib/api";
 import { formatarDataHora } from "../lib/format";
@@ -36,10 +36,17 @@ export function DiscordPage() {
     return () => controller.abort();
   }, [carregar]);
 
-  // Volta do Discord: o servidor redireciona para cá com ?resultado=ok|erro|cancelado.
+  // Volta do Discord: o servidor redireciona para cá com ?resultado=ok|erro|cancelado. A trava evita avisar duas vezes: o efeito pode
+  // rodar de novo antes de o endereço ser limpo (React StrictMode no desenvolvimento, ou uma nova renderização logo em seguida).
+  const retornoTratado = useRef(false);
   useEffect(() => {
     const resultado = params.get("resultado");
-    if (!resultado) return;
+    if (!resultado) {
+      retornoTratado.current = false;
+      return;
+    }
+    if (retornoTratado.current) return;
+    retornoTratado.current = true;
     if (resultado === "ok") notificar("success", "Conta do Discord vinculada.");
     else if (resultado === "cancelado") notificar("info", "O vínculo foi cancelado.");
     else notificar("error", params.get("motivo") ?? "Não foi possível vincular a conta do Discord.");
