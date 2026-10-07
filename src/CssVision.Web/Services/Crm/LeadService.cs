@@ -19,7 +19,8 @@ public sealed class LeadService(
     ILeadAssignmentService assignment,
     IMetaConversionService conversion,
     IAuditSink audit,
-    ICrmEventHub? eventos = null) : ILeadService
+    ICrmEventHub? eventos = null,
+    Microsoft.Extensions.Options.IOptions<DistribuicaoOptions>? distribuicao = null) : ILeadService
 {
     /// <summary>Nome da etapa terminal "perdida" do quadro de leads — ver CrmSeeder.cs. CrmLeadStage
     /// não tem um enum de tipo como CrmPipelineStage, então a identidade da etapa é pelo nome mesmo.</summary>
@@ -1024,7 +1025,7 @@ public sealed class LeadService(
         return lead;
     }
 
-    private static IQueryable<CrmLead> AplicarFiltros(IQueryable<CrmLead> query, LeadFilterRequest filtro)
+    private IQueryable<CrmLead> AplicarFiltros(IQueryable<CrmLead> query, LeadFilterRequest filtro)
     {
         if (!string.IsNullOrWhiteSpace(filtro.Busca))
         {
@@ -1038,7 +1039,7 @@ public sealed class LeadService(
         }
 
         if (filtro.ResponsavelId.HasValue) query = query.Where(l => l.ResponsavelId == filtro.ResponsavelId);
-        if (!string.IsNullOrWhiteSpace(filtro.Regional)) query = query.Where(l => l.Regional == filtro.Regional);
+        if (!string.IsNullOrWhiteSpace(filtro.Regional)) query = FiltroDeRegional.Aplicar(query, db.CrmRegionais.AsNoTracking(), db.CrmGrupos.AsNoTracking(), [filtro.Regional], distribuicao?.Value.RegionaisExclusivas);
         if (!string.IsNullOrWhiteSpace(filtro.Origem)) query = query.Where(l => l.Origem == filtro.Origem);
         if (filtro.LeadEtapaId.HasValue) query = query.Where(l => l.EtapaId == filtro.LeadEtapaId);
 
@@ -1060,8 +1061,7 @@ public sealed class LeadService(
         }
         if (filtro.Regionais is { Length: > 0 })
         {
-            var regionais = filtro.Regionais.Where(r => !string.IsNullOrWhiteSpace(r)).Select(r => r.Trim()).ToList();
-            query = query.Where(l => regionais.Contains(l.Regional!));
+            query = FiltroDeRegional.Aplicar(query, db.CrmRegionais.AsNoTracking(), db.CrmGrupos.AsNoTracking(), filtro.Regionais.Where(r => !string.IsNullOrWhiteSpace(r)), distribuicao?.Value.RegionaisExclusivas);
         }
         if (filtro.GrupoIds is { Length: > 0 })
         {
