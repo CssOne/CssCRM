@@ -231,6 +231,7 @@ public static class ServiceCollectionExtensions
             http.Timeout = TimeSpan.FromSeconds(15);
         });
         services.AddScoped<Services.Discord.IDiscordGruposService, Services.Discord.DiscordGruposService>();
+        services.AddScoped<Services.Discord.IDiscordChatService, Services.Discord.DiscordChatService>();
         services.AddHostedService<Services.Discord.DiscordGruposBackgroundService>();
         return services;
     }

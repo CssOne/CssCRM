@@ -22,3 +22,17 @@ public record DiscordCanalDto(string Chave, string Nome, bool Ativo);
 
 /// <summary>O que a sincronização dos grupos fez, e o que não conseguiu fazer (com o motivo).</summary>
 public record DiscordSincronizacaoDto(int CanaisCriados, int CargosCriados, int MembrosAtualizados, int MembrosForaDoServidor, IReadOnlyList<string> Falhas);
+
+/// <summary>Grupo de conversa que o usuário pode abrir no chat do CRM.</summary>
+public record DiscordChatCanalDto(string Chave, string Nome);
+
+public record DiscordChatAnexoDto(string Nome, string Url, bool Imagem);
+
+/// <param name="DoCrm">Publicada pelo CRM (a tela alinha as mensagens do próprio usuário à direita pelo nome do autor).</param>
+public record DiscordChatMensagemDto(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordChatAnexoDto> Anexos, bool DoCrm);
+
+/// <param name="TemMais">Pode haver mensagens mais antigas (pedir de novo com <c>antes</c>).</param>
+/// <param name="ConteudoOculto">O Discord entregou as mensagens sem texto: falta ligar "Message Content Intent" no portal do desenvolvedor.</param>
+public record DiscordChatMensagensDto(IReadOnlyList<DiscordChatMensagemDto> Mensagens, bool TemMais, bool ConteudoOculto);
+
+public record DiscordChatEnviarRequest(string Texto);

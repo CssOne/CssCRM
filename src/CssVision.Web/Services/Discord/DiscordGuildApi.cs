@@ -31,7 +31,18 @@ public interface IDiscordGuildApi
     Task AtribuirCargoAsync(string discordUserId, string cargoId, CancellationToken ct);
 
     Task RemoverCargoAsync(string discordUserId, string cargoId, CancellationToken ct);
+
+    /// <summary>Últimas mensagens do canal, da mais antiga para a mais nova. <paramref name="antesDeId"/> pagina para trás.</summary>
+    Task<IReadOnlyList<DiscordMensagem>> ListarMensagensAsync(string canalId, int limite, string? antesDeId, CancellationToken ct);
+
+    /// <summary>Publica no canal com o nome e a foto da pessoa do CRM (via webhook do próprio CRM) e devolve a mensagem criada.</summary>
+    Task<DiscordMensagem> EnviarMensagemAsync(string canalId, string nome, string? fotoUrl, string texto, CancellationToken ct);
 }
+
+/// <summary>Mensagem de um canal do Discord, já com menções resolvidas para nomes.</summary>
+public record DiscordMensagem(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordAnexo> Anexos, bool DoCrm);
+
+public record DiscordAnexo(string Nome, string Url, bool Imagem);
 
 public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> options, ILogger<DiscordGuildApi> logger) : IDiscordGuildApi
 {
@@ -41,8 +52,15 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
     /// <summary>Ver canal, enviar mensagens, ler o histórico, anexar arquivos, inserir links e reagir (1024+2048+65536+32768+16384+64).</summary>
     private const string PermissoesDoGrupo = "117824";
 
+    /// <summary>O bot (membro cujo id é o da aplicação) precisa ver, ler e gerenciar webhooks nos canais que criou: o canal nega a visão ao @everyone.</summary>
+    private const string PermissoesDoBot = "536939520"; // ver canal + enviar + ler histórico + gerenciar webhooks
+
+    private const string NomeDoWebhook = "CRM CSS Brasil";
     private const string MotivoAuditoria = "CRM CSS Brasil: sincronizacao de grupos";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    // O cliente tipado é recriado de tempos em tempos: o guardado dos webhooks (canal -> id/token) vive no tipo, não na instância.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Id, string Token)> webhooks = new();
 
     private DiscordOptions Opcoes => options.Value;
 
@@ -75,6 +93,7 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
                     // @everyone (o cargo "todos" tem o mesmo id do servidor) não vê; só quem tem o cargo do grupo.
                     Sobrescrita(Opcoes.GuildId, allow: null, deny: VerCanal),
                     Sobrescrita(cargoId, allow: PermissoesDoGrupo, deny: null),
+                    new { id = Opcoes.ClientId, type = 1, allow = PermissoesDoBot, deny = "0" },
                 },
             },
             "criar um canal", ct);
@@ -109,6 +128,107 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
         using var resposta = await EnviarAsync(() => Bot(HttpMethod.Delete, $"guilds/{Opcoes.GuildId}/members/{discordUserId}/roles/{cargoId}"), ct);
         await GarantirAsync(resposta, "tirar um cargo de um membro", ct);
     }
+
+    public async Task<IReadOnlyList<DiscordMensagem>> ListarMensagensAsync(string canalId, int limite, string? antesDeId, CancellationToken ct)
+    {
+        var caminho = $"channels/{canalId}/messages?limit={Math.Clamp(limite, 1, 100)}" + (antesDeId is null ? "" : $"&before={Uri.EscapeDataString(antesDeId)}");
+        using var resposta = await EnviarAsync(() => Bot(HttpMethod.Get, caminho), ct);
+        await GarantirAsync(resposta, "ler as mensagens do canal", ct);
+        using var documento = await LerAsync(resposta, ct);
+        // O Discord devolve da mais nova para a mais antiga; a tela mostra da mais antiga para a mais nova.
+        return documento.RootElement.EnumerateArray().Select(LerMensagem).Reverse().ToList();
+    }
+
+    public async Task<DiscordMensagem> EnviarMensagemAsync(string canalId, string nome, string? fotoUrl, string texto, CancellationToken ct)
+    {
+        var (webhookId, webhookToken) = await ObterWebhookAsync(canalId, ct);
+        var corpo = new
+        {
+            content = texto,
+            username = Cortar(nome, 80),
+            avatar_url = string.IsNullOrWhiteSpace(fotoUrl) ? null : fotoUrl,
+            // Nunca marca @everyone/@here nem cargos por texto digitado no CRM.
+            allowed_mentions = new { parse = Array.Empty<string>() },
+        };
+        using var resposta = await EnviarAsync(() => new HttpRequestMessage(HttpMethod.Post, $"webhooks/{webhookId}/{webhookToken}?wait=true")
+        {
+            Content = new StringContent(JsonSerializer.Serialize(corpo, Json), Encoding.UTF8, "application/json"),
+        }, ct);
+        if (resposta.StatusCode == HttpStatusCode.NotFound) webhooks.TryRemove(canalId, out _); // webhook apagado no Discord: recria na próxima
+        await GarantirAsync(resposta, "enviar a mensagem", ct);
+        using var documento = await LerAsync(resposta, ct);
+        return LerMensagem(documento.RootElement);
+    }
+
+    /// <summary>Webhook do CRM no canal (criado na primeira mensagem e guardado em memória; se não estiver guardado, procura o existente antes de criar).</summary>
+    private async Task<(string Id, string Token)> ObterWebhookAsync(string canalId, CancellationToken ct)
+    {
+        if (webhooks.TryGetValue(canalId, out var guardado)) return guardado;
+
+        using (var lista = await EnviarAsync(() => Bot(HttpMethod.Get, $"channels/{canalId}/webhooks"), ct))
+        {
+            await GarantirAsync(lista, "consultar os webhooks do canal", ct);
+            using var documento = await LerAsync(lista, ct);
+            foreach (var w in documento.RootElement.EnumerateArray())
+            {
+                if (w.TryGetProperty("name", out var n) && n.GetString() == NomeDoWebhook
+                    && w.TryGetProperty("token", out var t) && t.GetString() is { Length: > 0 } token)
+                {
+                    return webhooks[canalId] = (w.GetProperty("id").GetString()!, token);
+                }
+            }
+        }
+
+        using var criado = await EnviarAsync(() =>
+        {
+            var requisicao = Bot(HttpMethod.Post, $"channels/{canalId}/webhooks");
+            requisicao.Content = new StringContent(JsonSerializer.Serialize(new { name = NomeDoWebhook }, Json), Encoding.UTF8, "application/json");
+            return requisicao;
+        }, ct);
+        await GarantirAsync(criado, "criar o webhook do canal", ct);
+        using var novo = await LerAsync(criado, ct);
+        return webhooks[canalId] = (novo.RootElement.GetProperty("id").GetString()!, novo.RootElement.GetProperty("token").GetString()!);
+    }
+
+    private static string? Texto(JsonElement e, string propriedade) =>
+        e.TryGetProperty(propriedade, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    private static DiscordMensagem LerMensagem(JsonElement m)
+    {
+        var autor = m.GetProperty("author");
+        var autorId = autor.GetProperty("id").GetString()!;
+        var nome = Texto(autor, "global_name") ?? Texto(autor, "username") ?? "Discord";
+        var avatar = Texto(autor, "avatar") is { } hash ? $"https://cdn.discordapp.com/avatars/{autorId}/{hash}.png?size=64" : null;
+
+        var conteudo = Texto(m, "content") ?? "";
+        if (m.TryGetProperty("mentions", out var mencoes) && mencoes.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var u in mencoes.EnumerateArray())
+            {
+                var uid = u.GetProperty("id").GetString()!;
+                var uNome = Texto(u, "global_name") ?? Texto(u, "username") ?? "usuário";
+                conteudo = conteudo.Replace($"<@{uid}>", $"@{uNome}").Replace($"<@!{uid}>", $"@{uNome}");
+            }
+        }
+        conteudo = EmojiPersonalizado.Replace(conteudo, "$1");
+
+        var anexos = new List<DiscordAnexo>();
+        if (m.TryGetProperty("attachments", out var arquivos) && arquivos.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var f in arquivos.EnumerateArray())
+            {
+                var tipo = Texto(f, "content_type") ?? "";
+                anexos.Add(new DiscordAnexo(Texto(f, "filename") ?? "arquivo", Texto(f, "url") ?? "", tipo.StartsWith("image/", StringComparison.OrdinalIgnoreCase)));
+            }
+        }
+
+        // "DoCrm": mensagem publicada por um webhook do CRM (a tela alinha as suas à direita).
+        var doCrm = Texto(m, "webhook_id") is { } wid && webhooks.Values.Any(w => w.Id == wid);
+        var quando = DateTimeOffset.Parse(Texto(m, "timestamp")!, System.Globalization.CultureInfo.InvariantCulture);
+        return new DiscordMensagem(m.GetProperty("id").GetString()!, nome, avatar, conteudo, quando, anexos, doCrm);
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex EmojiPersonalizado = new(@"<a?(:\w+:)\d+>", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private async Task<string> CriarAsync(string caminho, object corpo, string acao, CancellationToken ct)
     {
