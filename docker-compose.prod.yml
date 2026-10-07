@@ -27,6 +27,16 @@ services:
       MetaCapi__PixelId: ${META_PIXEL_ID}
       MetaCapi__AccessToken: ${META_CAPI_ACCESS_TOKEN}
       NotionSync__Token: ${NOTION_TOKEN}
+      # Rodízio de leads por regional: leads sem regional não vão para consultores da MG134 (ver DistribuicaoOptions).
+      Distribuicao__RegionaisExclusivas__0: MG134
+      # Pixels extras da Meta (CAPI). Vale a primeira entrada que bater, na ordem dos números; o pixel padrão é
+      # MetaCapi__PixelId acima. Os tokens vêm do Secrets Manager (via .env), nunca escritos aqui.
+      MetaCapi__PixelsPorOQue__0__OQue: AGV TRUCK
+      MetaCapi__PixelsPorOQue__0__PixelId: "1101770588863922"
+      MetaCapi__PixelsPorOQue__0__AccessToken: ${META_PIXEL_TRUCK_TOKEN}
+      MetaCapi__PixelsPorOQue__1__Regional: MG134
+      MetaCapi__PixelsPorOQue__1__PixelId: "4545692432243936"
+      MetaCapi__PixelsPorOQue__1__AccessToken: ${META_PIXEL_134_TOKEN}
     expose:
       - "8080"
     healthcheck:
