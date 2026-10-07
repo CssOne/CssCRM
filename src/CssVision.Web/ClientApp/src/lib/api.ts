@@ -91,9 +91,10 @@ export function toQueryString(params: Record<string, unknown>): string {
   return texto ? `?${texto}` : "";
 }
 
-export async function uploadFile<T>(path: string, file: File): Promise<T> {
+export async function uploadFile<T>(path: string, file: File, campos: Record<string, string> = {}): Promise<T> {
   const formData = new FormData();
   formData.append("arquivo", file);
+  for (const [chave, valor] of Object.entries(campos)) formData.append(chave, valor);
   return request<T>(path, { method: "POST", body: formData });
 }
 

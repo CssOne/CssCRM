@@ -20,6 +20,9 @@ public interface IDiscordChatService
     /// <summary>Publica na conversa, no Discord, com o nome e a foto da pessoa.</summary>
     Task<DiscordChatMensagemDto> EnviarAsync(Guid usuarioId, string chave, string texto, CancellationToken ct);
 
+    /// <summary>Publica um arquivo (imagem, PDF, planilha...) na conversa, com legenda opcional.</summary>
+    Task<DiscordChatMensagemDto> EnviarArquivoAsync(Guid usuarioId, string chave, string? texto, string nomeDoArquivo, string tipoDeConteudo, byte[] conteudo, CancellationToken ct);
+
     /// <summary>Quem está com o CRM aberto agora na conversa (grupo: entre os que participam dele; 1:1: a outra pessoa). Não inclui quem pergunta.</summary>
     Task<DiscordChatOnlineDto> ListarOnlineAsync(Guid usuarioId, string chave, CancellationToken ct);
 
@@ -55,6 +58,15 @@ public sealed class DiscordChatService(
     Crm.IPresencaService? presenca = null) : IDiscordChatService
 {
     public const int LimiteDoTexto = 2000;
+
+    /// <summary>Tamanho máximo de um arquivo no chat (o Discord aceita 10 MB no mínimo em qualquer servidor).</summary>
+    public const int LimiteDoArquivo = 10 * 1024 * 1024;
+
+    /// <summary>Tipos aceitos: imagens, PDF, documentos do Office, texto/CSV e ZIP. Nada executável nem script.</summary>
+    internal static readonly HashSet<string> ExtensoesPermitidas = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".zip",
+    };
     public const string PrefixoConversa = "dm:";
     private const int MensagensPorPagina = 50;
     private const int MaximoDeContatos = 30;
@@ -145,6 +157,52 @@ public sealed class DiscordChatService(
         cache.Remove(ChaveDaUltima(destino.LeituraId));
         await MarcarComoLidaAsync(usuarioId, chave, enviada.Id, ct); // a mensagem que a própria pessoa mandou nunca é "não lida" para ela
         return Converter(enviada);
+    }
+
+    public async Task<DiscordChatMensagemDto> EnviarArquivoAsync(Guid usuarioId, string chave, string? texto, string nomeDoArquivo, string tipoDeConteudo, byte[] conteudo, CancellationToken ct)
+    {
+        texto = (texto ?? "").Trim();
+        if (texto.Length > LimiteDoTexto)
+        {
+            throw new CrmBusinessException($"A mensagem pode ter no máximo {LimiteDoTexto} caracteres.", "mensagem_longa");
+        }
+
+        if (conteudo.Length == 0)
+        {
+            throw new CrmBusinessException("O arquivo está vazio.", "arquivo_vazio");
+        }
+
+        if (conteudo.Length > LimiteDoArquivo)
+        {
+            throw new CrmBusinessException($"O arquivo pode ter no máximo {LimiteDoArquivo / (1024 * 1024)} MB.", "arquivo_grande");
+        }
+
+        var nome = NomeSeguro(nomeDoArquivo);
+        if (!ExtensoesPermitidas.Contains(Path.GetExtension(nome)))
+        {
+            throw new CrmBusinessException("Esse tipo de arquivo não pode ser enviado. Use imagem, PDF, documento do Office, texto/CSV ou ZIP.", "arquivo_tipo_invalido");
+        }
+
+        var destino = await ObterDestinoPermitidoAsync(usuarioId, chave, ct);
+        var pessoa = await db.Users.AsNoTracking().Where(u => u.Id == usuarioId).Select(u => new { u.NomeCompleto, u.FotoUrl }).FirstAsync(ct);
+
+        var enviada = await LerAsync(async () => await api.EnviarArquivoAsync(
+            destino.CanalDoWebhook, pessoa.NomeCompleto, FotoAbsoluta(pessoa.FotoUrl), texto, new DiscordArquivo(nome, tipoDeConteudo, conteudo), ct, destino.ThreadId));
+        cache.Remove(ChaveDeCache(destino.LeituraId));
+        cache.Remove(ChaveDaUltima(destino.LeituraId));
+        await MarcarComoLidaAsync(usuarioId, chave, enviada.Id, ct);
+        return Converter(enviada);
+    }
+
+    /// <summary>Só o nome do arquivo (sem pasta), com letras, números, espaço, ponto, hífen e parênteses; cortado em 100 caracteres sem perder a extensão.</summary>
+    internal static string NomeSeguro(string? nome)
+    {
+        var simples = Path.GetFileName((nome ?? "").Replace('\\', '/'));
+        var limpo = new string(simples.Select(c => char.IsLetterOrDigit(c) || c is '.' or '-' or '_' or ' ' or '(' or ')' ? c : '_').ToArray()).Trim();
+        if (limpo.Length == 0) return "arquivo";
+        if (limpo.Length <= 100) return limpo;
+        var extensao = Path.GetExtension(limpo);
+        return limpo[..(100 - extensao.Length)] + extensao;
     }
 
     public async Task<DiscordChatNaoLidasDto> ContarNaoLidasAsync(Guid usuarioId, CancellationToken ct)

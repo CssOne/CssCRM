@@ -21,6 +21,22 @@ public class CrmDiscordChatController(IDiscordChatService chat, ICurrentUserServ
     public async Task<ActionResult<DiscordChatNaoLidasDto>> NaoLidas(CancellationToken ct) =>
         Ok(await chat.ContarNaoLidasAsync(currentUser.UserId, ct));
 
+    /// <summary>Envia um arquivo (imagem, PDF, planilha...) para a conversa, com legenda opcional. Até 10 MB.</summary>
+    [HttpPost("canais/{chave}/anexos")]
+    [RequestSizeLimit(12 * 1024 * 1024)]
+    public async Task<ActionResult<DiscordChatMensagemDto>> EnviarArquivo(string chave, IFormFile arquivo, [FromForm] string? texto, CancellationToken ct)
+    {
+        // Confere o tamanho antes de ler para a memória: um arquivo enorme é recusado sem ocupar o servidor.
+        if (arquivo.Length > DiscordChatService.LimiteDoArquivo)
+        {
+            throw new CssVision.Web.Api.Contracts.Common.CrmBusinessException($"O arquivo pode ter no máximo {DiscordChatService.LimiteDoArquivo / (1024 * 1024)} MB.", "arquivo_grande");
+        }
+
+        await using var memoria = new MemoryStream();
+        await arquivo.CopyToAsync(memoria, ct);
+        return Ok(await chat.EnviarArquivoAsync(currentUser.UserId, chave, texto, arquivo.FileName, arquivo.ContentType, memoria.ToArray(), ct));
+    }
+
     /// <summary>Endereço do canal de voz da conversa no Discord; também avisa a conversa de que a pessoa está numa chamada.</summary>
     [HttpPost("canais/{chave}/chamada")]
     public async Task<ActionResult<DiscordChatChamadaDto>> Chamada(string chave, CancellationToken ct) =>

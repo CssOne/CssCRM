@@ -137,4 +137,18 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
         Avisos.Add((canalId, texto));
         return Task.CompletedTask;
     }
+
+    /// <summary>Arquivos enviados ao chat (destino = thread ou canal).</summary>
+    public List<(string CanalId, string Nome, string Texto, DiscordArquivo Arquivo)> ArquivosEnviados { get; } = [];
+
+    public Task<DiscordMensagem> EnviarArquivoAsync(string canalId, string nome, string? fotoUrl, string texto, DiscordArquivo arquivo, CancellationToken ct, string? threadId = null)
+    {
+        if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para enviar o arquivo.");
+        var onde = threadId ?? canalId;
+        ArquivosEnviados.Add((onde, nome, texto, arquivo));
+        var mensagem = new DiscordMensagem(Novo(), nome, fotoUrl, texto, DateTimeOffset.UtcNow, [new DiscordAnexo(arquivo.Nome, $"https://cdn.exemplo.com/{arquivo.Nome}", arquivo.Nome.EndsWith(".png"))], true);
+        if (!Mensagens.TryGetValue(onde, out var lista)) Mensagens[onde] = lista = [];
+        lista.Add(mensagem);
+        return Task.FromResult(mensagem);
+    }
 }

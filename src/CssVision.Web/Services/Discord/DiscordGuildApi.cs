@@ -52,6 +52,9 @@ public interface IDiscordGuildApi
 
     Task AdicionarAThreadAsync(string threadId, string discordUserId, CancellationToken ct);
 
+    /// <summary>Igual a <see cref="EnviarMensagemAsync"/>, com um arquivo anexado (o texto pode ser vazio).</summary>
+    Task<DiscordMensagem> EnviarArquivoAsync(string canalId, string nome, string? fotoUrl, string texto, DiscordArquivo arquivo, CancellationToken ct, string? threadId = null);
+
     /// <summary>Publica um aviso do próprio CRM (como bot) num canal. Nunca marca ninguém (@everyone/@here/cargos).</summary>
     Task PublicarAvisoAsync(string canalId, string texto, CancellationToken ct);
 
@@ -69,6 +72,9 @@ public record DiscordPermitido(string Id, bool Pessoa);
 public record DiscordMensagem(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordAnexo> Anexos, bool DoCrm);
 
 public record DiscordAnexo(string Nome, string Url, bool Imagem);
+
+/// <summary>Arquivo a anexar: o conteúdo fica em memória (o limite do chat é pequeno) para poder reenviar se o Discord pedir calma (429).</summary>
+public record DiscordArquivo(string Nome, string TipoDeConteudo, byte[] Conteudo);
 
 public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> options, ILogger<DiscordGuildApi> logger) : IDiscordGuildApi
 {
@@ -207,6 +213,54 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
         await GarantirAsync(resposta, "enviar a mensagem", ct);
         using var documento = await LerAsync(resposta, ct);
         return LerMensagem(documento.RootElement);
+    }
+
+    public async Task<DiscordMensagem> EnviarArquivoAsync(string canalId, string nome, string? fotoUrl, string texto, DiscordArquivo arquivo, CancellationToken ct, string? threadId = null)
+    {
+        var (webhookId, webhookToken) = await ObterWebhookAsync(canalId, ct);
+        var corpo = new
+        {
+            content = texto,
+            username = Cortar(nome, 80),
+            avatar_url = string.IsNullOrWhiteSpace(fotoUrl) ? null : fotoUrl,
+            allowed_mentions = new { parse = Array.Empty<string>() },
+        };
+        var destino = $"webhooks/{webhookId}/{webhookToken}?wait=true" + (threadId is null ? "" : $"&thread_id={Uri.EscapeDataString(threadId)}");
+        using var resposta = await EnviarAsync(() => new HttpRequestMessage(HttpMethod.Post, destino) { Content = Multipart(corpo, arquivo) }, ct);
+
+        if (threadId is not null && !resposta.IsSuccessStatusCode && resposta.StatusCode != HttpStatusCode.NotFound)
+        {
+            // Mesmo plano B do texto: o bot publica na thread com o nome de quem enviou.
+            var legenda = texto.Length == 0 ? $"**{nome}** enviou um arquivo" : $"**{nome}:** {texto}";
+            var plano = new { content = legenda, allowed_mentions = new { parse = Array.Empty<string>() } };
+            using var comoBot = await EnviarAsync(() =>
+            {
+                var requisicao = Bot(HttpMethod.Post, $"channels/{threadId}/messages");
+                requisicao.Content = Multipart(plano, arquivo);
+                return requisicao;
+            }, ct);
+            await GarantirAsync(comoBot, "enviar o arquivo", ct);
+            using var documentoBot = await LerAsync(comoBot, ct);
+            return LerMensagem(documentoBot.RootElement);
+        }
+
+        if (resposta.StatusCode == HttpStatusCode.NotFound) webhooks.TryRemove(canalId, out _);
+        await GarantirAsync(resposta, "enviar o arquivo", ct);
+        using var documento = await LerAsync(resposta, ct);
+        return LerMensagem(documento.RootElement);
+    }
+
+    /// <summary>Corpo "multipart": o JSON da mensagem em <c>payload_json</c> e o arquivo em <c>files[0]</c>.</summary>
+    private static MultipartFormDataContent Multipart(object payload, DiscordArquivo arquivo)
+    {
+        var conteudo = new MultipartFormDataContent
+        {
+            { new StringContent(JsonSerializer.Serialize(payload, Json), Encoding.UTF8, "application/json"), "payload_json" },
+        };
+        var parte = new ByteArrayContent(arquivo.Conteudo);
+        parte.Headers.ContentType = MediaTypeHeaderValue.TryParse(arquivo.TipoDeConteudo, out var tipo) ? tipo : new MediaTypeHeaderValue("application/octet-stream");
+        conteudo.Add(parte, "files[0]", arquivo.Nome);
+        return conteudo;
     }
 
     public async Task PublicarAvisoAsync(string canalId, string texto, CancellationToken ct) =>

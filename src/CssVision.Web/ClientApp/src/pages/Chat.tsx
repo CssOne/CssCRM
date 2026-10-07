@@ -1,8 +1,8 @@
-import { ChevronUp, Hash, MessagesSquare, Phone, Plus, Search, Send } from "lucide-react";
+import { ChevronUp, Hash, MessagesSquare, Paperclip, Phone, Plus, Search, Send, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { api, ApiRequestError, isAbortError } from "../lib/api";
+import { api, ApiRequestError, isAbortError, uploadFile } from "../lib/api";
 import { desligarNotificacao, definirSom, ligarNotificacao, notificacaoLigada, notificacaoSuportada, somLigado } from "../lib/avisosDoChat";
 import { formatarDataHora } from "../lib/format";
 import { rotuloNaoLidas, useChatNaoLidas } from "../lib/useChatNaoLidas";
@@ -10,6 +10,8 @@ import type { DiscordChatCanal, DiscordChatChamada, DiscordChatContato, DiscordC
 import { Avatar, Badge, Button, Card, Checkbox, EmptyState, ErrorState, Input, Modal, Skeleton, useToast } from "../components/ui";
 
 const LIMITE_TEXTO = 2000;
+const LIMITE_ARQUIVO = 10 * 1024 * 1024;
+const TIPOS_DE_ARQUIVO = ".png,.jpg,.jpeg,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip";
 const INTERVALO_MS = 4000;
 
 /**
@@ -30,6 +32,8 @@ export function ChatPage() {
   const [carregandoAntigas, setCarregandoAntigas] = useState(false);
   const [novaConversa, setNovaConversa] = useState(false);
   const [ligando, setLigando] = useState(false);
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const seletorDeArquivo = useRef<HTMLInputElement>(null);
   const [online, setOnline] = useState<DiscordChatOnline["pessoas"]>([]);
   const [linkDaChamada, setLinkDaChamada] = useState<string | null>(null);
   const rolagem = useRef<HTMLDivElement>(null);
@@ -140,11 +144,14 @@ export function ChatPage() {
 
   async function enviar() {
     const conteudo = texto.trim();
-    if (!chave || !conteudo || enviando) return;
+    if (!chave || (!conteudo && !arquivo) || enviando) return;
     setEnviando(true);
     try {
-      const nova = await api.post<DiscordChatMensagem>(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/mensagens`, { texto: conteudo });
+      const nova = arquivo
+        ? await uploadFile<DiscordChatMensagem>(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/anexos`, arquivo, conteudo ? { texto: conteudo } : {})
+        : await api.post<DiscordChatMensagem>(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/mensagens`, { texto: conteudo });
       setTexto("");
+      setArquivo(null);
       colarNoFim.current = true;
       setDados((atual) => ({ mensagens: [...(atual?.mensagens ?? []), nova], temMais: atual?.temMais ?? false, conteudoOculto: atual?.conteudoOculto ?? false }));
     } catch (e) {
@@ -174,8 +181,11 @@ export function ChatPage() {
     };
   }, [chave]);
 
-  // Troca de conversa: o aviso de "abrir a chamada manualmente" era da conversa anterior.
-  useEffect(() => setLinkDaChamada(null), [chave]);
+  // Troca de conversa: o aviso de "abrir a chamada manualmente" e o arquivo escolhido eram da conversa anterior.
+  useEffect(() => {
+    setLinkDaChamada(null);
+    setArquivo(null);
+  }, [chave]);
 
   /**
    * O Discord não deixa embutir a chamada: pede o canal de voz da conversa (o servidor também avisa a conversa de que você está numa chamada)
@@ -320,6 +330,16 @@ export function ChatPage() {
               )}
             </div>
 
+            {arquivo && (
+              <div className="flex items-center gap-2 border-t border-[var(--border)] px-3 pt-2 text-xs text-[var(--fg)]">
+                <Paperclip className="size-3.5 text-[var(--fg-muted)]" aria-hidden />
+                <span className="truncate">{arquivo.name}</span>
+                <span className="shrink-0 text-[var(--fg-muted)]">({(arquivo.size / 1024 / 1024).toFixed(1)} MB)</span>
+                <button type="button" onClick={() => setArquivo(null)} aria-label="Remover arquivo" className="ml-auto rounded p-0.5 hover:bg-[var(--bg-muted)]">
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            )}
             <form
               className="flex items-end gap-2 border-t border-[var(--border)] p-3"
               onSubmit={(e) => {
@@ -327,6 +347,22 @@ export function ChatPage() {
                 void enviar();
               }}
             >
+              <input
+                ref={seletorDeArquivo}
+                type="file"
+                accept={TIPOS_DE_ARQUIVO}
+                className="hidden"
+                onChange={(e) => {
+                  const escolhido = e.target.files?.[0];
+                  e.target.value = ""; // permite escolher o mesmo arquivo de novo depois de remover
+                  if (!escolhido) return;
+                  if (escolhido.size > LIMITE_ARQUIVO) notificar("error", "O arquivo pode ter no máximo 10 MB.");
+                  else setArquivo(escolhido);
+                }}
+              />
+              <Button type="button" variant="ghost" onClick={() => seletorDeArquivo.current?.click()} aria-label="Anexar arquivo" title="Anexar imagem, PDF, planilha ou documento (até 10 MB)">
+                <Paperclip className="size-4" />
+              </Button>
               <textarea
                 value={texto}
                 onChange={(e) => setTexto(e.target.value)}
@@ -343,7 +379,7 @@ export function ChatPage() {
                 aria-label={`Mensagem para ${nomeDoGrupo ?? "o grupo"}`}
                 className="min-h-10 flex-1 resize-none rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--fg)] outline-none focus:border-[var(--brand)]"
               />
-              <Button type="submit" loading={enviando} disabled={!texto.trim()}>
+              <Button type="submit" loading={enviando} disabled={!texto.trim() && !arquivo}>
                 <Send className="size-4" /> Enviar
               </Button>
             </form>
