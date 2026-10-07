@@ -59,6 +59,7 @@ const iconesPorChave: Record<string, typeof Gauge> = {
   megaphone: Megaphone,
   database: Database,
   "life-buoy": LifeBuoy,
+  "message-circle": MessageCircle,
   wallet: Wallet,
   monitor: Monitor,
 };

@@ -113,7 +113,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<Services.Backup.IBackupService, Services.Backup.BackupService>();
         services.AddHostedService<Services.Backup.BackupDiarioBackgroundService>();
         // Notificação push de lead novo (aparece no sistema mesmo com o CRM fechado).
-        services.AddScoped<IPushService, PushService>();
+        // Todo aviso por push (lead novo, pagamento em aberto...) também vai para o Discord de quem vinculou a conta
+        // (as peças do Discord são registradas em AddDiscordIntegration; sem credenciais ele só devolve o push normal).
+        services.AddScoped<PushService>();
+        services.AddScoped<IPushService>(sp => new Services.Discord.PushComDiscordService(
+            sp.GetRequiredService<PushService>(),
+            sp.GetRequiredService<Services.Discord.IDiscordService>(),
+            sp.GetRequiredService<ILogger<Services.Discord.PushComDiscordService>>()));
         services.AddHostedService<PushNovosLeadsBackgroundService>();
         services.AddScoped<IOpportunityService, OpportunityService>();
         services.AddScoped<IPipelineService, PipelineService>();
@@ -198,6 +204,24 @@ public static class ServiceCollectionExtensions
             services.AddHostedService<NotionSyncBackgroundService>();
         }
 
+        return services;
+    }
+
+    /// <summary>
+    /// Discord: vínculo da conta do usuário (OAuth2) e avisos como mensagem direta, que chegam no celular pelo app do Discord.
+    /// Sem as credenciais (<see cref="Services.Discord.DiscordOptions.Configurado"/>) fica desligado e o CRM funciona como antes.
+    /// </summary>
+    public static IServiceCollection AddDiscordIntegration(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<Services.Discord.DiscordOptions>(configuration.GetSection(Services.Discord.DiscordOptions.SectionName));
+        services.AddHttpClient<Services.Discord.IDiscordApi, Services.Discord.DiscordApi>(http =>
+        {
+            http.BaseAddress = new Uri(Services.Discord.DiscordApi.UrlBase);
+            // O Discord exige um User-Agent no formato "DiscordBot (url, versão)".
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("DiscordBot (https://cssbrasil.duckdns.org, 1.0)");
+            http.Timeout = TimeSpan.FromSeconds(15);
+        });
+        services.AddScoped<Services.Discord.IDiscordService, Services.Discord.DiscordService>();
         return services;
     }
 }

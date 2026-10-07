@@ -1,0 +1,162 @@
+import { CheckCircle2, MessageCircle, Send, Smartphone, Unlink } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { api, ApiRequestError, isAbortError } from "../lib/api";
+import { formatarDataHora } from "../lib/format";
+import type { DiscordIniciar, DiscordStatus, DiscordTeste } from "../lib/types";
+import { Badge, Button, Card, Checkbox, ErrorState, Skeleton, useToast } from "../components/ui";
+
+/**
+ * Vínculo da conta do Discord com o CRM. Vinculada, a pessoa recebe os avisos do CRM (lead novo, pagamento em aberto, alertas...)
+ * como mensagem direta no Discord — e, com o app instalado, no celular. O vínculo é por OAuth2 do próprio Discord: o CRM nunca vê
+ * a senha dele.
+ */
+export function DiscordPage() {
+  const { notificar } = useToast();
+  const [params, setParams] = useSearchParams();
+  const [status, setStatus] = useState<DiscordStatus | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const [ocupado, setOcupado] = useState<null | "vincular" | "teste" | "desvincular" | "avisos">(null);
+
+  const carregar = useCallback((sinal?: AbortSignal) => {
+    api
+      .get<DiscordStatus>("/crm/discord/status", sinal)
+      .then((s) => {
+        setStatus(s);
+        setErro(null);
+      })
+      .catch((e) => {
+        if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar o Discord.");
+      });
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    carregar(controller.signal);
+    return () => controller.abort();
+  }, [carregar]);
+
+  // Volta do Discord: o servidor redireciona para cá com ?resultado=ok|erro|cancelado.
+  useEffect(() => {
+    const resultado = params.get("resultado");
+    if (!resultado) return;
+    if (resultado === "ok") notificar("success", "Conta do Discord vinculada.");
+    else if (resultado === "cancelado") notificar("info", "O vínculo foi cancelado.");
+    else notificar("error", params.get("motivo") ?? "Não foi possível vincular a conta do Discord.");
+    setParams({}, { replace: true });
+    carregar();
+  }, [params, setParams, notificar, carregar]);
+
+  async function acao<T>(qual: NonNullable<typeof ocupado>, executar: () => Promise<T>): Promise<T | undefined> {
+    setOcupado(qual);
+    try {
+      return await executar();
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível concluir a ação.");
+      return undefined;
+    } finally {
+      setOcupado(null);
+    }
+  }
+
+  const vincular = () =>
+    acao("vincular", async () => {
+      const r = await api.post<DiscordIniciar>("/crm/discord/vinculo/iniciar");
+      window.location.href = r.url; // vai ao Discord autorizar; ele volta para /api/crm/discord/callback
+    });
+
+  const testar = () =>
+    acao("teste", async () => {
+      const r = await api.post<DiscordTeste>("/crm/discord/teste");
+      notificar(r.enviado ? "success" : "error", r.mensagem);
+    });
+
+  const desvincular = () =>
+    acao("desvincular", async () => {
+      await api.del("/crm/discord/vinculo");
+      notificar("success", "Conta do Discord desvinculada.");
+      carregar();
+    });
+
+  const alternarAvisos = (ativos: boolean) =>
+    acao("avisos", async () => {
+      setStatus(await api.put<DiscordStatus>("/crm/discord/avisos", { ativos }));
+    });
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-4">
+      <div>
+        <h1 className="flex items-center gap-2 text-xl font-bold text-[var(--fg)]">
+          <MessageCircle className="size-5 text-[var(--brand)]" aria-hidden /> Discord
+        </h1>
+        <p className="text-sm text-[var(--fg-muted)]">
+          Vincule sua conta do Discord para receber os avisos do CRM no celular: leads novos, pagamentos em aberto e alertas.
+        </p>
+      </div>
+
+      {erro ? (
+        <ErrorState message={erro} onRetry={() => carregar()} />
+      ) : !status ? (
+        <Skeleton className="h-40" />
+      ) : !status.configurado ? (
+        <Card className="space-y-2 p-5">
+          <Badge variant="warning">Ainda não ativado</Badge>
+          <p className="text-sm text-[var(--fg)]">
+            A integração com o Discord ainda não foi configurada no servidor. Peça ao administrador para ativá-la; depois é só voltar aqui e vincular a sua conta.
+          </p>
+        </Card>
+      ) : !status.vinculado ? (
+        <Card className="space-y-4 p-5">
+          <ol className="list-decimal space-y-1 pl-5 text-sm text-[var(--fg)]">
+            <li>Instale o app do Discord no celular e entre com a sua conta (ou crie uma).</li>
+            <li>Clique em <strong>Vincular Discord</strong> e autorize. Você entra no servidor da empresa automaticamente.</li>
+            <li>Deixe as notificações do Discord ligadas no celular.</li>
+          </ol>
+          <Button onClick={vincular} loading={ocupado === "vincular"}>
+            <MessageCircle className="size-4" /> Vincular Discord
+          </Button>
+        </Card>
+      ) : (
+        <Card className="space-y-4 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="flex items-center gap-2 font-semibold text-[var(--fg)]">
+                <CheckCircle2 className="size-4 text-[var(--success)]" aria-hidden /> {status.discordNome}
+              </p>
+              {status.vinculadoEm && <p className="text-xs text-[var(--fg-muted)]">Vinculado em {formatarDataHora(status.vinculadoEm)}</p>}
+            </div>
+            <Badge variant={status.noServidor ? "success" : "warning"}>{status.noServidor ? "No servidor da empresa" : "Fora do servidor"}</Badge>
+          </div>
+
+          {!status.noServidor && (
+            <p className="text-xs text-[var(--fg-muted)]">
+              O bot não conseguiu colocar sua conta no servidor da empresa. Os avisos diretos funcionam mesmo assim; para entrar nos grupos, peça o convite ao administrador.
+            </p>
+          )}
+
+          <Checkbox
+            label="Receber os avisos do CRM no Discord"
+            checked={status.avisosAtivos}
+            disabled={ocupado === "avisos"}
+            onChange={(e) => alternarAvisos(e.target.checked)}
+          />
+
+          <p className="flex items-start gap-2 text-xs text-[var(--fg-muted)]">
+            <Smartphone className="mt-px size-4 shrink-0" aria-hidden />
+            Para aparecer no celular, o app do Discord precisa estar instalado com as notificações ligadas. Se o aviso de teste não chegar, no Discord vá em
+            Configurações → Privacidade e permita mensagens diretas de membros do servidor.
+          </p>
+
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={testar} loading={ocupado === "teste"}>
+              <Send className="size-4" /> Enviar aviso de teste
+            </Button>
+            <Button variant="ghost" onClick={desvincular} loading={ocupado === "desvincular"}>
+              <Unlink className="size-4" /> Desvincular
+            </Button>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}

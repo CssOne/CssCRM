@@ -25,6 +25,7 @@ builder.Services.AddCrmEmailSender(builder.Configuration);
 builder.Services.AddCrmFileStorage(builder.Configuration);
 builder.Services.AddMetaLeadAdsIntegration(builder.Configuration);
 builder.Services.AddNotionSync(builder.Configuration);
+builder.Services.AddDiscordIntegration(builder.Configuration);
 builder.Services.AddPublicLeadIntakeCors();
 
 builder.Services.AddControllers();
