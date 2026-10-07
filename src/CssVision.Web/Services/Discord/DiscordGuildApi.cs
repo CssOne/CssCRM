@@ -52,6 +52,9 @@ public interface IDiscordGuildApi
 
     Task AdicionarAThreadAsync(string threadId, string discordUserId, CancellationToken ct);
 
+    /// <summary>Publica um aviso do próprio CRM (como bot) num canal. Nunca marca ninguém (@everyone/@here/cargos).</summary>
+    Task PublicarAvisoAsync(string canalId, string texto, CancellationToken ct);
+
     /// <summary>
     /// Cria um canal de voz que só os <paramref name="permitidos"/> veem e usam (cargos ou pessoas). O CRM não consegue embutir a chamada:
     /// a tela abre este canal no Discord.
@@ -202,6 +205,23 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
 
         if (resposta.StatusCode == HttpStatusCode.NotFound) webhooks.TryRemove(canalId, out _); // webhook apagado no Discord: recria na próxima
         await GarantirAsync(resposta, "enviar a mensagem", ct);
+        using var documento = await LerAsync(resposta, ct);
+        return LerMensagem(documento.RootElement);
+    }
+
+    public async Task PublicarAvisoAsync(string canalId, string texto, CancellationToken ct) =>
+        await EnviarComoBotAsync(canalId, texto, ct);
+
+    private async Task<DiscordMensagem> EnviarComoBotAsync(string canalId, string texto, CancellationToken ct)
+    {
+        var corpo = new { content = Cortar(texto, 2000), allowed_mentions = new { parse = Array.Empty<string>() } };
+        using var resposta = await EnviarAsync(() =>
+        {
+            var requisicao = Bot(HttpMethod.Post, $"channels/{canalId}/messages");
+            requisicao.Content = new StringContent(JsonSerializer.Serialize(corpo, Json), Encoding.UTF8, "application/json");
+            return requisicao;
+        }, ct);
+        await GarantirAsync(resposta, "publicar o aviso", ct);
         using var documento = await LerAsync(resposta, ct);
         return LerMensagem(documento.RootElement);
     }

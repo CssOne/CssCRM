@@ -1575,3 +1575,10 @@ export interface DiscordChatChamada {
 export interface DiscordChatOnline {
   pessoas: { id: string; nome: string; fotoUrl?: string | null }[];
 }
+
+/** Avisos automáticos do CRM nos canais das regionais no Discord (tudo desligado até o administrador ligar). */
+export interface DiscordAvisosCanais {
+  venda: boolean;
+  metaBatida: boolean;
+  leadsParados: boolean;
+}

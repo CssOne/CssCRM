@@ -127,4 +127,14 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
         VozesCriadas.Add((nome, categoriaId, permitidos));
         return Task.FromResult(id);
     }
+
+    /// <summary>Avisos do CRM publicados nos canais (como bot).</summary>
+    public List<(string CanalId, string Texto)> Avisos { get; } = [];
+
+    public Task PublicarAvisoAsync(string canalId, string texto, CancellationToken ct)
+    {
+        if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para publicar o aviso.");
+        Avisos.Add((canalId, texto));
+        return Task.CompletedTask;
+    }
 }
