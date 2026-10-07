@@ -23,6 +23,10 @@ resource "aws_secretsmanager_secret_version" "app" {
     NOTION_TOKEN           = ""
     META_PIXEL_134_TOKEN   = "" # token do pixel da regional MG134
     META_PIXEL_TRUCK_TOKEN = "" # token do pixel do AGV TRUCK
+    DISCORD_BOT_TOKEN      = "" # token do bot do Discord (Portal do Desenvolvedor → Bot)
+    DISCORD_CLIENT_ID      = "" # id da aplicação do Discord (OAuth2 → Client ID)
+    DISCORD_CLIENT_SECRET  = "" # segredo do OAuth2 do Discord (OAuth2 → Client Secret)
+    DISCORD_GUILD_ID       = "" # id do servidor do Discord da empresa
   })
 
   lifecycle {
