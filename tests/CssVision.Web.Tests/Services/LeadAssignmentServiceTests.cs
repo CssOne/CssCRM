@@ -58,6 +58,34 @@ public class LeadAssignmentServiceTests
     }
 
     [Fact]
+    public async Task ProximoResponsavelAsync_DeveEscolherQuemAindaNaoRecebeuHoje_MesmoComMaisLeadsNoMes()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var ana = await factory.CriarUsuarioAsync(db, "Ana Vendedora");
+        var bruna = await factory.CriarUsuarioAsync(db, "Bruna Vendedora");
+        await factory.AtribuirPapelAsync(db, ana, Roles.Comercial);
+        await factory.AtribuirPapelAsync(db, bruna, Roles.Comercial);
+
+        // Ana tem 3 no mês (todos de ontem), Bruna só 1 (de hoje): Ana ainda não recebeu hoje, então é a vez dela.
+        var ontem = DateTimeOffset.UtcNow.AddDays(-1);
+        db.CrmLeads.AddRange(
+            new CrmLead { NomeOuRazaoSocial = "L1", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, MetaLeadId = Guid.NewGuid().ToString(), CriadoEm = ontem },
+            new CrmLead { NomeOuRazaoSocial = "L2", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, MetaLeadId = Guid.NewGuid().ToString(), CriadoEm = ontem },
+            new CrmLead { NomeOuRazaoSocial = "L3", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, MetaLeadId = Guid.NewGuid().ToString(), CriadoEm = ontem },
+            new CrmLead { NomeOuRazaoSocial = "L4", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = bruna.Id, MetaLeadId = Guid.NewGuid().ToString(), CriadoEm = DateTimeOffset.UtcNow });
+        await db.SaveChangesAsync();
+        // O salvamento carimba a atribuição como "agora"; volta a data de ontem nos leads da Ana.
+        foreach (var lead in db.CrmLeads.Where(l => l.ResponsavelId == ana.Id)) lead.ResponsavelAtribuidoEm = ontem;
+        await db.SaveChangesAsync();
+
+        var service = new LeadAssignmentService(db);
+        var escolhido = await service.ProximoResponsavelAsync(null, CancellationToken.None);
+
+        Assert.Equal(ana.Id, escolhido);
+    }
+
+    [Fact]
     public async Task ProximoResponsavelAsync_DevePular_QuemBateuLimiteMensal()
     {
         using var factory = new TestDbContextFactory();
