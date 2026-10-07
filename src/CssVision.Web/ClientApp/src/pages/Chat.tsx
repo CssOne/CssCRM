@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { api, ApiRequestError, isAbortError } from "../lib/api";
 import { formatarDataHora } from "../lib/format";
 import { rotuloNaoLidas, useChatNaoLidas } from "../lib/useChatNaoLidas";
-import type { DiscordChatCanal, DiscordChatChamada, DiscordChatContato, DiscordChatMensagem, DiscordChatMensagens } from "../lib/types";
+import type { DiscordChatCanal, DiscordChatChamada, DiscordChatContato, DiscordChatMensagem, DiscordChatMensagens, DiscordChatOnline } from "../lib/types";
 import { Avatar, Badge, Button, Card, EmptyState, ErrorState, Input, Modal, Skeleton, useToast } from "../components/ui";
 
 const LIMITE_TEXTO = 2000;
@@ -29,6 +29,7 @@ export function ChatPage() {
   const [carregandoAntigas, setCarregandoAntigas] = useState(false);
   const [novaConversa, setNovaConversa] = useState(false);
   const [ligando, setLigando] = useState(false);
+  const [online, setOnline] = useState<DiscordChatOnline["pessoas"]>([]);
   const [linkDaChamada, setLinkDaChamada] = useState<string | null>(null);
   const rolagem = useRef<HTMLDivElement>(null);
   const colarNoFim = useRef(true);
@@ -45,16 +46,25 @@ export function ChatPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    api
-      .get<DiscordChatCanal[]>("/crm/discord/chat/canais", controller.signal)
-      .then((lista) => {
-        setCanais(lista);
-        setChave((atual) => atual ?? lista[0]?.chave ?? null);
-      })
-      .catch((e) => {
-        if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar as conversas.");
-      });
-    return () => controller.abort();
+    const carregar = (primeira: boolean) =>
+      api
+        .get<DiscordChatCanal[]>("/crm/discord/chat/canais", controller.signal)
+        .then((lista) => {
+          // Nas atualizações seguintes só renova o "online" (mantém as conversas que a pessoa acabou de abrir nesta tela).
+          setCanais((atual) => (primeira || !atual ? lista : [...lista, ...atual.filter((c) => !lista.some((l) => l.chave === c.chave))]));
+          setChave((atual) => atual ?? lista[0]?.chave ?? null);
+        })
+        .catch((e) => {
+          if (primeira && !isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar as conversas.");
+        });
+    void carregar(true);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void carregar(false);
+    }, 30000);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+    };
   }, []);
 
   const carregarMensagens = useCallback((qual: string, sinal?: AbortSignal) => {
@@ -142,6 +152,26 @@ export function ChatPage() {
       setEnviando(false);
     }
   }
+
+  // Quem está online na conversa aberta (atualiza a cada 20 s, só com a aba visível).
+  useEffect(() => {
+    setOnline([]);
+    if (!chave) return;
+    const controller = new AbortController();
+    const carregar = () =>
+      api
+        .get<DiscordChatOnline>(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/online`, controller.signal)
+        .then((r) => setOnline(r.pessoas))
+        .catch(() => undefined);
+    void carregar();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void carregar();
+    }, 20000);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+    };
+  }, [chave]);
 
   // Troca de conversa: o aviso de "abrir a chamada manualmente" era da conversa anterior.
   useEffect(() => setLinkDaChamada(null), [chave]);
@@ -231,9 +261,21 @@ export function ChatPage() {
                 )}{" "}
                 {nomeDoGrupo}
               </p>
+              <div className="flex items-center gap-3">
+              {online.length > 0 && (
+                <span
+                  className="flex items-center gap-1.5 text-xs text-[var(--fg-muted)]"
+                  title={online.map((p) => p.nome).join(", ")}
+                  aria-label={`Online agora: ${online.map((p) => p.nome).join(", ")}`}
+                >
+                  <span className="size-2 rounded-full bg-[var(--success)]" aria-hidden />
+                  {atual?.tipo === "direta" ? "online" : `${online.length} online`}
+                </span>
+              )}
               <Button variant="secondary" size="sm" onClick={ligar} loading={ligando} title="Abre o canal de voz no Discord e avisa a conversa">
                 <Phone className="size-4" /> Chamada de voz
               </Button>
+              </div>
             </div>
 
             {linkDaChamada && (
@@ -322,7 +364,14 @@ function ItemDaLista({ conversa, ativa, naoLidas, aoEscolher }: { conversa: Disc
         ativa ? "border-[var(--brand)] bg-[var(--brand)]/10 font-semibold text-[var(--fg)]" : "border-[var(--border)] text-[var(--fg-muted)] hover:bg-[var(--bg-muted)]"
       }`}
     >
-      {conversa.tipo === "direta" ? <Avatar nome={conversa.nome} fotoUrl={conversa.fotoUrl} className="size-5 text-[9px]" /> : <Hash className="size-4 shrink-0" aria-hidden />}
+      {conversa.tipo === "direta" ? (
+        <span className="relative shrink-0">
+          <Avatar nome={conversa.nome} fotoUrl={conversa.fotoUrl} className="size-5 text-[9px]" />
+          {conversa.online && <span className="absolute -bottom-0.5 -right-0.5 size-2 rounded-full border border-[var(--bg)] bg-[var(--success)]" aria-label="online" />}
+        </span>
+      ) : (
+        <Hash className="size-4 shrink-0" aria-hidden />
+      )}
       <span className="truncate">{conversa.nome}</span>
       {naoLidas > 0 && !ativa && (
         <span className="ml-auto rounded-full bg-[var(--brand)] px-1.5 text-xs font-semibold text-white" aria-label={`${naoLidas} não lidas`}>
@@ -393,7 +442,10 @@ function NovaConversa({ aberta, aoFechar, aoAbrir }: { aberta: boolean; aoFechar
                   disabled={abrindo !== null}
                   className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-[var(--bg-muted)] disabled:opacity-60"
                 >
-                  <Avatar nome={c.nome} fotoUrl={c.fotoUrl} className="size-8 text-xs" />
+                  <span className="relative shrink-0">
+                    <Avatar nome={c.nome} fotoUrl={c.fotoUrl} className="size-8 text-xs" />
+                    {c.online && <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-[var(--bg)] bg-[var(--success)]" aria-label="online" />}
+                  </span>
                   <span className="flex-1 text-sm font-medium text-[var(--fg)]">{c.nome}</span>
                   {c.regional && <Badge variant="neutral">{c.regional}</Badge>}
                 </button>

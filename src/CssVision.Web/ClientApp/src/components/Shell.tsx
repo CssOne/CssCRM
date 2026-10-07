@@ -33,6 +33,7 @@ import {
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { usePresenca } from "../lib/usePresenca";
 import { rotuloNaoLidas, useChatNaoLidas } from "../lib/useChatNaoLidas";
 import { useTheme } from "../context/ThemeContext";
 import { Avatar, IconButton, useToast } from "./ui";
@@ -111,6 +112,7 @@ export function Shell({ children }: { children: ReactNode }) {
   // Número de mensagens não lidas do chat no menu e no título da aba (só consulta quem tem o Chat no menu).
   const temChat = !!sessao?.menu.some((m) => m.chave === "chat");
   const chatNaoLidas = useChatNaoLidas(temChat, 30000);
+  usePresenca(!!sessao); // "online" no chat: o CRM aberto avisa a cada minuto
 
   useEffect(() => {
     localStorage.setItem("crm-sidebar-colapsado", colapsado ? "1" : "0");

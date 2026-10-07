@@ -20,6 +20,9 @@ public interface IDiscordChatService
     /// <summary>Publica na conversa, no Discord, com o nome e a foto da pessoa.</summary>
     Task<DiscordChatMensagemDto> EnviarAsync(Guid usuarioId, string chave, string texto, CancellationToken ct);
 
+    /// <summary>Quem está com o CRM aberto agora na conversa (grupo: entre os que participam dele; 1:1: a outra pessoa). Não inclui quem pergunta.</summary>
+    Task<DiscordChatOnlineDto> ListarOnlineAsync(Guid usuarioId, string chave, CancellationToken ct);
+
     /// <summary>Pessoas com quem dá para iniciar uma conversa 1:1: quem vinculou o Discord e já está no servidor.</summary>
     Task<IReadOnlyList<DiscordChatContatoDto>> ListarContatosAsync(Guid usuarioId, string? busca, CancellationToken ct);
 
@@ -48,7 +51,8 @@ public sealed class DiscordChatService(
     ApplicationDbContext db,
     IDiscordGuildApi api,
     IMemoryCache cache,
-    IOptions<DiscordOptions> options) : IDiscordChatService
+    IOptions<DiscordOptions> options,
+    Crm.IPresencaService? presenca = null) : IDiscordChatService
 {
     public const int LimiteDoTexto = 2000;
     public const string PrefixoConversa = "dm:";
@@ -88,7 +92,7 @@ public sealed class DiscordChatService(
 
         var diretas = conversas
             .Where(c => pessoas.ContainsKey(c.OutraId))
-            .Select(c => new DiscordChatCanalDto($"{PrefixoConversa}{c.Id}", pessoas[c.OutraId].NomeCompleto, "direta", FotoAbsoluta(pessoas[c.OutraId].FotoUrl)))
+            .Select(c => new DiscordChatCanalDto($"{PrefixoConversa}{c.Id}", pessoas[c.OutraId].NomeCompleto, "direta", FotoAbsoluta(pessoas[c.OutraId].FotoUrl), presenca?.EstaOnline(c.OutraId) ?? false))
             .OrderBy(c => c.Nome, StringComparer.OrdinalIgnoreCase);
 
         return grupos.Concat(diretas).ToList();
@@ -334,8 +338,11 @@ public sealed class DiscordChatService(
             consulta = consulta.Where(u => u.NomeCompleto.ToLower().Contains(termo));
         }
 
-        return (await consulta.OrderBy(u => u.NomeCompleto).Take(MaximoDeContatos).ToListAsync(ct))
-            .Select(u => new DiscordChatContatoDto(u.Id, u.NomeCompleto, FotoAbsoluta(u.FotoUrl), u.RegionalNome))
+        // Quem está online vem primeiro (depois, ordem alfabética).
+        return (await consulta.ToListAsync(ct))
+            .Select(u => new DiscordChatContatoDto(u.Id, u.NomeCompleto, FotoAbsoluta(u.FotoUrl), u.RegionalNome, presenca?.EstaOnline(u.Id) ?? false))
+            .OrderByDescending(u => u.Online).ThenBy(u => u.Nome, StringComparer.OrdinalIgnoreCase)
+            .Take(MaximoDeContatos)
             .ToList();
     }
 
@@ -405,6 +412,52 @@ public sealed class DiscordChatService(
         {
             throw new CrmBusinessException("A integração com o Discord ainda não foi configurada no servidor.", "discord_nao_configurado");
         }
+    }
+
+    public async Task<DiscordChatOnlineDto> ListarOnlineAsync(Guid usuarioId, string chave, CancellationToken ct)
+    {
+        ExigirConfigurado();
+        var vazio = new DiscordChatOnlineDto([]);
+        if (presenca is null) return vazio;
+
+        var onlineIds = presenca.TodosOnline().Where(id => id != usuarioId).ToList();
+        if (onlineIds.Count == 0) return vazio;
+
+        if (chave.StartsWith(PrefixoConversa, StringComparison.Ordinal))
+        {
+            if (!Guid.TryParse(chave[PrefixoConversa.Length..], out var conversaId)) throw new CrmForbiddenException("Você não tem acesso a esta conversa.");
+            var conversa = await db.CrmDiscordConversas.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == conversaId && (c.UsuarioAId == usuarioId || c.UsuarioBId == usuarioId), ct)
+                ?? throw new CrmForbiddenException("Você não tem acesso a esta conversa.");
+            var outraId = conversa.UsuarioAId == usuarioId ? conversa.UsuarioBId : conversa.UsuarioAId;
+            if (!onlineIds.Contains(outraId)) return vazio;
+            var outra = await db.Users.AsNoTracking().Where(u => u.Id == outraId).Select(u => new DiscordChatPessoaOnlineDto(u.Id, u.NomeCompleto, u.FotoUrl)).FirstAsync(ct);
+            return new DiscordChatOnlineDto([outra with { FotoUrl = FotoAbsoluta(outra.FotoUrl) }]);
+        }
+
+        // Grupo: quem pode abrir este grupo, pelas mesmas regras da lista de conversas (e só se a própria pessoa pode abri-lo).
+        if ((await CanaisDaPessoaAsync(usuarioId, ct)).All(c => c.Chave != chave)) throw new CrmForbiddenException("Você não tem acesso a esta conversa.");
+
+        var candidatos = await db.Users.AsNoTracking().Where(u => u.Ativo && onlineIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.NomeCompleto, u.FotoUrl, u.RegionalId, u.GrupoId }).ToListAsync(ct);
+        var papeis = await db.UserRoles.Where(ur => onlineIds.Contains(ur.UserId))
+            .Join(db.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => new { ur.UserId, Papel = r.Name! }).ToListAsync(ct);
+
+        bool Participa(Guid id, Guid? regionalId, Guid? grupoId)
+        {
+            var seus = papeis.Where(p => p.UserId == id).Select(p => p.Papel).ToList();
+            if (seus.Any(p => Roles.VisaoTotal.Contains(p))) return true;
+            return chave switch
+            {
+                DiscordGruposService.ChaveGeral => true,
+                DiscordGruposService.ChaveGestao => seus.Any(p => Roles.GestaoComercial.Contains(p)),
+                _ => chave == $"regional:{regionalId}" || chave == $"grupo:{grupoId}",
+            };
+        }
+
+        return new DiscordChatOnlineDto(candidatos.Where(c => Participa(c.Id, c.RegionalId, c.GrupoId))
+            .OrderBy(c => c.NomeCompleto, StringComparer.OrdinalIgnoreCase)
+            .Select(c => new DiscordChatPessoaOnlineDto(c.Id, c.NomeCompleto, FotoAbsoluta(c.FotoUrl))).ToList());
     }
 
     private async Task<Destino> ObterDestinoPermitidoAsync(Guid usuarioId, string chave, CancellationToken ct)

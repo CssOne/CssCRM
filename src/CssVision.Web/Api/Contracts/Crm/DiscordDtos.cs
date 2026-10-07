@@ -25,10 +25,11 @@ public record DiscordSincronizacaoDto(int CanaisCriados, int CargosCriados, int 
 
 /// <summary>Grupo de conversa que o usuário pode abrir no chat do CRM.</summary>
 /// <param name="Tipo"><c>grupo</c> ou <c>direta</c> (conversa 1:1: o nome é o da outra pessoa).</param>
-public record DiscordChatCanalDto(string Chave, string Nome, string Tipo = "grupo", string? FotoUrl = null);
+/// <param name="Online">Só nas conversas 1:1: a outra pessoa está com o CRM aberto agora.</param>
+public record DiscordChatCanalDto(string Chave, string Nome, string Tipo = "grupo", string? FotoUrl = null, bool Online = false);
 
 /// <summary>Pessoa com quem dá para iniciar uma conversa 1:1.</summary>
-public record DiscordChatContatoDto(Guid Id, string Nome, string? FotoUrl, string? Regional);
+public record DiscordChatContatoDto(Guid Id, string Nome, string? FotoUrl, string? Regional, bool Online = false);
 
 public record DiscordChatIniciarRequest(Guid UsuarioId);
 
@@ -42,6 +43,11 @@ public record DiscordChatMensagemDto(string Id, string AutorNome, string? AutorF
 public record DiscordChatMensagensDto(IReadOnlyList<DiscordChatMensagemDto> Mensagens, bool TemMais, bool ConteudoOculto);
 
 public record DiscordChatEnviarRequest(string Texto);
+
+/// <summary>Quem está online (com o CRM aberto) numa conversa.</summary>
+public record DiscordChatOnlineDto(IReadOnlyList<DiscordChatPessoaOnlineDto> Pessoas);
+
+public record DiscordChatPessoaOnlineDto(Guid Id, string Nome, string? FotoUrl);
 
 /// <param name="Url">Endereço do canal de voz no Discord (abre o app ou o navegador).</param>
 /// <param name="Avisou">O CRM publicou na conversa o aviso "fulano está numa chamada" com o link (não repete se a pessoa clicar de novo logo em seguida).</param>

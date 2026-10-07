@@ -100,6 +100,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddCrmServices(this IServiceCollection services)
     {
         services.AddSingleton<ICrmEventHub, CrmEventHub>();
+        services.AddSingleton<IPresencaService, PresencaService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IEquipeComercialService, EquipeComercialService>();
         services.AddScoped<IAuditSink, CrmAuditLogSink>();

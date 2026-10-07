@@ -1520,6 +1520,8 @@ export interface DiscordChatCanal {
   /** "grupo" ou "direta" (conversa 1:1: o nome é o da outra pessoa). */
   tipo: "grupo" | "direta";
   fotoUrl?: string | null;
+  /** Só nas conversas 1:1: a outra pessoa está com o CRM aberto agora. */
+  online?: boolean;
 }
 
 /** Pessoa com quem dá para iniciar uma conversa 1:1. */
@@ -1528,6 +1530,7 @@ export interface DiscordChatContato {
   nome: string;
   fotoUrl?: string | null;
   regional?: string | null;
+  online?: boolean;
 }
 
 export interface DiscordChatAnexo {
@@ -1566,4 +1569,9 @@ export interface DiscordChatChamada {
   url: string;
   /** O CRM avisou a conversa de que a pessoa está numa chamada (não repete se clicar de novo logo em seguida). */
   avisou: boolean;
+}
+
+/** Quem está com o CRM aberto agora numa conversa (sem a própria pessoa). */
+export interface DiscordChatOnline {
+  pessoas: { id: string; nome: string; fotoUrl?: string | null }[];
 }

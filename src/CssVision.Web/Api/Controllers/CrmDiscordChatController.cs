@@ -26,6 +26,11 @@ public class CrmDiscordChatController(IDiscordChatService chat, ICurrentUserServ
     public async Task<ActionResult<DiscordChatChamadaDto>> Chamada(string chave, CancellationToken ct) =>
         Ok(await chat.IniciarChamadaAsync(currentUser.UserId, chave, ct));
 
+    /// <summary>Quem está com o CRM aberto agora nesta conversa.</summary>
+    [HttpGet("canais/{chave}/online")]
+    public async Task<ActionResult<DiscordChatOnlineDto>> Online(string chave, CancellationToken ct) =>
+        Ok(await chat.ListarOnlineAsync(currentUser.UserId, chave, ct));
+
     /// <summary>Pessoas com quem dá para iniciar uma conversa 1:1 (quem vinculou o Discord e já está no servidor).</summary>
     [HttpGet("contatos")]
     public async Task<ActionResult<IReadOnlyList<DiscordChatContatoDto>>> Contatos([FromQuery] string? busca, CancellationToken ct) =>
