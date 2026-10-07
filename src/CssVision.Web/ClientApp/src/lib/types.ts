@@ -226,6 +226,22 @@ export interface DiscordTeste {
   mensagem: string;
 }
 
+/** Grupo do CRM que existe como canal no Discord. */
+export interface DiscordCanal {
+  chave: string;
+  nome: string;
+  ativo: boolean;
+}
+
+/** O que a sincronização dos grupos do Discord fez e o que não conseguiu fazer. */
+export interface DiscordSincronizacao {
+  canaisCriados: number;
+  cargosCriados: number;
+  membrosAtualizados: number;
+  membrosForaDoServidor: number;
+  falhas: string[];
+}
+
 /** Aviso de pagamento em aberto (visão de quem envia). */
 export interface AvisoPagamento {
   id: string;

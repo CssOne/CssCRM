@@ -1,9 +1,10 @@
-import { CheckCircle2, MessageCircle, Send, Smartphone, Unlink } from "lucide-react";
+import { CheckCircle2, MessageCircle, RefreshCw, Send, Smartphone, Unlink, Users } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, ApiRequestError, isAbortError } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 import { formatarDataHora } from "../lib/format";
-import type { DiscordIniciar, DiscordStatus, DiscordTeste } from "../lib/types";
+import type { DiscordCanal, DiscordIniciar, DiscordSincronizacao, DiscordStatus, DiscordTeste } from "../lib/types";
 import { Badge, Button, Card, Checkbox, ErrorState, Skeleton, useToast } from "../components/ui";
 
 /**
@@ -164,6 +165,89 @@ export function DiscordPage() {
           </div>
         </Card>
       )}
+
+      {status?.configurado && <GruposDoDiscord />}
     </div>
+  );
+}
+
+/**
+ * Administração dos grupos: um canal (e um cargo) no Discord para cada regional e grupo do CRM, mais "Geral" e "Gestão". Só quem tem
+ * visão total vê. A sincronização cria o que falta e acerta os cargos de cada pessoa que vinculou a conta; pode ser repetida à vontade.
+ */
+function GruposDoDiscord() {
+  const { temPapel } = useAuth();
+  const { notificar } = useToast();
+  const [canais, setCanais] = useState<DiscordCanal[] | null>(null);
+  const [resultado, setResultado] = useState<DiscordSincronizacao | null>(null);
+  const [sincronizando, setSincronizando] = useState(false);
+  const permitido = temPapel("Admin", "GestorMaster", "SupervisorComercial");
+
+  const carregar = useCallback(() => {
+    api.get<DiscordCanal[]>("/crm/discord/grupos").then(setCanais).catch(() => setCanais([]));
+  }, []);
+
+  useEffect(() => {
+    if (permitido) carregar();
+  }, [permitido, carregar]);
+
+  if (!permitido) return null;
+
+  async function sincronizar() {
+    setSincronizando(true);
+    try {
+      const r = await api.post<DiscordSincronizacao>("/crm/discord/grupos/sincronizar");
+      setResultado(r);
+      notificar(r.falhas.length > 0 ? "error" : "success", r.falhas.length > 0 ? "Sincronizado com falhas — veja abaixo." : "Grupos sincronizados.");
+      carregar();
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível sincronizar os grupos.");
+    } finally {
+      setSincronizando(false);
+    }
+  }
+
+  return (
+    <Card className="space-y-4 p-5">
+      <div>
+        <h2 className="flex items-center gap-2 font-semibold text-[var(--fg)]">
+          <Users className="size-4 text-[var(--brand)]" aria-hidden /> Grupos no Discord
+        </h2>
+        <p className="text-xs text-[var(--fg-muted)]">
+          Cada regional e cada grupo do CRM vira um canal no servidor, visível só para quem é do grupo. Os cargos de cada pessoa seguem o CRM. O bot precisa das
+          permissões "Gerenciar canais" e "Gerenciar cargos", e o cargo dele deve ficar acima dos cargos "CRM · …".
+        </p>
+      </div>
+
+      {canais && canais.length > 0 && (
+        <ul className="flex flex-wrap gap-2">
+          {canais.map((c) => (
+            <li key={c.chave}>
+              <Badge variant={c.ativo ? "success" : "neutral"}>{c.nome}</Badge>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <Button variant="secondary" onClick={sincronizar} loading={sincronizando}>
+        <RefreshCw className="size-4" /> {canais && canais.length > 0 ? "Sincronizar grupos" : "Criar grupos no Discord"}
+      </Button>
+
+      {resultado && (
+        <div className="space-y-1 text-sm text-[var(--fg)]">
+          <p>
+            {resultado.canaisCriados} canal(is) e {resultado.cargosCriados} cargo(s) criados · {resultado.membrosAtualizados} pessoa(s) com cargos ajustados
+            {resultado.membrosForaDoServidor > 0 && ` · ${resultado.membrosForaDoServidor} ainda fora do servidor`}.
+          </p>
+          {resultado.falhas.length > 0 && (
+            <ul className="list-disc pl-5 text-xs text-[var(--danger)]">
+              {resultado.falhas.slice(0, 8).map((f) => (
+                <li key={f}>{f}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
