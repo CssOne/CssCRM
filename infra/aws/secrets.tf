@@ -21,6 +21,8 @@ resource "aws_secretsmanager_secret_version" "app" {
     META_PIXEL_ID          = ""
     META_CAPI_ACCESS_TOKEN = ""
     NOTION_TOKEN           = ""
+    META_PIXEL_134_TOKEN   = "" # token do pixel da regional MG134
+    META_PIXEL_TRUCK_TOKEN = "" # token do pixel do AGV TRUCK
   })
 
   lifecycle {
