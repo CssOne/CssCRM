@@ -11,4 +11,7 @@ public class CrmDiscordConversa : CrmEntityBase
     public Guid UsuarioBId { get; set; }
 
     public string DiscordThreadId { get; set; } = string.Empty;
+
+    /// <summary>Canal de voz privado das duas pessoas, criado na primeira chamada.</summary>
+    public string? DiscordVozId { get; set; }
 }

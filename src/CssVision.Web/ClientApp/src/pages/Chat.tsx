@@ -1,11 +1,11 @@
-import { ChevronUp, Hash, MessagesSquare, Plus, Search, Send } from "lucide-react";
+import { ChevronUp, Hash, MessagesSquare, Phone, Plus, Search, Send } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api, ApiRequestError, isAbortError } from "../lib/api";
 import { formatarDataHora } from "../lib/format";
 import { rotuloNaoLidas, useChatNaoLidas } from "../lib/useChatNaoLidas";
-import type { DiscordChatCanal, DiscordChatContato, DiscordChatMensagem, DiscordChatMensagens } from "../lib/types";
+import type { DiscordChatCanal, DiscordChatChamada, DiscordChatContato, DiscordChatMensagem, DiscordChatMensagens } from "../lib/types";
 import { Avatar, Badge, Button, Card, EmptyState, ErrorState, Input, Modal, Skeleton, useToast } from "../components/ui";
 
 const LIMITE_TEXTO = 2000;
@@ -28,6 +28,8 @@ export function ChatPage() {
   const [enviando, setEnviando] = useState(false);
   const [carregandoAntigas, setCarregandoAntigas] = useState(false);
   const [novaConversa, setNovaConversa] = useState(false);
+  const [ligando, setLigando] = useState(false);
+  const [linkDaChamada, setLinkDaChamada] = useState<string | null>(null);
   const rolagem = useRef<HTMLDivElement>(null);
   const colarNoFim = useRef(true);
   const chaveAtual = useRef<string | null>(null);
@@ -141,6 +143,33 @@ export function ChatPage() {
     }
   }
 
+  // Troca de conversa: o aviso de "abrir a chamada manualmente" era da conversa anterior.
+  useEffect(() => setLinkDaChamada(null), [chave]);
+
+  /**
+   * O Discord não deixa embutir a chamada: pede o canal de voz da conversa (o servidor também avisa a conversa de que você está numa chamada)
+   * e abre o Discord numa nova aba. Se o navegador bloquear a aba, o link fica na tela para clicar.
+   */
+  async function ligar() {
+    if (!chave || ligando) return;
+    setLigando(true);
+    setLinkDaChamada(null);
+    try {
+      const r = await api.post<DiscordChatChamada>(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/chamada`);
+      colarNoFim.current = true;
+      carregarMensagens(chave); // mostra o aviso que o CRM acabou de publicar
+      if (window.open(r.url, "_blank", "noopener,noreferrer")) {
+        notificar("info", "Abrindo o Discord. Entre no canal de voz para falar.");
+      } else {
+        setLinkDaChamada(r.url);
+      }
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível iniciar a chamada.");
+    } finally {
+      setLigando(false);
+    }
+  }
+
   function aoAbrirConversa(conversa: DiscordChatCanal) {
     setNovaConversa(false);
     setCanais((atual) => (atual?.some((c) => c.chave === conversa.chave) ? atual : [...(atual ?? []), conversa]));
@@ -202,7 +231,20 @@ export function ChatPage() {
                 )}{" "}
                 {nomeDoGrupo}
               </p>
+              <Button variant="secondary" size="sm" onClick={ligar} loading={ligando} title="Abre o canal de voz no Discord e avisa a conversa">
+                <Phone className="size-4" /> Chamada de voz
+              </Button>
             </div>
+
+            {linkDaChamada && (
+              <p className="border-b border-[var(--border)] bg-[var(--brand)]/10 px-4 py-2 text-xs text-[var(--fg)]">
+                O navegador bloqueou a abertura do Discord.{" "}
+                <a href={linkDaChamada} target="_blank" rel="noopener noreferrer" className="font-semibold text-[var(--brand)] underline">
+                  Clique aqui para entrar na chamada
+                </a>
+                .
+              </p>
+            )}
 
             {dados?.conteudoOculto && (
               <p className="border-b border-[var(--border)] bg-[var(--warning)]/10 px-4 py-2 text-xs text-[var(--fg)]">
@@ -374,7 +416,7 @@ function Balao({ mensagem, minha }: { mensagem: DiscordChatMensagem; minha: bool
           {!mensagem.doCrm && <Badge variant="neutral">Discord</Badge>}
           <span>{formatarDataHora(mensagem.criadaEm)}</span>
         </p>
-        {mensagem.conteudo && <p className="whitespace-pre-wrap break-words text-sm text-[var(--fg)]">{mensagem.conteudo}</p>}
+        {mensagem.conteudo && <p className="whitespace-pre-wrap break-words text-sm text-[var(--fg)]">{comLinks(mensagem.conteudo)}</p>}
         {mensagem.anexos.map((a) =>
           a.url.startsWith("https://") ? (
             a.imagem ? (
@@ -390,5 +432,18 @@ function Balao({ mensagem, minha }: { mensagem: DiscordChatMensagem; minha: bool
         )}
       </div>
     </div>
+  );
+}
+
+/** Endereços (http/https) do texto viram links clicáveis; o resto continua texto puro (nada de HTML). */
+function comLinks(texto: string) {
+  return texto.split(/(https?:\/\/[^\s]+)/g).map((parte, i) =>
+    /^https?:\/\//.test(parte) ? (
+      <a key={i} href={parte} target="_blank" rel="noopener noreferrer" className="text-[var(--brand)] underline">
+        {parte}
+      </a>
+    ) : (
+      parte
+    )
   );
 }

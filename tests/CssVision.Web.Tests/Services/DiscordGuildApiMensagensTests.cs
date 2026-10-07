@@ -232,4 +232,22 @@ public class DiscordGuildApiMensagensTests
         Assert.Equal("Bot token-do-bot", plano.Autorizacao);
         Assert.Contains("\"parse\":[]", plano.Corpo);
     }
+
+    [Fact]
+    public async Task CriarCanalDeVoz_EscondeDoEveryone_LiberaSoOsPermitidos_ECriaComoCanalDeVoz()
+    {
+        var (api, manipulador) = Montar(_ => Json(HttpStatusCode.OK, """{"id":"v1"}"""));
+
+        var id = await api.CriarCanalDeVozAsync("voz-ana-bia", "cat-1", [new DiscordPermitido("d-ana", Pessoa: true), new DiscordPermitido("cargo-1", Pessoa: false)], CancellationToken.None);
+
+        Assert.Equal("v1", id);
+        var chamada = Assert.Single(manipulador.Chamadas);
+        Assert.Equal("/api/v10/guilds/servidor-9/channels", chamada.CaminhoEQuery);
+        Assert.Contains("\"type\":2", chamada.Corpo);                              // canal de voz
+        Assert.Contains("\"parent_id\":\"cat-1\"", chamada.Corpo);
+        Assert.Contains("\"id\":\"d-ana\",\"type\":1,\"allow\":\"36701696\"", chamada.Corpo); // pessoa
+        Assert.Contains("\"id\":\"cargo-1\",\"type\":0,\"allow\":\"36701696\"", chamada.Corpo); // cargo
+        Assert.Contains("\"id\":\"servidor-9\",\"type\":0,\"allow\":\"0\",\"deny\":\"1024\"", chamada.Corpo); // @everyone não vê
+        Assert.Contains("\"id\":\"app-1\",\"type\":1", chamada.Corpo);       // o bot enxerga o canal
+    }
 }

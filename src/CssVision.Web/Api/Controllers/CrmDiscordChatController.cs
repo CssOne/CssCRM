@@ -21,6 +21,11 @@ public class CrmDiscordChatController(IDiscordChatService chat, ICurrentUserServ
     public async Task<ActionResult<DiscordChatNaoLidasDto>> NaoLidas(CancellationToken ct) =>
         Ok(await chat.ContarNaoLidasAsync(currentUser.UserId, ct));
 
+    /// <summary>Endereço do canal de voz da conversa no Discord; também avisa a conversa de que a pessoa está numa chamada.</summary>
+    [HttpPost("canais/{chave}/chamada")]
+    public async Task<ActionResult<DiscordChatChamadaDto>> Chamada(string chave, CancellationToken ct) =>
+        Ok(await chat.IniciarChamadaAsync(currentUser.UserId, chave, ct));
+
     /// <summary>Pessoas com quem dá para iniciar uma conversa 1:1 (quem vinculou o Discord e já está no servidor).</summary>
     [HttpGet("contatos")]
     public async Task<ActionResult<IReadOnlyList<DiscordChatContatoDto>>> Contatos([FromQuery] string? busca, CancellationToken ct) =>

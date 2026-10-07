@@ -16,6 +16,9 @@ public class CrmDiscordCanal : CrmEntityBase
 
     public string DiscordCargoId { get; set; } = string.Empty;
 
+    /// <summary>Canal de voz do grupo (visível só a quem tem o cargo). Nulo até a próxima sincronização criá-lo.</summary>
+    public string? DiscordVozId { get; set; }
+
     /// <summary>Falso quando a regional/grupo deixou de existir no CRM. O canal do Discord não é apagado, só deixa de receber membros.</summary>
     public bool Ativo { get; set; } = true;
 }

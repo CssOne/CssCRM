@@ -34,7 +34,7 @@ public sealed class DiscordGruposService(
     IOptions<DiscordOptions> options,
     ILogger<DiscordGruposService> logger) : IDiscordGruposService
 {
-    private const string ChaveCategoria = "discord:categoria-crm";
+    internal const string ChaveCategoria = "discord:categoria-crm";
     private const string NomeCategoria = "CRM CSS Brasil";
     public const string ChaveGeral = "geral";
     public const string ChaveGestao = "gestao";
@@ -58,7 +58,7 @@ public sealed class DiscordGruposService(
         }
 
         var falhas = new List<string>();
-        int canaisCriados = 0, cargosCriados = 0;
+        int canaisCriados = 0, cargosCriados = 0, vozCriados = 0;
 
         var desejados = await MontarDesejadosAsync(ct);
         var mapa = await db.CrmDiscordCanais.ToDictionaryAsync(c => c.Chave, ct);
@@ -88,6 +88,7 @@ public sealed class DiscordGruposService(
                 {
                     existente.Nome = d.Nome;
                     existente.Ativo = true;
+                    if (await GarantirVozAsync(existente, d, categoriaId, ct)) vozCriados++;
                     continue;
                 }
 
@@ -108,6 +109,7 @@ public sealed class DiscordGruposService(
                 existente.DiscordCargoId = cargoId;
                 existente.Ativo = true;
                 cargosNoServidor.Add(cargoId);
+                if (await GarantirVozAsync(existente, d, categoriaId, ct)) vozCriados++;
             }
             catch (DiscordApiException ex)
             {
@@ -132,7 +134,7 @@ public sealed class DiscordGruposService(
 
         logger.LogInformation("Grupos do Discord sincronizados: {Canais} canal(is) e {Cargos} cargo(s) criados, {Membros} membro(s) ajustados, {Fora} fora do servidor, {Falhas} falha(s).",
             canaisCriados, cargosCriados, atualizados, foraDoServidor, falhas.Count);
-        return new DiscordSincronizacaoDto(canaisCriados, cargosCriados, atualizados, foraDoServidor, falhas);
+        return new DiscordSincronizacaoDto(canaisCriados, cargosCriados, atualizados, foraDoServidor, falhas, vozCriados);
     }
 
     /// <summary>Os grupos que o CRM quer ter no Discord, a partir das regionais e grupos ativos.</summary>
@@ -158,6 +160,15 @@ public sealed class DiscordGruposService(
         }
 
         return lista;
+    }
+
+    /// <summary>Garante o canal de voz do grupo (visível só a quem tem o cargo). Devolve se criou um novo.</summary>
+    private async Task<bool> GarantirVozAsync(CrmDiscordCanal entrada, Desejado d, string categoriaId, CancellationToken ct)
+    {
+        if (entrada.DiscordVozId is { Length: > 0 } atual && await api.CanalExisteAsync(atual, ct)) return false;
+
+        entrada.DiscordVozId = await api.CriarCanalDeVozAsync($"Voz · {d.Nome}", categoriaId, [new DiscordPermitido(entrada.DiscordCargoId, Pessoa: false)], ct);
+        return true;
     }
 
     /// <summary>Cria o canal das conversas 1:1 (visível a todos os que têm o cargo "geral"). Devolve se criou.</summary>

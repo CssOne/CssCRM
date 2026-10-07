@@ -240,6 +240,7 @@ export interface DiscordSincronizacao {
   membrosAtualizados: number;
   membrosForaDoServidor: number;
   falhas: string[];
+  canaisDeVozCriados: number;
 }
 
 /** Aviso de pagamento em aberto (visão de quem envia). */
@@ -1558,4 +1559,11 @@ export interface DiscordChatMensagens {
 export interface DiscordChatNaoLidas {
   total: number;
   porConversa: Record<string, number>;
+}
+
+/** Chamada de voz de uma conversa: o CRM não embute a chamada, abre o canal de voz no Discord. */
+export interface DiscordChatChamada {
+  url: string;
+  /** O CRM avisou a conversa de que a pessoa está numa chamada (não repete se clicar de novo logo em seguida). */
+  avisou: boolean;
 }
