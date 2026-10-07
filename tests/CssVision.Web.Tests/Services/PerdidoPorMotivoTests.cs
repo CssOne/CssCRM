@@ -15,6 +15,9 @@ public class PerdidoPorMotivoTests
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
         var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor");
+        // As regionais usadas pelos leads existem no cadastro, como em produção.
+        await factory.CriarRegionalAsync(db, "MG");
+        await factory.CriarRegionalAsync(db, "SP");
         var perdido = await factory.ObterOuCriarEtapaLeadAsync(db, "Perdido", 6);
         var cotacao = await factory.ObterOuCriarEtapaLeadAsync(db, "Cotação", 2);
         var numero = new CrmLossReason { Descricao = "Número não existe" };

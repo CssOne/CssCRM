@@ -13,7 +13,8 @@ namespace CssVision.Web.Services.Crm;
 /// (<see cref="ObterCartoesAsync"/>). Os cartões são projetados direto em SQL — só os campos exibidos.
 /// </summary>
 public sealed class LeadKanbanService(
-    ApplicationDbContext db, IEquipeComercialService equipe, IMemoryCache? cache = null, ICrmEventHub? eventos = null) : ILeadKanbanService
+    ApplicationDbContext db, IEquipeComercialService equipe, IMemoryCache? cache = null, ICrmEventHub? eventos = null,
+    Microsoft.Extensions.Options.IOptions<DistribuicaoOptions>? distribuicao = null) : ILeadKanbanService
 {
     private const int MaxCartoesPorPagina = 200;
 
@@ -194,8 +195,9 @@ public sealed class LeadKanbanService(
         var podeVerOrigem = visiveis is null;
         var origens = Valores(filtro.Origem);
         if (podeVerOrigem && origens.Count > 0) query = query.Where(l => origens.Contains(l.Origem));
+        // Regional do lead, a do consultor responsável ou, sem nenhuma das duas, o rodízio geral (ver FiltroDeRegional).
         var regionais = Valores(filtro.Regional);
-        if (regionais.Count > 0) query = query.Where(l => regionais.Contains(l.Regional));
+        if (regionais.Count > 0) query = FiltroDeRegional.Aplicar(query, db.CrmRegionais.AsNoTracking(), db.CrmGrupos.AsNoTracking(), regionais, distribuicao?.Value.RegionaisExclusivas);
         var grupos = Valores(filtro.GrupoId?.Select(id => (Guid?)id));
         if (grupos.Count > 0) query = query.Where(l => l.Responsavel != null && grupos.Contains(l.Responsavel.GrupoId));
 
