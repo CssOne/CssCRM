@@ -183,7 +183,7 @@ public class IndicacaoLeadEVeiculosAdicionaisTests
         var adicional = await db.CrmLeads.AsNoTracking().SingleAsync(l => l.Id == adicionalId);
 
         var salvo = await service.AtualizarAsync(adicionalId, new LeadUpdateRequest(
-            "Cliente Frota", TipoPessoa.Fisica, "529.982.247-25", "(31) 99999-0000", null, null, "frota@exemplo.com", null, null, "MG", null,
+            "Cliente Frota", TipoPessoa.Fisica, "529.982.247-25", "(31) 99999-0000", null, null, "frota@exemplo.com", null, "Belo Horizonte", "MG", "MG132",
             null, null, null, "ABC1D23", null, null, null, null, null, null, null, null, null, null, "Lead", null,
             null, false, null, adicional.RowVersion), CancellationToken.None);
 
@@ -200,7 +200,7 @@ public class IndicacaoLeadEVeiculosAdicionaisTests
         await service.CriarVeiculosAdicionaisAsync(lead.Id, new LeadVeiculosAdicionaisRequest(null, 2), CancellationToken.None);
 
         var resultado = await service.CriarAsync(new LeadCreateRequest(
-            "Cliente Frota", TipoPessoa.Fisica, "529.982.247-25", null, null, null, null, null, null, null, null, null, null, null, null,
+            "Cliente Frota", TipoPessoa.Fisica, "529.982.247-25", "31999990000", null, null, null, null, "Belo Horizonte", "MG", "MG132", null, null, null, "ABC1D23",
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, false, null), CancellationToken.None);
 
         Assert.Null(resultado.Lead);

@@ -81,8 +81,8 @@ public class TotaisVeiculoERankingAdesaoTests
         var servico = Leads(db, admin.Id);
 
         LeadUpdateRequest Editar(string? veiculo, uint rowVersion) => new(
-            "Cliente", TipoPessoa.Fisica, null, null, null, null, null, null, null, null, null,
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            "Cliente", TipoPessoa.Fisica, null, "31999990000", null, null, null, null, "Belo Horizonte", "MG", "MG132",
+            null, null, null, "ABC1D23", null, null, null, null, null, null, null, null, null, null, null,
             null, null, false, null, rowVersion, VeiculoNaoAtendido: veiculo);
 
         var salvo = await servico.AtualizarAsync(lead.Id, Editar("  Honda CG 160  ", lead.RowVersion), CancellationToken.None);
