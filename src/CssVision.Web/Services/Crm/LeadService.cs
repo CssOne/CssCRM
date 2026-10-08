@@ -757,12 +757,8 @@ public sealed class LeadService(
     /// </summary>
     public async Task ExcluirAsync(Guid id, CancellationToken ct)
     {
-        if (!currentUser.TemVisaoTotal)
-        {
-            throw new CrmForbiddenException("Apenas administradores podem excluir leads.");
-        }
-
         var lead = await CarregarComEscopoAsync(id, ct);
+        ExigirPermissaoDaLixeira(lead);
         var agora = DateTimeOffset.UtcNow;
 
         lead.Arquivado = true;
@@ -780,6 +776,67 @@ public sealed class LeadService(
         await db.SaveChangesAsync(ct);
         await audit.RegistrarAsync("LeadExcluido", nameof(CrmLead), lead.Id,
             new { lead.NomeOuRazaoSocial, OportunidadesArquivadas = oportunidades.Count }, ct);
+        eventos?.PublicarQuadroAtualizado("crm");
+    }
+
+    /// <summary>Administrador mexe em qualquer lead; o consultor só nos de indicação (cadastro manual ou canal diferente de "Lead") da própria carteira.</summary>
+    private void ExigirPermissaoDaLixeira(CrmLead lead)
+    {
+        if (currentUser.TemVisaoTotal) return;
+        if (!NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao))
+        {
+            throw new CrmForbiddenException("Você só pode excluir cards de indicação. Para excluir um lead, fale com a gestão.");
+        }
+    }
+
+    public async Task<IReadOnlyList<LeadLixeiraDto>> ListarLixeiraAsync(CancellationToken ct)
+    {
+        var query = await QueryEscopadaAsync(incluirArquivados: true, ct);
+        var excluidos = await query
+            .Where(l => l.Arquivado && l.ArquivadoPorId != null)
+            .OrderByDescending(l => l.ArquivadoEm)
+            .Take(500)
+            .Select(l => new
+            {
+                l.Id, l.NomeOuRazaoSocial, l.Placa, l.Telefone, l.TipoIndicacao, l.CriadoManualmente, l.ArquivadoEm, l.ArquivadoPorId,
+                Responsavel = l.Responsavel != null ? l.Responsavel.NomeCompleto : null,
+                Etapa = l.Etapa != null ? l.Etapa.Nome : null,
+            })
+            .ToListAsync(ct);
+        // O consultor só enxerga (e restaura) na lixeira o que ele pode excluir: os cards de indicação.
+        if (!currentUser.TemVisaoTotal) excluidos = excluidos.Where(l => NotionEtapaLead.EhIndicacao(l.CriadoManualmente, l.TipoIndicacao)).ToList();
+
+        var quemIds = excluidos.Select(l => l.ArquivadoPorId!.Value).Distinct().ToList();
+        var nomes = await db.Users.AsNoTracking().Where(u => quemIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.NomeCompleto, ct);
+        return excluidos.Take(200)
+            .Select(l => new LeadLixeiraDto(l.Id, l.NomeOuRazaoSocial, l.Placa, l.Telefone, l.Responsavel, l.Etapa, l.TipoIndicacao, l.ArquivadoEm,
+                nomes.GetValueOrDefault(l.ArquivadoPorId!.Value)))
+            .ToList();
+    }
+
+    public async Task RestaurarAsync(Guid id, CancellationToken ct)
+    {
+        var lead = await db.CrmLeads.FirstOrDefaultAsync(l => l.Id == id && l.Arquivado && l.ArquivadoPorId != null, ct)
+            ?? throw new CrmNotFoundException("Lead na lixeira", id);
+        if (!await equipe.PodeAcessarVendedorAsync(lead.ResponsavelId ?? Guid.Empty, ct)) throw new CrmForbiddenException();
+        ExigirPermissaoDaLixeira(lead);
+
+        // Volta o lead e só as oportunidades que saíram junto com ele (as excluídas antes, uma a uma, continuam fora).
+        var excluidoEm = lead.ArquivadoEm;
+        var oportunidades = await db.CrmOpportunities.Where(o => o.LeadId == lead.Id && o.Arquivado && o.ArquivadoEm == excluidoEm).ToListAsync(ct);
+        lead.Arquivado = false;
+        lead.ArquivadoEm = null;
+        lead.ArquivadoPorId = null;
+        foreach (var oportunidade in oportunidades)
+        {
+            oportunidade.Arquivado = false;
+            oportunidade.ArquivadoEm = null;
+            oportunidade.ArquivadoPorId = null;
+        }
+
+        await db.SaveChangesAsync(ct);
+        await audit.RegistrarAsync("LeadRestaurado", nameof(CrmLead), lead.Id,
+            new { lead.NomeOuRazaoSocial, OportunidadesRestauradas = oportunidades.Count }, ct);
         eventos?.PublicarQuadroAtualizado("crm");
     }
 

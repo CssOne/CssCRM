@@ -49,8 +49,7 @@ public class ExclusaoAdminTests
     }
 
     [Theory]
-    [InlineData("Indicação")] // consultores podiam excluir Indicação; agora não mais
-    [InlineData("Lead")]
+    [InlineData("Lead")] // consultor só exclui card de indicação (ver LixeiraDoQuadroTests)
     public async Task Consultor_NaoExcluiLead(string tipoIndicacao)
     {
         using var factory = new TestDbContextFactory();

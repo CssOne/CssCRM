@@ -480,6 +480,18 @@ export interface LeadStage {
   ativa: boolean;
 }
 
+export interface LeadLixeira {
+  id: string;
+  nomeOuRazaoSocial: string;
+  placa?: string | null;
+  telefone?: string | null;
+  responsavelNome?: string | null;
+  etapa?: string | null;
+  tipoIndicacao?: string | null;
+  excluidoEm?: string | null;
+  excluidoPor?: string | null;
+}
+
 export interface LeadKanbanCard {
   leadId: string;
   nomeOuRazaoSocial: string;

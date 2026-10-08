@@ -1,4 +1,4 @@
-import { ArrowRightLeft, List, Plus, Save, Trash2, X, Car } from "lucide-react";
+import { ArrowRightLeft, List, Plus, RotateCcw, Save, Trash2, X, Car } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
@@ -10,6 +10,7 @@ import {
   type LeadKanbanBoard,
   type LeadKanbanCard,
   type LeadKanbanColumn,
+  type LeadLixeira,
   type PipelineBoard,
   type Regional,
   type GrupoFiltro,
@@ -27,6 +28,7 @@ import { MultiSelect } from "../../components/MultiSelect";
 import { useAbrirLead } from "../../lib/painelLead";
 import { OPCOES_FILTRO_TIPO_INDICACAO } from "../../lib/opcoesLead";
 import { useAuth } from "../../context/AuthContext";
+import { formatarDataHora } from "../../lib/format";
 import { useCrmEventos } from "../../lib/useCrmEventos";
 
 /** Prefixo comum das duas colunas "Em atendimento (Leads)"/"Em atendimento (Indicação)" — uma só
@@ -140,8 +142,36 @@ export function LeadsKanbanPage() {
   const [filtrosIniciais] = useState(() => lerFiltros(chaveFiltros));
   // Origem (filtro e rodapé do cartão) só para administradores — o servidor também não a envia aos demais.
   const podeVerOrigem = temPapel("Admin", "GestorMaster", "SupervisorComercial");
-  // Excluir lead é só para Admin/GestorMaster (ver LeadService.ExcluirAsync no back-end).
+  // Excluir lead: gestão exclui qualquer um; o consultor só os cards de indicação (ver LeadService.ExcluirAsync no back-end).
   const podeExcluir = temPapel("Admin", "GestorMaster", "SupervisorComercial");
+  const podeExcluirCartao = (cartao: LeadKanbanCard) => podeExcluir || (temPapel("Comercial") && classificarCartao(cartao) === "indicacao");
+  const [lixeiraAberta, setLixeiraAberta] = useState(false);
+  const [lixeira, setLixeira] = useState<LeadLixeira[] | null>(null);
+  const [restaurandoId, setRestaurandoId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!lixeiraAberta) return;
+    setLixeira(null);
+    api.get<LeadLixeira[]>("/crm/leads/lixeira").then(setLixeira).catch(() => {
+      setLixeira([]);
+      notificar("error", "Não foi possível abrir a lixeira.");
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lixeiraAberta]);
+
+  async function restaurarLead(item: LeadLixeira) {
+    setRestaurandoId(item.id);
+    try {
+      await api.post(`/crm/leads/${item.id}/restaurar`, {});
+      setLixeira((atual) => atual && atual.filter((x) => x.id !== item.id));
+      notificar("success", `${item.nomeOuRazaoSocial} voltou para o quadro.`);
+      setRecarregar((n) => n + 1);
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível restaurar o lead.");
+    } finally {
+      setRestaurandoId(null);
+    }
+  }
 
   const [board, setBoard] = useState<LeadKanbanBoard | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -498,7 +528,7 @@ export function LeadsKanbanPage() {
       setBoard((atual) =>
         atual && { ...atual, colunas: atual.colunas.map((c) => ({ ...c, cartoes: c.cartoes.filter((x) => x.leadId !== leadId) })) }
       );
-      notificar("success", "Lead excluído.");
+      notificar("success", "Lead enviado para a lixeira.");
       setLeadExcluindo(null);
     } catch (e) {
       notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível excluir o lead.");
@@ -640,6 +670,9 @@ export function LeadsKanbanPage() {
         <div className="flex gap-2">
           <Button onClick={() => setModalNovo(true)}>
             <Plus className="size-4" /> Novo cliente
+          </Button>
+          <Button variant="secondary" type="button" onClick={() => setLixeiraAberta(true)}>
+            <Trash2 className="size-4" /> Lixeira
           </Button>
           <Link to="/app/crm/leads">
             <Button variant="secondary" type="button">
@@ -915,7 +948,7 @@ export function LeadsKanbanPage() {
                       cartao={cartao}
                       corColuna={cor}
                       podeGerir={podeGerir}
-                      podeExcluir={podeExcluir}
+                      podeExcluir={podeExcluirCartao(cartao)}
                       podeVerOrigem={podeVerOrigem}
                       mostrarAdesao={coluna.etapa.nome === ETAPA_COTACAO}
                       onAbrir={() => abrirLead(cartao.leadId)}
@@ -1051,16 +1084,43 @@ export function LeadsKanbanPage() {
         }}
       />
 
+      <Modal open={lixeiraAberta} onClose={() => setLixeiraAberta(false)} title="Lixeira do quadro de leads" size="lg">
+        {lixeira === null ? (
+          <Skeleton className="h-24" />
+        ) : lixeira.length === 0 ? (
+          <p className="text-sm text-[var(--fg-muted)]">A lixeira está vazia.</p>
+        ) : (
+          <ul className="space-y-2">
+            {lixeira.map((x) => (
+              <li key={x.id} className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-[var(--fg)]" title={x.nomeOuRazaoSocial}>
+                    {x.nomeOuRazaoSocial}
+                  </p>
+                  <p className="truncate text-xs text-[var(--fg-muted)]">
+                    {[x.placa, x.responsavelNome, x.etapa].filter(Boolean).join(" · ")}
+                    {x.excluidoEm && ` · excluído em ${formatarDataHora(x.excluidoEm)}${x.excluidoPor ? ` por ${x.excluidoPor}` : ""}`}
+                  </p>
+                </div>
+                <Button size="sm" variant="secondary" disabled={restaurandoId === x.id} onClick={() => restaurarLead(x)}>
+                  <RotateCcw className="size-4" /> Restaurar
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Modal>
+
       <ConfirmDialog
         open={!!leadExcluindo}
         title="Excluir lead"
         danger
-        confirmLabel="Excluir"
+        confirmLabel="Enviar para a lixeira"
         loading={excluindoLead}
         message={
           <>
-            Tem certeza que deseja excluir <strong className="text-[var(--fg)]">{leadExcluindo?.nomeOuRazaoSocial}</strong>? O lead sai
-            do quadro de leads, as oportunidades dele saem do Pipeline e ele não pode ser recuperado por aqui.
+            Enviar <strong className="text-[var(--fg)]">{leadExcluindo?.nomeOuRazaoSocial}</strong> para a lixeira? O lead sai do quadro de
+            leads e as oportunidades dele saem do Pipeline, mas dá para restaurá-lo pelo botão Lixeira do quadro.
           </>
         }
         onConfirm={excluirLead}
