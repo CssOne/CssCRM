@@ -1070,9 +1070,11 @@ public sealed class LeadService(
         }
         if (filtro.DataVendaInicio.HasValue || filtro.DataVendaFim.HasValue)
         {
-            var de = filtro.DataVendaInicio?.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) ?? DateTime.MinValue;
-            var ate = filtro.DataVendaFim?.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc) ?? DateTime.MaxValue;
-            query = query.Where(l => l.Oportunidades.Any(o => !o.Arquivado && o.DataEfetivaFechamento >= de && o.DataEfetivaFechamento <= ate));
+            // Dias de Brasília e só venda ganha (a perda também grava a data de fechamento).
+            var de = filtro.DataVendaInicio is { } vi ? HorarioBrasilia.Inicio(vi) : DateTimeOffset.MinValue;
+            var ate = filtro.DataVendaFim is { } vf ? HorarioBrasilia.Fim(vf) : DateTimeOffset.MaxValue;
+            query = query.Where(l => l.Oportunidades.Any(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho
+                && o.DataEfetivaFechamento >= de && o.DataEfetivaFechamento <= ate));
         }
         if (filtro.EtapaId.HasValue) query = query.Where(l => l.Oportunidades.Any(o => o.EtapaId == filtro.EtapaId && !o.Arquivado));
         if (filtro.DataInicio.HasValue)
