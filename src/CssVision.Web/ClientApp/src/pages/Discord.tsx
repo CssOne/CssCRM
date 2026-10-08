@@ -230,7 +230,7 @@ function GruposDoDiscord() {
         </h2>
         <p className="text-xs text-[var(--fg-muted)]">
           Cada regional e cada grupo do CRM vira um canal no servidor, visível só para quem é do grupo. Os cargos de cada pessoa seguem o CRM. O bot precisa das
-          permissões "Gerenciar canais", "Gerenciar cargos", "Gerenciar apelidos" e "Gerenciar mensagens" (fixar a boas-vindas), e o cargo dele deve ficar acima dos cargos "CRM · …".
+          permissões "Gerenciar canais", "Gerenciar cargos", "Gerenciar apelidos" e "Fixar mensagens" (para fixar a boas-vindas), e o cargo dele deve ficar acima dos cargos "CRM · …".
         </p>
       </div>
 
