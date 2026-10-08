@@ -47,9 +47,10 @@ export function PortalDashboardPage() {
   const [erro, setErro] = useState<string | null>(null);
 
   const [recarregar, setRecarregar] = useState(0);
-  const { podeFiltrar, regionalId, escolher: escolherRegional } = useRegionalDoPainel();
+  const { podeFiltrar, regionais, regionalId, escolher: escolherRegional, pronto } = useRegionalDoPainel();
 
   useEffect(() => {
+    if (!pronto) return; // espera saber qual regional abrir, para carregar uma vez só
     const controller = new AbortController();
     setCarregando(true);
     setErro(null);
@@ -71,7 +72,7 @@ export function PortalDashboardPage() {
       })
       .finally(() => { if (!controller.signal.aborted) setCarregando(false); });
     return () => controller.abort();
-  }, [recarregar, regionalId]);
+  }, [recarregar, regionalId, pronto]);
 
   // Tempo real: ranking, metas e indicadores atualizam sozinhos (vendas, leads) e quando o mês vira.
   useAtualizarAoVivo(() => setRecarregar((n) => n + 1));
@@ -111,7 +112,7 @@ export function PortalDashboardPage() {
           </h1>
           <p className="text-sm text-[var(--fg-muted)]">Aqui está o resumo do seu desempenho e atividades de hoje.</p>
         </div>
-        {podeFiltrar && <FiltroRegionalDoPainel valor={regionalId} aoEscolher={escolherRegional} />}
+        {podeFiltrar && <FiltroRegionalDoPainel regionais={regionais} valor={regionalId} aoEscolher={escolherRegional} />}
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

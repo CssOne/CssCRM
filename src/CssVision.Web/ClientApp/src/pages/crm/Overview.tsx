@@ -22,9 +22,10 @@ export function OverviewPage() {
   // Mês mostrado (YYYY-MM): começa no mês atual e acompanha a virada do mês se ninguém escolheu outro.
   const [mes, setMes] = useState(() => mesAtualIso().slice(0, 7));
   const mesAtualRef = useRef(mesAtualIso().slice(0, 7));
-  const { podeFiltrar, regionalId, escolher: escolherRegional } = useRegionalDoPainel();
+  const { podeFiltrar, regionais, regionalId, escolher: escolherRegional, pronto } = useRegionalDoPainel();
 
   useEffect(() => {
+    if (!pronto) return; // espera saber qual regional abrir, para carregar uma vez só
     const controller = new AbortController();
     setCarregando(true);
     setErro(null);
@@ -36,7 +37,7 @@ export function OverviewPage() {
       .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar o painel."); })
       .finally(() => { if (!controller.signal.aborted) setCarregando(false); });
     return () => controller.abort();
-  }, [recarregar, mes, regionalId]);
+  }, [recarregar, mes, regionalId, pronto]);
 
   // Tempo real: o painel recarrega (sem piscar) quando uma venda/lead muda e quando o mês vira.
   useAtualizarAoVivo(() => {
@@ -80,7 +81,7 @@ export function OverviewPage() {
           <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Mês</label>
           <Input type="month" value={mes} onChange={(e) => e.target.value && setMes(e.target.value)} />
         </div>
-        {podeFiltrar && <FiltroRegionalDoPainel valor={regionalId} aoEscolher={escolherRegional} />}
+        {podeFiltrar && <FiltroRegionalDoPainel regionais={regionais} valor={regionalId} aoEscolher={escolherRegional} />}
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
