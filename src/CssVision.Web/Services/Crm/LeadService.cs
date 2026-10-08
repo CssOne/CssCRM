@@ -139,7 +139,7 @@ public sealed class LeadService(
     public async Task<LeadDetailDto> ObterPorIdAsync(Guid id, CancellationToken ct)
     {
         var lead = await CarregarComEscopoAsync(id, ct);
-        return ParaDetailDto(lead, PodeVerOrigem);
+        return ParaDetailDto(lead, PodeVerOrigem, currentUser.PodeGerirComercial);
     }
 
     public async Task<IReadOnlyList<LeadTimelineItemDto>> ObterTimelineAsync(Guid id, CancellationToken ct)
@@ -377,21 +377,25 @@ public sealed class LeadService(
         lead.Estado = request.Estado?.ToUpperInvariant();
         lead.Regional = request.Regional;
         if (PodeVerOrigem) lead.Origem = request.Origem;
-        lead.Campanha = request.Campanha;
+        // Os campos de marketing não chegam ao consultor: o que ele "manda de volta" não pode apagá-los.
+        if (currentUser.PodeGerirComercial) lead.Campanha = request.Campanha;
         lead.ProdutoInteresse = request.ProdutoInteresse;
         lead.Placa = request.Placa?.Trim().ToUpperInvariant() is { Length: > 0 and <= 10 } placaValida ? placaValida : null;
         lead.TemSeguro = request.TemSeguro;
         lead.UtilidadeVeiculo = request.UtilidadeVeiculo;
         // Nulo = o chamador não manda o campo (não mexe); vazio = limpa.
         if (request.VeiculoNaoAtendido is not null) lead.VeiculoNaoAtendido = LimparVeiculoNaoAtendido(request.VeiculoNaoAtendido);
-        lead.Gclid = request.Gclid;
-        lead.UtmMedium = request.UtmMedium;
-        lead.UtmSource = request.UtmSource;
-        lead.UtmCampaign = request.UtmCampaign;
-        lead.UtmTerm = request.UtmTerm;
-        lead.MetaClickId = request.MetaClickId;
-        lead.MetaFormId = request.MetaFormId;
-        lead.MetaLeadId = request.MetaLeadId;
+        if (currentUser.PodeGerirComercial)
+        {
+            lead.Gclid = request.Gclid;
+            lead.UtmMedium = request.UtmMedium;
+            lead.UtmSource = request.UtmSource;
+            lead.UtmCampaign = request.UtmCampaign;
+            lead.UtmTerm = request.UtmTerm;
+            lead.MetaClickId = request.MetaClickId;
+            lead.MetaFormId = request.MetaFormId;
+            lead.MetaLeadId = request.MetaLeadId;
+        }
         lead.IndicadoPorLeadId = request.IndicadoPorLeadId;
         lead.TipoIndicacao = request.TipoIndicacao;
         lead.Observacoes = request.Observacoes;
@@ -1180,7 +1184,10 @@ public sealed class LeadService(
         }
     }
 
-    private static LeadDetailDto ParaDetailDto(CrmLead lead, bool podeVerOrigem) => new(
+    /// <summary>
+    /// Campanha, UTMs e ids do Meta/Google denunciam a origem do lead: só a gestão (que vê o marketing) os recebe; o consultor não.
+    /// </summary>
+    private static LeadDetailDto ParaDetailDto(CrmLead lead, bool podeVerOrigem, bool podeVerMarketing) => new(
         lead.Id,
         lead.NomeOuRazaoSocial,
         lead.TipoPessoa,
@@ -1194,18 +1201,18 @@ public sealed class LeadService(
         lead.Estado,
         lead.Regional,
         podeVerOrigem ? lead.Origem : null,
-        lead.Campanha,
+        podeVerMarketing ? lead.Campanha : null,
         lead.ProdutoInteresse,
         lead.Placa,
         lead.TemSeguro,
         lead.UtilidadeVeiculo,
-        lead.Gclid,
-        lead.UtmMedium,
-        lead.UtmSource,
-        lead.UtmTerm,
-        lead.MetaClickId,
-        lead.MetaFormId,
-        lead.MetaLeadId,
+        podeVerMarketing ? lead.Gclid : null,
+        podeVerMarketing ? lead.UtmMedium : null,
+        podeVerMarketing ? lead.UtmSource : null,
+        podeVerMarketing ? lead.UtmTerm : null,
+        podeVerMarketing ? lead.MetaClickId : null,
+        podeVerMarketing ? lead.MetaFormId : null,
+        podeVerMarketing ? lead.MetaLeadId : null,
         lead.IndicadoPorLeadId,
         lead.IndicadoPorLead?.NomeOuRazaoSocial,
         lead.TipoIndicacao,
