@@ -40,6 +40,19 @@ public sealed class TvComercialService(
 
         // O painel da TV mostra todas as regionais, mesmo para o administrador que oculta alguma nas demais telas.
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct, ignorarRegionaisOcultas: true);
+        // A TV da regional MG134 mostra também os dados da MG132.
+        if (visiveis is not null && currentUser is not null)
+        {
+            var regionalDoUsuario = await db.Users.AsNoTracking().Where(u => u.Id == currentUser.UserId)
+                .Select(u => u.Regional != null ? u.Regional.Nome : null).FirstOrDefaultAsync(ct);
+            if (NomeDeRegional.Normalizar(regionalDoUsuario) == "MG134")
+            {
+                var daMg132 = await db.Users.AsNoTracking()
+                    .Where(u => u.Regional != null && u.Regional.Nome.Replace(" ", "").ToUpper() == "MG132")
+                    .Select(u => u.Id).ToListAsync(ct);
+                visiveis = visiveis.Union(daMg132).ToList();
+            }
+        }
         // O Notion tem cache próprio; a versão dele entra na chave para o painel refletir cada atualização.
         IReadOnlyList<TvNotionVenda> vendasNotion = notion is null ? [] : await notion.VendasAsync(primeiro, ct);
         var administrativo = notion is null ? null : await notion.AdministrativoAsync(primeiro, ct);
