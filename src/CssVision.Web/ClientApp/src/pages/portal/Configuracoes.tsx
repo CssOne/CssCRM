@@ -7,6 +7,7 @@ import type { Profile, TwoFactorEnableResult, TwoFactorSetup } from "../../lib/t
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { Avatar, Badge, Button, Card, ErrorState, Input, Label, Modal, Skeleton, useToast } from "../../components/ui";
+import { CartaoNotificacoesPush } from "../../components/crm/NotificacoesPush";
 
 export function ConfiguracoesPage() {
   const { refetchSessao, logout } = useAuth();
@@ -59,6 +60,7 @@ export function ConfiguracoesPage() {
       />
       <Seguranca perfil={perfil} onDoisFatoresAlterado={(ativo) => setPerfil((p) => (p ? { ...p, doisFatoresAtivo: ativo } : p))} />
       <Aparencia />
+      <CartaoNotificacoesPush />
       {perfil.podeExcluirPropriaConta && (
         <ZonaDeRisco
           onExcluido={async () => {
