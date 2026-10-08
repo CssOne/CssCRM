@@ -486,6 +486,12 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
         }
         conteudo = EmojiPersonalizado.Replace(conteudo, "$1");
 
+        // Mensagem só com cartão (embed), como os avisos e a boas-vindas que o próprio CRM publica: o texto está no cartão, não em "content".
+        if (conteudo.Length == 0 && m.TryGetProperty("embeds", out var cartoes) && cartoes.ValueKind == JsonValueKind.Array)
+        {
+            conteudo = string.Join("\n\n", cartoes.EnumerateArray().Select(TextoDoCartao).Where(t => t.Length > 0));
+        }
+
         var anexos = new List<DiscordAnexo>();
         if (m.TryGetProperty("attachments", out var arquivos) && arquivos.ValueKind == JsonValueKind.Array)
         {
@@ -502,6 +508,23 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
             && (Texto(m, "application_id") == Opcoes.ClientId || webhooks.Values.Any(w => w.Id == wid));
         var quando = DateTimeOffset.Parse(Texto(m, "timestamp")!, System.Globalization.CultureInfo.InvariantCulture);
         return new DiscordMensagem(m.GetProperty("id").GetString()!, nome, avatar, conteudo, quando, anexos, doCrm, Texto(m, "edited_timestamp") is not null);
+    }
+
+    /// <summary>Texto corrido de um cartão: título em negrito, descrição e cada campo como "**Nome:** valor".</summary>
+    private static string TextoDoCartao(JsonElement cartao)
+    {
+        var linhas = new List<string>();
+        if (Texto(cartao, "title") is { Length: > 0 } titulo) linhas.Add($"**{titulo}**");
+        if (Texto(cartao, "description") is { Length: > 0 } descricao) linhas.Add(descricao);
+        if (cartao.TryGetProperty("fields", out var campos) && campos.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var campo in campos.EnumerateArray())
+            {
+                if (Texto(campo, "name") is { Length: > 0 } nome) linhas.Add($"**{nome}:** {Texto(campo, "value")}");
+            }
+        }
+
+        return string.Join("\n", linhas);
     }
 
     private static readonly System.Text.RegularExpressions.Regex EmojiPersonalizado = new(@"<a?(:\w+:)\d+>", System.Text.RegularExpressions.RegexOptions.Compiled);

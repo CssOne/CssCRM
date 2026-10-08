@@ -250,4 +250,24 @@ public class DiscordGuildApiMensagensTests
         Assert.Contains("\"id\":\"servidor-9\",\"type\":0,\"allow\":\"0\",\"deny\":\"1024\"", chamada.Corpo); // @everyone não vê
         Assert.Contains("\"id\":\"app-1\",\"type\":1", chamada.Corpo);       // o bot enxerga o canal
     }
+
+    [Fact]
+    public async Task ListarMensagens_MensagemSoComCartao_VemComOTextoDoCartao_NaoEmBranco()
+    {
+        // Avisos e boas-vindas que o próprio CRM publica são cartões (embeds) com "content" vazio.
+        var (api, _) = Montar(_ => Json(HttpStatusCode.OK, """
+            [
+              {"id":"2","content":"","timestamp":"2026-10-07T18:00:02+00:00","author":{"id":"bot","username":"CRM CSS Brasil"},
+               "embeds":[{"title":"🎉 Venda fechada!","description":"**Ana** fechou uma venda.","fields":[{"name":"Regional","value":"MG132","inline":true},{"name":"Adesão","value":"R$ 300,00","inline":true}]}]},
+              {"id":"1","content":"texto normal","timestamp":"2026-10-07T18:00:01+00:00","author":{"id":"u","username":"ana"},"embeds":[{"title":"ignorado: já tem texto"}]},
+              {"id":"0","content":"","timestamp":"2026-10-07T18:00:00+00:00","author":{"id":"u","username":"ana"},"embeds":[]}
+            ]
+            """));
+
+        var m = await api.ListarMensagensAsync("canal-1", 50, null, CancellationToken.None);
+
+        Assert.Equal("", m[0].Conteudo); // sem texto e sem cartão: continua vazio (é o caso do "Message Content Intent" desligado)
+        Assert.Equal("texto normal", m[1].Conteudo); // quem tem texto não ganha o cartão por cima
+        Assert.Equal("**🎉 Venda fechada!**\n**Ana** fechou uma venda.\n**Regional:** MG132\n**Adesão:** R$ 300,00", m[2].Conteudo);
+    }
 }
