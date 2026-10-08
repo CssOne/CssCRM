@@ -193,6 +193,8 @@ export function LeadsKanbanPage() {
   const [pendenciaNaoFazemos, setPendenciaNaoFazemos] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
   const [pendenciaCotacao, setPendenciaCotacao] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
   const [etapaGanhoPipelineId, setEtapaGanhoPipelineId] = useState<string | null>(null);
+  /** Cadastro direto em "Venda concluída (Indicação)": etapa da coluna onde o cliente novo entra. */
+  const [novoClienteConcluido, setNovoClienteConcluido] = useState<{ etapaId: string } | null>(null);
 
   const boardRef = useRef<LeadKanbanBoard | null>(null);
   boardRef.current = board;
@@ -652,7 +654,7 @@ export function LeadsKanbanPage() {
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
         <div className="w-56">
           <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Buscar</label>
-          <Input placeholder="Nome, telefone ou e-mail" value={busca} onChange={(e) => setBusca(e.target.value)} />
+          <Input placeholder="Nome, placa, telefone ou e-mail" value={busca} onChange={(e) => setBusca(e.target.value)} />
         </div>
         {podeVerOrigem && (
           <div className="w-44">
@@ -889,6 +891,13 @@ export function LeadsKanbanPage() {
                       {coluna.total.toLocaleString("pt-BR")}
                     </span>
                   </div>
+                  {coluna.etapa.nome === `${ETAPA_VENDA_CONCLUIDA} (Indicação)` && coluna.etapa.id && (
+                    <div className="border-b border-[var(--border)] px-3 py-2">
+                      <Button size="sm" variant="secondary" className="w-full" onClick={() => setNovoClienteConcluido({ etapaId: coluna.etapa.id! })}>
+                        <Plus className="size-4" /> Cadastrar cliente já concluído
+                      </Button>
+                    </div>
+                  )}
                   {coluna.etapa.nome === ETAPA_PERDIDO && (
                     <div className="border-b border-[var(--border)] px-3 py-2">
                       {/* Filtro só desta coluna: soma-se aos filtros de cima (as quantidades já os respeitam). */}
@@ -1011,6 +1020,21 @@ export function LeadsKanbanPage() {
         onConcluido={(resultado) => {
           if (pendenciaVenda) concluirVenda(pendenciaVenda.cartao, pendenciaVenda.etapaId, resultado);
           setPendenciaVenda(null);
+        }}
+      />
+
+      <VendaConcluidaDialog
+        open={!!novoClienteConcluido}
+        novoCliente={novoClienteConcluido}
+        leadId={null}
+        pipelineGanhoEtapaId={etapaGanhoPipelineId ?? undefined}
+        etapaNome={`${ETAPA_VENDA_CONCLUIDA} (Indicação)`}
+        valorEstimado={0}
+        onCancel={() => setNovoClienteConcluido(null)}
+        onConcluido={() => {
+          setNovoClienteConcluido(null);
+          notificar("success", "Cliente cadastrado em \"Venda concluída (Indicação)\".");
+          carregar(undefined, true);
         }}
       />
 

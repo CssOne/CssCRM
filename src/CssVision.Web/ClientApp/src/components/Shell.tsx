@@ -110,6 +110,8 @@ export function Shell({ children }: { children: ReactNode }) {
   }, [colapsado]);
 
   const emPortal = location.pathname.startsWith("/app/portal");
+  // O quadro de leads tem a própria busca (nome, placa, telefone, e-mail): a busca do topo sai dali.
+  const noQuadroDeLeads = location.pathname.startsWith("/app/crm/leads/kanban");
   // Financeiro "puro": só gestão da carteira, usuários e avisos — nada de leads, atividades nem avisos de lead novo.
   const soFinanceiro = !!sessao && sessao.papeis.length === 1 && sessao.papeis[0] === "Financeiro";
   const itensNav = emPortal ? PORTAL_NAV : sessao?.menu.map((m) => ({ ...m, icone: iconesPorChave[m.icone] ?? Gauge, divisor: false }));
@@ -221,6 +223,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <IconButton label="Abrir menu" className="lg:hidden" onClick={() => setMenuAberto(true)}>
               <MenuIcon className="size-5" />
             </IconButton>
+            {!noQuadroDeLeads && (
             <form onSubmit={handleBuscar} className="relative hidden lg:block">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--fg-muted)]" />
               <input
@@ -230,6 +233,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 className="focus-ring w-72 rounded-lg border border-[var(--border)] bg-[var(--bg)] py-2 pl-9 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
               />
             </form>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5">

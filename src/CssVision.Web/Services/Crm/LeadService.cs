@@ -1061,8 +1061,14 @@ public sealed class LeadService(
         {
             var busca = filtro.Busca.Trim();
             var buscaDigitos = DocumentValidation.SomenteDigitos(busca);
+            // Placa: do cadastro do lead ou do veículo da venda, com ou sem hífen/espaço ("ABC-1D23" acha "ABC1D23").
+            var buscaPlaca = new string(busca.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+            var buscarPlaca = buscaPlaca.Length >= 3;
             query = query.Where(l =>
                 EF.Functions.ILike(l.NomeOuRazaoSocial, $"%{busca}%") ||
+                (buscarPlaca && l.Placa != null && EF.Functions.ILike(l.Placa.Replace("-", "").Replace(" ", ""), $"%{buscaPlaca}%")) ||
+                (buscarPlaca && l.Oportunidades.Any(o => o.Veiculo != null && o.Veiculo.Placa != null
+                    && EF.Functions.ILike(o.Veiculo.Placa.Replace("-", "").Replace(" ", ""), $"%{buscaPlaca}%"))) ||
                 (l.Email != null && EF.Functions.ILike(l.Email, $"%{busca}%")) ||
                 (buscaDigitos != "" && l.DocumentoNormalizado != null && l.DocumentoNormalizado.Contains(buscaDigitos)) ||
                 (buscaDigitos != "" && l.TelefoneNormalizado != null && l.TelefoneNormalizado.Contains(buscaDigitos)));
