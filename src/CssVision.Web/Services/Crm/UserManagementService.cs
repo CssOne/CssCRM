@@ -54,6 +54,9 @@ public sealed class UserManagementService(
 
         // "Vendedor Notion ..." (vendedores que o Notion não identifica) ficam fora do sistema por enquanto: só aparecem
         // se alguém procurar o nome deles de propósito, para a revisão futura.
+        // Conta excluída (mantida só para preservar vendas e leads) não aparece na lista.
+        query = query.Where(u => !u.Email!.EndsWith(SufixoEmailExcluido));
+
         if (!ProcurandoProvisorios(filtro.Busca)) query = query.Where(u => !u.NomeCompleto.StartsWith(NotionPageExtensions.PrefixoNomeProvisorio));
 
         if (!string.IsNullOrWhiteSpace(filtro.Busca))
@@ -345,9 +348,11 @@ public sealed class UserManagementService(
 
         if (possuiVinculos)
         {
-            throw new CrmBusinessException(
-                "Não é possível excluir este usuário porque existem leads, oportunidades, atividades, metas ou consultores vinculados a ele. Desative a conta em vez de excluir.",
-                "usuario_possui_vinculos");
+            // Tem vendas, leads, atividades ou metas: a linha do usuário fica (os registros continuam com o nome dele nos relatórios, na TV e
+            // no quadro), mas a conta deixa de existir para o sistema — sem login, fora das listas e do rodízio.
+            await ExcluirPreservandoRegistrosAsync(usuario, ct);
+            await audit.RegistrarAsync("UsuarioExcluido", nameof(ApplicationUser), usuario.Id, new { usuario.NomeCompleto, Preservado = true }, ct);
+            return;
         }
 
         IdentityResult resultado;
@@ -368,6 +373,31 @@ public sealed class UserManagementService(
         }
 
         await audit.RegistrarAsync("UsuarioExcluido", nameof(ApplicationUser), usuario.Id, new { usuario.NomeCompleto, usuario.Email }, ct);
+    }
+
+    /// <summary>Sufixo do e-mail de uma conta excluída (o e-mail original fica livre para um novo cadastro).</summary>
+    public const string SufixoEmailExcluido = "@excluido.invalid";
+
+    private async Task ExcluirPreservandoRegistrosAsync(ApplicationUser usuario, CancellationToken ct)
+    {
+        var anonimo = $"{usuario.Id:N}{SufixoEmailExcluido}";
+        usuario.Ativo = false;
+        usuario.RecebeLeads = false;
+        usuario.GrupoId = null;
+        usuario.GestorComercialId = null;
+        usuario.LockoutEnabled = true;
+        usuario.LockoutEnd = DateTimeOffset.MaxValue;
+        await userManager.SetUserNameAsync(usuario, anonimo);
+        await userManager.SetEmailAsync(usuario, anonimo);
+        if (await userManager.HasPasswordAsync(usuario)) await userManager.RemovePasswordAsync(usuario);
+
+        // Quem tinha este usuário como gestor passa a ficar sem gestor; notificações push dele deixam de existir.
+        foreach (var subordinado in await db.Users.Where(u => u.GestorComercialId == usuario.Id).ToListAsync(ct)) subordinado.GestorComercialId = null;
+        db.CrmPushInscricoes.RemoveRange(await db.CrmPushInscricoes.Where(i => i.UsuarioId == usuario.Id).ToListAsync(ct));
+
+        var resultado = await userManager.UpdateAsync(usuario);
+        if (!resultado.Succeeded) throw new CrmBusinessException(IdentityErrors.Traduzir(resultado), "usuario_invalido");
+        await db.SaveChangesAsync(ct);
     }
 
     // --- auxiliares ---

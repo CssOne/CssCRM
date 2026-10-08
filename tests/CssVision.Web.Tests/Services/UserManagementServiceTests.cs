@@ -3,6 +3,7 @@ using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Authorization;
 using CssVision.Web.Services.Crm;
 using CssVision.Web.Tests.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace CssVision.Web.Tests.Services;
@@ -216,7 +217,7 @@ public class UserManagementServiceTests
     }
 
     [Fact]
-    public async Task ExcluirAsync_Admin_NaoPodeExcluirUsuarioComLeadsVinculados()
+    public async Task ExcluirAsync_Admin_ExcluiUsuarioComVendas_PreservandoLeadsEVendas()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
@@ -225,19 +226,32 @@ public class UserManagementServiceTests
 
         var admin = await factory.CriarUsuarioAsync(db, "Admin");
         var consultor = await factory.CriarUsuarioAsync(db, "Consultor");
-
-        db.CrmLeads.Add(new CssVision.Web.Domain.Crm.CrmLead
-        {
-            NomeOuRazaoSocial = "Cliente Teste",
-            ResponsavelId = consultor.Id,
-        });
+        var etapa = await factory.CriarEtapaAsync(db, "Ganho", 9, CssVision.Web.Domain.Crm.TipoEtapaPipeline.Ganho);
+        var lead = new CssVision.Web.Domain.Crm.CrmLead { NomeOuRazaoSocial = "Cliente Teste", ResponsavelId = consultor.Id };
+        db.CrmLeads.Add(lead);
         await db.SaveChangesAsync();
+        db.CrmOpportunities.Add(new CssVision.Web.Domain.Crm.CrmOpportunity { LeadId = lead.Id, Titulo = "V", ResponsavelId = consultor.Id, EtapaId = etapa.Id, PagamentoAdesao = 100m });
+        await db.SaveChangesAsync();
+        var emailOriginal = consultor.Email;
 
         var currentUser = TestDbContextFactory.MockCurrentUser(admin.Id, visaoTotal: true);
         var service = new UserManagementService(db, userManager, currentUser.Object, new NoOpAuditSink());
 
-        await Assert.ThrowsAsync<CrmBusinessException>(() => service.ExcluirAsync(consultor.Id, CancellationToken.None));
-        Assert.NotNull(await userManager.FindByIdAsync(consultor.Id.ToString()));
+        await service.ExcluirAsync(consultor.Id, CancellationToken.None);
+
+        // A venda e o lead continuam com o consultor; a conta fica sem login, inativa e fora da lista.
+        db.ChangeTracker.Clear();
+        Assert.Equal(consultor.Id, (await db.CrmOpportunities.SingleAsync()).ResponsavelId);
+        Assert.Equal(consultor.Id, (await db.CrmLeads.SingleAsync()).ResponsavelId);
+        var conta = (await userManager.FindByIdAsync(consultor.Id.ToString()))!;
+        Assert.False(conta.Ativo);
+        Assert.NotEqual(emailOriginal, conta.Email);
+        Assert.True(await userManager.IsLockedOutAsync(conta));
+        Assert.Equal("Consultor", conta.NomeCompleto);
+        var lista = await service.ListarAsync(new UserFilterRequest(), CancellationToken.None);
+        Assert.DoesNotContain(lista.Itens, u => u.Id == consultor.Id);
+        // O e-mail antigo pode ser cadastrado de novo.
+        Assert.Null(await userManager.FindByEmailAsync(emailOriginal!));
     }
 
     [Fact]

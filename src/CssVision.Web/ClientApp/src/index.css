@@ -52,6 +52,21 @@
   --info: #38bdf8;
 }
 
+/* Campos nativos (data, mês, rolagem) seguem o tema: sem isto o ícone do calendário some no tema escuro. */
+:root {
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
+}
+.dark input[type="date"]::-webkit-calendar-picker-indicator,
+.dark input[type="month"]::-webkit-calendar-picker-indicator,
+.dark input[type="time"]::-webkit-calendar-picker-indicator,
+.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 1;
+}
+
 body {
   background: var(--bg);
   color: var(--fg);
