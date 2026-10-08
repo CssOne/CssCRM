@@ -77,14 +77,20 @@ public class AdminRestritoARegionalTests
         await Assert.ThrowsAsync<CrmForbiddenException>(() => servicoOculto.CriarAsync(
             new UserCreateRequest("Novo", "novo@teste.com", "Senha@123", null, Roles.Comercial, mg134.Id, null, null, null), CancellationToken.None));
 
-        // Ele não se solta nem oculta regional de outro administrador.
+        // Ele não oculta nem solta regional de OUTRO administrador (mas ajusta as próprias — ver o fim do teste).
         await Assert.ThrowsAsync<CrmForbiddenException>(() => servicoOculto.CriarAsync(NovoAdmin("outro@teste.com", mg132.Id), CancellationToken.None));
-        await Assert.ThrowsAsync<CrmForbiddenException>(() => servicoOculto.AtualizarAsync(oculto.Id,
-            new UserUpdateRequest("Admin", null, Roles.Admin, null, null, null, null, true, RegionaisOcultasIds: [], AlterarRegionaisOcultas: true), CancellationToken.None));
+        await Assert.ThrowsAsync<CrmForbiddenException>(() => servicoOculto.AtualizarAsync(chefe.Id,
+            new UserUpdateRequest("Admin", null, Roles.Admin, null, null, null, null, true, RegionaisOcultasIds: [mg134.Id], AlterarRegionaisOcultas: true), CancellationToken.None));
 
         // Regionais listadas e metas: sem a MG134.
         Assert.Equal(["MG132"], (await new LookupService(db, usuarioOculto).ObterRegionaisAsync(CancellationToken.None)).Select(r => r.Nome));
         Assert.Equal(2, (await new LookupService(db, Admin(chefe.Id).Object).ObterRegionaisAsync(CancellationToken.None)).Count);
+
+        // Mas ele mesmo volta a ver todas quando quiser (antes ficava travado: "só quem não tem regionais ocultas altera").
+        var solto = await servicoOculto.AtualizarAsync(oculto.Id,
+            new UserUpdateRequest("Admin", null, Roles.Admin, null, null, null, null, true, RegionaisOcultasIds: [], AlterarRegionaisOcultas: true), CancellationToken.None);
+        Assert.Empty(solto.RegionaisOcultasIds!);
+        Assert.Equal(2, (await new LookupService(db, usuarioOculto).ObterRegionaisAsync(CancellationToken.None)).Count);
     }
 
     [Fact]
