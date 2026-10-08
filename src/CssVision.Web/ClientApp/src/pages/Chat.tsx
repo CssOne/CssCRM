@@ -782,7 +782,10 @@ function ConteudoDaMensagem({ texto }: { texto: string }) {
   );
 }
 
-/** Endereços (http/https) do texto viram links clicáveis; o resto continua texto puro (nada de HTML). */
+/**
+ * Endereços (http/https) viram links clicáveis e **texto entre dois asteriscos** vira negrito (é como o Discord mostra, e os avisos do CRM usam).
+ * O resto continua texto puro: nada de HTML, então nenhuma mensagem consegue injetar código na tela.
+ */
 function comLinks(texto: string) {
   return texto.split(/(https?:\/\/[^\s]+)/g).map((parte, i) =>
     /^https?:\/\//.test(parte) ? (
@@ -790,7 +793,11 @@ function comLinks(texto: string) {
         {parte}
       </a>
     ) : (
-      parte
+      <span key={i}>
+        {parte.split(/(\*\*[^*\n]+\*\*)/g).map((trecho, j) =>
+          /^\*\*[^*\n]+\*\*$/.test(trecho) ? <strong key={j}>{trecho.slice(2, -2)}</strong> : trecho
+        )}
+      </span>
     )
   );
 }
