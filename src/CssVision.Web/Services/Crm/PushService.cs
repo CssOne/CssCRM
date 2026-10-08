@@ -157,21 +157,25 @@ public sealed class PushNovosLeadsBackgroundService(IServiceScopeFactory scopeFa
         var push = scope.ServiceProvider.GetRequiredService<IPushService>();
         var agora = DateTimeOffset.UtcNow;
 
+        // Quem recebe o aviso: quem tem navegador inscrito no push E quem vinculou o Discord com os avisos ligados (esses recebem pelo Discord, no
+        // celular, mesmo sem nunca ter ativado o push no navegador).
         var inscritos = await db.CrmPushInscricoes.AsNoTracking().Select(i => i.UsuarioId).Distinct().ToListAsync(ct);
+        var comDiscord = await db.CrmDiscordVinculos.AsNoTracking().Where(v => v.AvisosAtivos).Select(v => v.UsuarioId).ToListAsync(ct);
+        inscritos = inscritos.Union(comDiscord).ToList();
         if (inscritos.Count == 0) return agora;
 
         var leads = await db.CrmLeads.AsNoTracking()
             .Where(l => l.ResponsavelId != null && inscritos.Contains(l.ResponsavelId.Value) && !l.Arquivado
                 && l.ResponsavelAtribuidoEm > desde && l.ResponsavelAtribuidoEm <= agora
                 && (l.AtualizadoPorId ?? l.CriadoPorId) != l.ResponsavelId)
-            .Select(l => new { l.Id, l.NomeOuRazaoSocial, l.ProdutoInteresse, ResponsavelId = l.ResponsavelId!.Value })
+            .Select(l => new { l.Id, l.NomeOuRazaoSocial, l.ProdutoInteresse, l.Origem, ResponsavelId = l.ResponsavelId!.Value })
             .ToListAsync(ct);
 
         foreach (var doUsuario in leads.GroupBy(l => l.ResponsavelId))
         {
             var lista = doUsuario.ToList();
             var mensagem = lista.Count == 1
-                ? new PushMensagem("Novo lead para você", Nome(lista[0].NomeOuRazaoSocial, lista[0].ProdutoInteresse),
+                ? new PushMensagem("Novo lead para você", Nome(lista[0].NomeOuRazaoSocial, lista[0].ProdutoInteresse, lista[0].Origem),
                     $"/app/crm/leads/kanban?lead={lista[0].Id}", $"lead-{lista[0].Id}")
                 : new PushMensagem($"{lista.Count} novos leads para você", string.Join(", ", lista.Take(5).Select(l => l.NomeOuRazaoSocial)),
                     "/app/crm/leads/kanban", $"leads-{agora:yyyyMMddHHmmss}");
@@ -181,5 +185,7 @@ public sealed class PushNovosLeadsBackgroundService(IServiceScopeFactory scopeFa
         return agora;
     }
 
-    private static string Nome(string nome, string? oQue) => string.IsNullOrWhiteSpace(oQue) ? nome : $"{nome} · {oQue}";
+    /// <summary>"Maria Souza · AGV · Meta ads": nome, o que o cliente quer e de onde veio (o que existir).</summary>
+    private static string Nome(string nome, string? oQue, string? origem) =>
+        string.Join(" · ", new[] { nome, oQue, origem }.Where(t => !string.IsNullOrWhiteSpace(t)));
 }

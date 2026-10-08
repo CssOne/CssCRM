@@ -230,7 +230,7 @@ function GruposDoDiscord() {
         </h2>
         <p className="text-xs text-[var(--fg-muted)]">
           Cada regional e cada grupo do CRM vira um canal no servidor, visível só para quem é do grupo. Os cargos de cada pessoa seguem o CRM. O bot precisa das
-          permissões "Gerenciar canais" e "Gerenciar cargos", e o cargo dele deve ficar acima dos cargos "CRM · …".
+          permissões "Gerenciar canais", "Gerenciar cargos", "Gerenciar apelidos" e "Gerenciar mensagens" (fixar a boas-vindas), e o cargo dele deve ficar acima dos cargos "CRM · …".
         </p>
       </div>
 
@@ -277,7 +277,9 @@ function GruposDoDiscord() {
         <div className="space-y-1 text-sm text-[var(--fg)]">
           <p>
             {resultado.canaisCriados} canal(is), {resultado.canaisDeVozCriados} canal(is) de voz e {resultado.cargosCriados} cargo(s) criados · {resultado.membrosAtualizados} pessoa(s) com cargos ajustados
-            {resultado.membrosForaDoServidor > 0 && ` · ${resultado.membrosForaDoServidor} ainda fora do servidor`}.
+            {resultado.apelidosDefinidos > 0 && ` · ${resultado.apelidosDefinidos} apelido(s) ajustado(s) para o nome do CRM`}
+            {resultado.membrosForaDoServidor > 0 && ` · ${resultado.membrosForaDoServidor} ainda fora do servidor`}
+            {resultado.boasVindasPublicadas && " · mensagem de boas-vindas publicada no Geral"}.
           </p>
           {resultado.falhas.length > 0 && (
             <ul className="list-disc pl-5 text-xs text-[var(--danger)]">

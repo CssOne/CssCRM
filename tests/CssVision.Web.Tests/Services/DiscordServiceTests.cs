@@ -193,6 +193,8 @@ public class DiscordServiceTests
         var usuario = Guid.NewGuid();
         await servico.ConcluirVinculoAsync("c", EstadoDaUrl(await servico.IniciarVinculoAsync(usuario, Retorno, CancellationToken.None)), Retorno, CancellationToken.None);
 
+        api.Envios.Clear(); // a boas-vindas do vínculo não é o que este teste confere
+
         await servico.DesvincularAsync(usuario, CancellationToken.None);
 
         Assert.Empty(await db.CrmDiscordVinculos.ToListAsync());
@@ -208,6 +210,7 @@ public class DiscordServiceTests
         var usuario = Guid.NewGuid();
         await servico.ConcluirVinculoAsync("c", EstadoDaUrl(await servico.IniciarVinculoAsync(usuario, Retorno, CancellationToken.None)), Retorno, CancellationToken.None);
 
+        api.Envios.Clear(); // a boas-vindas do vínculo não é o que este teste confere
         var enviado = await servico.EnviarAvisoAsync(usuario, "Novo lead para você", "Maria · AGV", "/app/crm/leads/kanban?lead=1", CancellationToken.None);
 
         Assert.True(enviado);
@@ -227,6 +230,7 @@ public class DiscordServiceTests
         Assert.False(await servico.EnviarAvisoAsync(usuario, "t", "c", null, CancellationToken.None)); // sem vínculo
 
         await servico.ConcluirVinculoAsync("c", EstadoDaUrl(await servico.IniciarVinculoAsync(usuario, Retorno, CancellationToken.None)), Retorno, CancellationToken.None);
+        api.Envios.Clear(); // a boas-vindas do vínculo não é o que este teste confere
         await servico.DefinirAvisosAsync(usuario, false, CancellationToken.None);
 
         Assert.False(await servico.EnviarAvisoAsync(usuario, "t", "c", null, CancellationToken.None)); // avisos desligados
@@ -234,6 +238,48 @@ public class DiscordServiceTests
 
         await servico.DefinirAvisosAsync(usuario, true, CancellationToken.None);
         Assert.True(await servico.EnviarAvisoAsync(usuario, "t", "c", null, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Vincular_NaPrimeiraVez_EnviaBoasVindasPorMensagemDireta_ComLinkParaOChat()
+    {
+        using var factory = new TestDbContextFactory();
+        var (servico, api, _) = Montar(factory);
+        var usuario = Guid.NewGuid();
+
+        await servico.ConcluirVinculoAsync("c", EstadoDaUrl(await servico.IniciarVinculoAsync(usuario, Retorno, CancellationToken.None)), Retorno, CancellationToken.None);
+
+        var (conta, aviso) = Assert.Single(api.Envios);
+        Assert.Equal("111", conta);
+        Assert.Contains("vinculada", aviso.Titulo);
+        Assert.Equal("https://crm.exemplo.com/app/chat", aviso.Url);
+    }
+
+    [Fact]
+    public async Task Vincular_DeNovo_NaoRepeteABoasVindas()
+    {
+        using var factory = new TestDbContextFactory();
+        var (servico, api, _) = Montar(factory);
+        var usuario = Guid.NewGuid();
+        await servico.ConcluirVinculoAsync("c", EstadoDaUrl(await servico.IniciarVinculoAsync(usuario, Retorno, CancellationToken.None)), Retorno, CancellationToken.None);
+
+        await servico.ConcluirVinculoAsync("c", EstadoDaUrl(await servico.IniciarVinculoAsync(usuario, Retorno, CancellationToken.None)), Retorno, CancellationToken.None);
+
+        Assert.Single(api.Envios);
+    }
+
+    [Fact]
+    public async Task Vincular_ComMensagemDiretaFechada_ContinuaVinculadoSemErro()
+    {
+        using var factory = new TestDbContextFactory();
+        var (servico, api, db) = Montar(factory);
+        api.Resultado = ResultadoEnvioDiscord.DmFechada;
+        var usuario = Guid.NewGuid();
+
+        var status = await servico.ConcluirVinculoAsync("c", EstadoDaUrl(await servico.IniciarVinculoAsync(usuario, Retorno, CancellationToken.None)), Retorno, CancellationToken.None);
+
+        Assert.True(status.Vinculado);
+        Assert.Single(await db.CrmDiscordVinculos.ToListAsync());
     }
 
     [Fact]

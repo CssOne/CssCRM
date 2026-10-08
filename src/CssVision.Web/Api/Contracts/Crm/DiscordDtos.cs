@@ -21,7 +21,7 @@ public record DiscordTesteDto(bool Enviado, string Mensagem);
 public record DiscordCanalDto(string Chave, string Nome, bool Ativo);
 
 /// <summary>O que a sincronização dos grupos fez, e o que não conseguiu fazer (com o motivo).</summary>
-public record DiscordSincronizacaoDto(int CanaisCriados, int CargosCriados, int MembrosAtualizados, int MembrosForaDoServidor, IReadOnlyList<string> Falhas, int CanaisDeVozCriados = 0);
+public record DiscordSincronizacaoDto(int CanaisCriados, int CargosCriados, int MembrosAtualizados, int MembrosForaDoServidor, IReadOnlyList<string> Falhas, int CanaisDeVozCriados = 0, int ApelidosDefinidos = 0, bool BoasVindasPublicadas = false);
 
 /// <summary>Grupo de conversa que o usuário pode abrir no chat do CRM.</summary>
 /// <param name="Tipo"><c>grupo</c> ou <c>direta</c> (conversa 1:1: o nome é o da outra pessoa).</param>

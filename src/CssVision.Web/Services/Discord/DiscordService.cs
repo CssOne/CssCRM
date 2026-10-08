@@ -106,6 +106,7 @@ public sealed class DiscordService(
         }
 
         var vinculo = await db.CrmDiscordVinculos.FirstOrDefaultAsync(v => v.UsuarioId == usuarioId, ct);
+        var primeiraVez = vinculo is null;
         if (vinculo is null)
         {
             vinculo = new CrmDiscordVinculo { UsuarioId = usuarioId, AvisosAtivos = true };
@@ -122,7 +123,25 @@ public sealed class DiscordService(
         await db.SaveChangesAsync(ct);
 
         logger.LogInformation("Usuário {UsuarioId} vinculou a conta do Discord {DiscordUserId} (no servidor: {NoServidor}).", usuarioId, conta.Id, vinculo.NoServidor);
+
+        // Boas-vindas por mensagem direta, só na primeira vez (e sem que uma falha dela estrague o vínculo, que já está feito e salvo).
+        if (primeiraVez) await EnviarBoasVindasAsync(usuarioId, ct);
         return Status(vinculo);
+    }
+
+    private async Task EnviarBoasVindasAsync(Guid usuarioId, CancellationToken ct)
+    {
+        try
+        {
+            await EnviarAvisoAsync(usuarioId, "Conta do Discord vinculada! 🎉",
+                "A partir de agora os avisos do CRM chegam por aqui: lead novo, pagamentos em aberto e alertas — inclusive no celular, com o app do Discord instalado e as notificações ligadas.\n\n"
+                + "Você também já pode conversar com a equipe pelo menu **Chat** do CRM, com o seu nome e a sua foto.",
+                "app/chat", ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogInformation(ex, "Não foi possível enviar a mensagem de boas-vindas pelo Discord ao usuário {UsuarioId}.", usuarioId);
+        }
     }
 
     public async Task DesvincularAsync(Guid usuarioId, CancellationToken ct)

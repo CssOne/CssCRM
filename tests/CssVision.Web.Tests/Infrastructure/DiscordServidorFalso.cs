@@ -29,12 +29,16 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
 
     public Task<HashSet<string>> ListarIdsDeCargosAsync(CancellationToken ct) => Task.FromResult(new HashSet<string>(Cargos));
 
-    public Task<string> CriarCargoAsync(string nome, CancellationToken ct)
+    /// <summary>Cor e "destacar" com que cada cargo foi criado (id do cargo → aparência).</summary>
+    public Dictionary<string, DiscordAparenciaCargo?> AparenciasDeCargo { get; } = [];
+
+    public Task<string> CriarCargoAsync(string nome, CancellationToken ct, DiscordAparenciaCargo? aparencia = null)
     {
         if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para criar um cargo.");
         var id = Novo();
         Cargos.Add(id);
         NomesDeCargo[id] = nome;
+        AparenciasDeCargo[id] = aparencia;
         return Task.FromResult(id);
     }
 
@@ -54,8 +58,24 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
 
     public Task<bool> CanalExisteAsync(string canalId, CancellationToken ct) => Task.FromResult(Canais.Contains(canalId));
 
-    public Task<IReadOnlyCollection<string>?> ObterCargosDoMembroAsync(string discordUserId, CancellationToken ct) =>
-        Task.FromResult<IReadOnlyCollection<string>?>(Membros.TryGetValue(discordUserId, out var c) ? c.ToList() : null);
+    /// <summary>Apelido de cada membro no servidor (id do Discord → apelido; ausente = sem apelido).</summary>
+    public Dictionary<string, string> Apelidos { get; } = [];
+
+    /// <summary>O Discord recusa trocar apelidos (ex.: o bot não tem "Gerenciar apelidos" ou o membro é o dono do servidor).</summary>
+    public bool SemPermissaoParaApelidos { get; set; }
+
+    public List<(string DiscordUserId, string Apelido)> ApelidosDefinidos { get; } = [];
+
+    public Task<DiscordMembro?> ObterMembroAsync(string discordUserId, CancellationToken ct) =>
+        Task.FromResult<DiscordMembro?>(Membros.TryGetValue(discordUserId, out var c) ? new DiscordMembro(c.ToList(), Apelidos.GetValueOrDefault(discordUserId)) : null);
+
+    public Task DefinirApelidoAsync(string discordUserId, string apelido, CancellationToken ct)
+    {
+        if (SemPermissaoParaApelidos) throw new DiscordApiException("O bot não tem permissão para definir o apelido de um membro.");
+        Apelidos[discordUserId] = apelido;
+        ApelidosDefinidos.Add((discordUserId, apelido));
+        return Task.CompletedTask;
+    }
 
     public Task AtribuirCargoAsync(string discordUserId, string cargoId, CancellationToken ct)
     {
@@ -135,10 +155,27 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
     /// <summary>Avisos do CRM publicados nos canais (como bot).</summary>
     public List<(string CanalId, string Texto)> Avisos { get; } = [];
 
-    public Task PublicarAvisoAsync(string canalId, string texto, CancellationToken ct)
+    /// <summary>Cartões publicados (o <see cref="Avisos"/> guarda o mesmo conteúdo em texto corrido, para as conferências simples).</summary>
+    public List<(string CanalId, DiscordCartao Cartao)> Cartoes { get; } = [];
+
+    public List<(string CanalId, string MensagemId)> Fixadas { get; } = [];
+
+    /// <summary>Só fixar mensagens falha (falta "Gerenciar mensagens").</summary>
+    public bool SemPermissaoParaFixar { get; set; }
+
+    public Task<DiscordMensagem> PublicarCartaoAsync(string canalId, DiscordCartao cartao, CancellationToken ct)
     {
         if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para publicar o aviso.");
+        Cartoes.Add((canalId, cartao));
+        var texto = string.Join("\n", new[] { cartao.Titulo, cartao.Descricao }.Concat((cartao.Campos ?? []).Select(c => $"{c.Nome}: {c.Valor}")).Where(t => !string.IsNullOrEmpty(t)));
         Avisos.Add((canalId, texto));
+        return Task.FromResult(new DiscordMensagem(Novo(), "CRM", null, texto, DateTimeOffset.UtcNow, [], false));
+    }
+
+    public Task FixarMensagemAsync(string canalId, string mensagemId, CancellationToken ct)
+    {
+        if (SemPermissaoParaFixar) throw new DiscordApiException("O bot não tem permissão para fixar a mensagem.");
+        Fixadas.Add((canalId, mensagemId));
         return Task.CompletedTask;
     }
 
