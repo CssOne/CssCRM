@@ -279,7 +279,7 @@ export function GoalsPage() {
           <div>
             <h2 className="text-lg font-semibold text-[var(--fg)]">Metas gerais por regional</h2>
             <p className="text-sm text-[var(--fg-muted)]">
-              Meta de quantidade de vendas para toda a regional, somada às metas individuais dos consultores no cálculo da meta do mês.
+              Meta de vendas para toda a regional. No dashboard e no Portal do Consultor ela vale no lugar das metas individuais (não soma com elas); as individuais continuam servindo para acompanhar cada consultor. Regional sem meta aqui usa a soma das metas individuais dela.
             </p>
           </div>
 

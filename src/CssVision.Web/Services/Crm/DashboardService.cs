@@ -89,40 +89,10 @@ public sealed class DashboardService(
             novosLeads, leadsSemContato, contatosHoje, atividadesAtrasadas,
             oportunidadesAbertas, valorPipeline, taxaConversao, ticketMedio, valorGanho, qtdGanhas, valorAdesao, novosLeadsTrafegoSemEtapa);
 
-        // Meta comercial do mês corrente para os vendedores visíveis.
+        // Meta do mês (ver CalcularMetaDoMesAsync: a meta da regional vale no lugar das individuais, não soma com elas).
         var mesReferencia = HorarioBrasilia.PrimeiroDiaDoMes(hoje);
-        var metaQuery = db.CrmSalesGoals.AsNoTracking().Where(g => g.MesReferencia == mesReferencia);
-        if (visiveis is not null) metaQuery = metaQuery.Where(g => visiveis.Contains(g.VendedorId));
-        var metaValor = await metaQuery.SumAsync(g => (decimal?)g.MetaValor, ct) ?? 0m;
-        var metaQuantidade = await metaQuery.SumAsync(g => (int?)g.MetaQuantidadeVendas, ct) ?? 0;
-
-        // Meta geral por regional (definida pelo administrador) soma-se às metas individuais:
-        // visão total considera todas as regionais, os demais só a própria regional.
-        var metaRegionalQuery = db.CrmRegionalGoals.AsNoTracking().Where(g => g.MesReferencia == mesReferencia);
-        if (visiveis is not null && currentUser.TemVisaoTotal)
-        {
-            // Administrador com regionais ocultas: as metas das regionais que ele vê.
-            var ocultas = await EscopoRegional.OcultasAsync(db, currentUser, ct);
-            metaRegionalQuery = metaRegionalQuery.Where(g => !ocultas.Contains(g.RegionalId));
-        }
-        else if (visiveis is not null)
-        {
-            var minhaRegionalId = await db.Users.AsNoTracking()
-                .Where(u => u.Id == currentUser.UserId)
-                .Select(u => u.RegionalId)
-                .FirstOrDefaultAsync(ct);
-            metaRegionalQuery = minhaRegionalId is null
-                ? metaRegionalQuery.Where(g => false)
-                : metaRegionalQuery.Where(g => g.RegionalId == minhaRegionalId);
-        }
-        metaValor += await metaRegionalQuery.SumAsync(g => (decimal?)g.MetaValor, ct) ?? 0m;
-        metaQuantidade += await metaRegionalQuery.SumAsync(g => (int?)g.MetaQuantidadeVendas, ct) ?? 0;
-
-        var ganhasDoMes = oportunidadesQuery.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho &&
-            o.DataEfetivaFechamento >= HorarioBrasilia.Inicio(mesReferencia));
-        // Meta de valor = adesão recebida (ver GoalService).
-        var realizadoMes = await ganhasDoMes.SumAsync(o => o.PagamentoAdesao, ct) ?? 0m;
-        var realizadoQuantidadeMes = await ganhasDoMes.CountAsync(ct);
+        var (metaValor, metaQuantidade, realizadoMes, realizadoQuantidadeMes) =
+            await CalcularMetaDoMesAsync(visiveis, filtro.VendedorId.HasValue, oportunidadesQuery, mesReferencia, ct);
         var meta = new MetaResultadoDto(
             metaValor, realizadoMes,
             metaQuantidade == 0 ? 0m : Math.Round(100m * realizadoQuantidadeMes / metaQuantidade, 1),
@@ -161,6 +131,92 @@ public sealed class DashboardService(
 
         return new DashboardDto(indicadores, meta, funil, evolucao, origens, desempenho, atividadesDoDiaPagina.Itens, leadsParados,
             funilLeads, resumoMensal, leadsParadosTotal);
+    }
+
+    /// <summary>
+    /// Meta e realizado do mês corrente. A meta que o administrador define para a <b>regional</b> vale <b>no lugar</b> das metas individuais dos
+    /// consultores, não soma com elas: as individuais detalham quem entrega o quê dentro da regional, e somar as duas contava a mesma meta duas
+    /// vezes (500 da regional + 745 dos consultores + 200 de outra regional = 1445).
+    /// <list type="bullet">
+    /// <item>Consultor ou gestor (com regional): a meta da própria regional e as vendas da regional inteira no mês. Sem meta cadastrada para a
+    /// regional (ou sem regional), vale a soma das metas individuais que ele enxerga, contra as vendas que ele enxerga.</item>
+    /// <item>Administrador (visão total): para cada regional que enxerga, a meta dela ou, se não tiver, a soma das individuais dos seus consultores;
+    /// consultores sem regional entram pelas individuais.</item>
+    /// <item>Um consultor escolhido no filtro: a meta individual dele.</item>
+    /// </list>
+    /// Cada medida (valor e quantidade) cai para a soma das individuais quando a regional só definiu a outra. Meta de valor = adesão recebida (ver GoalService).
+    /// </summary>
+    private async Task<(decimal MetaValor, int MetaQuantidade, decimal Realizado, int RealizadoQuantidade)> CalcularMetaDoMesAsync(
+        List<Guid>? visiveis, bool umConsultor, IQueryable<CrmOpportunity> oportunidadesQuery, DateOnly mes, CancellationToken ct)
+    {
+        var inicioMes = HorarioBrasilia.Inicio(mes);
+        var individuais = db.CrmSalesGoals.AsNoTracking().Where(g => g.MesReferencia == mes);
+        if (visiveis is not null) individuais = individuais.Where(g => visiveis.Contains(g.VendedorId));
+        var regionais = db.CrmRegionalGoals.AsNoTracking().Where(g => g.MesReferencia == mes);
+
+        async Task<(decimal Valor, int Quantidade)> RealizadoAsync(IQueryable<CrmOpportunity> consulta)
+        {
+            var ganhas = consulta.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho && o.DataEfetivaFechamento >= inicioMes);
+            return (await ganhas.SumAsync(o => o.PagamentoAdesao, ct) ?? 0m, await ganhas.CountAsync(ct));
+        }
+
+        async Task<(decimal MetaValor, int MetaQuantidade, decimal Realizado, int RealizadoQuantidade)> SoIndividuaisAsync()
+        {
+            var valor = await individuais.SumAsync(g => (decimal?)g.MetaValor, ct) ?? 0m;
+            var quantidade = await individuais.SumAsync(g => (int?)g.MetaQuantidadeVendas, ct) ?? 0;
+            var (realizado, realizadoQuantidade) = await RealizadoAsync(oportunidadesQuery);
+            return (valor, quantidade, realizado, realizadoQuantidade);
+        }
+
+        if (umConsultor) return await SoIndividuaisAsync();
+
+        if (currentUser.TemVisaoTotal)
+        {
+            // Regionais ocultas do administrador ficam de fora.
+            var ocultas = await EscopoRegional.OcultasAsync(db, currentUser, ct);
+            var porRegional = await individuais.GroupBy(g => g.Vendedor.RegionalId)
+                .Select(g => new { RegionalId = g.Key, Valor = g.Sum(x => (decimal?)x.MetaValor) ?? 0m, Quantidade = g.Sum(x => (int?)x.MetaQuantidadeVendas) ?? 0 })
+                .ToListAsync(ct);
+            var daRegional = await regionais.Where(g => !ocultas.Contains(g.RegionalId))
+                .Select(g => new { g.RegionalId, g.MetaValor, g.MetaQuantidadeVendas })
+                .ToListAsync(ct);
+
+            decimal metaValor = 0m;
+            var metaQuantidade = 0;
+            foreach (var r in porRegional.Where(p => p.RegionalId is null || !ocultas.Contains(p.RegionalId.Value)))
+            {
+                var meta = r.RegionalId is { } id ? daRegional.FirstOrDefault(m => m.RegionalId == id) : null;
+                metaValor += meta?.MetaValor is > 0 ? meta.MetaValor.Value : r.Valor;
+                metaQuantidade += meta is { MetaQuantidadeVendas: > 0 } ? meta.MetaQuantidadeVendas : r.Quantidade;
+            }
+
+            // Regional com meta cadastrada e nenhum consultor com meta individual: a meta dela também conta.
+            foreach (var m in daRegional.Where(m => porRegional.All(p => p.RegionalId != m.RegionalId)))
+            {
+                metaValor += m.MetaValor ?? 0m;
+                metaQuantidade += m.MetaQuantidadeVendas;
+            }
+
+            var (realizado, realizadoQuantidade) = await RealizadoAsync(oportunidadesQuery);
+            return (metaValor, metaQuantidade, realizado, realizadoQuantidade);
+        }
+
+        var minhaRegionalId = await db.Users.AsNoTracking().Where(u => u.Id == currentUser.UserId).Select(u => u.RegionalId).FirstOrDefaultAsync(ct);
+        var minha = minhaRegionalId is null
+            ? null
+            : await regionais.Where(g => g.RegionalId == minhaRegionalId).Select(g => new { g.MetaValor, g.MetaQuantidadeVendas }).FirstOrDefaultAsync(ct);
+        if (minha is null || (minha.MetaValor is not > 0 && minha.MetaQuantidadeVendas <= 0)) return await SoIndividuaisAsync();
+
+        var valorIndividuais = await individuais.SumAsync(g => (decimal?)g.MetaValor, ct) ?? 0m;
+        var quantidadeIndividuais = await individuais.SumAsync(g => (int?)g.MetaQuantidadeVendas, ct) ?? 0;
+        // As vendas contadas contra a meta da regional são as da regional inteira, não só as de quem está vendo.
+        var vendasDaRegional = db.CrmOpportunities.AsNoTracking().Where(o => !o.Arquivado && o.Responsavel.RegionalId == minhaRegionalId);
+        var (realizadoRegional, realizadoQuantidadeRegional) = await RealizadoAsync(vendasDaRegional);
+        return (
+            minha.MetaValor is > 0 ? minha.MetaValor.Value : valorIndividuais,
+            minha.MetaQuantidadeVendas > 0 ? minha.MetaQuantidadeVendas : quantidadeIndividuais,
+            realizadoRegional,
+            realizadoQuantidadeRegional);
     }
 
     private static async Task<List<EvolucaoVendasDto>> ObterEvolucaoVendasAsync(IQueryable<CrmOpportunity> oportunidadesQuery, DateOnly hoje, CancellationToken ct)
