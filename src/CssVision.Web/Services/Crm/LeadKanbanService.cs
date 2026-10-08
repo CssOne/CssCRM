@@ -171,6 +171,7 @@ public sealed class LeadKanbanService(
         var query = db.CrmLeads.AsNoTracking();
 
         if (!filtro.IncluirArquivados) query = query.Where(l => !l.Arquivado);
+        else query = query.Where(LixeiraDoQuadro.ForaDaLixeira); // excluídos pelo CRM ficam só na lixeira
         if (filtro.CriadoManualmente.HasValue) query = query.Where(l => l.CriadoManualmente == filtro.CriadoManualmente.Value);
 
         if (visiveis is not null)
