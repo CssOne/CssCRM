@@ -240,7 +240,7 @@ export function RelatorioComercialPage() {
       </div>
       <div className="flex items-end gap-1" title="Vazio = usa o período acima.">
         <label className="text-xs text-[var(--fg-muted)]">
-          Venda de
+          Ativação de
           <Input type="date" className="mt-0.5 h-8 w-36" value={vendaInicio} max={vendaFim || undefined} onChange={(e) => setVendaInicio(e.target.value)} />
         </label>
         <label className="text-xs text-[var(--fg-muted)]">
@@ -259,7 +259,7 @@ export function RelatorioComercialPage() {
       <div>
         <h1 className="text-xl font-semibold text-[var(--fg)]">Relatório comercial</h1>
         <p className="text-sm text-[var(--fg-muted)]">
-          Vendas, leads, origem e retorno — os relatórios do Notion, calculados com os dados do CRM. Vendas pela data da venda; leads pela data de chegada.
+          Vendas, leads, origem e retorno — os relatórios do Notion, calculados com os dados do CRM. Vendas pela data de ativação; leads pela data de chegada.
         </p>
       </div>
       {filtro}

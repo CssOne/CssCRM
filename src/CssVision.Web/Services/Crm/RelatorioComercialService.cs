@@ -89,15 +89,20 @@ public sealed class RelatorioComercialService(
         // Chegada e venda têm datas próprias (como no Notion); sem elas valem o período principal.
         var chegadaDe = InicioDoDia(extras.ChegadaInicio ?? inicio);
         var chegadaAte = InicioDoDia((extras.ChegadaFim ?? fim).AddDays(1));
+        // A venda conta no dia em que foi ATIVADA ("Ativo em", um dia gravado à meia-noite UTC); sem ativação, vale a data da venda em
+        // Brasília — a mesma regra do painel da TV e do filtro de venda do quadro de leads.
         var vendaDe = InicioDoDia(extras.VendaInicio ?? inicio);
         var vendaAte = InicioDoDia((extras.VendaFim ?? fim).AddDays(1));
+        var ativacaoDe = new DateTimeOffset((extras.VendaInicio ?? inicio).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+        var ativacaoAte = new DateTimeOffset((extras.VendaFim ?? fim).AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
 
         var leadsQuery = db.CrmLeads.AsNoTracking()
             // Veículo adicional repete o cliente: não é um lead a mais.
             .Where(l => !l.Arquivado && l.VeiculoAdicionalDeLeadId == null && l.CriadoEm >= chegadaDe && l.CriadoEm < chegadaAte);
         var vendasQuery = db.CrmOpportunities.AsNoTracking()
             .Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho
-                && o.DataEfetivaFechamento >= vendaDe && o.DataEfetivaFechamento < vendaAte);
+                && ((o.AtivoEm != null && o.AtivoEm >= ativacaoDe && o.AtivoEm < ativacaoAte)
+                    || (o.AtivoEm == null && o.DataEfetivaFechamento >= vendaDe && o.DataEfetivaFechamento < vendaAte)));
         // Se o gestor escolheu a data de chegada, as vendas também são só dos leads que chegaram nela.
         if (extras.ChegadaInicio is not null || extras.ChegadaFim is not null)
         {
@@ -125,9 +130,10 @@ public sealed class RelatorioComercialService(
         if (extras.Indicacao is { } indicacao)
         {
             // Mesma regra do quadro de leads: indicação = qualquer tipo que não seja "Lead". Na venda, também vale o campo da própria venda.
+            // (cadastro manual sem tipo também é indicação, como no quadro: ver NotionEtapaLead.EhIndicacao)
             leadsQuery = indicacao
-                ? leadsQuery.Where(l => l.TipoIndicacao != null && l.TipoIndicacao.ToLower() != "lead")
-                : leadsQuery.Where(l => l.TipoIndicacao == null || l.TipoIndicacao.ToLower() == "lead");
+                ? leadsQuery.Where(l => (l.TipoIndicacao == null || l.TipoIndicacao.ToLower() != "lead") && (l.CriadoManualmente || (l.TipoIndicacao != null && l.TipoIndicacao != "")))
+                : leadsQuery.Where(l => (l.TipoIndicacao != null && l.TipoIndicacao.ToLower() == "lead") || (!l.CriadoManualmente && (l.TipoIndicacao == null || l.TipoIndicacao == "")));
             vendasQuery = indicacao
                 ? vendasQuery.Where(o => o.Indicacao == true || o.ValorIndicacao > 0)
                 : vendasQuery.Where(o => o.Indicacao != true && !(o.ValorIndicacao > 0));
@@ -148,7 +154,8 @@ public sealed class RelatorioComercialService(
         var vendas = (await vendasQuery
             .Select(o => new
             {
-                Data = o.DataEfetivaFechamento!.Value,
+                o.AtivoEm,
+                o.DataEfetivaFechamento,
                 o.ResponsavelId,
                 Responsavel = o.Responsavel.NomeCompleto,
                 Origem = o.Lead.Origem,
@@ -163,7 +170,7 @@ public sealed class RelatorioComercialService(
                 o.Indicacao,
             })
             .ToListAsync(ct))
-            .Select(o => new VendaLinha(o.Data, o.ResponsavelId, o.Responsavel, o.Origem, o.Estado, o.Produto,
+            .Select(o => new VendaLinha(DataDaVenda(o.AtivoEm, o.DataEfetivaFechamento), o.ResponsavelId, o.Responsavel, o.Origem, o.Estado, o.Produto,
                 o.PagamentoAdesao ?? 0m, o.Mensalidade ?? 0m, o.Rastreador ?? 0m, o.Vistoria ?? 0m, o.ValorIndicacao ?? 0m,
                 o.Indicacao == true || o.ValorIndicacao > 0, o.Fipe))
             .ToList();
@@ -181,6 +188,10 @@ public sealed class RelatorioComercialService(
             await MarketingDoNotionAsync(inicio, fim, ct),
             PorEtapa(leads));
     }
+
+    /// <summary>Instante que põe a venda no dia certo: "Ativo em" à meia-noite UTC vira meio-dia do mesmo dia; sem ativação, a data da venda.</summary>
+    private static DateTimeOffset DataDaVenda(DateTimeOffset? ativoEm, DateTimeOffset? dataDaVenda) =>
+        ativoEm is { } a ? (a.UtcDateTime.TimeOfDay == TimeSpan.Zero ? a.AddHours(12) : a) : dataDaVenda!.Value;
 
     private static DateTime Brasilia(DateTimeOffset data) => data.UtcDateTime.AddHours(-3);
 
