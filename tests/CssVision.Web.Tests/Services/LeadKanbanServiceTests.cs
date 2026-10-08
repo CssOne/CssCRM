@@ -145,7 +145,7 @@ public class LeadKanbanServiceTests
         db.CrmLeads.AddRange(meta, site, migrado, sincronizado, Lead("Manual"));
         await db.SaveChangesAsync();
 
-        var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
+        var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id, visaoTotal: true);
         var service = new LeadKanbanService(db, new EquipeComercialService(db, currentUser.Object));
 
         var nomes = (await service.ObterBoardAsync(new LeadKanbanFilterRequest { Fonte = fonte is null ? null : [fonte] }, CancellationToken.None))

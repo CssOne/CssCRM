@@ -685,6 +685,7 @@ export function LeadsKanbanPage() {
             onChange={setTipoIndicacao}
           />
         </div>
+        {podeVerOrigem && (
         <div className="w-44">
           <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Fonte</label>
           <MultiSelect
@@ -698,6 +699,7 @@ export function LeadsKanbanPage() {
             onChange={setFonte}
           />
         </div>
+        )}
         <div className="flex items-end gap-1">
           <div className="w-36">
             <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Chegada de</label>

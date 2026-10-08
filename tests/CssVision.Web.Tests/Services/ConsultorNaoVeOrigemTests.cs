@@ -58,4 +58,34 @@ public class ConsultorNaoVeOrigemTests
         Assert.Null(cartao.Origem);
         Assert.Null(cartao.Campanha);
     }
+
+    [Fact]
+    public async Task Consultor_NaoDefineOrigemNemMarketingAoCadastrar_ENaoFiltraOQuadroPorFonte()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var consultor = await factory.CriarUsuarioAsync(db, "Consultor");
+        var regional = await factory.CriarRegionalAsync(db, "MG132");
+        consultor.RegionalId = regional.Id;
+        await db.SaveChangesAsync();
+        var u = TestDbContextFactory.MockCurrentUser(consultor.Id);
+        var leads = new LeadService(db, u.Object, new EquipeComercialService(db, u.Object), new NoOpLeadAssignmentService(), new NoOpMetaConversionService(), new NoOpAuditSink());
+
+        var pedido = new LeadCreateRequest("Novo", TipoPessoa.Fisica, null, "31999990000", null, null, null, null, "BH", "MG", "MG132", "Lookalike", "Camp", null, "ABC1D23", null, null,
+            "gclid", "med", "src", "term", "click", "form", "metalead", null, "Pessoal", null, null, null, null, true, null);
+        var criado = (await leads.CriarAsync(pedido, CancellationToken.None)).Lead!;
+
+        db.ChangeTracker.Clear();
+        var salvo = await db.CrmLeads.AsNoTracking().SingleAsync(l => l.Id == criado.Id);
+        Assert.Null(salvo.Origem);
+        Assert.Null(salvo.Campanha);
+        Assert.Null(salvo.Gclid);
+        Assert.Null(salvo.UtmSource);
+        Assert.Null(salvo.MetaLeadId);
+
+        // "Fonte" (Notion x tráfego pago) revela a origem: para o consultor o filtro é ignorado e o card continua na lista.
+        var quadro = new LeadKanbanService(db, new EquipeComercialService(db, u.Object), currentUser: u.Object);
+        var comFiltro = await quadro.ObterBoardAsync(new LeadKanbanFilterRequest { Fonte = ["Notion"] }, CancellationToken.None);
+        Assert.Single(comFiltro.Colunas.SelectMany(c => c.Cartoes));
+    }
 }
