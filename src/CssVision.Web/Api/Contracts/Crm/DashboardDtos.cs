@@ -1,6 +1,7 @@
 namespace CssVision.Web.Api.Contracts.Crm;
 
-public record DashboardFilterRequest(DateOnly? DataInicio, DateOnly? DataFim, Guid? VendedorId);
+/// <param name="RegionalId">Só o administrador (visão total) pode escolher: mostra o painel apenas dessa regional (a meta do mês é a da regional). Para os demais é ignorado.</param>
+public record DashboardFilterRequest(DateOnly? DataInicio, DateOnly? DataFim, Guid? VendedorId, Guid? RegionalId = null);
 
 public record DashboardIndicadoresDto(
     int NovosLeads,

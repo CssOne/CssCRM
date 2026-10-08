@@ -10,6 +10,7 @@ import { BarrasHorizontaisChart } from "../../components/marketing/GraficosTrafe
 import { mesAtualIso, useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { StatCard } from "../../components/crm/StatCard";
 import { EvolucaoChart, OrigemChart } from "../../components/crm/Charts";
+import { FiltroRegionalDoPainel, useRegionalDoPainel } from "../../components/crm/FiltroRegionalDoPainel";
 
 const TAMANHO_PAGINA_VENDEDORES = 10;
 
@@ -21,6 +22,7 @@ export function OverviewPage() {
   // Mês mostrado (YYYY-MM): começa no mês atual e acompanha a virada do mês se ninguém escolheu outro.
   const [mes, setMes] = useState(() => mesAtualIso().slice(0, 7));
   const mesAtualRef = useRef(mesAtualIso().slice(0, 7));
+  const { podeFiltrar, regionalId, escolher: escolherRegional } = useRegionalDoPainel();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -29,12 +31,12 @@ export function OverviewPage() {
     const [ano, numeroMes] = mes.split("-").map(Number);
     const ultimoDia = new Date(ano, numeroMes, 0).getDate();
     api
-      .get<Dashboard>(`/crm/dashboard${toQueryString({ dataInicio: `${mes}-01`, dataFim: `${mes}-${String(ultimoDia).padStart(2, "0")}` })}`, controller.signal)
+      .get<Dashboard>(`/crm/dashboard${toQueryString({ dataInicio: `${mes}-01`, dataFim: `${mes}-${String(ultimoDia).padStart(2, "0")}`, regionalId: regionalId || undefined })}`, controller.signal)
       .then(setDados)
       .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar o painel."); })
       .finally(() => { if (!controller.signal.aborted) setCarregando(false); });
     return () => controller.abort();
-  }, [recarregar, mes]);
+  }, [recarregar, mes, regionalId]);
 
   // Tempo real: o painel recarrega (sem piscar) quando uma venda/lead muda e quando o mês vira.
   useAtualizarAoVivo(() => {
@@ -73,9 +75,12 @@ export function OverviewPage() {
         <h1 className="text-xl font-semibold text-[var(--fg)]">Visão geral</h1>
         <p className="text-sm text-[var(--fg-muted)]">Indicadores comerciais de {rotuloMes}.</p>
       </div>
-      <div className="w-44">
-        <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Mês</label>
-        <Input type="month" value={mes} onChange={(e) => e.target.value && setMes(e.target.value)} />
+      <div className="flex flex-wrap gap-4">
+        <div className="w-44">
+          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Mês</label>
+          <Input type="month" value={mes} onChange={(e) => e.target.value && setMes(e.target.value)} />
+        </div>
+        {podeFiltrar && <FiltroRegionalDoPainel valor={regionalId} aoEscolher={escolherRegional} />}
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

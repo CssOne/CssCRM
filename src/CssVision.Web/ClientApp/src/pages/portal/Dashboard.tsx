@@ -18,7 +18,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { Link } from "react-router-dom";
-import { api, isAbortError } from "../../lib/api";
+import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarDataHora, formatarMoeda } from "../../lib/format";
 import { TipoAnuncio, TipoAtividade, type Activity, type Announcement, type Dashboard, type MeuAviso } from "../../lib/types";
 import { useAuth } from "../../context/AuthContext";
@@ -26,6 +26,7 @@ import { Badge, Card, ErrorState, Skeleton, useToast } from "../../components/ui
 import { PortalStatCard } from "../../components/portal/PortalStatCard";
 import { DesempenhoChart } from "../../components/portal/DesempenhoChart";
 import { tipoLabel } from "../../components/crm/ActivityForm";
+import { FiltroRegionalDoPainel, useRegionalDoPainel } from "../../components/crm/FiltroRegionalDoPainel";
 
 function saudacao(): string {
   const hora = new Date().getHours();
@@ -46,13 +47,14 @@ export function PortalDashboardPage() {
   const [erro, setErro] = useState<string | null>(null);
 
   const [recarregar, setRecarregar] = useState(0);
+  const { podeFiltrar, regionalId, escolher: escolherRegional } = useRegionalDoPainel();
 
   useEffect(() => {
     const controller = new AbortController();
     setCarregando(true);
     setErro(null);
     Promise.all([
-      api.get<Dashboard>("/crm/dashboard", controller.signal),
+      api.get<Dashboard>(`/crm/dashboard${toQueryString({ regionalId: regionalId || undefined })}`, controller.signal),
       api.get<{ itens: Activity[] }>("/crm/activities?visao=3&tamanhoPagina=10", controller.signal),
       api.get<Announcement[]>(`/crm/portal/announcements?tipo=${TipoAnuncio.Aviso}`, controller.signal),
       // Pagamentos em aberto avisados pelo financeiro/gestão: se falhar, o resto do painel segue.
@@ -69,7 +71,7 @@ export function PortalDashboardPage() {
       })
       .finally(() => { if (!controller.signal.aborted) setCarregando(false); });
     return () => controller.abort();
-  }, [recarregar]);
+  }, [recarregar, regionalId]);
 
   // Tempo real: ranking, metas e indicadores atualizam sozinhos (vendas, leads) e quando o mês vira.
   useAtualizarAoVivo(() => setRecarregar((n) => n + 1));
@@ -102,11 +104,14 @@ export function PortalDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-[var(--fg)]">
-          {saudacao()}, {primeiroNome}! 👋
-        </h1>
-        <p className="text-sm text-[var(--fg-muted)]">Aqui está o resumo do seu desempenho e atividades de hoje.</p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--fg)]">
+            {saudacao()}, {primeiroNome}! 👋
+          </h1>
+          <p className="text-sm text-[var(--fg-muted)]">Aqui está o resumo do seu desempenho e atividades de hoje.</p>
+        </div>
+        {podeFiltrar && <FiltroRegionalDoPainel valor={regionalId} aoEscolher={escolherRegional} />}
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

@@ -35,12 +35,14 @@ public class DashboardMetaDoMesTests
             return new DashboardService(Db, equipe, atividades, currentUser.Object);
         }
 
-        public async Task<MetaResultadoDto> MetaAsync(ApplicationUser quem, bool visaoTotal = false, Guid? vendedor = null)
+        public async Task<DashboardDto> PainelAsync(ApplicationUser quem, bool visaoTotal = false, Guid? vendedor = null, Guid? regional = null)
         {
             var hoje = HorarioBrasilia.Hoje;
-            var r = await Servico(quem, visaoTotal).ObterAsync(new DashboardFilterRequest(HorarioBrasilia.PrimeiroDiaDoMes(hoje), hoje, vendedor), CancellationToken.None);
-            return r.Meta;
+            return await Servico(quem, visaoTotal).ObterAsync(new DashboardFilterRequest(HorarioBrasilia.PrimeiroDiaDoMes(hoje), hoje, vendedor, regional), CancellationToken.None);
         }
+
+        public async Task<MetaResultadoDto> MetaAsync(ApplicationUser quem, bool visaoTotal = false, Guid? vendedor = null, Guid? regional = null) =>
+            (await PainelAsync(quem, visaoTotal, vendedor, regional)).Meta;
     }
 
     private static async Task<Cenario> MontarAsync(TestDbContextFactory factory)
@@ -232,5 +234,71 @@ public class DashboardMetaDoMesTests
         Assert.Equal(0, meta.MetaQuantidade);
         Assert.Equal(0m, meta.MetaValor);
         Assert.Equal(0m, meta.PercentualAtingido);
+    }
+
+    [Fact]
+    public async Task Administrador_FiltrandoSoAMg132_VeSo500_ComAsVendasDaMg132()
+    {
+        using var factory = new TestDbContextFactory();
+        var c = await MontarAsync(factory);
+
+        var meta = await c.MetaAsync(c.Admin, visaoTotal: true, regional: c.Mg132.Id);
+
+        Assert.Equal(500, meta.MetaQuantidade); // a meta definida para a regional, sem somar com as individuais nem com outras regionais
+        Assert.Equal(100000m, meta.MetaValor);
+        Assert.Equal(3, meta.RealizadoQuantidade); // Ana 2 + Bia 1
+        Assert.Equal(600m, meta.RealizadoValor);
+    }
+
+    [Fact]
+    public async Task Administrador_FiltrandoARegionalQueSoDefiniuQuantidade_ComplementaOValorComAsIndividuais()
+    {
+        using var factory = new TestDbContextFactory();
+        var c = await MontarAsync(factory);
+
+        var meta = await c.MetaAsync(c.Admin, visaoTotal: true, regional: c.Mg134.Id);
+
+        Assert.Equal(200, meta.MetaQuantidade);
+        Assert.Equal(3000m, meta.MetaValor); // a MG134 não definiu valor: a individual da Cris
+        Assert.Equal(1, meta.RealizadoQuantidade);
+    }
+
+    [Fact]
+    public async Task Administrador_FiltroDeRegional_RestringeTambemOsDemaisNumerosDoPainel()
+    {
+        using var factory = new TestDbContextFactory();
+        var c = await MontarAsync(factory);
+
+        var painel = await c.PainelAsync(c.Admin, visaoTotal: true, regional: c.Mg132.Id);
+
+        Assert.Equal(3, painel.Indicadores.VendasGanhasQuantidade);
+        Assert.All(painel.DesempenhoPorVendedor, d => Assert.Contains(d.VendedorNome, new[] { "Ana", "Bia" }));
+    }
+
+    [Fact]
+    public async Task QuemNaoTemVisaoTotal_NaoUsaOFiltroParaVerOutraRegional()
+    {
+        using var factory = new TestDbContextFactory();
+        var c = await MontarAsync(factory);
+
+        // A Ana (MG132) pede a MG134: o filtro é ignorado e ela continua vendo só a própria regional.
+        var meta = await c.MetaAsync(c.Ana, regional: c.Mg134.Id);
+
+        Assert.Equal(500, meta.MetaQuantidade);
+        Assert.Equal(3, meta.RealizadoQuantidade);
+    }
+
+    [Fact]
+    public async Task Administrador_FiltrandoARegionalOculta_NaoVeNada()
+    {
+        using var factory = new TestDbContextFactory();
+        var c = await MontarAsync(factory);
+        var admin = await c.Db.Users.FindAsync(c.Admin.Id);
+        admin!.RegionaisOcultas = c.Mg134.Id.ToString();
+        await c.Db.SaveChangesAsync();
+
+        var meta = await c.MetaAsync(c.Admin, visaoTotal: true, regional: c.Mg134.Id);
+
+        Assert.Equal(0, meta.RealizadoQuantidade); // as vendas da regional oculta não aparecem nem pelo filtro
     }
 }

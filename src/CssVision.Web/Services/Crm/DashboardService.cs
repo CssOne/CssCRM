@@ -36,6 +36,15 @@ public sealed class DashboardService(
         var agora = DateTimeOffset.UtcNow;
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
+
+        // Filtro de regional: só para quem tem visão total (os demais já estão presos à própria equipe). Fica só quem é da regional escolhida.
+        var regionalFiltrada = currentUser.TemVisaoTotal ? filtro.RegionalId : null;
+        if (regionalFiltrada is { } escolhida)
+        {
+            var daRegional = await db.Users.AsNoTracking().Where(u => u.RegionalId == escolhida).Select(u => u.Id).ToListAsync(ct);
+            visiveis = visiveis is null ? daRegional : visiveis.Intersect(daRegional).ToList();
+        }
+
         if (filtro.VendedorId.HasValue)
         {
             if (visiveis is not null && !visiveis.Contains(filtro.VendedorId.Value))
@@ -92,7 +101,7 @@ public sealed class DashboardService(
         // Meta do mês (ver CalcularMetaDoMesAsync: a meta da regional vale no lugar das individuais, não soma com elas).
         var mesReferencia = HorarioBrasilia.PrimeiroDiaDoMes(hoje);
         var (metaValor, metaQuantidade, realizadoMes, realizadoQuantidadeMes) =
-            await CalcularMetaDoMesAsync(visiveis, filtro.VendedorId.HasValue, oportunidadesQuery, mesReferencia, ct);
+            await CalcularMetaDoMesAsync(visiveis, filtro.VendedorId.HasValue, regionalFiltrada, oportunidadesQuery, mesReferencia, ct);
         var meta = new MetaResultadoDto(
             metaValor, realizadoMes,
             metaQuantidade == 0 ? 0m : Math.Round(100m * realizadoQuantidadeMes / metaQuantidade, 1),
@@ -147,7 +156,7 @@ public sealed class DashboardService(
     /// Cada medida (valor e quantidade) cai para a soma das individuais quando a regional só definiu a outra. Meta de valor = adesão recebida (ver GoalService).
     /// </summary>
     private async Task<(decimal MetaValor, int MetaQuantidade, decimal Realizado, int RealizadoQuantidade)> CalcularMetaDoMesAsync(
-        List<Guid>? visiveis, bool umConsultor, IQueryable<CrmOpportunity> oportunidadesQuery, DateOnly mes, CancellationToken ct)
+        List<Guid>? visiveis, bool umConsultor, Guid? regionalFiltrada, IQueryable<CrmOpportunity> oportunidadesQuery, DateOnly mes, CancellationToken ct)
     {
         var inicioMes = HorarioBrasilia.Inicio(mes);
         var individuais = db.CrmSalesGoals.AsNoTracking().Where(g => g.MesReferencia == mes);
@@ -169,6 +178,21 @@ public sealed class DashboardService(
         }
 
         if (umConsultor) return await SoIndividuaisAsync();
+
+        // Administrador que escolheu uma regional: a meta é a dela (ou a soma das individuais, se ela não tiver), contra as vendas dela
+        // (as oportunidades já vêm só dos consultores da regional).
+        if (regionalFiltrada is { } escolhida)
+        {
+            var daRegional = await regionais.Where(g => g.RegionalId == escolhida).Select(g => new { g.MetaValor, g.MetaQuantidadeVendas }).FirstOrDefaultAsync(ct);
+            var valorDaEscolhida = await individuais.SumAsync(g => (decimal?)g.MetaValor, ct) ?? 0m;
+            var quantidadeDaEscolhida = await individuais.SumAsync(g => (int?)g.MetaQuantidadeVendas, ct) ?? 0;
+            var (realizadoDaEscolhida, realizadoQuantidadeDaEscolhida) = await RealizadoAsync(oportunidadesQuery);
+            return (
+                daRegional?.MetaValor is > 0 ? daRegional.MetaValor.Value : valorDaEscolhida,
+                daRegional is { MetaQuantidadeVendas: > 0 } ? daRegional.MetaQuantidadeVendas : quantidadeDaEscolhida,
+                realizadoDaEscolhida,
+                realizadoQuantidadeDaEscolhida);
+        }
 
         if (currentUser.TemVisaoTotal)
         {
