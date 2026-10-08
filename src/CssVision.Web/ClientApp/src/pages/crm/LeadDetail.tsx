@@ -60,6 +60,12 @@ function paraFormValues(lead: LeadDetail): LeadFormValues {
   };
 }
 
+/** Mesma regra do quadro de leads: tipo "Lead" é lead (tráfego, Notion); qualquer outro tipo, ou cadastro manual, é indicação. */
+function ehIndicacao(lead: LeadDetail): boolean {
+  const tipo = lead.tipoIndicacao?.trim().toLowerCase();
+  return tipo !== "lead" && (lead.criadoManualmente || !!tipo);
+}
+
 export function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
   return id ? <LeadDetailConteudo key={id} leadId={id} /> : null;
@@ -516,7 +522,7 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
             Já existe outro lead com o mesmo {duplicidade.campoDuplicado}: {duplicidade.nomeExistente}.
           </p>
         )}
-        <LeadForm valoresIniciais={paraFormValues(lead)} salvando={salvando} onSubmit={salvarEdicao} onCancel={() => setModalEditar(false)} idPrefix="editar" />
+        <LeadForm valoresIniciais={paraFormValues(lead)} salvando={salvando} onSubmit={salvarEdicao} onCancel={() => setModalEditar(false)} idPrefix="editar" ehIndicacao={ehIndicacao(lead)} />
       </Modal>
 
       {/* Nova oportunidade: mesmo formulário da Venda concluída, só o nome do cliente é obrigatório. */}
