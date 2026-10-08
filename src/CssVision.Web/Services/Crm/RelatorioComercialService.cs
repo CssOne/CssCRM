@@ -65,12 +65,18 @@ public sealed class RelatorioComercialService(
         }
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
+        if (extras?.RegionalId is { } regionalId)
+        {
+            // Aba de uma regional: só os consultores dela, dentro do que quem consulta já enxerga.
+            var daRegional = await db.Users.AsNoTracking().Where(u => u.RegionalId == regionalId).Select(u => u.Id).ToListAsync(ct);
+            visiveis = visiveis is null ? daRegional : visiveis.Intersect(daRegional).ToList();
+        }
         var etapas = etapaIds is { Count: > 0 } ? etapaIds.Distinct().Order().ToList() : null;
         // Tipos de indicação sem maiúsculas/minúsculas (o dado veio de épocas com grafias diferentes), ordenados para a chave do cache.
         var tipos = (extras?.TiposIndicacao ?? []).Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim().ToLower()).Distinct().Order().ToList();
-        var filtroExtra = new RelatorioFiltroExtra(extras?.ChegadaInicio, extras?.ChegadaFim, extras?.VendaInicio, extras?.VendaFim, extras?.Indicacao, tipos);
+        var filtroExtra = new RelatorioFiltroExtra(extras?.ChegadaInicio, extras?.ChegadaFim, extras?.VendaInicio, extras?.VendaFim, extras?.Indicacao, tipos, extras?.RegionalId);
         return await RespostaEmCache.ObterAsync(cache, eventos, "relatorio-comercial",
-            new { escopo = RespostaEmCache.Escopo(visiveis), inicio, fim, consultorId, etapas, extras = new { filtroExtra.ChegadaInicio, filtroExtra.ChegadaFim, filtroExtra.VendaInicio, filtroExtra.VendaFim, filtroExtra.Indicacao, tipos } },
+            new { escopo = RespostaEmCache.Escopo(visiveis), inicio, fim, consultorId, etapas, extras = new { filtroExtra.ChegadaInicio, filtroExtra.ChegadaFim, filtroExtra.VendaInicio, filtroExtra.VendaFim, filtroExtra.Indicacao, tipos, filtroExtra.RegionalId } },
             () => CalcularAsync(inicio, fim, visiveis, consultorId, etapas, filtroExtra, tipos, ct));
     }
 
