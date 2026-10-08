@@ -64,6 +64,47 @@ public class FiltroDataDaVendaTests
     }
 
     [Fact]
+    public async Task Filtro_UsaADataDeAtivacao_ESoCaiParaADataDaVendaQuandoNaoHaAtivacao()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var admin = await factory.CriarUsuarioAsync(db, "Admin");
+        var ganho = await factory.CriarEtapaAsync(db, "Ganho", 8, TipoEtapaPipeline.Ganho);
+        CrmLead Lead(string nome) => new() { NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = admin.Id };
+        var ativadaDepois = Lead("Vendida 30/09, ativada 01/10"); var semAtivacao = Lead("Sem ativacao"); var ativadaAntes = Lead("Vendida 02/10, ativada 30/09");
+        db.CrmLeads.AddRange(ativadaDepois, semAtivacao, ativadaAntes);
+        await db.SaveChangesAsync();
+        CrmOpportunity Op(CrmLead l, DateTimeOffset venda, DateTimeOffset? ativo) => new()
+        {
+            LeadId = l.Id, Titulo = "AGV", ResponsavelId = admin.Id, EtapaId = ganho.Id, DataEfetivaFechamento = venda, AtivoEm = ativo,
+        };
+        db.CrmOpportunities.AddRange(
+            Op(ativadaDepois, new DateTimeOffset(2026, 9, 30, 12, 0, 0, TimeSpan.Zero), new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero)),
+            Op(semAtivacao, new DateTimeOffset(2026, 10, 1, 15, 0, 0, TimeSpan.Zero), null),
+            Op(ativadaAntes, new DateTimeOffset(2026, 10, 2, 12, 0, 0, TimeSpan.Zero), new DateTimeOffset(2026, 9, 30, 0, 0, 0, TimeSpan.Zero)));
+        await db.SaveChangesAsync();
+
+        var usuario = TestDbContextFactory.MockCurrentUser(admin.Id, visaoTotal: true);
+        var kanban = new LeadKanbanService(db, new EquipeComercialService(db, usuario.Object));
+        var leads = new LeadService(db, usuario.Object, new EquipeComercialService(db, usuario.Object),
+            new NoOpLeadAssignmentService(), new NoOpMetaConversionService(), new NoOpAuditSink());
+
+        async Task<string[]> NoQuadro(DateOnly de, DateOnly ate) =>
+            (await kanban.ObterBoardAsync(new LeadKanbanFilterRequest { DataVendaInicio = de, DataVendaFim = ate }, CancellationToken.None))
+                .Colunas.SelectMany(c => c.Cartoes).Select(c => c.NomeOuRazaoSocial).Order().ToArray();
+        async Task<string[]> NaLista(DateOnly de, DateOnly ate) =>
+            (await leads.ListarAsync(new LeadFilterRequest { DataVendaInicio = de, DataVendaFim = ate, Pagina = 1, TamanhoPagina = 50 }, CancellationToken.None))
+                .Itens.Select(i => i.NomeOuRazaoSocial).Order().ToArray();
+
+        foreach (var buscar in new Func<DateOnly, DateOnly, Task<string[]>>[] { NoQuadro, NaLista })
+        {
+            Assert.Equal(["Sem ativacao", "Vendida 30/09, ativada 01/10"], await buscar(new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 1)));
+            Assert.Equal(["Vendida 02/10, ativada 30/09"], await buscar(new DateOnly(2026, 9, 30), new DateOnly(2026, 9, 30)));
+            Assert.Empty(await buscar(new DateOnly(2026, 10, 2), new DateOnly(2026, 10, 31)));
+        }
+    }
+
+    [Fact]
     public async Task Meta_ContaAVendaDoFimDeSetembroEmSetembro_ENaoContaVendaExcluida()
     {
         using var factory = new TestDbContextFactory();
