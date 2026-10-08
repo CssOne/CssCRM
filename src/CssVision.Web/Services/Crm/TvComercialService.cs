@@ -48,6 +48,13 @@ public sealed class TvComercialService(
             () => CalcularAsync(primeiro, hoje, visiveis, vendasNotion, administrativo, ct));
     }
 
+    /// <summary>
+    /// Instante que coloca a venda no dia certo do painel: "Ativo em" é um dia gravado à meia-noite UTC (21h da véspera em Brasília), então
+    /// vira meio-dia do mesmo dia; com horário de verdade, vale como está. Sem ativação, vale a data da venda.
+    /// </summary>
+    internal static DateTimeOffset DataDaAtivacao(DateTimeOffset? ativoEm, DateTimeOffset? dataDaVenda) =>
+        ativoEm is { } a ? (a.UtcDateTime.TimeOfDay == TimeSpan.Zero ? a.AddHours(12) : a) : dataDaVenda!.Value;
+
     private async Task<TvComercialDto> CalcularAsync(
         DateOnly primeiro, DateOnly hoje, List<Guid>? visiveis, IReadOnlyList<TvNotionVenda> vendasNotion, TvAdministrativoDto? administrativo, CancellationToken ct)
     {
@@ -58,9 +65,13 @@ public sealed class TvComercialService(
         var fimDeHoje = HorarioBrasilia.Inicio(hoje.AddDays(1));
         if (fimDeHoje < fimMes) fimMes = fimDeHoje;
 
+        // A venda conta no dia em que foi ATIVADA ("Ativo em"); sem essa data, vale a data da venda. A janela do banco é folgada (um dia
+        // para cada lado) e o corte exato é feito abaixo, porque "Ativo em" é um dia gravado à meia-noite UTC.
+        var folgaIni = inicioMes.AddDays(-1);
+        var folgaFim = fimMes.AddDays(1);
         var vendasQuery = db.CrmOpportunities.AsNoTracking()
             .Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho
-                && o.DataEfetivaFechamento >= inicioMes && o.DataEfetivaFechamento < fimMes);
+                && (o.AtivoEm ?? o.DataEfetivaFechamento) >= folgaIni && (o.AtivoEm ?? o.DataEfetivaFechamento) < folgaFim);
         var leadsQuery = db.CrmLeads.AsNoTracking().Where(l => !l.Arquivado && l.CriadoEm >= inicioMes && l.CriadoEm < fimMes);
         if (visiveis is not null)
         {
@@ -68,12 +79,18 @@ public sealed class TvComercialService(
             leadsQuery = leadsQuery.Where(l => l.ResponsavelId != null && visiveis.Contains(l.ResponsavelId.Value));
         }
 
-        var vendas = await vendasQuery
-            .Select(o => new VendaTv(
-                o.Id, o.ResponsavelId, o.DataEfetivaFechamento!.Value, o.PagamentoAdesao ?? 0m,
-                o.AtualizadoEm ?? o.CriadoEm, o.Lead.NomeOuRazaoSocial,
-                o.Veiculo != null ? o.Veiculo.Placa : null, o.TipoIndicacao ?? o.Lead.TipoIndicacao, false))
+        var vendasBrutas = await vendasQuery
+            .Select(o => new
+            {
+                o.Id, o.ResponsavelId, o.AtivoEm, o.DataEfetivaFechamento, Adesao = o.PagamentoAdesao ?? 0m,
+                Atualizada = o.AtualizadoEm ?? o.CriadoEm, Cliente = o.Lead.NomeOuRazaoSocial,
+                Placa = o.Veiculo != null ? o.Veiculo.Placa : null, Origem = o.TipoIndicacao ?? o.Lead.TipoIndicacao,
+            })
             .ToListAsync(ct);
+        var vendas = vendasBrutas
+            .Select(o => new VendaTv(o.Id, o.ResponsavelId, DataDaAtivacao(o.AtivoEm, o.DataEfetivaFechamento), o.Adesao, o.Atualizada, o.Cliente, o.Placa, o.Origem, false))
+            .Where(v => v.Data >= inicioMes && v.Data < fimMes)
+            .ToList();
 
         // ----- vendas que existem só no Notion (base MG134), sem repetir as que o CRM já tem -----
         var regionais = await db.CrmRegionais.AsNoTracking().Where(r => r.Ativa).Select(r => new { r.Id, r.Nome }).ToListAsync(ct);
