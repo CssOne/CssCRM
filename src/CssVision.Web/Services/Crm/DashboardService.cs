@@ -187,7 +187,7 @@ public sealed class DashboardService(
     private async Task<List<DesempenhoVendedorDto>> ObterDesempenhoPorVendedorAsync(
         List<Guid>? visiveis, DateTimeOffset inicioUtc, DateTimeOffset fimUtc, CancellationToken ct)
     {
-        var vendedoresQuery = db.Users.AsNoTracking().AsQueryable();
+        var vendedoresQuery = db.Users.AsNoTracking().Where(u => u.AtuaNasVendas); // admin que só administra fica fora do ranking
         if (visiveis is not null) vendedoresQuery = vendedoresQuery.Where(u => visiveis.Contains(u.Id));
 
         var vendedores = await vendedoresQuery.Select(u => new { u.Id, u.NomeCompleto, u.Ativo }).ToListAsync(ct);

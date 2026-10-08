@@ -166,6 +166,8 @@ public sealed class UserManagementService(
             LimiteMensalLeads = request.Papel == Roles.Comercial ? request.LimiteMensalLeads : null,
             RecebeSomenteOQue = request.Papel == Roles.Comercial ? FiltroOQue.Juntar(request.RecebeSomenteOQue) : null,
             LimiteDiarioLeads = request.Papel == Roles.Comercial ? request.LimiteDiarioLeads : null,
+            // Só administrador (visão total) pode "só administrar"; os demais papéis sempre atuam nas vendas.
+            AtuaNasVendas = request.Papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial) || (request.AtuaNasVendas ?? true),
         };
 
         var resultado = await userManager.CreateAsync(usuario, request.Senha);
@@ -277,6 +279,8 @@ public sealed class UserManagementService(
         if (request.Papel != Roles.Comercial) usuario.RecebeSomenteOQue = null;
         else if (request.RecebeSomenteOQue is not null) usuario.RecebeSomenteOQue = FiltroOQue.Juntar(request.RecebeSomenteOQue);
         usuario.Ativo = request.Ativo;
+        if (request.Papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial)) usuario.AtuaNasVendas = true;
+        else if (request.AtuaNasVendas is { } atua) usuario.AtuaNasVendas = atua;
 
         var papeisAtuais = await userManager.GetRolesAsync(usuario);
         if (!papeisAtuais.Contains(request.Papel))
@@ -469,7 +473,8 @@ public sealed class UserManagementService(
             usuario.GrupoId, usuario.Grupo?.Nome,
             usuario.Ativo, usuario.LimiteMensalLeads, usuario.FotoUrl, usuario.CriadoEm, FiltroOQue.Separar(usuario.RecebeSomenteOQue), usuario.LimiteDiarioLeads,
             [.. EscopoRegional.Ler(usuario.RegionaisOcultas)],
-            await NomesDasOcultasAsync(usuario.RegionaisOcultas, ct));
+            await NomesDasOcultasAsync(usuario.RegionaisOcultas, ct),
+            usuario.AtuaNasVendas);
     }
 
     private async Task<IReadOnlyList<string>> NomesDasOcultasAsync(string? ocultas, CancellationToken ct)

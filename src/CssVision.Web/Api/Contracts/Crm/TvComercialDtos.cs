@@ -30,6 +30,9 @@ public record TvEvolucaoDto(
     DateOnly Data, int QuantidadeVendasDia, decimal ValorVendidoDia, int QuantidadeAcumulada, decimal ValorAcumulado);
 
 /// <summary>Tudo o que o painel da TV (/tv/comercial) mostra, direto do banco do CRM.</summary>
+/// <summary>Ranking de vendas do mês, igual ao da TV (usado no Portal do consultor).</summary>
+public record TvRankingGeralDto(TvPeriodoDto Periodo, IReadOnlyList<TvRankingDto> Ranking);
+
 public record TvComercialDto(
     TvPeriodoDto Periodo,
     TvResumoDto Resumo,

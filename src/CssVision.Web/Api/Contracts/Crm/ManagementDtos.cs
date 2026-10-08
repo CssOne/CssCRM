@@ -21,7 +21,9 @@ public record VendedorResumoDto(
     /// <summary>Tipos de lead ("O que?") que o consultor recebe; nulo = qualquer tipo.</summary>
     IReadOnlyList<string>? RecebeSomenteOQue = null,
     /// <summary>Leads de tráfego pago (Notion + sistema novo) que chegaram para o vendedor no mês anterior.</summary>
-    int LeadsTrafegoMesAnterior = 0);
+    int LeadsTrafegoMesAnterior = 0,
+    /// <summary>Regional do cadastro do consultor (filtro da Gestão comercial).</summary>
+    string? RegionalNome = null);
 
 public record AtualizarTiposLeadRequest(IReadOnlyList<string>? OQue);
 
