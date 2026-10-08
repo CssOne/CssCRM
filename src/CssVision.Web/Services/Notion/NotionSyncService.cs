@@ -462,7 +462,7 @@ public sealed class NotionSyncService(
         var (documento, documentoSemZero) = NormalizarCpfNotion(page.Text("CPF") ?? page.Number("CPF")?.ToString("F0", System.Globalization.CultureInfo.InvariantCulture));
         var email = DocumentValidation.NormalizarEmail(page.Text("E-mail", "[META] Email"));
         var telefone = DocumentValidation.NormalizarTelefone(PrimeiroTexto(page, "WhatsApp", "[META] Phone Number"));
-        return new IdentificacaoNotion(page.PageId(), nome.Trim(), regionalNome, documento, documentoSemZero, email, telefone);
+        return new IdentificacaoNotion(page.PageId(), nome.Trim(), regionalNome, documento, documentoSemZero, email, telefone, NormalizarPlaca(page.Text("Placa")));
     }
 
     private async Task CarregarUsuariosAtivosAsync(CancellationToken ct)
@@ -501,7 +501,7 @@ public sealed class NotionSyncService(
         var email = DocumentValidation.NormalizarEmail(page.Text("E-mail", "[META] Email"));
         var telefone = DocumentValidation.NormalizarTelefone(PrimeiroTexto(page, "WhatsApp", "[META] Phone Number"));
         var (lead, arquivado) = await EncontrarLeadAsync(
-            new IdentificacaoNotion(page.PageId(), nome.Trim(), regionalNome, documento, documentoSemZero, email, telefone), ct);
+            new IdentificacaoNotion(page.PageId(), nome.Trim(), regionalNome, documento, documentoSemZero, email, telefone, NormalizarPlaca(page.Text("Placa"))), ct);
         if (lead is null || arquivado) return false;
 
         var vendedorInfo = page.PrimeiroVendedor("Vendedor");
@@ -704,7 +704,8 @@ public sealed class NotionSyncService(
 
         var pageId = page.PageId();
         var (lead, arquivado) = await EncontrarLeadAsync(
-            new IdentificacaoNotion(pageId, nome.Trim(), regionalNome, documentoNormalizado, documentoSemZero, emailNormalizado, telefoneNormalizado), ct);
+            new IdentificacaoNotion(pageId, nome.Trim(), regionalNome, documentoNormalizado, documentoSemZero, emailNormalizado, telefoneNormalizado,
+                NormalizarPlaca(page.Text("Placa"))), ct);
 
         // Card ligado a um lead que alguém arquivou/excluiu no CRM: respeita — não recria nem mexe.
         if (arquivado) return false;
@@ -1211,7 +1212,7 @@ public sealed class NotionSyncService(
 
     public sealed record IdentificacaoNotion(
         string PageId, string Nome, string RegionalNome,
-        string? Documento, string? DocumentoSemZero, string? Email, string? Telefone);
+        string? Documento, string? DocumentoSemZero, string? Email, string? Telefone, string? Placa = null);
 
     /// <summary>
     /// Acha o lead de um card do Notion, da chave mais confiável para a menos confiável: o próprio
@@ -1243,6 +1244,18 @@ public sealed class NotionSyncService(
         lead ??= id.Telefone is not null
             ? await db.CrmLeads.FirstOrDefaultAsync(l => l.TelefoneNormalizado == id.Telefone && !l.Arquivado, ct)
             : null;
+        // Mesma placa de um lead do CRM ainda sem card (cadastrado/recebido no sistema, sem telefone ou CPF iguais): é o mesmo cliente e a
+        // mesma venda — sem isso o card virava um lead novo e a venda contava em duplicidade. Só leads recentes e sem vínculo.
+        if (lead is null && id.Placa is { Length: >= 6 } placa)
+        {
+            var recentes = DateTimeOffset.UtcNow.AddDays(-60);
+            var comMesmaPlaca = await db.CrmLeads
+                .Where(l => l.Placa == placa && l.NotionPageId == null && !l.Arquivado && l.VeiculoAdicionalDeLeadId == null && l.CriadoEm >= recentes
+                    && l.ConsentimentoOrigem != OrigemLead.MarcadorSincronizacaoNotion && l.ConsentimentoOrigem != OrigemLead.MarcadorMigracaoNotion)
+                .Take(2)
+                .ToListAsync(ct);
+            if (comMesmaPlaca.Count == 1) lead = comMesmaPlaca[0];
+        }
         if (lead is not null) return (lead, false);
 
         var mesmoNome = await db.CrmLeads
