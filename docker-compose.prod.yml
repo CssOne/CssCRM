@@ -37,6 +37,13 @@ services:
       MetaCapi__PixelsPorOQue__1__Regional: MG134
       MetaCapi__PixelsPorOQue__1__PixelId: "4545692432243936"
       MetaCapi__PixelsPorOQue__1__AccessToken: ${META_PIXEL_134_TOKEN}
+      # Discord (vínculo de contas e avisos no celular). Sem as quatro primeiras o CRM funciona como antes, com a integração desligada.
+      # Segredo e token vêm do Secrets Manager (via .env), nunca escritos aqui.
+      Discord__BotToken: ${DISCORD_BOT_TOKEN}
+      Discord__ClientId: ${DISCORD_CLIENT_ID}
+      Discord__ClientSecret: ${DISCORD_CLIENT_SECRET}
+      Discord__GuildId: ${DISCORD_GUILD_ID}
+      Discord__UrlPublica: https://${CADDY_DOMAIN}
     expose:
       - "8080"
     healthcheck:
