@@ -29,6 +29,9 @@ public interface IDiscordGruposService
     /// <summary>Esconde (ou volta a mostrar) um canal extra no chat do CRM, sem mexer no Discord. Só canais extras.</summary>
     Task<DiscordCanalDto> ArquivarCanalAsync(string chave, bool arquivar, CancellationToken ct);
 
+    /// <summary>Volta a ligar um grupo cujo canal foi apagado: a próxima sincronização recria o canal (e o de voz) com o cargo que o grupo já tem.</summary>
+    Task<DiscordCanalDto> ReligarCanalAsync(string chave, CancellationToken ct);
+
     /// <summary>Renomeia o canal no Discord e no CRM (e o canal de voz do grupo, se houver). O nome no CRM vale mesmo depois de novas sincronizações.</summary>
     Task<DiscordCanalDto> RenomearCanalAsync(string chave, string nome, CancellationToken ct);
 
@@ -91,7 +94,7 @@ public sealed class DiscordGruposService(
     public async Task<IReadOnlyList<DiscordCanalDto>> ListarCanaisAsync(CancellationToken ct) =>
         (await db.CrmDiscordCanais.AsNoTracking().Where(c => c.Chave != ChaveConversas).ToListAsync(ct))
             .OrderBy(c => c.Chave == ChaveGeral ? 0 : c.Chave == ChaveGestao ? 1 : 2).ThenBy(c => c.Nome)
-            .Select(c => new DiscordCanalDto(c.Chave, c.NomeExibido, c.Ativo, EhExtra(c.Chave), c.AcessoChave, c.Chave.StartsWith(PrefixoExtraVoz, StringComparison.Ordinal)))
+            .Select(c => new DiscordCanalDto(c.Chave, c.NomeExibido, c.Ativo, EhExtra(c.Chave), c.AcessoChave, c.Chave.StartsWith(PrefixoExtraVoz, StringComparison.Ordinal), c.Desligado))
             .ToList();
 
     public async Task<DiscordCanalDto> CriarCanalAsync(string nome, string acessoChave, string? topico, CancellationToken ct, bool voz = false)
@@ -171,9 +174,14 @@ public sealed class DiscordGruposService(
     {
         ExigirConfigurado();
         var canal = await db.CrmDiscordCanais.FirstOrDefaultAsync(c => c.Chave == chave, ct);
-        if (canal is null || !EhExtra(canal.Chave))
+        if (canal is null || canal.Chave == ChaveConversas)
         {
-            throw new CrmBusinessException("Só canais extras podem ser apagados por aqui. Os canais dos grupos acompanham o CRM.", "canal_nao_apagavel");
+            throw new CrmBusinessException("Esse canal não pode ser apagado por aqui (o das conversas diretas é do sistema).", "canal_nao_apagavel");
+        }
+
+        if (canal.Desligado)
+        {
+            throw new CrmBusinessException("Esse canal já foi apagado no Discord.", "canal_ja_apagado");
         }
 
         if (!string.Equals((confirmarNome ?? "").Trim(), canal.NomeExibido, StringComparison.OrdinalIgnoreCase))
@@ -181,9 +189,12 @@ public sealed class DiscordGruposService(
             throw new CrmBusinessException("Digite o nome do canal exatamente para confirmar que quer apagá-lo.", "canal_confirmacao");
         }
 
+        var idsDoDiscord = canal.DiscordCanalId;
         try
         {
             await api.ApagarCanalAsync(canal.DiscordCanalId, ct);
+            // Canal de voz do grupo: sai junto (o que já foi apagado no Discord conta como apagado).
+            if (!string.IsNullOrEmpty(canal.DiscordVozId)) await api.ApagarCanalAsync(canal.DiscordVozId, ct);
         }
         catch (DiscordApiException ex)
         {
@@ -191,10 +202,30 @@ public sealed class DiscordGruposService(
         }
 
         // As reações e as marcas de "lido" do canal apagado não servem mais.
-        db.CrmDiscordReacoes.RemoveRange(db.CrmDiscordReacoes.Where(r => r.LeituraId == canal.DiscordCanalId));
+        db.CrmDiscordReacoes.RemoveRange(db.CrmDiscordReacoes.Where(r => r.LeituraId == idsDoDiscord));
         db.CrmDiscordLeituras.RemoveRange(db.CrmDiscordLeituras.Where(l => l.Chave == canal.Chave));
-        db.CrmDiscordCanais.Remove(canal);
+        if (EhExtra(canal.Chave))
+        {
+            db.CrmDiscordCanais.Remove(canal);
+        }
+        else
+        {
+            // Canal de grupo: o grupo e o cargo ficam (as pessoas continuam nele); só some o canal, e a sincronização não o recria até religar.
+            canal.Desligado = true;
+            canal.DiscordCanalId = string.Empty;
+            canal.DiscordVozId = null;
+        }
+
         await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<DiscordCanalDto> ReligarCanalAsync(string chave, CancellationToken ct)
+    {
+        var canal = await db.CrmDiscordCanais.FirstOrDefaultAsync(c => c.Chave == chave && c.Chave != ChaveConversas && c.Desligado, ct)
+            ?? throw new CrmBusinessException("Esse grupo não está desligado no Discord.", "canal_nao_desligado");
+        canal.Desligado = false;
+        await db.SaveChangesAsync(ct);
+        return new DiscordCanalDto(canal.Chave, canal.NomeExibido, canal.Ativo, false, canal.AcessoChave, false, false);
     }
 
     public async Task<DiscordCanalDto> ArquivarCanalAsync(string chave, bool arquivar, CancellationToken ct)
@@ -266,6 +297,14 @@ public sealed class DiscordGruposService(
             try
             {
                 mapa.TryGetValue(d.Chave, out var existente);
+                if (existente is { Desligado: true })
+                {
+                    // Canal apagado de propósito: o grupo segue existindo (nome em dia, cargo mantido), mas não ganha canal de novo até ser religado.
+                    existente.Nome = d.Nome;
+                    existente.Ativo = true;
+                    continue;
+                }
+
                 var cargoOk = existente is not null && cargosNoServidor.Contains(existente.DiscordCargoId);
                 var canalOk = cargoOk && await api.CanalExisteAsync(existente!.DiscordCanalId, ct);
 
@@ -512,7 +551,7 @@ public sealed class DiscordGruposService(
     /// </summary>
     private async Task<bool> GarantirBoasVindasAsync(Dictionary<string, CrmDiscordCanal> mapa, CancellationToken ct)
     {
-        if (!mapa.TryGetValue(ChaveGeral, out var geral) || string.IsNullOrEmpty(geral.DiscordCanalId)) return false;
+        if (!mapa.TryGetValue(ChaveGeral, out var geral) || string.IsNullOrEmpty(geral.DiscordCanalId) || geral.Desligado) return false;
         if (await db.CrmParametros.AnyAsync(p => p.Chave == ChaveBoasVindas, ct)) return false;
 
         var link = options.Value.UrlPublica.TrimEnd('/');

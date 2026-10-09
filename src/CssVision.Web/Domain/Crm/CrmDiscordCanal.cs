@@ -31,6 +31,12 @@ public class CrmDiscordCanal : CrmEntityBase
     /// <summary>Nome que aparece no CRM.</summary>
     public string NomeExibido => string.IsNullOrWhiteSpace(NomePersonalizado) ? Nome : NomePersonalizado;
 
+    /// <summary>
+    /// Verdadeiro quando um administrador apagou o(s) canal(is) deste grupo no Discord: o grupo continua existindo (as pessoas mantêm o cargo), mas fica
+    /// <b>sem canal</b> e a sincronização não o recria — até alguém "religar" o grupo. Só vale para canais de grupo; os extras apagados somem da tabela.
+    /// </summary>
+    public bool Desligado { get; set; }
+
     /// <summary>Falso quando a regional/grupo deixou de existir no CRM. O canal do Discord não é apagado, só deixa de receber membros.</summary>
     public bool Ativo { get; set; } = true;
 }

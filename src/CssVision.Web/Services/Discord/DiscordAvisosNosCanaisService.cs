@@ -353,7 +353,7 @@ public sealed class DiscordAvisosNosCanaisService(
     {
         if (regionalId is null) return null;
         var chave = $"regional:{regionalId}";
-        return await db.CrmDiscordCanais.AsNoTracking().Where(c => c.Chave == chave && c.Ativo).Select(c => c.DiscordCanalId).FirstOrDefaultAsync(ct);
+        return await db.CrmDiscordCanais.AsNoTracking().Where(c => c.Chave == chave && c.Ativo && !c.Desligado).Select(c => c.DiscordCanalId).FirstOrDefaultAsync(ct);
     }
 
     private async Task GravarAsync(string chave, string valor, CancellationToken ct)

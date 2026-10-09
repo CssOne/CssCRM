@@ -237,6 +237,35 @@ export interface DiscordCanal {
   acessoChave?: string | null;
   /** Canal de voz extra (só existe no Discord; não aparece no chat de texto). */
   voz?: boolean;
+  /** Grupo cujo canal foi apagado no Discord: o grupo e o cargo continuam, mas o canal só volta ao religar e sincronizar. */
+  desligado?: boolean;
+}
+
+export interface DiscordMembroVinculo {
+  usuarioId: string;
+  nome: string;
+  regional?: string | null;
+  ativo: boolean;
+}
+
+export interface DiscordMembro {
+  id: string;
+  nome: string;
+  usuario: string;
+  avatarUrl?: string | null;
+  bot: boolean;
+  entrouEm?: string | null;
+  cargos: string[];
+  vinculo?: DiscordMembroVinculo | null;
+}
+
+export interface DiscordMembros {
+  total: number;
+  vinculados: number;
+  semVinculo: number;
+  bots: number;
+  itens: DiscordMembro[];
+  foraDoServidor: DiscordMembroVinculo[];
 }
 
 /** O que a sincronização dos grupos do Discord fez e o que não conseguiu fazer. */

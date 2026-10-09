@@ -7,6 +7,7 @@ import { formatarDataHora } from "../lib/format";
 import type { DiscordAvisosCanais, DiscordCanal, DiscordIniciar, DiscordSincronizacao, DiscordStatus, DiscordTeste } from "../lib/types";
 import { Badge, Button, Card, Checkbox, ErrorState, Skeleton, useToast } from "../components/ui";
 import { GestaoDeCanais } from "../components/discord/GestaoDeCanais";
+import { MembrosDoDiscord } from "../components/discord/MembrosDoDiscord";
 
 /**
  * Vínculo da conta do Discord com o CRM. Vinculada, a pessoa recebe os avisos do CRM (lead novo, pagamento em aberto, alertas...)
@@ -168,6 +169,7 @@ export function DiscordPage() {
       )}
 
       {status?.configurado && <GruposDoDiscord />}
+      {status?.configurado && <MembrosDoDiscord />}
     </div>
   );
 }
