@@ -40,7 +40,18 @@ public record DiscordChatIniciarRequest(Guid UsuarioId);
 public record DiscordChatAnexoDto(string Nome, string Url, bool Imagem);
 
 /// <param name="DoCrm">Publicada pelo CRM (a tela alinha as mensagens do próprio usuário à direita pelo nome do autor).</param>
-public record DiscordChatMensagemDto(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordChatAnexoDto> Anexos, bool DoCrm, bool Editada = false, DiscordChatEnqueteDto? Enquete = null);
+public record DiscordChatMensagemDto(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordChatAnexoDto> Anexos, bool DoCrm, bool Editada = false, DiscordChatEnqueteDto? Enquete = null,
+    IReadOnlyList<DiscordChatReacaoDto>? Reacoes = null, bool Fixada = false);
+
+/// <summary>Reação a uma mensagem: <paramref name="Texto"/> é o emoji (caractere) ou <c>:nome:</c>; <paramref name="Url"/> a imagem do emoji personalizado.</summary>
+public record DiscordChatReacaoDto(string Chave, string Texto, string? Url, int Contagem, bool Reagi);
+
+public record DiscordChatReacaoRequest(string Emoji);
+
+public record DiscordChatFixarRequest(bool Fixar);
+
+/// <summary>Tópico de um grupo, aberto no chat pela <see cref="Chave"/> (<c>topico:{id}</c>).</summary>
+public record DiscordChatTopicoDto(string Chave, string Nome);
 
 /// <summary>Enquete da mensagem, só para mostrar (votar é no Discord).</summary>
 public record DiscordChatEnqueteDto(string Pergunta, IReadOnlyList<DiscordChatRespostaDto> Respostas, bool VariasEscolhas, DateTimeOffset? EncerraEm, bool Encerrada);

@@ -39,6 +39,21 @@ public interface IDiscordChatService
     /// <summary>Publica uma enquete na conversa. Votar é no Discord; o CRM mostra a pergunta e os votos.</summary>
     Task<DiscordChatMensagemDto> CriarEnqueteAsync(Guid usuarioId, string chave, string pergunta, IReadOnlyList<string> respostas, int horas, bool variasEscolhas, CancellationToken ct);
 
+    /// <summary>Reage (ou tira a reação) da pessoa a uma mensagem. Devolve as reações da mensagem já atualizadas.</summary>
+    Task<IReadOnlyList<DiscordChatReacaoDto>> AlternarReacaoAsync(Guid usuarioId, string chave, string mensagemId, string emoji, CancellationToken ct);
+
+    /// <summary>Fixa ou desafixa uma mensagem da conversa. Só gestores e administradores.</summary>
+    Task FixarMensagemAsync(Guid usuarioId, string chave, string mensagemId, bool fixar, CancellationToken ct);
+
+    /// <summary>Mensagens fixadas da conversa, da mais recente para a mais antiga.</summary>
+    Task<IReadOnlyList<DiscordChatMensagemDto>> ListarFixadasAsync(Guid usuarioId, string chave, CancellationToken ct);
+
+    /// <summary>Procura um texto nas últimas mensagens da conversa (até 300). O Discord não oferece busca para bots: lê as mais recentes e filtra aqui.</summary>
+    Task<IReadOnlyList<DiscordChatMensagemDto>> BuscarMensagensAsync(Guid usuarioId, string chave, string termo, CancellationToken ct);
+
+    /// <summary>Tópicos ativos do grupo (abrem no chat como conversas próprias). Conversas diretas não têm tópicos.</summary>
+    Task<IReadOnlyList<DiscordChatTopicoDto>> ListarTopicosAsync(Guid usuarioId, string chave, CancellationToken ct);
+
     /// <summary>Emojis e figurinhas do servidor para o seletor do chat (guardados por alguns minutos). Sem Discord ativado, devolve listas vazias.</summary>
     Task<DiscordChatExtrasDto> ListarExtrasAsync(CancellationToken ct);
 
@@ -81,7 +96,8 @@ public sealed class DiscordChatService(
     IMemoryCache cache,
     IOptions<DiscordOptions> options,
     Crm.IPresencaService? presenca = null,
-    Crm.ILeadCompartilhavel? leads = null) : IDiscordChatService
+    Crm.ILeadCompartilhavel? leads = null,
+    IAvisoDeMencao? avisoDeMencao = null) : IDiscordChatService
 {
     public const int LimiteDoTexto = 2000;
 
@@ -94,6 +110,9 @@ public sealed class DiscordChatService(
         ".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".zip",
     };
     public const string PrefixoConversa = "dm:";
+
+    /// <summary>Chave de um tópico (thread pública) de um grupo: <c>topico:{id do tópico no Discord}</c>.</summary>
+    public const string PrefixoTopico = "topico:";
     private const int MensagensPorPagina = 50;
     private const int MaximoDeContatos = 30;
 
@@ -161,7 +180,7 @@ public sealed class DiscordChatService(
                 || mensagens.Any(m => !m.AutorEhBot && m.Conteudo.Length == 0 && m.Anexos.Count == 0));
 
         return new DiscordChatMensagensDto(
-            mensagens.Select(Converter).ToList(),
+            await ConverterComReacoesAsync(usuarioId, mensagens, ct),
             TemMais: mensagens.Count >= MensagensPorPagina,
             ConteudoOculto: conteudoOculto);
     }
@@ -192,6 +211,7 @@ public sealed class DiscordChatService(
         cache.Remove(ChaveDeCache(destino.LeituraId));
         cache.Remove(ChaveDaUltima(destino.LeituraId));
         await MarcarComoLidaAsync(usuarioId, chave, enviada.Id, ct); // a mensagem que a própria pessoa mandou nunca é "não lida" para ela
+        await AvisarMencionadosAsync(usuarioId, chave, pessoa.NomeCompleto, mencoes, ct);
         return Converter(enviada);
     }
 
@@ -375,6 +395,209 @@ public sealed class DiscordChatService(
         cache.Remove(ChaveDaUltima(destino.LeituraId));
         await MarcarComoLidaAsync(usuarioId, chave, enviada.Id, ct);
         return Converter(enviada);
+    }
+
+    // ----- reações, fixadas, busca, tópicos e menções -----
+
+    private static readonly System.Text.RegularExpressions.Regex EmojiPersonalizadoChave = new(@"^[A-Za-z0-9_]{2,32}:\d{5,25}$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>Emoji aceito como reação: o caractere (só símbolos, sem letras, números nem espaços) ou o personalizado <c>nome:id</c>. Nada digitado pela pessoa vai cru para o endereço do Discord.</summary>
+    internal static bool EmojiValido(string? emoji) =>
+        !string.IsNullOrEmpty(emoji) && emoji.Length <= 40
+        && (EmojiPersonalizadoChave.IsMatch(emoji)
+            || (emoji.Length <= 16 && emoji.Any(c => c > 0x7F) && !emoji.Any(c => char.IsLetterOrDigit(c) || char.IsWhiteSpace(c) || char.IsControl(c) || c is '/' or '?' or '#' or '%')));
+
+    private static void ExigirIdDoDiscord(string? mensagemId)
+    {
+        if (string.IsNullOrEmpty(mensagemId) || mensagemId.Length > 32 || !mensagemId.All(char.IsAsciiDigit))
+        {
+            throw new CrmBusinessException("Mensagem inválida.", "mensagem_invalida");
+        }
+    }
+
+    public async Task<IReadOnlyList<DiscordChatReacaoDto>> AlternarReacaoAsync(Guid usuarioId, string chave, string mensagemId, string emoji, CancellationToken ct)
+    {
+        ExigirIdDoDiscord(mensagemId);
+        if (!EmojiValido(emoji))
+        {
+            throw new CrmBusinessException("Esse emoji não pode ser usado como reação.", "emoji_invalido");
+        }
+
+        var destino = await ObterDestinoPermitidoAsync(usuarioId, chave, ct);
+        var minha = await db.CrmDiscordReacoes.FirstOrDefaultAsync(r => r.MensagemId == mensagemId && r.UsuarioId == usuarioId && r.Emoji == emoji, ct);
+
+        if (minha is not null)
+        {
+            db.CrmDiscordReacoes.Remove(minha);
+            await db.SaveChangesAsync(ct);
+            // A reação do bot sai quando a última pessoa tira a dela.
+            if (!await db.CrmDiscordReacoes.AnyAsync(r => r.MensagemId == mensagemId && r.Emoji == emoji, ct))
+            {
+                await LerAsync(async () => { await api.RemoverReacaoAsync(destino.LeituraId, mensagemId, emoji, ct); return true; });
+            }
+        }
+        else
+        {
+            var primeira = !await db.CrmDiscordReacoes.AnyAsync(r => r.MensagemId == mensagemId && r.Emoji == emoji, ct);
+            if (primeira)
+            {
+                // Antes de guardar: se o Discord recusar (mensagem apagada, 20 reações diferentes), nada fica gravado.
+                await LerAsync(async () => { await api.AdicionarReacaoAsync(destino.LeituraId, mensagemId, emoji, ct); return true; });
+            }
+
+            db.CrmDiscordReacoes.Add(new CrmDiscordReacao { MensagemId = mensagemId, LeituraId = destino.LeituraId, UsuarioId = usuarioId, Emoji = emoji });
+            await db.SaveChangesAsync(ct);
+        }
+
+        cache.Remove(ChaveDeCache(destino.LeituraId));
+        var atual = await LerAsync(() => api.ObterMensagemAsync(destino.LeituraId, mensagemId, ct));
+        return (await MesclarReacoesAsync(usuarioId, [atual], ct)).GetValueOrDefault(mensagemId) ?? [];
+    }
+
+    /// <summary>Reações do Discord + as feitas pelo CRM. A reação do bot não conta como pessoa: no lugar dela entram as pessoas do CRM que reagiram.</summary>
+    private async Task<Dictionary<string, IReadOnlyList<DiscordChatReacaoDto>>> MesclarReacoesAsync(Guid usuarioId, IReadOnlyList<DiscordMensagem> mensagens, CancellationToken ct)
+    {
+        var resultado = new Dictionary<string, IReadOnlyList<DiscordChatReacaoDto>>();
+        var ids = mensagens.Select(m => m.Id).ToList();
+        var doCrm = ids.Count == 0 ? [] : await db.CrmDiscordReacoes.AsNoTracking()
+            .Where(r => ids.Contains(r.MensagemId)).Select(r => new { r.MensagemId, r.Emoji, r.UsuarioId }).ToListAsync(ct);
+
+        foreach (var m in mensagens)
+        {
+            var linhas = new List<DiscordChatReacaoDto>();
+            var vistas = new HashSet<string>();
+            foreach (var r in m.Reacoes ?? [])
+            {
+                var pessoas = doCrm.Where(x => x.MensagemId == m.Id && x.Emoji == r.Chave).ToList();
+                var contagem = Math.Max(0, r.Contagem - (r.EuReagi ? 1 : 0)) + pessoas.Count;
+                vistas.Add(r.Chave);
+                if (contagem > 0) linhas.Add(Montar(r.Chave, r.Nome, r.EmojiId, r.Animado, contagem, pessoas.Any(x => x.UsuarioId == usuarioId)));
+            }
+
+            // Reação só do CRM que o Discord ainda não devolveu (acabou de ser feita).
+            foreach (var grupo in doCrm.Where(x => x.MensagemId == m.Id && !vistas.Contains(x.Emoji)).GroupBy(x => x.Emoji))
+            {
+                var partes = grupo.Key.Split(':');
+                var personalizado = partes.Length == 2;
+                linhas.Add(Montar(grupo.Key, personalizado ? partes[0] : grupo.Key, personalizado ? partes[1] : null, false, grupo.Count(), grupo.Any(x => x.UsuarioId == usuarioId)));
+            }
+
+            resultado[m.Id] = linhas;
+        }
+
+        return resultado;
+
+        static DiscordChatReacaoDto Montar(string chave, string nome, string? emojiId, bool animado, int contagem, bool reagi) =>
+            new(chave, emojiId is null ? nome : $":{nome}:", emojiId is null ? null : $"https://cdn.discordapp.com/emojis/{emojiId}.{(animado ? "gif" : "png")}?size=32", contagem, reagi);
+    }
+
+    private async Task<List<DiscordChatMensagemDto>> ConverterComReacoesAsync(Guid usuarioId, IReadOnlyList<DiscordMensagem> mensagens, CancellationToken ct)
+    {
+        var reacoes = await MesclarReacoesAsync(usuarioId, mensagens, ct);
+        return mensagens.Select(m => Converter(m) with { Reacoes = reacoes.GetValueOrDefault(m.Id) ?? [] }).ToList();
+    }
+
+    public async Task FixarMensagemAsync(Guid usuarioId, string chave, string mensagemId, bool fixar, CancellationToken ct)
+    {
+        ExigirIdDoDiscord(mensagemId);
+        var destino = await ObterDestinoPermitidoAsync(usuarioId, chave, ct);
+        var papeis = await db.UserRoles.Where(ur => ur.UserId == usuarioId).Join(db.Roles, ur => ur.RoleId, r => r.Id, (_, r) => r.Name!).ToListAsync(ct);
+        if (!papeis.Any(p => Roles.VisaoTotal.Contains(p) || Roles.GestaoComercial.Contains(p)))
+        {
+            throw new CrmForbiddenException("Só gestores e administradores fixam mensagens.");
+        }
+
+        await LerAsync(async () =>
+        {
+            if (fixar) await api.FixarMensagemAsync(destino.LeituraId, mensagemId, ct);
+            else await api.DesafixarMensagemAsync(destino.LeituraId, mensagemId, ct);
+            return true;
+        });
+        cache.Remove(ChaveDeCache(destino.LeituraId));
+    }
+
+    public async Task<IReadOnlyList<DiscordChatMensagemDto>> ListarFixadasAsync(Guid usuarioId, string chave, CancellationToken ct)
+    {
+        var destino = await ObterDestinoPermitidoAsync(usuarioId, chave, ct);
+        var fixadas = await LerAsync(() => api.ListarFixadasAsync(destino.LeituraId, ct));
+        return await ConverterComReacoesAsync(usuarioId, fixadas, ct);
+    }
+
+    private const int MensagensNaBusca = 300;
+    private const int ResultadosDaBusca = 30;
+
+    public async Task<IReadOnlyList<DiscordChatMensagemDto>> BuscarMensagensAsync(Guid usuarioId, string chave, string termo, CancellationToken ct)
+    {
+        termo = (termo ?? "").Trim();
+        if (termo.Length < 2 || termo.Length > 100)
+        {
+            throw new CrmBusinessException("Digite pelo menos 2 letras para buscar.", "busca_curta");
+        }
+
+        var destino = await ObterDestinoPermitidoAsync(usuarioId, chave, ct);
+        var lidas = await cache.GetOrCreateAsync($"discord:busca:{destino.LeituraId}", async entrada =>
+        {
+            entrada.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
+            var todas = new List<DiscordMensagem>();
+            string? antes = null;
+            while (todas.Count < MensagensNaBusca)
+            {
+                var pagina = await LerAsync(() => api.ListarMensagensAsync(destino.LeituraId, 100, antes, ct));
+                if (pagina.Count == 0) break;
+                todas.AddRange(pagina);
+                antes = pagina[0].Id; // a lista vem da mais antiga para a mais nova: a primeira é a de onde seguir para trás
+                if (pagina.Count < 100) break;
+            }
+
+            return todas;
+        }) ?? [];
+
+        var procurado = SemAcento(termo);
+        var achadas = lidas
+            .Where(m => SemAcento(m.Conteudo).Contains(procurado, StringComparison.Ordinal) || SemAcento(m.AutorNome).Contains(procurado, StringComparison.Ordinal))
+            .OrderByDescending(m => m.CriadaEm).Take(ResultadosDaBusca).ToList();
+        return await ConverterComReacoesAsync(usuarioId, achadas, ct);
+    }
+
+    private static string SemAcento(string texto)
+    {
+        var decomposto = texto.Normalize(System.Text.NormalizationForm.FormD);
+        return new string(decomposto.Where(c => System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark).ToArray()).ToLowerInvariant();
+    }
+
+    public async Task<IReadOnlyList<DiscordChatTopicoDto>> ListarTopicosAsync(Guid usuarioId, string chave, CancellationToken ct)
+    {
+        var destino = await ObterDestinoPermitidoAsync(usuarioId, chave, ct);
+        if (destino.ThreadId is not null) return []; // conversa direta ou tópico: não tem tópicos dentro
+
+        var ativos = await cache.GetOrCreateAsync("discord:topicos-ativos", async entrada =>
+        {
+            entrada.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(15);
+            return await LerAsync(() => api.ListarTopicosAtivosAsync(ct));
+        }) ?? [];
+        return ativos.Where(t => t.CanalPaiId == destino.CanalDoWebhook).OrderBy(t => t.Nome, StringComparer.OrdinalIgnoreCase)
+            .Select(t => new DiscordChatTopicoDto($"{PrefixoTopico}{t.Id}", t.Nome)).ToList();
+    }
+
+    /// <summary>
+    /// "@Fulano" no chat já avisa pelo Discord (a menção toca no app). Aqui, quem tem o CRM instalado como app recebe também a notificação do navegador/celular
+    /// — sem o texto da mensagem, só quem chamou e onde. Só avisa quem pode abrir a conversa; falha de aviso nunca atrapalha o envio.
+    /// </summary>
+    private async Task AvisarMencionadosAsync(Guid remetenteId, string chave, string nomeDoRemetente, IReadOnlyList<Guid>? mencoes, CancellationToken ct)
+    {
+        if (avisoDeMencao is null || mencoes is null || mencoes.Count == 0) return;
+        foreach (var id in mencoes.Distinct().Where(i => i != remetenteId).Take(20))
+        {
+            try
+            {
+                await ObterDestinoPermitidoAsync(id, chave, ct); // só quem pode abrir
+                await avisoDeMencao.AvisarAsync(id, nomeDoRemetente, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // quem não pode abrir a conversa, ou falha do push: segue sem avisar
+            }
+        }
     }
 
     private const string ChaveDosExtras = "discord:chat:extras";
@@ -801,6 +1024,18 @@ public sealed class DiscordChatService(
             return new Destino(conversa.DiscordThreadId, pai.DiscordCanalId, conversa.DiscordThreadId);
         }
 
+        if (chave.StartsWith(PrefixoTopico, StringComparison.Ordinal))
+        {
+            // Tópico: abre quem pode abrir o grupo a que ele pertence (o Discord diz de qual canal é, o CRM decide o acesso).
+            var topicoId = chave[PrefixoTopico.Length..];
+            ExigirIdDoDiscord(topicoId);
+            var topico = await LerAsync(() => api.ObterTopicoAsync(topicoId, ct))
+                ?? throw new CrmForbiddenException("Você não tem acesso a esta conversa.");
+            var dono = (await CanaisDaPessoaAsync(usuarioId, ct)).FirstOrDefault(c => c.DiscordCanalId == topico.CanalPaiId)
+                ?? throw new CrmForbiddenException("Você não tem acesso a esta conversa.");
+            return new Destino(topico.Id, dono.DiscordCanalId, topico.Id);
+        }
+
         var canal = (await CanaisDaPessoaAsync(usuarioId, ct)).FirstOrDefault(c => c.Chave == chave)
             ?? throw new CrmForbiddenException("Você não tem acesso a esta conversa.");
         return new Destino(canal.DiscordCanalId, canal.DiscordCanalId, null);
@@ -849,5 +1084,6 @@ public sealed class DiscordChatService(
 
     private static DiscordChatMensagemDto Converter(DiscordMensagem m) =>
         new(m.Id, m.AutorNome, m.AutorFotoUrl, m.Conteudo, m.CriadaEm, m.Anexos.Select(a => new DiscordChatAnexoDto(a.Nome, a.Url, a.Imagem)).ToList(), m.DoCrm, m.Editada,
-            m.Enquete is null ? null : new DiscordChatEnqueteDto(m.Enquete.Pergunta, m.Enquete.Respostas.Select(r => new DiscordChatRespostaDto(r.Texto, r.Votos)).ToList(), m.Enquete.VariasEscolhas, m.Enquete.EncerraEm, m.Enquete.Encerrada));
+            m.Enquete is null ? null : new DiscordChatEnqueteDto(m.Enquete.Pergunta, m.Enquete.Respostas.Select(r => new DiscordChatRespostaDto(r.Texto, r.Votos)).ToList(), m.Enquete.VariasEscolhas, m.Enquete.EncerraEm, m.Enquete.Encerrada),
+            Fixada: m.Fixada);
 }

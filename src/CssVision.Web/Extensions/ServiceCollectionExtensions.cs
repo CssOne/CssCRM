@@ -117,6 +117,7 @@ public static class ServiceCollectionExtensions
         // Todo aviso por push (lead novo, pagamento em aberto...) também vai para o Discord de quem vinculou a conta
         // (as peças do Discord são registradas em AddDiscordIntegration; sem credenciais ele só devolve o push normal).
         services.AddScoped<PushService>();
+        services.AddScoped<Services.Discord.IAvisoDeMencao, Services.Discord.AvisoDeMencaoPush>();
         services.AddScoped<IPushService>(sp => new Services.Discord.PushComDiscordService(
             sp.GetRequiredService<PushService>(),
             sp.GetRequiredService<Services.Discord.IDiscordService>(),

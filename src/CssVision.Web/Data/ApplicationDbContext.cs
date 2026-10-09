@@ -46,6 +46,7 @@ public class ApplicationDbContext(
     public DbSet<CrmParametro> CrmParametros => Set<CrmParametro>();
     public DbSet<CrmDiscordVinculo> CrmDiscordVinculos => Set<CrmDiscordVinculo>();
     public DbSet<CrmDiscordCanal> CrmDiscordCanais => Set<CrmDiscordCanal>();
+    public DbSet<CrmDiscordReacao> CrmDiscordReacoes => Set<CrmDiscordReacao>();
     public DbSet<CrmDiscordConversa> CrmDiscordConversas => Set<CrmDiscordConversa>();
     public DbSet<CrmDiscordLeitura> CrmDiscordLeituras => Set<CrmDiscordLeitura>();
 
