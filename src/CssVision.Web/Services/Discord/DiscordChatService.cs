@@ -31,6 +31,12 @@ public interface IDiscordChatService
     /// ou sem conversas, devolve zero (nunca erro): é chamado em segundo plano pelo menu.
     /// </summary>
     Task<DiscordChatNaoLidasDto> ContarNaoLidasAsync(Guid usuarioId, CancellationToken ct);
+
+    /// <summary>
+    /// Prepara a chamada de voz da conversa: devolve o endereço do canal de voz no Discord (o CRM não embute chamada) e avisa a conversa de que
+    /// a pessoa está numa chamada, com o link. Grupo = o canal de voz do grupo; 1:1 = um canal de voz privado das duas pessoas, criado na primeira chamada.
+    /// </summary>
+    Task<DiscordChatChamadaDto> IniciarChamadaAsync(Guid usuarioId, string chave, CancellationToken ct);
 }
 
 /// <summary>
@@ -197,6 +203,81 @@ public sealed class DiscordChatService(
 
         if (alterou) await db.SaveChangesAsync(ct);
         return new DiscordChatNaoLidasDto(porConversa.Values.Sum(), porConversa);
+    }
+
+    // Clicar duas vezes em "Chamada" não deve encher a conversa de avisos iguais.
+    private static readonly TimeSpan IntervaloEntreAvisos = TimeSpan.FromMinutes(5);
+
+    public async Task<DiscordChatChamadaDto> IniciarChamadaAsync(Guid usuarioId, string chave, CancellationToken ct)
+    {
+        ExigirConfigurado();
+        var url = await ObterUrlDaVozAsync(usuarioId, chave, ct);
+
+        var chaveDoAviso = $"discord:chamada:{usuarioId}:{chave}";
+        var avisar = !cache.TryGetValue(chaveDoAviso, out _);
+        if (avisar)
+        {
+            var nome = await db.Users.AsNoTracking().Where(u => u.Id == usuarioId).Select(u => u.NomeCompleto).FirstAsync(ct);
+            await EnviarAsync(usuarioId, chave, $"📞 {nome} está numa chamada de voz. Entre: {url}", ct);
+            cache.Set(chaveDoAviso, true, IntervaloEntreAvisos);
+        }
+
+        return new DiscordChatChamadaDto(url, avisar);
+    }
+
+    private async Task<string> ObterUrlDaVozAsync(Guid usuarioId, string chave, CancellationToken ct)
+    {
+        string? vozId;
+        if (chave.StartsWith(PrefixoConversa, StringComparison.Ordinal))
+        {
+            vozId = await ObterVozDaConversaAsync(usuarioId, chave, ct);
+        }
+        else
+        {
+            var canal = (await CanaisDaPessoaAsync(usuarioId, ct)).FirstOrDefault(c => c.Chave == chave)
+                ?? throw new CrmForbiddenException("Você não tem acesso a esta conversa.");
+            vozId = canal.DiscordVozId;
+            if (string.IsNullOrEmpty(vozId) || !await LerAsync(() => api.CanalExisteAsync(vozId, ct)))
+            {
+                throw new CrmBusinessException("A chamada deste grupo ainda não foi criada no Discord. Peça a um administrador para sincronizar os grupos na página do Discord.", "chamada_nao_criada");
+            }
+        }
+
+        return $"https://discord.com/channels/{options.Value.GuildId}/{vozId}";
+    }
+
+    /// <summary>Canal de voz privado das duas pessoas da conversa: cria na primeira chamada e recria se alguém o apagou no Discord.</summary>
+    private async Task<string> ObterVozDaConversaAsync(Guid usuarioId, string chave, CancellationToken ct)
+    {
+        if (!Guid.TryParse(chave[PrefixoConversa.Length..], out var conversaId))
+        {
+            throw new CrmForbiddenException("Você não tem acesso a esta conversa.");
+        }
+
+        var conversa = await db.CrmDiscordConversas
+            .FirstOrDefaultAsync(c => c.Id == conversaId && (c.UsuarioAId == usuarioId || c.UsuarioBId == usuarioId), ct)
+            ?? throw new CrmForbiddenException("Você não tem acesso a esta conversa.");
+
+        if (conversa.DiscordVozId is { Length: > 0 } existente && await LerAsync(() => api.CanalExisteAsync(existente, ct))) return existente;
+
+        var vinculos = await db.CrmDiscordVinculos.AsNoTracking().Where(v => v.UsuarioId == conversa.UsuarioAId || v.UsuarioId == conversa.UsuarioBId).ToListAsync(ct);
+        var a = vinculos.FirstOrDefault(v => v.UsuarioId == conversa.UsuarioAId);
+        var b = vinculos.FirstOrDefault(v => v.UsuarioId == conversa.UsuarioBId);
+        if (a is null || b is null)
+        {
+            throw new CrmBusinessException("Uma das pessoas desta conversa não tem mais o Discord vinculado, então a chamada não pode ser criada.", "contato_sem_discord");
+        }
+
+        var categoria = await db.CrmParametros.AsNoTracking().Where(p => p.Chave == DiscordGruposService.ChaveCategoria).Select(p => p.Valor).FirstOrDefaultAsync(ct)
+            ?? throw new CrmBusinessException("Os grupos ainda não foram criados no Discord. Peça a um administrador para sincronizar os grupos na página do Discord.", "conversas_nao_criadas");
+
+        var nomes = await db.Users.AsNoTracking().Where(u => u.Id == conversa.UsuarioAId || u.Id == conversa.UsuarioBId).Select(u => new { u.Id, u.NomeCompleto }).ToListAsync(ct);
+        var nomeDoCanal = $"voz-{DiscordGruposService.Slug(nomes.First(n => n.Id == conversa.UsuarioAId).NomeCompleto)}-{DiscordGruposService.Slug(nomes.First(n => n.Id == conversa.UsuarioBId).NomeCompleto)}";
+
+        var vozId = await LerAsync(() => api.CriarCanalDeVozAsync(nomeDoCanal, categoria, [new DiscordPermitido(a.DiscordUserId, Pessoa: true), new DiscordPermitido(b.DiscordUserId, Pessoa: true)], ct));
+        conversa.DiscordVozId = vozId;
+        await db.SaveChangesAsync(ct);
+        return vozId;
     }
 
     private async Task<IReadOnlyList<DiscordMensagem>> LerRecentesAsync(Destino destino, CancellationToken ct) =>

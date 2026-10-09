@@ -51,7 +51,16 @@ public interface IDiscordGuildApi
     Task<string> CriarConversaPrivadaAsync(string canalPaiId, string nome, CancellationToken ct);
 
     Task AdicionarAThreadAsync(string threadId, string discordUserId, CancellationToken ct);
+
+    /// <summary>
+    /// Cria um canal de voz que só os <paramref name="permitidos"/> veem e usam (cargos ou pessoas). O CRM não consegue embutir a chamada:
+    /// a tela abre este canal no Discord.
+    /// </summary>
+    Task<string> CriarCanalDeVozAsync(string nome, string categoriaId, IReadOnlyList<DiscordPermitido> permitidos, CancellationToken ct);
 }
+
+/// <summary>Quem pode usar um canal de voz: um cargo (<see cref="Pessoa"/> falso) ou uma pessoa (id da conta no Discord).</summary>
+public record DiscordPermitido(string Id, bool Pessoa);
 
 /// <summary>Mensagem de um canal do Discord, já com menções resolvidas para nomes.</summary>
 public record DiscordMensagem(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordAnexo> Anexos, bool DoCrm);
@@ -77,6 +86,12 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
     /// (1 &lt;&lt; 34) e escrever em threads (1 &lt;&lt; 38).
     /// </summary>
     private const string PermissoesDoBotNoCanalDeConversas = "361314192384";
+
+    /// <summary>Canal de voz: ver, entrar, falar, transmitir tela/vídeo e usar detecção de voz (1024 + 1048576 + 2097152 + 512 + 33554432).</summary>
+    private const string PermissoesDeVoz = "36701696";
+
+    /// <summary>O bot só precisa ver o canal de voz e gerenciá-lo (conferir se existe, apagar): ver canal + gerenciar canal.</summary>
+    private const string PermissoesDoBotNaVoz = "1040";
 
     private const string NomeDoWebhook = "CRM CSS Brasil";
     private const string MotivoAuditoria = "CRM CSS Brasil: sincronizacao de grupos";
@@ -226,6 +241,18 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
     public async Task<string> CriarConversaPrivadaAsync(string canalPaiId, string nome, CancellationToken ct) =>
         // type 12 = thread privada; "invitable: false" impede que as pessoas convidem terceiros; arquiva sozinha após 7 dias sem uso (volta ao escrever).
         await CriarAsync($"channels/{canalPaiId}/threads", new { name = Cortar(nome, 100), type = 12, invitable = false, auto_archive_duration = 10080 }, "criar a conversa", ct);
+
+    public async Task<string> CriarCanalDeVozAsync(string nome, string categoriaId, IReadOnlyList<DiscordPermitido> permitidos, CancellationToken ct)
+    {
+        var sobrescritas = new List<object> { Sobrescrita(Opcoes.GuildId, allow: null, deny: VerCanal) }; // @everyone não vê
+        sobrescritas.AddRange(permitidos.Select(p => (object)new { id = p.Id, type = p.Pessoa ? 1 : 0, allow = PermissoesDeVoz, deny = "0" }));
+        sobrescritas.Add(new { id = Opcoes.ClientId, type = 1, allow = PermissoesDoBotNaVoz, deny = "0" });
+
+        // type 2 = canal de voz.
+        return await CriarAsync($"guilds/{Opcoes.GuildId}/channels",
+            new { name = Cortar(nome, 100), type = 2, parent_id = categoriaId, permission_overwrites = sobrescritas },
+            "criar o canal de voz", ct);
+    }
 
     public async Task AdicionarAThreadAsync(string threadId, string discordUserId, CancellationToken ct)
     {

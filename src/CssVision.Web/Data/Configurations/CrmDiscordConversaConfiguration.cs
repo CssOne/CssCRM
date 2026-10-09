@@ -11,6 +11,7 @@ public class CrmDiscordConversaConfiguration : IEntityTypeConfiguration<CrmDisco
         builder.ConfigureCrmBase();
         builder.ToTable("CrmDiscordConversas");
         builder.Property(e => e.DiscordThreadId).IsRequired().HasMaxLength(32);
+        builder.Property(e => e.DiscordVozId).HasMaxLength(32);
         builder.HasIndex(e => new { e.UsuarioAId, e.UsuarioBId }).IsUnique();
     }
 }

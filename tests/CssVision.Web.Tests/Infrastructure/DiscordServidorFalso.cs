@@ -116,4 +116,15 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
         Threads[threadId].Add(discordUserId);
         return Task.CompletedTask;
     }
+
+    public List<(string Nome, string CategoriaId, IReadOnlyList<DiscordPermitido> Permitidos)> VozesCriadas { get; } = [];
+
+    public Task<string> CriarCanalDeVozAsync(string nome, string categoriaId, IReadOnlyList<DiscordPermitido> permitidos, CancellationToken ct)
+    {
+        if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para criar o canal de voz.");
+        var id = Novo();
+        Canais.Add(id);
+        VozesCriadas.Add((nome, categoriaId, permitidos));
+        return Task.FromResult(id);
+    }
 }

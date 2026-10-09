@@ -236,7 +236,7 @@ function GruposDoDiscord() {
       {resultado && (
         <div className="space-y-1 text-sm text-[var(--fg)]">
           <p>
-            {resultado.canaisCriados} canal(is) e {resultado.cargosCriados} cargo(s) criados · {resultado.membrosAtualizados} pessoa(s) com cargos ajustados
+            {resultado.canaisCriados} canal(is), {resultado.canaisDeVozCriados} canal(is) de voz e {resultado.cargosCriados} cargo(s) criados · {resultado.membrosAtualizados} pessoa(s) com cargos ajustados
             {resultado.membrosForaDoServidor > 0 && ` · ${resultado.membrosForaDoServidor} ainda fora do servidor`}.
           </p>
           {resultado.falhas.length > 0 && (
