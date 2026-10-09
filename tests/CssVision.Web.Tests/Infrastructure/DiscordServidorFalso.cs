@@ -49,6 +49,16 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
         return Task.FromResult(id);
     }
 
+    public List<string> CanaisApagados { get; } = [];
+
+    public Task ApagarCanalAsync(string canalId, CancellationToken ct)
+    {
+        if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para apagar o canal.");
+        Canais.Remove(canalId);
+        CanaisApagados.Add(canalId);
+        return Task.CompletedTask;
+    }
+
     public List<(string Id, string Nome, string CargoId, string Topico)> TextosCriados { get; } = [];
 
     public Task<string> CriarCanalDeTextoAsync(string nome, string categoriaId, string cargoId, string topico, CancellationToken ct)
