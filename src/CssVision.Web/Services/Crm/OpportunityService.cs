@@ -28,7 +28,8 @@ public sealed class OpportunityService(
         if (filtro.ResponsavelId.HasValue) query = query.Where(o => o.ResponsavelId == filtro.ResponsavelId);
         if (filtro.EtapaId.HasValue) query = query.Where(o => o.EtapaId == filtro.EtapaId);
         if (!string.IsNullOrWhiteSpace(filtro.ProdutoOuServico)) query = query.Where(o => o.ProdutoOuServico == filtro.ProdutoOuServico);
-        if (!string.IsNullOrWhiteSpace(filtro.Origem)) query = query.Where(o => o.Lead.Origem == filtro.Origem);
+        // Origem é informação só de administrador (visão total): o consultor não filtra por ela (daria para deduzi-la).
+        if (currentUser.TemVisaoTotal && !string.IsNullOrWhiteSpace(filtro.Origem)) query = query.Where(o => o.Lead.Origem == filtro.Origem);
         if (!string.IsNullOrWhiteSpace(filtro.Regional)) query = query.Where(o => o.Lead.Regional == filtro.Regional);
         if (filtro.StatusEtapa.HasValue) query = query.Where(o => o.Etapa.Tipo == filtro.StatusEtapa);
         if (filtro.DataInicio.HasValue)

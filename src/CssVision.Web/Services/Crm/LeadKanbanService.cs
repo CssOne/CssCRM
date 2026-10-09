@@ -14,8 +14,12 @@ namespace CssVision.Web.Services.Crm;
 /// </summary>
 public sealed class LeadKanbanService(
     ApplicationDbContext db, IEquipeComercialService equipe, IMemoryCache? cache = null, ICrmEventHub? eventos = null,
-    Microsoft.Extensions.Options.IOptions<DistribuicaoOptions>? distribuicao = null) : ILeadKanbanService
+    Microsoft.Extensions.Options.IOptions<DistribuicaoOptions>? distribuicao = null,
+    ICurrentUserService? currentUser = null) : ILeadKanbanService
 {
+    /// <summary>A campanha do cartão revela a origem do lead: só a gestão a recebe (sem o usuário informado, como nos testes, vale tudo).</summary>
+    private bool PodeVerCampanha => currentUser?.PodeGerirComercial ?? true;
+
     private const int MaxCartoesPorPagina = 200;
 
     /// <summary>Coluna do quadro que tem o filtro por motivo — ver CrmSeeder.cs.</summary>
@@ -122,7 +126,7 @@ public sealed class LeadKanbanService(
     }
 
     /// <summary>Uma página de cartões de uma coluna (EtapaId nulo = "Sem etapa"), dos mais recentes para os mais antigos.</summary>
-    private static async Task<IReadOnlyList<LeadKanbanCardDto>> PaginaAsync(
+    private async Task<IReadOnlyList<LeadKanbanCardDto>> PaginaAsync(
         IQueryable<CrmLead> query, Guid? etapaId, int pular, int quantidade, bool podeVerOrigem, CancellationToken ct)
     {
         var linhas = await query
@@ -154,7 +158,7 @@ public sealed class LeadKanbanService(
             .ToListAsync(ct);
 
         return linhas.Select(l => new LeadKanbanCardDto(
-            l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Telefone2, l.Email, l.Estado, podeVerOrigem ? l.Origem : null, l.Campanha,
+            l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Telefone2, l.Email, l.Estado, podeVerOrigem ? l.Origem : null, PodeVerCampanha ? l.Campanha : null,
             // Placa do lead; se ainda não tiver, a do veículo da oportunidade mais recente.
             l.Placa ?? l.Oportunidade?.Placa, l.TemSeguro, l.UtilidadeVeiculo, l.TipoIndicacao,
             l.Oportunidade?.Migracao ?? false, l.Oportunidade?.Indicacao, l.CriadoManualmente,
