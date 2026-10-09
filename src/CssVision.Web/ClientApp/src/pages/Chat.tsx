@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api, ApiRequestError, isAbortError } from "../lib/api";
 import { formatarDataHora } from "../lib/format";
+import { rotuloNaoLidas, useChatNaoLidas } from "../lib/useChatNaoLidas";
 import type { DiscordChatCanal, DiscordChatContato, DiscordChatMensagem, DiscordChatMensagens } from "../lib/types";
 import { Avatar, Badge, Button, Card, EmptyState, ErrorState, Input, Modal, Skeleton, useToast } from "../components/ui";
 
@@ -30,6 +31,15 @@ export function ChatPage() {
   const rolagem = useRef<HTMLDivElement>(null);
   const colarNoFim = useRef(true);
   const chaveAtual = useRef<string | null>(null);
+  const naoLidas = useChatNaoLidas(true, 8000);
+  const { atualizar: atualizarNaoLidas } = naoLidas;
+
+  // A conversa aberta é marcada como lida pelo servidor ao carregar: logo depois, atualiza as marcas da lista.
+  useEffect(() => {
+    if (!chave) return;
+    const t = window.setTimeout(atualizarNaoLidas, 1500);
+    return () => window.clearTimeout(t);
+  }, [chave, atualizarNaoLidas]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -169,7 +179,7 @@ export function ChatPage() {
         <div className="grid gap-4 md:grid-cols-[14rem_1fr]">
           <nav aria-label="Conversas" className="flex gap-2 overflow-x-auto md:flex-col md:overflow-visible">
             {grupos.map((c) => (
-              <ItemDaLista key={c.chave} conversa={c} ativa={c.chave === chave} aoEscolher={() => setChave(c.chave)} />
+              <ItemDaLista key={c.chave} conversa={c} ativa={c.chave === chave} naoLidas={naoLidas.porConversa[c.chave] ?? 0} aoEscolher={() => setChave(c.chave)} />
             ))}
             <div className="flex shrink-0 items-center gap-2 md:mt-2 md:justify-between">
               <span className="hidden text-xs font-semibold uppercase tracking-wide text-[var(--fg-muted)] md:inline">Conversas diretas</span>
@@ -178,7 +188,7 @@ export function ChatPage() {
               </Button>
             </div>
             {diretas.map((c) => (
-              <ItemDaLista key={c.chave} conversa={c} ativa={c.chave === chave} aoEscolher={() => setChave(c.chave)} />
+              <ItemDaLista key={c.chave} conversa={c} ativa={c.chave === chave} naoLidas={naoLidas.porConversa[c.chave] ?? 0} aoEscolher={() => setChave(c.chave)} />
             ))}
           </nav>
 
@@ -260,7 +270,7 @@ export function ChatPage() {
   );
 }
 
-function ItemDaLista({ conversa, ativa, aoEscolher }: { conversa: DiscordChatCanal; ativa: boolean; aoEscolher: () => void }) {
+function ItemDaLista({ conversa, ativa, naoLidas, aoEscolher }: { conversa: DiscordChatCanal; ativa: boolean; naoLidas: number; aoEscolher: () => void }) {
   return (
     <button
       type="button"
@@ -272,6 +282,11 @@ function ItemDaLista({ conversa, ativa, aoEscolher }: { conversa: DiscordChatCan
     >
       {conversa.tipo === "direta" ? <Avatar nome={conversa.nome} fotoUrl={conversa.fotoUrl} className="size-5 text-[9px]" /> : <Hash className="size-4 shrink-0" aria-hidden />}
       <span className="truncate">{conversa.nome}</span>
+      {naoLidas > 0 && !ativa && (
+        <span className="ml-auto rounded-full bg-[var(--brand)] px-1.5 text-xs font-semibold text-white" aria-label={`${naoLidas} não lidas`}>
+          {rotuloNaoLidas(naoLidas)}
+        </span>
+      )}
     </button>
   );
 }

@@ -42,3 +42,7 @@ public record DiscordChatMensagemDto(string Id, string AutorNome, string? AutorF
 public record DiscordChatMensagensDto(IReadOnlyList<DiscordChatMensagemDto> Mensagens, bool TemMais, bool ConteudoOculto);
 
 public record DiscordChatEnviarRequest(string Texto);
+
+/// <param name="Total">Soma das mensagens não lidas de todas as conversas (o número do menu).</param>
+/// <param name="PorConversa">Não lidas por conversa (chave da conversa → quantidade; só as que têm alguma). 50 significa "50 ou mais".</param>
+public record DiscordChatNaoLidasDto(int Total, IReadOnlyDictionary<string, int> PorConversa);

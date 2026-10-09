@@ -1571,3 +1571,9 @@ export interface DiscordChatMensagens {
   /** O Discord entregou as mensagens sem texto: falta ligar "Message Content Intent" no portal do desenvolvedor. */
   conteudoOculto: boolean;
 }
+
+/** Mensagens não lidas do chat: total (o número do menu) e por conversa. 50 significa "50 ou mais". */
+export interface DiscordChatNaoLidas {
+  total: number;
+  porConversa: Record<string, number>;
+}
