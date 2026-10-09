@@ -354,7 +354,7 @@ public sealed class NotionSyncService(
                 var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
                 lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, TipoIndicacaoDoCard(page, page.Select("O que")));
                 lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
-                if (eraIndicacao != NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao)) TrocarColunaLeadIndicacao(lead, etapasPorNome);
+                TrocarColunaLeadIndicacao(lead, etapasPorNome);
                 if (antes != (lead.TipoIndicacao, lead.CriadoManualmente, lead.EtapaId)) leadsAtualizados++;
 
                 var vendas = await db.CrmOpportunities.Include(o => o.Veiculo).Where(o => o.LeadId == lead.Id && !o.Arquivado && o.NotionPageId == pageId).ToListAsync(ct);
@@ -575,8 +575,8 @@ public sealed class NotionSyncService(
             var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
             lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, TipoIndicacaoDoCard(page, page.Select("O que")));
             lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
-            if (etapasPorNome is not null && eraIndicacao != NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao)
-                && TrocarColunaLeadIndicacao(lead, etapasPorNome))
+            // Sempre alinha a coluna "(Leads)/(Indicação)" com a etiqueta (não só quando a etiqueta mudou): lead que ficou com a coluna trocada se acerta.
+            if (etapasPorNome is not null && TrocarColunaLeadIndicacao(lead, etapasPorNome))
             {
                 _mudancasNoQuadro++;
             }
@@ -660,7 +660,7 @@ public sealed class NotionSyncService(
     /// vai para a coluna par. Outras colunas não mudam.
     /// </summary>
     /// <returns>true se mudou de coluna.</returns>
-    private static bool TrocarColunaLeadIndicacao(CrmLead lead, IReadOnlyDictionary<string, Guid> etapasPorNome)
+    internal static bool TrocarColunaLeadIndicacao(CrmLead lead, IReadOnlyDictionary<string, Guid> etapasPorNome)
     {
         if (lead.EtapaId is not { } etapaAtual) return false;
         var nomeAtual = etapasPorNome.FirstOrDefault(e => e.Value == etapaAtual).Key;
@@ -880,8 +880,7 @@ public sealed class NotionSyncService(
         var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
         lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, tipoIndicacao);
         lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
-        if (!criadoAgora && eraIndicacao != NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao)
-            && TrocarColunaLeadIndicacao(lead, etapasPorNome))
+        if (!criadoAgora && TrocarColunaLeadIndicacao(lead, etapasPorNome))
         {
             _mudancasNoQuadro++;
         }
