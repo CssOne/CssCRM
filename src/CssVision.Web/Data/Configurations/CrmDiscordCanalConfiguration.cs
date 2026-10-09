@@ -15,6 +15,9 @@ public class CrmDiscordCanalConfiguration : IEntityTypeConfiguration<CrmDiscordC
         builder.Property(e => e.DiscordCanalId).IsRequired().HasMaxLength(32);
         builder.Property(e => e.DiscordCargoId).IsRequired().HasMaxLength(32);
         builder.Property(e => e.DiscordVozId).HasMaxLength(32);
+        builder.Property(e => e.NomePersonalizado).HasMaxLength(200);
+        builder.Property(e => e.AcessoChave).HasMaxLength(80);
+        builder.Ignore(e => e.NomeExibido);
         builder.HasIndex(e => e.Chave).IsUnique();
     }
 }

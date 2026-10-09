@@ -15,6 +15,16 @@ public class CrmDiscordGruposController(IDiscordGruposService grupos, IDiscordAv
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<DiscordCanalDto>>> Listar(CancellationToken ct) => Ok(await grupos.ListarCanaisAsync(ct));
 
+    /// <summary>Cria um canal de texto extra no Discord, visível só para quem está no grupo escolhido.</summary>
+    [HttpPost("canais")]
+    public async Task<ActionResult<DiscordCanalDto>> CriarCanal(DiscordCriarCanalRequest request, CancellationToken ct) =>
+        Ok(await grupos.CriarCanalAsync(request.Nome, request.AcessoChave, request.Topico, ct));
+
+    /// <summary>Renomeia o canal no Discord e no CRM.</summary>
+    [HttpPut("canais/{chave}")]
+    public async Task<ActionResult<DiscordCanalDto>> RenomearCanal(string chave, DiscordRenomearCanalRequest request, CancellationToken ct) =>
+        Ok(await grupos.RenomearCanalAsync(chave, request.Nome, ct));
+
     /// <summary>Quais avisos automáticos estão ligados nos canais das regionais.</summary>
     [HttpGet("avisos")]
     public async Task<ActionResult<DiscordAvisosCanaisDto>> ObterAvisos(CancellationToken ct) => Ok(await avisos.ObterConfiguracaoAsync(ct));
