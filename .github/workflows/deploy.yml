@@ -17,6 +17,13 @@ permissions:
   id-token: write
   contents: read
 
+# Um deploy por vez: dois deploys ao mesmo tempo (varios PRs mesclados em sequencia) disputavam o "docker compose up" na instancia e deixavam
+# o container do app com o nome preso ("Conflict. The container name ... is already in use"), derrubando o sistema. Os que chegam enquanto um
+# deploy roda esperam na fila e so o mais recente e executado (a imagem "latest" ja tem tudo o que foi mesclado).
+concurrency:
+  group: deploy-producao
+  cancel-in-progress: false
+
 jobs:
   build-and-push:
     if: github.event.workflow_run.conclusion == 'success'
@@ -52,7 +59,7 @@ jobs:
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
-            --parameters 'commands=["cd /opt/cssvision-crm && ./deploy.sh"]' \
+            --parameters 'commands=["cd /opt/cssvision-crm && (./deploy.sh || (docker ps -aq --filter name=cssvision-crm-app | xargs -r docker rm -f; ./deploy.sh))"]' \
             --query "Command.CommandId" --output text)
 
           aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" || true
