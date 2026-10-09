@@ -41,6 +41,12 @@ public class CrmNotionSyncCheckpoint
     public DateTimeOffset? DataChegadaCorrigidaEm { get; set; }
 
     /// <summary>
+    /// Quando o "Tipo de Indicação?" (Canal de Aquisição) de todas as vendas da base foi relido do Notion e gravado no lead e na venda
+    /// (Pessoal, Lead que fechou como indicação = "Indicação Lead"...). Nulo = correção pendente.
+    /// </summary>
+    public DateTimeOffset? TipoIndicacaoVendasCorrigidoEm { get; set; }
+
+    /// <summary>
     /// Quando os cards criados em 2025 (01/01/2025 até 31/12/2025) foram trazidos para o CRM.
     /// Nulo = importação de 2025 pendente (roda uma vez por base).
     /// </summary>

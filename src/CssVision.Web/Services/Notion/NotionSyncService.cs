@@ -73,7 +73,7 @@ public sealed class NotionSyncService(
         var relatorios = new List<string>();
         // Primeiro o incremental de todas as bases (cards novos/editados não esperam as passadas
         // longas); depois, a reimportação dos consultores ativos e a importação das vendas pendentes.
-        foreach (var passada in new[] { Passada.Normal, Passada.ReimportacaoAtivos, Passada.ImportacaoVendas, Passada.Importacao2025, Passada.ImportacaoCompleta, Passada.RevisaoVendedores, Passada.CorrecaoDataChegada })
+        foreach (var passada in new[] { Passada.Normal, Passada.ReimportacaoAtivos, Passada.ImportacaoVendas, Passada.Importacao2025, Passada.ImportacaoCompleta, Passada.RevisaoVendedores, Passada.CorrecaoDataChegada, Passada.CorrecaoTipoIndicacao })
         {
             foreach (var spec in DataSources)
             {
@@ -104,7 +104,7 @@ public sealed class NotionSyncService(
         return string.Join(" | ", relatorios);
     }
 
-    private enum Passada { Normal, ReimportacaoAtivos, ImportacaoVendas, Importacao2025, ImportacaoCompleta, RevisaoVendedores, CorrecaoDataChegada }
+    private enum Passada { Normal, ReimportacaoAtivos, ImportacaoVendas, Importacao2025, ImportacaoCompleta, RevisaoVendedores, CorrecaoDataChegada, CorrecaoTipoIndicacao }
 
     /// <param name="passada">
     /// Normal: realinhamento (se pendente) ou incremental. ReimportacaoAtivos / ImportacaoVendas: só
@@ -119,6 +119,12 @@ public sealed class NotionSyncService(
         {
             if (checkpoint is not { RealinhamentoConcluidoEm: not null, DataChegadaCorrigidaEm: null }) return null;
             return await CorrigirDataDeChegadaAsync(notion, dataSourceId, regionalNome, baseNome, inicioDaExecucao, ct);
+        }
+
+        if (passada == Passada.CorrecaoTipoIndicacao)
+        {
+            if (checkpoint is not { RealinhamentoConcluidoEm: not null, ImportacaoVendasConcluidaEm: not null, TipoIndicacaoVendasCorrigidoEm: null }) return null;
+            return await CorrigirTipoIndicacaoDasVendasAsync(notion, dataSourceId, regionalNome, baseNome, inicioDaExecucao, ct);
         }
 
         // Realinhamento (uma vez por base): relê todos os cards desde a data mínima para colocar cada
@@ -324,6 +330,60 @@ public sealed class NotionSyncService(
     /// Grava a "Data de chegada" de cada card (created_time) no lead ligado a ele. Só atualiza a
     /// data — em lote, direto no banco —, então é rápida mesmo relendo a base inteira.
     /// </summary>
+    /// <summary>
+    /// Passada única por base: relê o "Tipo de Indicação?" de cada card "VENDA CONCLUIDA" e grava o Canal de Aquisição no lead e na venda,
+    /// e os valores da venda (mensalidade, adesão, porcentagem, indicação, estado, rastreador, vistoria) —
+    /// "Pessoal" fica "Pessoal"; "Lead" com "Indicação?" = SIM vira "Indicação Lead" (e o card vai para a coluna das indicações).
+    /// Só mexe em lead que veio do Notion e já está ligado ao card.
+    /// </summary>
+    private async Task<string> CorrigirTipoIndicacaoDasVendasAsync(NotionClient notion, string dataSourceId, string regionalNome, string baseNome, DateTimeOffset inicio, CancellationToken ct)
+    {
+        int lidos = 0, leadsAtualizados = 0, vendasAtualizadas = 0, erros = 0;
+        var etapasPorNome = await db.CrmLeadStages.Where(s => s.Ativa).ToDictionaryAsync(s => s.Nome.Trim(), s => s.Id, ct);
+
+        await foreach (var page in PaginasDeVendaAsync(notion, dataSourceId, ct))
+        {
+            lidos++;
+            var pageId = page.PageId();
+            try
+            {
+                var lead = await db.CrmLeads.FirstOrDefaultAsync(l => l.NotionPageId == pageId && !l.Arquivado, ct);
+                if (lead is null || lead.ConsentimentoOrigem is not (OrigemLead.MarcadorMigracaoNotion or OrigemLead.MarcadorSincronizacaoNotion)) continue;
+
+                var antes = (lead.TipoIndicacao, lead.CriadoManualmente, lead.EtapaId);
+                var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
+                lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, TipoIndicacaoDoCard(page, page.Select("O que")));
+                lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
+                if (eraIndicacao != NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao)) TrocarColunaLeadIndicacao(lead, etapasPorNome);
+                if (antes != (lead.TipoIndicacao, lead.CriadoManualmente, lead.EtapaId)) leadsAtualizados++;
+
+                var vendas = await db.CrmOpportunities.Include(o => o.Veiculo).Where(o => o.LeadId == lead.Id && !o.Arquivado && o.NotionPageId == pageId).ToListAsync(ct);
+                foreach (var venda in vendas)
+                {
+                    AplicarIndicacaoNaOportunidade(venda, page);
+                    AplicarValoresDaVenda(venda, page);
+                    if (db.Entry(venda).State == EntityState.Modified || (venda.Veiculo is not null && db.Entry(venda.Veiculo).State == EntityState.Modified)) vendasAtualizadas++;
+                }
+                await db.SaveChangesAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                erros++;
+                logger.LogWarning(ex, "Erro corrigindo o tipo de indicação da página {PageId} ({Regional})", pageId, regionalNome);
+            }
+            finally
+            {
+                db.ChangeTracker.Clear();
+            }
+        }
+
+        var checkpoint = await db.CrmNotionSyncCheckpoints.FindAsync([dataSourceId], ct);
+        checkpoint!.TipoIndicacaoVendasCorrigidoEm = inicio;
+        await db.SaveChangesAsync(ct);
+        if (leadsAtualizados + vendasAtualizadas > 0) eventos?.PublicarQuadroAtualizado("notion");
+        return $"{baseNome}: {lidos} vendas lidas, {leadsAtualizados} leads e {vendasAtualizadas} vendas com o Canal de Aquisição e os valores acertados, {erros} erros (correção do tipo de indicação e dos valores)";
+    }
+
     private async Task<string> CorrigirDataDeChegadaAsync(NotionClient notion, string dataSourceId, string regionalNome, string baseNome, DateTimeOffset inicio, CancellationToken ct)
     {
         int lidos = 0, atualizados = 0, ligados = 0, erros = 0;
@@ -544,11 +604,20 @@ public sealed class NotionSyncService(
     public static string TipoIndicacaoDoCard(JsonElement page, string? oQue)
     {
         var tipo = page.SelectPorNomeAproximado("Tpo de Indicação?", "Tipo de Indicação?", "Tipo de Indicação");
-        if (!string.IsNullOrWhiteSpace(tipo)) return NormalizarTipoIndicacao(tipo);
+        if (!string.IsNullOrWhiteSpace(tipo)) return LeadQueFechouComoIndicacao(page, NormalizarTipoIndicacao(tipo));
         if (IndicacaoMarcada(page)) return "Indicação";
         if (TemSinalDeAnuncio(page)) return "Lead";
         return NotionLeadClassifier.Classificar(oQue);
     }
+
+    /// <summary>
+    /// Venda concluída de um card do tipo "Lead" com "Indicação?" = SIM: o lead (tráfego) fechou por indicação, e o Canal de Aquisição é
+    /// "Indicação Lead". Os demais tipos (Pessoal, Parceria...) ficam como estão no Notion.
+    /// </summary>
+    private static string LeadQueFechouComoIndicacao(JsonElement page, string tipo) =>
+        EhTipoLead(tipo) && IndicacaoMarcada(page) && string.Equals(page.Select("Status"), "VENDA CONCLUIDA", StringComparison.OrdinalIgnoreCase)
+            ? TipoIndicacaoLead.IndicacaoLead
+            : tipo;
 
     /// <summary>O card veio de anúncio: tem o ID do lead da Meta ou o GCLID do Google.</summary>
     private static bool TemSinalDeAnuncio(JsonElement page) =>
@@ -582,7 +651,7 @@ public sealed class NotionSyncService(
     {
         if (IndicacaoMarcada(page)) oportunidade.Indicacao = true;
         var tipo = page.SelectPorNomeAproximado("Tpo de Indicação?", "Tipo de Indicação?", "Tipo de Indicação");
-        if (!string.IsNullOrWhiteSpace(tipo)) oportunidade.TipoIndicacao = NormalizarTipoIndicacao(tipo);
+        if (!string.IsNullOrWhiteSpace(tipo)) oportunidade.TipoIndicacao = LeadQueFechouComoIndicacao(page, NormalizarTipoIndicacao(tipo));
     }
 
     /// <summary>
@@ -989,10 +1058,6 @@ public sealed class NotionSyncService(
 
         var dataVenda = DataDoNotion.ParaInstante(page.DateStart("Data da venda"));
         var mensalidade = page.Number("Mensalidade") is { } m ? (decimal)m : (decimal?)null;
-        var mensalidadeComDesconto = page.FormulaDecimal("Mensalidade com desconto");
-        var adesao = page.Number("Adesão") is { } a ? (decimal)a : (decimal?)null;
-        // O Notion guarda o percentual como fração (0,23 = 23%); o CRM guarda em pontos (23), como a tela de venda.
-        var porcentagem = page.Number("Porcentagem") is { } pc ? Math.Round((decimal)pc * 100m, 2) : (decimal?)null;
         var total = page.FormulaDecimal("Total");
         var ativoEm = ParseUtc(page.DateStart("Ativo em"));
         var oQue = page.Select("O que");
@@ -1016,12 +1081,7 @@ public sealed class NotionSyncService(
         oportunidade.DataEfetivaFechamento = dataVenda ?? oportunidade.DataEfetivaFechamento ?? lead.CriadoEm;
         oportunidade.DataAdesao = dataVenda.HasValue ? DateOnly.FromDateTime(dataVenda.Value.UtcDateTime) : oportunidade.DataAdesao;
         oportunidade.AtivoEm = ativoEm ?? oportunidade.AtivoEm;
-        oportunidade.Mensalidade = mensalidade ?? oportunidade.Mensalidade;
-        oportunidade.MensalidadeComDesconto = mensalidadeComDesconto ?? oportunidade.MensalidadeComDesconto;
-        oportunidade.MensalidadeComCupom = page.Number("Mensalidade (Cupom)") is { } cupom ? (decimal)cupom : oportunidade.MensalidadeComCupom;
-        oportunidade.PagamentoAdesao = adesao ?? oportunidade.PagamentoAdesao;
-        oportunidade.Porcentagem = porcentagem ?? oportunidade.Porcentagem;
-        oportunidade.ValorIndicacao = page.Number("Indicação") is { } valorIndicacao ? (decimal)valorIndicacao : oportunidade.ValorIndicacao;
+        AplicarValoresDaVenda(oportunidade, page);
         AplicarIndicacaoNaOportunidade(oportunidade, page);
         oportunidade.TermoAdesaoAceito = page.HasFiles("Termo Adesão") || oportunidade.TermoAdesaoAceito;
         oportunidade.Migracao = page.Select("Migração", "Migração?") is not null || oportunidade.Migracao;
@@ -1048,6 +1108,32 @@ public sealed class NotionSyncService(
         veiculo.Fipe = page.Number("FIPE") is { } fipe ? (decimal)fipe : veiculo.Fipe;
         veiculo.Rastreador = page.Number("Rastreador") is { } rastreador ? (decimal)rastreador : veiculo.Rastreador;
         veiculo.ValorVistoria = page.Number("Vistoriador") is { } vistoriador ? (decimal)vistoriador : veiculo.ValorVistoria;
+    }
+
+    /// <summary>
+    /// Valores da venda no card do Notion: mensalidade (e com desconto/cupom), adesão, porcentagem, valor da indicação, estado e, no veículo,
+    /// rastreador e vistoria. Só grava o que o card tem preenchido — campo vazio no Notion não apaga o que já está no CRM.
+    /// </summary>
+    internal static void AplicarValoresDaVenda(CrmOpportunity oportunidade, JsonElement page)
+    {
+        if (page.Number("Mensalidade") is { } mensalidade) oportunidade.Mensalidade = (decimal)mensalidade;
+        if (page.FormulaDecimal("Mensalidade com desconto") is { } comDesconto) oportunidade.MensalidadeComDesconto = comDesconto;
+        if (page.Number("Mensalidade (Cupom)") is { } cupom) oportunidade.MensalidadeComCupom = (decimal)cupom;
+        if (page.Number("Adesão") is { } adesao) oportunidade.PagamentoAdesao = (decimal)adesao;
+        // O Notion guarda o percentual como fração (0,23 = 23%); o CRM guarda em pontos (23), como a tela de venda.
+        if (page.Number("Porcentagem") is { } porcentagem) oportunidade.Porcentagem = Math.Round((decimal)porcentagem * 100m, 2);
+        if (page.Number("Indicação") is { } valorIndicacao) oportunidade.ValorIndicacao = (decimal)valorIndicacao;
+
+        var estadoSelect = page.Select("Estado");
+        var estadoTexto = page.Text("ESTADO");
+        var estado = estadoSelect is { Length: 2 } ? estadoSelect : estadoTexto is { Length: 2 } ? estadoTexto : null;
+        if (estado is not null) oportunidade.Estado = estado.ToUpperInvariant();
+
+        if (oportunidade.Veiculo is { } veiculo)
+        {
+            if (page.Number("Rastreador") is { } rastreador) veiculo.Rastreador = (decimal)rastreador;
+            if (page.Number("Vistoriador") is { } vistoriador) veiculo.ValorVistoria = (decimal)vistoriador;
+        }
     }
 
     private readonly Dictionary<string, Guid> _vendedorPorEmailCache = new();

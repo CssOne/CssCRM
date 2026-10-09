@@ -47,7 +47,8 @@ public class NotionSyncTipoIndicacaoTests
 
     [Theory]
     [InlineData("PESSOAL", true, "AGV", "Pessoal")]
-    [InlineData("LEAD", true, "AGV", "Lead")]
+    [InlineData("LEAD", true, "AGV", "Indicação Lead")] // venda de lead que fechou por indicação
+    [InlineData("LEAD", false, "AGV", "Lead")]
     [InlineData("CONTEMPLANDO SONHOS", false, "AGV", "Contemplando Sonhos")]
     [InlineData("PARCERIA", true, "AGV", "Parceria")]
     [InlineData("AÇÃO EXTERNA", true, "AGV", "Ação Externa")]
@@ -58,6 +59,10 @@ public class NotionSyncTipoIndicacaoTests
     [InlineData(null, false, null, "Indicação")]
     public void TipoIndicacaoDoCard(string? tipo, bool indicacaoSim, string? oQue, string esperado) =>
         Assert.Equal(esperado, NotionSyncService.TipoIndicacaoDoCard(Pagina(tipo, indicacaoSim, oQue: oQue), oQue));
+
+    [Fact]
+    public void CardLeadComIndicacaoSim_ForaDeVendaConcluida_SegueLead() =>
+        Assert.Equal("Lead", NotionSyncService.TipoIndicacaoDoCard(Pagina("LEAD", true, status: "EM ATENDIMENTO"), "AGV"));
 
     [Fact]
     public void TipoIndicacao_AchaOCampoPeloNomeAproximado() =>
