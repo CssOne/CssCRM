@@ -13,9 +13,9 @@ public class CrmDashboardController(IDashboardService dashboardService) : Contro
 {
     [HttpGet]
     public async Task<ActionResult<DashboardDto>> Obter(
-        [FromQuery] DateOnly? dataInicio, [FromQuery] DateOnly? dataFim, [FromQuery] Guid? vendedorId, CancellationToken ct)
+        [FromQuery] DateOnly? dataInicio, [FromQuery] DateOnly? dataFim, [FromQuery] Guid? vendedorId, [FromQuery] Guid? regionalId, CancellationToken ct)
     {
-        var resultado = await dashboardService.ObterAsync(new DashboardFilterRequest(dataInicio, dataFim, vendedorId), ct);
+        var resultado = await dashboardService.ObterAsync(new DashboardFilterRequest(dataInicio, dataFim, vendedorId, regionalId), ct);
         return Ok(resultado);
     }
 }
