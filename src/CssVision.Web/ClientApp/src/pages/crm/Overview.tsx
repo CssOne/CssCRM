@@ -2,6 +2,7 @@ import { AlertTriangle, CalendarClock, Handshake, PhoneMissed, Target, TrendingU
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, isAbortError, toQueryString } from "../../lib/api";
+import { useAuth } from "../../context/AuthContext";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { Dashboard } from "../../lib/types";
 import { Badge, Card, ErrorState, Input, Pagination, Skeleton } from "../../components/ui";
@@ -16,6 +17,9 @@ import { FiltroRegionalDoPainel, useRegionalDoPainel } from "../../components/cr
 const TAMANHO_PAGINA_VENDEDORES = 10;
 
 export function OverviewPage() {
+  const { temPapel } = useAuth();
+  // Consultor comercial: no "Resumo por mês" o valor ganho é a adesão, que é o que consta para ele em tempo real.
+  const ehConsultor = temPapel("Comercial") && !temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
   const [dados, setDados] = useState<Dashboard | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -152,7 +156,7 @@ export function OverviewPage() {
               <th className="pb-2 text-right font-medium">Perdidos</th>
               <th className="pb-2 text-right font-medium">Vendas</th>
               <th className="pb-2 text-right font-medium">Valor ganho</th>
-              <th className="pb-2 text-right font-medium">Adesão</th>
+              {!ehConsultor && <th className="pb-2 text-right font-medium">Adesão</th>}
               <th className="pb-2 text-right font-medium">Conversão</th>
             </tr>
           </thead>
@@ -170,8 +174,8 @@ export function OverviewPage() {
                   <td className="py-2 text-right text-[var(--fg-muted)]">{m.leads.toLocaleString("pt-BR")}</td>
                   <td className="py-2 text-right text-[var(--fg-muted)]">{m.perdidos.toLocaleString("pt-BR")}</td>
                   <td className="py-2 text-right text-[var(--fg-muted)]">{m.vendas.toLocaleString("pt-BR")}</td>
-                  <td className="py-2 text-right text-[var(--fg-muted)]">{formatarMoeda(m.valorGanho)}</td>
-                  <td className="py-2 text-right text-[var(--fg-muted)]">{formatarMoeda(m.adesao)}</td>
+                  <td className="py-2 text-right text-[var(--fg-muted)]">{formatarMoeda(ehConsultor ? m.adesao : m.valorGanho)}</td>
+                  {!ehConsultor && <td className="py-2 text-right text-[var(--fg-muted)]">{formatarMoeda(m.adesao)}</td>}
                   <td className="py-2 text-right text-[var(--fg-muted)]">{formatarPercentual(m.conversao)}</td>
                 </tr>
               );

@@ -737,7 +737,8 @@ public sealed class NotionSyncService(
                 lead.Email = emailBruto;
                 lead.EmailNormalizado = emailNormalizado;
             }
-            if (await AplicarStatusDoNotionAsync(lead, status, page.Select("Motivo da perda"), page.Text("Veiculo"), etapasPorNome, ct))
+            var mudouDeColunaPeloStatus = await AplicarStatusDoNotionAsync(lead, status, page.Select("Motivo da perda"), page.Text("Veiculo"), etapasPorNome, ct);
+            if (await GarantirColunaDeVendaAsync(lead, false, etapasPorNome, ct) || mudouDeColunaPeloStatus)
             {
                 _mudancasNoQuadro++;
             }
@@ -840,10 +841,38 @@ public sealed class NotionSyncService(
         }
 
         var mudouDeColuna = await AplicarStatusDoNotionAsync(lead, status, page.Select("Motivo da perda"), page.Text("Veiculo"), etapasPorNome, ct);
+        if (await GarantirColunaDeVendaAsync(lead, isVendaConcluida, etapasPorNome, ct)) mudouDeColuna = true;
 
         await db.SaveChangesAsync(ct);
         if (criadoAgora || mudouDeColuna) _mudancasNoQuadro++;
         return criadoAgora;
+    }
+
+    /// <summary>
+    /// Lead com venda ganha nunca fica parado em "Cotação"/"Em atendimento"/"Sem etapa": o Status do card no Notion pode estar atrasado em relação à
+    /// venda (cliente migrado, card editado depois), e o CRM não pode ter venda concluída com o card fora de "Venda concluída". "Perdido" e
+    /// "Não fazemos" são decisões explícitas e não são mexidos. Devolve true se o card mudou de coluna.
+    /// </summary>
+    public async Task<bool> GarantirColunaDeVendaAsync(CrmLead lead, bool vendaAindaNaoSalva, IReadOnlyDictionary<string, Guid> etapasPorNome, CancellationToken ct)
+    {
+        var jaEstaCerto = etapasPorNome
+            .Where(e => e.Value == lead.EtapaId)
+            .Any(e => e.Key.StartsWith(NotionEtapaLead.VendaConcluida, StringComparison.Ordinal) || e.Key is NotionEtapaLead.Perdido or NotionEtapaLead.NaoFazemos);
+        if (jaEstaCerto) return false;
+
+        var temVenda = vendaAindaNaoSalva
+            || await db.CrmOpportunities.AnyAsync(o => o.LeadId == lead.Id && !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho, ct);
+        if (!temVenda) return false;
+
+        var ehIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
+        var (reconhecido, etapaId, _) = NotionEtapaLead.Resolver("VENDA CONCLUIDA", ehIndicacao, etapasPorNome);
+        if (!reconhecido || etapaId is null || etapaId == lead.EtapaId) return false;
+
+        lead.EtapaId = etapaId;
+        lead.MotivoPerdaId = null;
+        lead.MotivoPerdaObservacao = null;
+        lead.VeiculoNaoAtendido = null;
+        return true;
     }
 
     /// <summary>

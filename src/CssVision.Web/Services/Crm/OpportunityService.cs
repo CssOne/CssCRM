@@ -103,6 +103,9 @@ public sealed class OpportunityService(
         if (etapaInicial.Tipo == TipoEtapaPipeline.Ganho)
         {
             await GarantirUmaVendaConcluidaPorLeadAsync(lead.Id, null, ct);
+            // Venda já criada como ganha: o card do lead vai junto para "Venda concluída", como em MudarEtapaAsync.
+            TravarLeadDuranteAVenda(lead);
+            await MoverLeadParaVendaConcluidaAsync(lead, null, ct);
         }
 
         var opportunity = new CrmOpportunity
