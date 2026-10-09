@@ -538,15 +538,21 @@ public sealed class NotionSyncService(
     /// <summary>
     /// Tipo de indicação do lead conforme o card: o campo "Tipo de Indicação?" do Notion (Lead,
     /// Pessoal, Contemplando Sonhos...); sem ele, "Indicação" se "Indicação?" = SIM; sem nenhum dos
-    /// dois, a classificação antiga pelo "O que" (Lead/Indicação).
+    /// dois, o card com sinal de anúncio (ID de lead da Meta ou GCLID do Google) é "Lead" — tráfego pago nunca cai na coluna de
+    /// Indicação por falta ou grafia do "O que"; por último, a classificação antiga pelo "O que" (Lead/Indicação).
     /// </summary>
     public static string TipoIndicacaoDoCard(JsonElement page, string? oQue)
     {
         var tipo = page.SelectPorNomeAproximado("Tpo de Indicação?", "Tipo de Indicação?", "Tipo de Indicação");
         if (!string.IsNullOrWhiteSpace(tipo)) return NormalizarTipoIndicacao(tipo);
         if (IndicacaoMarcada(page)) return "Indicação";
+        if (TemSinalDeAnuncio(page)) return "Lead";
         return NotionLeadClassifier.Classificar(oQue);
     }
+
+    /// <summary>O card veio de anúncio: tem o ID do lead da Meta ou o GCLID do Google.</summary>
+    private static bool TemSinalDeAnuncio(JsonElement page) =>
+        !string.IsNullOrWhiteSpace(page.Text("[META] Lead ID")) || !string.IsNullOrWhiteSpace(page.Text("GCLID"));
 
     /// <summary>"Indicação?" = SIM no card.</summary>
     private static bool IndicacaoMarcada(JsonElement page) =>

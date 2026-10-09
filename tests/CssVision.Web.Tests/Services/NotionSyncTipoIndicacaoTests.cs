@@ -15,7 +15,8 @@ namespace CssVision.Web.Tests.Services;
 public class NotionSyncTipoIndicacaoTests
 {
     private static JsonElement Pagina(string? tipo, bool indicacaoSim, string status = "VENDA CONCLUIDA", string? oQue = "AGV",
-        string? vendedorEmail = null, string? whatsapp = null, string nomePropTipo = "Tpo de Indicação? ")
+        string? vendedorEmail = null, string? whatsapp = null, string nomePropTipo = "Tpo de Indicação? ",
+        string? metaLeadId = null, string? gclid = null)
     {
         var props = new Dictionary<string, object>
         {
@@ -28,6 +29,14 @@ public class NotionSyncTipoIndicacaoTests
             ["Indicação"] = new { type = "number", number = 0 },
             [nomePropTipo] = new { type = "select", select = tipo is null ? null : new { name = tipo } },
         };
+        if (metaLeadId is not null)
+        {
+            props["[META] Lead ID"] = new { type = "rich_text", rich_text = new object[] { new { plain_text = metaLeadId } } };
+        }
+        if (gclid is not null)
+        {
+            props["GCLID"] = new { type = "rich_text", rich_text = new object[] { new { plain_text = gclid } } };
+        }
         if (vendedorEmail is not null)
         {
             props["Vendedor"] = new { type = "people", people = new object[] { new { name = "V", person = new { email = vendedorEmail } } } };
@@ -53,6 +62,89 @@ public class NotionSyncTipoIndicacaoTests
     [Fact]
     public void TipoIndicacao_AchaOCampoPeloNomeAproximado() =>
         Assert.Equal("Pessoal", NotionSyncService.TipoIndicacaoDoCard(Pagina("PESSOAL", false, nomePropTipo: "Tipo de indicação?"), "AGV"));
+
+    [Theory]
+    [InlineData("AGV ELETRICO")]   // grafia do Notion, sem acento
+    [InlineData("AGV ELÉTRICO")]
+    [InlineData("agv elétrico")]
+    [InlineData(" AGV Elétrico ")]
+    [InlineData("AGV")]
+    [InlineData("loovi")]
+    public void OQue_ConhecidoEhLead_SemDependerDeAcentoOuMaiuscula(string oQue) =>
+        Assert.Equal("Lead", NotionSyncService.TipoIndicacaoDoCard(Pagina(null, false, oQue: oQue), oQue));
+
+    [Theory]
+    [InlineData(null, "123456789", null, null, "Lead")]                  // sem "O que", mas com ID de lead da Meta
+    [InlineData(null, null, "Cj0KCQ", null, "Lead")]                    // sem "O que", mas com GCLID
+    [InlineData("OUTRO PRODUTO", "123456789", null, null, "Lead")]       // "O que" desconhecido com anúncio
+    [InlineData(null, "123456789", null, "PESSOAL", "Pessoal")]           // tipo explícito do Notion vale mais que o anúncio
+    [InlineData(null, "123456789", null, "LEAD", "Lead")]
+    [InlineData("OUTRO PRODUTO", null, null, null, "Indicação")]          // sem anúncio, sem "O que" conhecido: continua indicação
+    public void CardComSinalDeAnuncio_NuncaViraIndicacaoPorPadrao(string? oQue, string? metaLeadId, string? gclid, string? tipo, string esperado) =>
+        Assert.Equal(esperado, NotionSyncService.TipoIndicacaoDoCard(Pagina(tipo, false, oQue: oQue, metaLeadId: metaLeadId, gclid: gclid), oQue));
+
+    [Fact]
+    public void IndicacaoMarcadaNoNotion_ValeMaisQueOAnuncio() =>
+        Assert.Equal("Indicação", NotionSyncService.TipoIndicacaoDoCard(Pagina(null, true, oQue: "AGV ELETRICO", metaLeadId: "123456789"), "AGV ELETRICO"));
+
+    [Fact]
+    public async Task CardDeAnuncioEmAtendimento_AGVEletricoSemAcento_FicaNaColunaDeLeads()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, service, regional, ganho, placeholder, etapas, ana) = await PrepararAsync(factory);
+        await using var _ = db;
+        var anaEmail = (await db.Users.FindAsync(ana))!.Email;
+
+        await service.ProcessarPaginaAsync(
+            Pagina(null, false, status: "EM ATENDIMENTO", oQue: "AGV ELETRICO", vendedorEmail: anaEmail, metaLeadId: "987654321"),
+            regional, "MG132", etapas, ganho, placeholder, false, CancellationToken.None);
+
+        var lead = await db.CrmLeads.SingleAsync();
+        Assert.Equal("Lead", lead.TipoIndicacao);
+        Assert.False(lead.CriadoManualmente);
+        Assert.Equal(etapas["Em atendimento (Leads)"], lead.EtapaId);
+    }
+
+    [Fact]
+    public async Task CardDeAnuncioSemOQue_FicaNaColunaDeLeads()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, service, regional, ganho, placeholder, etapas, ana) = await PrepararAsync(factory);
+        await using var _ = db;
+        var anaEmail = (await db.Users.FindAsync(ana))!.Email;
+
+        await service.ProcessarPaginaAsync(
+            Pagina(null, false, status: "EM ATENDIMENTO", oQue: null, vendedorEmail: anaEmail, gclid: "Cj0KCQ"),
+            regional, "MG132", etapas, ganho, placeholder, false, CancellationToken.None);
+
+        var lead = await db.CrmLeads.SingleAsync();
+        Assert.Equal("Lead", lead.TipoIndicacao);
+        Assert.Equal(etapas["Em atendimento (Leads)"], lead.EtapaId);
+    }
+
+    [Fact]
+    public async Task Revisao_Anuncio_TiraOLeadDaColunaDeIndicacaoSemEtiquetaExplicita()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, service, regional, _, placeholder, etapas, _) = await PrepararAsync(factory);
+        await using var __ = db;
+        // Como estava em produção: "AGV ELETRICO" classificado como Indicação, na coluna de Indicação.
+        db.CrmLeads.Add(new CrmLead
+        {
+            NomeOuRazaoSocial = "Davi", TipoPessoa = TipoPessoa.Fisica, TelefoneNormalizado = "31992142811",
+            TipoIndicacao = "Indicação", CriadoManualmente = true, EtapaId = etapas["Em atendimento (Indicação)"],
+            NotionStatus = "EM ATENDIMENTO", ConsentimentoOrigem = OrigemLead.MarcadorSincronizacaoNotion, ResponsavelId = placeholder,
+        });
+        await db.SaveChangesAsync();
+
+        await service.DevolverAoVendedorDoCardAsync(
+            Pagina(null, false, status: "EM ATENDIMENTO", oQue: "AGV ELETRICO", whatsapp: "(31) 99214-2811", metaLeadId: "987654321"),
+            regional, "MG132", placeholder, CancellationToken.None, etapas);
+
+        var lead = await db.CrmLeads.SingleAsync();
+        Assert.Equal("Lead", lead.TipoIndicacao);
+        Assert.Equal(etapas["Em atendimento (Leads)"], lead.EtapaId);
+    }
 
     private static async Task<(ApplicationDbContext Db, NotionSyncService Service, Guid Regional, Guid Ganho, Guid Placeholder, Dictionary<string, Guid> Etapas, Guid Ana)> PrepararAsync(TestDbContextFactory factory)
     {
