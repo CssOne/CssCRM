@@ -270,7 +270,7 @@ public sealed class UserManagementService(
         usuario.GrupoId = grupoId;
         // Papel sem visão total nunca fica com regionais ocultas; a lista só muda quando o chamador a manda.
         if (request.Papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial)) usuario.RegionaisOcultas = null;
-        else if (request.AlterarRegionaisOcultas) usuario.RegionaisOcultas = await ValidarOcultasAsync(request.RegionaisOcultasIds, request.Papel, ct, alterando: true);
+        else if (request.AlterarRegionaisOcultas) usuario.RegionaisOcultas = await ValidarOcultasAsync(request.RegionaisOcultasIds, request.Papel, ct, alterando: true, usuarioAlvoId: usuario.Id);
         usuario.LimiteMensalLeads = request.Papel == Roles.Comercial ? request.LimiteMensalLeads : null;
         usuario.LimiteDiarioLeads = request.Papel == Roles.Comercial ? request.LimiteDiarioLeads : null;
         // Só quando vier (lista vazia limpa): outras telas que editam o usuário não mandam o campo.
@@ -413,12 +413,15 @@ public sealed class UserManagementService(
     /// Regionais ocultas de um administrador. Só quem não tem regionais ocultas define isso (senão ele se liberaria), e só para quem
     /// tem visão total (Admin/Gestor master/Supervisor); para os demais papéis, e para uma lista vazia, não há regional oculta.
     /// </summary>
-    private async Task<string?> ValidarOcultasAsync(IReadOnlyList<Guid>? ids, string papel, CancellationToken ct, bool alterando = false)
+    private async Task<string?> ValidarOcultasAsync(IReadOnlyList<Guid>? ids, string papel, CancellationToken ct, bool alterando = false, Guid? usuarioAlvoId = null)
     {
         var lista = (ids ?? []).Where(i => i != Guid.Empty).Distinct().ToList();
         if (papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial)) return null;
         if (lista.Count == 0 && !alterando) return null;
-        if (!GerenciaTodasAsRegionais || (await EscopoRegional.OcultasAsync(db, currentUser, ct)).Count > 0)
+        // Cada administrador ajusta as PRÓPRIAS regionais ocultas (incluindo voltar a ver todas); quem tem regionais ocultas não mexe nas
+        // de outro administrador.
+        var ehOProprioUsuario = usuarioAlvoId is { } alvo && alvo == currentUser.UserId;
+        if (!GerenciaTodasAsRegionais || (!ehOProprioUsuario && (await EscopoRegional.OcultasAsync(db, currentUser, ct)).Count > 0))
         {
             throw new CrmForbiddenException("Apenas um administrador sem regionais ocultas pode ocultar regionais de outro administrador.");
         }
