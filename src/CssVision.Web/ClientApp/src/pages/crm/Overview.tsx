@@ -9,6 +9,7 @@ import { usePaginacao } from "../../lib/usePaginacao";
 import { BarrasHorizontaisChart } from "../../components/marketing/GraficosTrafego";
 import { mesAtualIso, useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { StatCard } from "../../components/crm/StatCard";
+import { PagamentosEmAberto } from "../../components/crm/PagamentosEmAberto";
 import { EvolucaoChart, OrigemChart } from "../../components/crm/Charts";
 
 const TAMANHO_PAGINA_VENDEDORES = 10;
@@ -73,6 +74,7 @@ export function OverviewPage() {
         <h1 className="text-xl font-semibold text-[var(--fg)]">Visão geral</h1>
         <p className="text-sm text-[var(--fg-muted)]">Indicadores comerciais de {rotuloMes}.</p>
       </div>
+      <PagamentosEmAberto />
       <div className="w-44">
         <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Mês</label>
         <Input type="month" value={mes} onChange={(e) => e.target.value && setMes(e.target.value)} />
