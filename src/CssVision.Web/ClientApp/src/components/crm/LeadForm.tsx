@@ -118,12 +118,18 @@ export function LeadForm({
   onSubmit,
   onCancel,
   idPrefix = "lead",
+  ehIndicacao = true,
 }: {
   valoresIniciais?: LeadFormValues;
   salvando: boolean;
   onSubmit: (valores: LeadFormValues) => void;
   onCancel: () => void;
   idPrefix?: string;
+  /**
+   * Indicação (cadastro manual, "Novo cliente", ou tipo diferente de "Lead"): o Canal de Aquisição pode ser escolhido, sem a opção "Lead".
+   * Lead (tráfego pago, Notion): o canal é sempre "Lead", então o campo nem aparece na edição. Padrão: indicação, que é o que se cadastra à mão.
+   */
+  ehIndicacao?: boolean;
 }) {
   const [valores, setValores] = useState<LeadFormValues>(valoresIniciais ?? leadFormVazio);
   const [erros, setErros] = useState<Record<string, string>>({});
@@ -318,17 +324,19 @@ export function LeadForm({
               </div>
             )}
           </div>
-          <div>
-            <Label htmlFor={`${idPrefix}-tipo-indicacao`}>Canal de Aquisição</Label>
-            <Select id={`${idPrefix}-tipo-indicacao`} value={valores.tipoIndicacao} onChange={(e) => set("tipoIndicacao", e.target.value)}>
-              <option value="">Selecione...</option>
-              {OPCOES_TIPO_INDICACAO.map((tipo) => (
-                <option key={tipo} value={tipo}>
-                  {tipo}
-                </option>
-              ))}
-            </Select>
-          </div>
+          {ehIndicacao && (
+            <div>
+              <Label htmlFor={`${idPrefix}-tipo-indicacao`}>Canal de Aquisição</Label>
+              <Select id={`${idPrefix}-tipo-indicacao`} value={valores.tipoIndicacao} onChange={(e) => set("tipoIndicacao", e.target.value)}>
+                <option value="">Selecione...</option>
+                {OPCOES_TIPO_INDICACAO.filter((tipo) => tipo !== "Lead").map((tipo) => (
+                  <option key={tipo} value={tipo}>
+                    {tipo}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
         </div>
       </div>
 
