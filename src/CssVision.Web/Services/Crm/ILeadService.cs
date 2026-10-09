@@ -23,4 +23,9 @@ public interface ILeadService
     Task<LeadTotaisDto> ObterTotaisAsync(LeadFilterRequest filtro, CancellationToken ct);
     Task<Guid> AdicionarNotaAsync(Guid leadId, string texto, CancellationToken ct);
     Task ExcluirAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Lixeira do quadro: leads excluídos por alguém no CRM (podem voltar para o quadro).</summary>
+    Task<IReadOnlyList<LeadLixeiraDto>> ListarLixeiraAsync(CancellationToken ct);
+
+    Task RestaurarAsync(Guid id, CancellationToken ct);
 }

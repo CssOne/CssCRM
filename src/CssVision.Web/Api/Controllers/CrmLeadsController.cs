@@ -79,11 +79,24 @@ public class CrmLeadsController(ILeadService leadService, ILeadKanbanService kan
     public async Task<ActionResult> AdicionarNota(Guid id, AddNoteRequest request, CancellationToken ct) =>
         Ok(new { id = await leadService.AdicionarNotaAsync(id, request.Texto, ct) });
 
+    /// <summary>Administradores excluem qualquer lead; o consultor só os de indicação da própria carteira (a regra fica no serviço).</summary>
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = PolicyNames.VisaoTotalComercial)]
+    [Authorize(Policy = PolicyNames.AreaComercial)]
     public async Task<IActionResult> Excluir(Guid id, CancellationToken ct)
     {
         await leadService.ExcluirAsync(id, ct);
+        return NoContent();
+    }
+
+    [HttpGet("lixeira")]
+    [Authorize(Policy = PolicyNames.AreaComercial)]
+    public async Task<ActionResult<IReadOnlyList<LeadLixeiraDto>>> Lixeira(CancellationToken ct) => Ok(await leadService.ListarLixeiraAsync(ct));
+
+    [HttpPost("{id:guid}/restaurar")]
+    [Authorize(Policy = PolicyNames.AreaComercial)]
+    public async Task<IActionResult> Restaurar(Guid id, CancellationToken ct)
+    {
+        await leadService.RestaurarAsync(id, ct);
         return NoContent();
     }
 
