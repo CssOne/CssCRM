@@ -217,9 +217,13 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddDiscordIntegration(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<Services.Discord.DiscordOptions>(configuration.GetSection(Services.Discord.DiscordOptions.SectionName));
+        // Endereço da API do Discord. Só muda para testar contra um Discord de mentira (Discord__UrlBase); em produção fica o padrão.
+        var urlBaseDoDiscord = configuration["Discord:UrlBase"] is { Length: > 0 } configurada
+            ? configurada.TrimEnd('/') + "/"
+            : Services.Discord.DiscordApi.UrlBase;
         services.AddHttpClient<Services.Discord.IDiscordApi, Services.Discord.DiscordApi>(http =>
         {
-            http.BaseAddress = new Uri(Services.Discord.DiscordApi.UrlBase);
+            http.BaseAddress = new Uri(urlBaseDoDiscord);
             // O Discord exige um User-Agent no formato "DiscordBot (url, versão)".
             http.DefaultRequestHeaders.UserAgent.ParseAdd("DiscordBot (https://cssbrasil.duckdns.org, 1.0)");
             http.Timeout = TimeSpan.FromSeconds(15);
@@ -229,7 +233,7 @@ public static class ServiceCollectionExtensions
         // Grupos: um canal + um cargo por regional/grupo do CRM, mantidos em dia pela sincronização.
         services.AddHttpClient<Services.Discord.IDiscordGuildApi, Services.Discord.DiscordGuildApi>(http =>
         {
-            http.BaseAddress = new Uri(Services.Discord.DiscordApi.UrlBase);
+            http.BaseAddress = new Uri(urlBaseDoDiscord);
             http.DefaultRequestHeaders.UserAgent.ParseAdd("DiscordBot (https://cssbrasil.duckdns.org, 1.0)");
             http.Timeout = TimeSpan.FromSeconds(15);
         });

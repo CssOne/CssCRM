@@ -46,6 +46,11 @@ public sealed class DiscordAvisosNosCanaisService(
 
     private static readonly TimeSpan HoraDoResumo = new(9, 30, 0);
 
+    // Cores da barra lateral dos cartões.
+    private const int CorVenda = 0x2ECC71;
+    private const int CorMeta = 0xF1C40F;
+    private const int CorAlerta = 0xF39C12;
+
     private DateTimeOffset Agora => (relogio ?? TimeProvider.System).GetUtcNow();
 
     public async Task<DiscordAvisosCanaisDto> ObterConfiguracaoAsync(CancellationToken ct)
@@ -83,9 +88,10 @@ public sealed class DiscordAvisosNosCanaisService(
         {
             if (configuracao.Venda)
             {
-                var valor = venda.PagamentoAdesao is > 0 ? $" Adesão de {Moeda(venda.PagamentoAdesao.Value)}." : "";
-                var onde = venda.Regional is null ? "" : $" ({venda.Regional})";
-                await api.PublicarAvisoAsync(canal, $"🎉 **{venda.Consultor}** fechou uma venda{onde}!{valor}", ct);
+                var campos = new List<DiscordCampo>();
+                if (venda.Regional is not null) campos.Add(new DiscordCampo("Regional", venda.Regional));
+                if (venda.PagamentoAdesao is > 0) campos.Add(new DiscordCampo("Adesão", Moeda(venda.PagamentoAdesao.Value)));
+                await api.PublicarCartaoAsync(canal, new DiscordCartao("🎉 Venda fechada!", $"**{venda.Consultor}** fechou uma venda.", CorVenda, campos, "CRM CSS Brasil"), ct);
             }
 
             if (configuracao.MetaBatida && venda.RegionalId is { } regionalId) await PublicarMetaSeBatidaAsync(regionalId, venda.Regional ?? "regional", venda.PagamentoAdesao ?? 0m, canal, ct);
@@ -122,10 +128,10 @@ public sealed class DiscordAvisosNosCanaisService(
         // Só quando esta venda virou a chave: antes dela a meta ainda não estava batida.
         if (!Batida(realizado.Valor, realizado.Quantidade) || Batida(realizado.Valor - valorDestaVenda, realizado.Quantidade - 1)) return;
 
-        var partes = new List<string>();
-        if (meta.MetaValor is > 0) partes.Add($"{Moeda(realizado.Valor)} de {Moeda(meta.MetaValor.Value)}");
-        if (meta.MetaQuantidadeVendas > 0) partes.Add($"{realizado.Quantidade} de {meta.MetaQuantidadeVendas} vendas");
-        await api.PublicarAvisoAsync(canal, $"🏆 **A regional {nomeRegional} bateu a meta do mês!** {string.Join(" · ", partes)}.", ct);
+        var campos = new List<DiscordCampo>();
+        if (meta.MetaValor is > 0) campos.Add(new DiscordCampo("Valor", $"{Moeda(realizado.Valor)} de {Moeda(meta.MetaValor.Value)}"));
+        if (meta.MetaQuantidadeVendas > 0) campos.Add(new DiscordCampo("Vendas", $"{realizado.Quantidade} de {meta.MetaQuantidadeVendas}"));
+        await api.PublicarCartaoAsync(canal, new DiscordCartao("🏆 Meta do mês batida!", $"**A regional {nomeRegional} bateu a meta do mês!** Parabéns, time!", CorMeta, campos, "CRM CSS Brasil"), ct);
 
         db.CrmParametros.Add(new CrmParametro { Chave = marca, Valor = Agora.ToString("O", CultureInfo.InvariantCulture) });
         await db.SaveChangesAsync(ct);
@@ -172,7 +178,8 @@ public sealed class DiscordAvisosNosCanaisService(
             try
             {
                 var leads = r.Total == 1 ? "1 lead" : $"{r.Total} leads";
-                await api.PublicarAvisoAsync(canal, $"⚠️ **{nomes.GetValueOrDefault(r.RegionalId, "Regional")}:** {leads} de anúncio {(r.Total == 1 ? "está parado" : "estão parados")} há mais de {DiasParado} dias, sem contato. Vale olhar o painel de alertas.", ct);
+                await api.PublicarCartaoAsync(canal,
+                    new DiscordCartao("⚠️ Leads parados", $"**{nomes.GetValueOrDefault(r.RegionalId, "Regional")}:** {leads} de anúncio {(r.Total == 1 ? "está parado" : "estão parados")} há mais de {DiasParado} dias, sem contato. Vale olhar o painel de alertas.", CorAlerta, null, "CRM CSS Brasil"), ct);
                 publicados++;
             }
             catch (DiscordApiException ex)

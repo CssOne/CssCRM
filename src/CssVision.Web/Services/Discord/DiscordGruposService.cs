@@ -42,7 +42,26 @@ public sealed class DiscordGruposService(
     /// <summary>Canal onde moram as threads privadas das conversas 1:1 (não é um grupo: fica fora das listas de grupos e do chat).</summary>
     public const string ChaveConversas = "conversas";
 
-    private sealed record Desejado(string Chave, string Nome, string NomeCanal, string NomeCargo, string Topico);
+    private sealed record Desejado(string Chave, string Nome, string NomeCanal, string NomeCargo, string Topico, DiscordAparenciaCargo Aparencia);
+
+    /// <summary>
+    /// Cores dos cargos das regionais (a primeira regional ganha a primeira cor, e assim por diante). Sem roxo, que é o do cargo de gestão. Os grupos
+    /// de uma regional usam a cor dela: na lista de membros do Discord, o nome de cada pessoa já mostra a que regional pertence.
+    /// </summary>
+    internal static readonly int[] CoresDasRegionais = [0x3498DB, 0xE67E22, 0x1ABC9C, 0xE91E63, 0x2ECC71, 0xF1C40F, 0xE74C3C, 0x34495E];
+
+    internal const int CorGeral = 0x95A5A6;
+    internal const int CorGestao = 0x8E44AD;
+
+    /// <summary>Apelido no servidor: o nome do CRM; se passar de 32 caracteres (limite do Discord), primeiro e último nome.</summary>
+    internal static string ApelidoNoDiscord(string nomeCompleto)
+    {
+        var nome = string.Join(' ', nomeCompleto.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        if (nome.Length <= 32) return nome;
+        var partes = nome.Split(' ');
+        var curto = partes.Length > 1 ? $"{partes[0]} {partes[^1]}" : nome;
+        return curto.Length <= 32 ? curto : curto[..32].TrimEnd();
+    }
 
     public async Task<IReadOnlyList<DiscordCanalDto>> ListarCanaisAsync(CancellationToken ct) =>
         (await db.CrmDiscordCanais.AsNoTracking().Where(c => c.Chave != ChaveConversas).ToListAsync(ct))
@@ -59,6 +78,7 @@ public sealed class DiscordGruposService(
 
         var falhas = new List<string>();
         int canaisCriados = 0, cargosCriados = 0, vozCriados = 0;
+        var boasVindas = false;
 
         var desejados = await MontarDesejadosAsync(ct);
         var mapa = await db.CrmDiscordCanais.ToDictionaryAsync(c => c.Chave, ct);
@@ -92,7 +112,7 @@ public sealed class DiscordGruposService(
                     continue;
                 }
 
-                var cargoId = cargoOk ? existente!.DiscordCargoId : await api.CriarCargoAsync(d.NomeCargo, ct);
+                var cargoId = cargoOk ? existente!.DiscordCargoId : await api.CriarCargoAsync(d.NomeCargo, ct, d.Aparencia);
                 if (!cargoOk) cargosCriados++;
                 var canalId = await api.CriarCanalDeTextoAsync(d.NomeCanal, categoriaId, cargoId, d.Topico, ct);
                 canaisCriados++;
@@ -119,6 +139,15 @@ public sealed class DiscordGruposService(
 
         try
         {
+            boasVindas = await GarantirBoasVindasAsync(mapa, ct);
+        }
+        catch (DiscordApiException ex)
+        {
+            falhas.Add($"Boas-vindas: {ex.Message}");
+        }
+
+        try
+        {
             if (await GarantirCanalDeConversasAsync(mapa, categoriaId, ct)) canaisCriados++;
         }
         catch (DiscordApiException ex)
@@ -130,11 +159,11 @@ public sealed class DiscordGruposService(
         foreach (var obsoleto in mapa.Values.Where(m => m.Chave != ChaveConversas && desejados.All(d => d.Chave != m.Chave))) obsoleto.Ativo = false;
         await db.SaveChangesAsync(ct);
 
-        var (atualizados, foraDoServidor) = await SincronizarMembrosAsync(mapa, falhas, ct);
+        var (atualizados, foraDoServidor, apelidos) = await SincronizarMembrosAsync(mapa, falhas, ct);
 
         logger.LogInformation("Grupos do Discord sincronizados: {Canais} canal(is) e {Cargos} cargo(s) criados, {Membros} membro(s) ajustados, {Fora} fora do servidor, {Falhas} falha(s).",
             canaisCriados, cargosCriados, atualizados, foraDoServidor, falhas.Count);
-        return new DiscordSincronizacaoDto(canaisCriados, cargosCriados, atualizados, foraDoServidor, falhas, vozCriados);
+        return new DiscordSincronizacaoDto(canaisCriados, cargosCriados, atualizados, foraDoServidor, falhas, vozCriados, apelidos, boasVindas);
     }
 
     /// <summary>Os grupos que o CRM quer ter no Discord, a partir das regionais e grupos ativos.</summary>
@@ -142,13 +171,18 @@ public sealed class DiscordGruposService(
     {
         var lista = new List<Desejado>
         {
-            new(ChaveGeral, "Geral", "geral", "CRM · Todos", "Conversa de toda a equipe da CSS Brasil."),
-            new(ChaveGestao, "Gestão", "gestao", "CRM · Gestão", "Gestores e supervisores."),
+            new(ChaveGeral, "Geral", "geral", "CRM · Todos", "Conversa de toda a equipe da CSS Brasil.", new(CorGeral, Destacar: false)),
+            new(ChaveGestao, "Gestão", "gestao", "CRM · Gestão", "Gestores e supervisores.", new(CorGestao, Destacar: true)),
         };
 
+        var coresDasRegionais = new Dictionary<Guid, int>();
+        var posicao = 0;
         foreach (var r in await db.CrmRegionais.AsNoTracking().Where(r => r.Ativa).OrderBy(r => r.Nome).ToListAsync(ct))
         {
-            lista.Add(new($"regional:{r.Id}", r.Nome, $"regional-{Slug(r.Nome)}", $"CRM · {r.Nome}", $"Regional {r.Nome}."));
+            var cor = CoresDasRegionais[posicao++ % CoresDasRegionais.Length];
+            coresDasRegionais[r.Id] = cor;
+            // Regional aparece separada na lista de membros ("destacar"): quem é de qual regional fica visível de relance.
+            lista.Add(new($"regional:{r.Id}", r.Nome, $"regional-{Slug(r.Nome)}", $"CRM · {r.Nome}", $"Regional {r.Nome}.", new(cor, Destacar: true)));
         }
 
         var grupos = await db.CrmGrupos.AsNoTracking().Include(g => g.Regional)
@@ -156,7 +190,7 @@ public sealed class DiscordGruposService(
         foreach (var g in grupos)
         {
             lista.Add(new($"grupo:{g.Id}", $"{g.Regional.Nome} · {g.Nome}", $"grupo-{Slug(g.Regional.Nome)}-{Slug(g.Nome)}",
-                $"CRM · {g.Regional.Nome} / {g.Nome}", $"Grupo {g.Nome} da regional {g.Regional.Nome}."));
+                $"CRM · {g.Regional.Nome} / {g.Nome}", $"Grupo {g.Nome} da regional {g.Regional.Nome}.", new(coresDasRegionais.GetValueOrDefault(g.RegionalId, CorGeral), Destacar: false)));
         }
 
         return lista;
@@ -212,14 +246,14 @@ public sealed class DiscordGruposService(
     }
 
     /// <summary>Dá e tira cargos de cada pessoa que vinculou o Discord, para refletir regional, grupo e perfil no CRM.</summary>
-    private async Task<(int Atualizados, int ForaDoServidor)> SincronizarMembrosAsync(Dictionary<string, CrmDiscordCanal> mapa, List<string> falhas, CancellationToken ct)
+    private async Task<(int Atualizados, int ForaDoServidor, int Apelidos)> SincronizarMembrosAsync(Dictionary<string, CrmDiscordCanal> mapa, List<string> falhas, CancellationToken ct)
     {
         var vinculos = await db.CrmDiscordVinculos.ToListAsync(ct);
-        if (vinculos.Count == 0) return (0, 0);
+        if (vinculos.Count == 0) return (0, 0, 0);
 
         var usuarioIds = vinculos.Select(v => v.UsuarioId).ToList();
         var usuarios = (await db.Users.AsNoTracking().Where(u => usuarioIds.Contains(u.Id))
-            .Select(u => new { u.Id, u.Ativo, u.RegionalId, u.GrupoId }).ToListAsync(ct)).ToDictionary(u => u.Id);
+            .Select(u => new { u.Id, u.NomeCompleto, u.Ativo, u.RegionalId, u.GrupoId }).ToListAsync(ct)).ToDictionary(u => u.Id);
         var gestores = (await db.UserRoles.Where(ur => usuarioIds.Contains(ur.UserId))
             .Join(db.Roles.Where(r => Roles.GestaoComercial.Contains(r.Name!)), ur => ur.RoleId, r => r.Id, (ur, _) => ur.UserId)
             .Distinct().ToListAsync(ct)).ToHashSet();
@@ -227,7 +261,7 @@ public sealed class DiscordGruposService(
         var gerenciados = mapa.Values.Select(m => m.DiscordCargoId).ToHashSet();
         string? CargoDe(string chave) => mapa.TryGetValue(chave, out var m) && m.Ativo ? m.DiscordCargoId : null;
 
-        int atualizados = 0, fora = 0;
+        int atualizados = 0, fora = 0, apelidos = 0;
         foreach (var vinculo in vinculos)
         {
             if (!usuarios.TryGetValue(vinculo.UsuarioId, out var usuario)) continue;
@@ -244,13 +278,15 @@ public sealed class DiscordGruposService(
 
             try
             {
-                var atuais = await api.ObterCargosDoMembroAsync(vinculo.DiscordUserId, ct);
-                if (atuais is null)
+                var membro = await api.ObterMembroAsync(vinculo.DiscordUserId, ct);
+                if (membro is null)
                 {
                     vinculo.NoServidor = false;
                     fora++;
                     continue;
                 }
+
+                var atuais = membro.Cargos;
 
                 vinculo.NoServidor = true;
                 var adicionar = desejados.Where(c => !atuais.Contains(c)).ToList();
@@ -258,6 +294,9 @@ public sealed class DiscordGruposService(
                 foreach (var cargo in adicionar) await api.AtribuirCargoAsync(vinculo.DiscordUserId, cargo, ct);
                 foreach (var cargo in remover) await api.RemoverCargoAsync(vinculo.DiscordUserId, cargo, ct);
                 if (adicionar.Count + remover.Count > 0) atualizados++;
+
+                // Apelido = nome do CRM, mas só para quem ainda não tem apelido: quem escolheu o seu no servidor continua com ele.
+                if (usuario.Ativo && string.IsNullOrWhiteSpace(membro.Apelido) && await TentarDefinirApelidoAsync(vinculo.DiscordUserId, usuario.NomeCompleto, ct)) apelidos++;
             }
             catch (DiscordApiException ex)
             {
@@ -266,7 +305,64 @@ public sealed class DiscordGruposService(
         }
 
         await db.SaveChangesAsync(ct);
-        return (atualizados, fora);
+        return (atualizados, fora, apelidos);
+    }
+
+    /// <summary>
+    /// O Discord não deixa o bot trocar o apelido do dono do servidor nem de quem tem cargo acima do bot, e o bot pode estar sem "Gerenciar apelidos":
+    /// nesses casos o apelido é só uma gentileza que não saiu — não vira falha da sincronização.
+    /// </summary>
+    private async Task<bool> TentarDefinirApelidoAsync(string discordUserId, string nomeCompleto, CancellationToken ct)
+    {
+        try
+        {
+            await api.DefinirApelidoAsync(discordUserId, ApelidoNoDiscord(nomeCompleto), ct);
+            return true;
+        }
+        catch (DiscordApiException ex)
+        {
+            logger.LogDebug(ex, "Não foi possível definir o apelido de {DiscordUserId} no Discord.", discordUserId);
+            return false;
+        }
+    }
+
+    private const string ChaveBoasVindas = "discord:boas-vindas";
+
+    /// <summary>
+    /// Mensagem de boas-vindas fixada no canal "Geral": explica como usar o Discord com o CRM. Publicada uma única vez (depois disso o
+    /// administrador pode editar ou apagar à vontade; o CRM não volta a publicar). Se não conseguir fixar (falta "Gerenciar mensagens"), publica mesmo assim.
+    /// </summary>
+    private async Task<bool> GarantirBoasVindasAsync(Dictionary<string, CrmDiscordCanal> mapa, CancellationToken ct)
+    {
+        if (!mapa.TryGetValue(ChaveGeral, out var geral) || string.IsNullOrEmpty(geral.DiscordCanalId)) return false;
+        if (await db.CrmParametros.AnyAsync(p => p.Chave == ChaveBoasVindas, ct)) return false;
+
+        var link = options.Value.UrlPublica.TrimEnd('/');
+        var cartao = new DiscordCartao(
+            "👋 Bem-vindo(a) ao Discord da CSS Brasil!",
+            "Este servidor conversa com o CRM. Você usa o Discord e o CRM juntos — o que você escreve em um aparece no outro.",
+            CorGeral,
+            [
+                new DiscordCampo("💬 Chat no CRM", link.Length > 0 ? $"Converse pelo CRM em {link}/app/chat — com o seu nome e a sua foto." : "Converse pelo menu Chat do CRM, com o seu nome e a sua foto.", Lado: false),
+                new DiscordCampo("👥 Grupos", "Cada regional e cada grupo tem o seu canal. Você só vê os canais do que é seu.", Lado: false),
+                new DiscordCampo("📞 Chamadas de voz", "Use o botão Chamada de voz do chat para abrir o canal de voz do grupo ou da conversa.", Lado: false),
+                new DiscordCampo("🔔 Avisos no celular", "Instale o app do Discord e deixe as notificações ligadas: lead novo e avisos do CRM chegam por mensagem direta.", Lado: false),
+            ],
+            "CRM CSS Brasil");
+
+        var mensagem = await api.PublicarCartaoAsync(geral.DiscordCanalId, cartao, ct);
+        try
+        {
+            await api.FixarMensagemAsync(geral.DiscordCanalId, mensagem.Id, ct);
+        }
+        catch (DiscordApiException ex)
+        {
+            logger.LogInformation(ex, "Boas-vindas publicadas no Discord, mas não foi possível fixar a mensagem.");
+        }
+
+        db.CrmParametros.Add(new CrmParametro { Chave = ChaveBoasVindas, Valor = mensagem.Id });
+        await db.SaveChangesAsync(ct);
+        return true;
     }
 
     /// <summary>Nome de canal do Discord: minúsculas, sem acento, só letras, números e hífen.</summary>

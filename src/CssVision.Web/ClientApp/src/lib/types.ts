@@ -241,6 +241,8 @@ export interface DiscordSincronizacao {
   membrosForaDoServidor: number;
   falhas: string[];
   canaisDeVozCriados: number;
+  apelidosDefinidos: number;
+  boasVindasPublicadas: boolean;
 }
 
 /** Aviso de pagamento em aberto (visão de quem envia). */

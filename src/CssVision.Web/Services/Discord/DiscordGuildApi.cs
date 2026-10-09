@@ -15,7 +15,7 @@ public interface IDiscordGuildApi
 {
     Task<HashSet<string>> ListarIdsDeCargosAsync(CancellationToken ct);
 
-    Task<string> CriarCargoAsync(string nome, CancellationToken ct);
+    Task<string> CriarCargoAsync(string nome, CancellationToken ct, DiscordAparenciaCargo? aparencia = null);
 
     /// <summary>Cria a categoria que agrupa os canais do CRM (invisível para quem não tem cargo).</summary>
     Task<string> CriarCategoriaAsync(string nome, CancellationToken ct);
@@ -25,8 +25,11 @@ public interface IDiscordGuildApi
 
     Task<bool> CanalExisteAsync(string canalId, CancellationToken ct);
 
-    /// <returns>Os cargos do membro, ou <c>null</c> se a conta não está no servidor.</returns>
-    Task<IReadOnlyCollection<string>?> ObterCargosDoMembroAsync(string discordUserId, CancellationToken ct);
+    /// <returns>Os cargos e o apelido do membro no servidor, ou <c>null</c> se a conta não está no servidor.</returns>
+    Task<DiscordMembro?> ObterMembroAsync(string discordUserId, CancellationToken ct);
+
+    /// <summary>Define o apelido do membro neste servidor (até 32 caracteres). Exige "Gerenciar apelidos" e que o cargo do bot esteja acima do membro.</summary>
+    Task DefinirApelidoAsync(string discordUserId, string apelido, CancellationToken ct);
 
     Task AtribuirCargoAsync(string discordUserId, string cargoId, CancellationToken ct);
 
@@ -64,8 +67,11 @@ public interface IDiscordGuildApi
     /// <summary>Apaga uma mensagem publicada pelo webhook do CRM.</summary>
     Task ApagarMensagemAsync(string canalId, string? threadId, string mensagemId, CancellationToken ct);
 
-    /// <summary>Publica um aviso do próprio CRM (como bot) num canal. Nunca marca ninguém (@everyone/@here/cargos).</summary>
-    Task PublicarAvisoAsync(string canalId, string texto, CancellationToken ct);
+    /// <summary>Publica um cartão (embed) do próprio CRM, como bot, num canal. Nunca marca ninguém (@everyone/@here/cargos).</summary>
+    Task<DiscordMensagem> PublicarCartaoAsync(string canalId, DiscordCartao cartao, CancellationToken ct);
+
+    /// <summary>Fixa uma mensagem no canal (exige "Gerenciar mensagens").</summary>
+    Task FixarMensagemAsync(string canalId, string mensagemId, CancellationToken ct);
 
     /// <summary>
     /// Cria um canal de voz que só os <paramref name="permitidos"/> veem e usam (cargos ou pessoas). O CRM não consegue embutir a chamada:
@@ -81,6 +87,18 @@ public record DiscordPermitido(string Id, bool Pessoa);
 public record DiscordMensagem(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordAnexo> Anexos, bool DoCrm, bool Editada = false);
 
 public record DiscordAnexo(string Nome, string Url, bool Imagem);
+
+/// <summary>O que se sabe do membro do servidor: cargos e apelido (nulo = sem apelido; o Discord mostra o nome de usuário).</summary>
+public record DiscordMembro(IReadOnlyCollection<string> Cargos, string? Apelido);
+
+/// <summary>Cor do cargo (RGB, ex.: <c>0x3498DB</c>) e se aparece separado na lista de membros ("destacar").</summary>
+public record DiscordAparenciaCargo(int Cor, bool Destacar);
+
+/// <summary>Campo de um cartão: <paramref name="Lado"/> = mostra lado a lado com os vizinhos.</summary>
+public record DiscordCampo(string Nome, string Valor, bool Lado = true);
+
+/// <summary>Aviso do CRM no formato "cartão" do Discord: título, texto, cor da barra lateral e campos organizados.</summary>
+public record DiscordCartao(string Titulo, string? Descricao, int Cor, IReadOnlyList<DiscordCampo>? Campos = null, string? Rodape = null);
 
 /// <summary>Arquivo a anexar: o conteúdo fica em memória (o limite do chat é pequeno) para poder reenviar se o Discord pedir calma (429).</summary>
 public record DiscordArquivo(string Nome, string TipoDeConteudo, byte[] Conteudo);
@@ -128,8 +146,10 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
         return documento.RootElement.EnumerateArray().Select(e => e.GetProperty("id").GetString()!).ToHashSet();
     }
 
-    public async Task<string> CriarCargoAsync(string nome, CancellationToken ct) =>
-        await CriarAsync($"guilds/{Opcoes.GuildId}/roles", new { name = Cortar(nome, 100), permissions = "0", hoist = false, mentionable = false }, "criar um cargo", ct);
+    public async Task<string> CriarCargoAsync(string nome, CancellationToken ct, DiscordAparenciaCargo? aparencia = null) =>
+        await CriarAsync($"guilds/{Opcoes.GuildId}/roles",
+            new { name = Cortar(nome, 100), permissions = "0", hoist = aparencia?.Destacar ?? false, mentionable = false, color = aparencia?.Cor ?? 0 },
+            "criar um cargo", ct);
 
     public async Task<string> CriarCategoriaAsync(string nome, CancellationToken ct) =>
         await CriarAsync($"guilds/{Opcoes.GuildId}/channels",
@@ -162,15 +182,27 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
         return true;
     }
 
-    public async Task<IReadOnlyCollection<string>?> ObterCargosDoMembroAsync(string discordUserId, CancellationToken ct)
+    public async Task<DiscordMembro?> ObterMembroAsync(string discordUserId, CancellationToken ct)
     {
         using var resposta = await EnviarAsync(() => Bot(HttpMethod.Get, $"guilds/{Opcoes.GuildId}/members/{discordUserId}"), ct);
         if (resposta.StatusCode == HttpStatusCode.NotFound) return null;
         await GarantirAsync(resposta, "consultar um membro", ct);
         using var documento = await LerAsync(resposta, ct);
-        return documento.RootElement.TryGetProperty("roles", out var cargos)
-            ? cargos.EnumerateArray().Select(c => c.GetString()!).ToList()
+        var cargos = documento.RootElement.TryGetProperty("roles", out var lista) && lista.ValueKind == JsonValueKind.Array
+            ? lista.EnumerateArray().Select(c => c.GetString()!).ToList()
             : [];
+        return new DiscordMembro(cargos, Texto(documento.RootElement, "nick"));
+    }
+
+    public async Task DefinirApelidoAsync(string discordUserId, string apelido, CancellationToken ct)
+    {
+        using var resposta = await EnviarAsync(() =>
+        {
+            var requisicao = Bot(HttpMethod.Patch, $"guilds/{Opcoes.GuildId}/members/{discordUserId}");
+            requisicao.Content = new StringContent(JsonSerializer.Serialize(new { nick = Cortar(apelido, 32) }, Json), Encoding.UTF8, "application/json");
+            return requisicao;
+        }, ct);
+        await GarantirAsync(resposta, "definir o apelido de um membro", ct);
     }
 
     public async Task AtribuirCargoAsync(string discordUserId, string cargoId, CancellationToken ct)
@@ -301,8 +333,38 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
     private static string CaminhoDaMensagemDoWebhook(string webhookId, string webhookToken, string mensagemId, string? threadId) =>
         $"webhooks/{webhookId}/{webhookToken}/messages/{Uri.EscapeDataString(mensagemId)}" + (threadId is null ? "" : $"?thread_id={Uri.EscapeDataString(threadId)}");
 
-    public async Task PublicarAvisoAsync(string canalId, string texto, CancellationToken ct) =>
-        await EnviarComoBotAsync(canalId, texto, ct);
+    public async Task<DiscordMensagem> PublicarCartaoAsync(string canalId, DiscordCartao cartao, CancellationToken ct)
+    {
+        var embed = new Dictionary<string, object?>
+        {
+            ["title"] = Cortar(cartao.Titulo, 256),
+            ["color"] = cartao.Cor,
+            ["timestamp"] = DateTimeOffset.UtcNow.ToString("O"),
+        };
+        if (!string.IsNullOrWhiteSpace(cartao.Descricao)) embed["description"] = Cortar(cartao.Descricao, 4000);
+        if (cartao.Campos is { Count: > 0 })
+        {
+            embed["fields"] = cartao.Campos.Take(25).Select(c => new { name = Cortar(c.Nome, 256), value = Cortar(string.IsNullOrWhiteSpace(c.Valor) ? "-" : c.Valor, 1024), inline = c.Lado }).ToArray();
+        }
+
+        if (!string.IsNullOrWhiteSpace(cartao.Rodape)) embed["footer"] = new { text = Cortar(cartao.Rodape, 2048) };
+
+        using var resposta = await EnviarAsync(() =>
+        {
+            var requisicao = Bot(HttpMethod.Post, $"channels/{canalId}/messages");
+            requisicao.Content = new StringContent(JsonSerializer.Serialize(new { embeds = new[] { embed }, allowed_mentions = new { parse = Array.Empty<string>() } }, Json), Encoding.UTF8, "application/json");
+            return requisicao;
+        }, ct);
+        await GarantirAsync(resposta, "publicar o aviso", ct);
+        using var documento = await LerAsync(resposta, ct);
+        return LerMensagem(documento.RootElement);
+    }
+
+    public async Task FixarMensagemAsync(string canalId, string mensagemId, CancellationToken ct)
+    {
+        using var resposta = await EnviarAsync(() => Bot(HttpMethod.Put, $"channels/{canalId}/pins/{Uri.EscapeDataString(mensagemId)}"), ct);
+        await GarantirAsync(resposta, "fixar a mensagem", ct);
+    }
 
     private async Task<DiscordMensagem> EnviarComoBotAsync(string canalId, string texto, CancellationToken ct)
     {
@@ -424,6 +486,12 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
         }
         conteudo = EmojiPersonalizado.Replace(conteudo, "$1");
 
+        // Mensagem só com cartão (embed), como os avisos e a boas-vindas que o próprio CRM publica: o texto está no cartão, não em "content".
+        if (conteudo.Length == 0 && m.TryGetProperty("embeds", out var cartoes) && cartoes.ValueKind == JsonValueKind.Array)
+        {
+            conteudo = string.Join("\n\n", cartoes.EnumerateArray().Select(TextoDoCartao).Where(t => t.Length > 0));
+        }
+
         var anexos = new List<DiscordAnexo>();
         if (m.TryGetProperty("attachments", out var arquivos) && arquivos.ValueKind == JsonValueKind.Array)
         {
@@ -440,6 +508,23 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
             && (Texto(m, "application_id") == Opcoes.ClientId || webhooks.Values.Any(w => w.Id == wid));
         var quando = DateTimeOffset.Parse(Texto(m, "timestamp")!, System.Globalization.CultureInfo.InvariantCulture);
         return new DiscordMensagem(m.GetProperty("id").GetString()!, nome, avatar, conteudo, quando, anexos, doCrm, Texto(m, "edited_timestamp") is not null);
+    }
+
+    /// <summary>Texto corrido de um cartão: título em negrito, descrição e cada campo como "**Nome:** valor".</summary>
+    private static string TextoDoCartao(JsonElement cartao)
+    {
+        var linhas = new List<string>();
+        if (Texto(cartao, "title") is { Length: > 0 } titulo) linhas.Add($"**{titulo}**");
+        if (Texto(cartao, "description") is { Length: > 0 } descricao) linhas.Add(descricao);
+        if (cartao.TryGetProperty("fields", out var campos) && campos.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var campo in campos.EnumerateArray())
+            {
+                if (Texto(campo, "name") is { Length: > 0 } nome) linhas.Add($"**{nome}:** {Texto(campo, "value")}");
+            }
+        }
+
+        return string.Join("\n", linhas);
     }
 
     private static readonly System.Text.RegularExpressions.Regex EmojiPersonalizado = new(@"<a?(:\w+:)\d+>", System.Text.RegularExpressions.RegexOptions.Compiled);

@@ -55,6 +55,8 @@ public class DiscordAvisosNosCanaisTests
         var servidor = new DiscordServidorFalso();
         await new DiscordGruposService(db, servidor, Options.Create(Configurado()), NullLogger<DiscordGruposService>.Instance).SincronizarAsync(CancellationToken.None);
         var ganho = await factory.CriarEtapaAsync(db, "Ganho", 9, TipoEtapaPipeline.Ganho);
+        servidor.Avisos.Clear(); // a mensagem de boas-vindas da sincronização não é um aviso automático do CRM
+        servidor.Cartoes.Clear();
         return new Cenario { Factory = factory, Db = db, Servidor = servidor, Mg132 = mg132, Mg134 = mg134, Relogio = new RelogioFalso(agora ?? MeioDia), Ganho = ganho };
     }
 
