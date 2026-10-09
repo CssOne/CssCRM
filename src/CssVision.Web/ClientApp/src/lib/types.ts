@@ -1655,4 +1655,8 @@ export interface DiscordAvisosCanais {
   venda: boolean;
   metaBatida: boolean;
   leadsParados: boolean;
+  /** Resumo das vendas do dia de cada regional, no canal dela, depois das 18h. */
+  resumoDiario?: boolean;
+  /** Aviso de cada lead de anúncio novo no canal da regional (com link para abrir no CRM; sem dados do cliente). */
+  leadNovo?: boolean;
 }

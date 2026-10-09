@@ -90,7 +90,7 @@ public record DiscordChatLeadRequest(Guid LeadId, string? Comentario = null);
 /// <param name="Venda">"Fulano fechou uma venda".</param>
 /// <param name="MetaBatida">"A regional bateu a meta do mês" (uma vez por mês).</param>
 /// <param name="LeadsParados">Resumo diário (depois das 9h30) de quantos leads de anúncio estão parados há mais de 5 dias.</param>
-public record DiscordAvisosCanaisDto(bool Venda, bool MetaBatida, bool LeadsParados);
+public record DiscordAvisosCanaisDto(bool Venda, bool MetaBatida, bool LeadsParados, bool ResumoDiario = false, bool LeadNovo = false);
 
 /// <summary>Quem está online (com o CRM aberto) numa conversa.</summary>
 public record DiscordChatOnlineDto(IReadOnlyList<DiscordChatPessoaOnlineDto> Pessoas);
