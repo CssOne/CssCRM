@@ -1,4 +1,4 @@
-import { BarChart3, ChevronUp, CornerUpLeft, Hash, MessageSquarePlus, MessagesSquare, Paperclip, Pencil, Phone, Plus, Search, Send, Smile, Trash2, X } from "lucide-react";
+import { BarChart3, ChevronUp, CornerUpLeft, Hash, MessageSquarePlus, MessagesSquare, Paperclip, Pencil, Phone, Pin, Plus, Search, Send, Smile, SmilePlus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -6,9 +6,10 @@ import { api, ApiRequestError, isAbortError, uploadFile } from "../lib/api";
 import { desligarNotificacao, definirSom, ligarNotificacao, notificacaoLigada, notificacaoSuportada, somLigado } from "../lib/avisosDoChat";
 import { formatarDataHora } from "../lib/format";
 import { rotuloNaoLidas, useChatNaoLidas } from "../lib/useChatNaoLidas";
-import type { DiscordChatCanal, DiscordChatChamada, DiscordChatContato, DiscordChatExtras, DiscordChatMensagem, DiscordChatMensagens, DiscordChatOnline } from "../lib/types";
+import type { DiscordChatCanal, DiscordChatChamada, DiscordChatContato, DiscordChatExtras, DiscordChatMensagem, DiscordChatMensagens, DiscordChatOnline, DiscordChatReacao, DiscordChatTopico } from "../lib/types";
 import { SeletorDeEmojis } from "../components/chat/SeletorDeEmojis";
 import { NovaEnquete, NovoTopico } from "../components/chat/NovoTopicoEEnquete";
+import { PainelDeMensagens, ReacoesDaMensagem, ReacoesRapidas } from "../components/chat/ReacoesEPaineis";
 import { Avatar, Badge, Button, Card, Checkbox, ConfirmDialog, EmptyState, ErrorState, Input, Modal, Skeleton, useToast } from "../components/ui";
 
 const LIMITE_TEXTO = 2000;
@@ -44,6 +45,14 @@ export function ChatPage() {
   const [apagando, setApagando] = useState<DiscordChatMensagem | null>(null);
   const [apagandoEmAndamento, setApagandoEmAndamento] = useState(false);
   const campoDeTexto = useRef<HTMLTextAreaElement>(null);
+  const [painel, setPainel] = useState<null | "busca" | "fixadas">(null);
+  const [termoDeBusca, setTermoDeBusca] = useState("");
+  const [resultados, setResultados] = useState<DiscordChatMensagem[] | null>(null);
+  const [carregandoPainel, setCarregandoPainel] = useState(false);
+  const [topicos, setTopicos] = useState<DiscordChatTopico[]>([]);
+  const [topicosAbertos, setTopicosAbertos] = useState(false);
+  const [versaoDosTopicos, setVersaoDosTopicos] = useState(0);
+  const [topicoAtual, setTopicoAtual] = useState<{ chave: string; nome: string; grupo: string } | null>(null);
   const [menuMaisAberto, setMenuMaisAberto] = useState(false);
   const [topicoAberto, setTopicoAberto] = useState(false);
   const [enqueteAberta, setEnqueteAberta] = useState(false);
@@ -185,6 +194,102 @@ export function ChatPage() {
       const posicao = Math.min(inicio + trecho.length, novo.length);
       campo?.setSelectionRange(posicao, posicao);
     });
+  }
+
+  const podeFixar = !!sessao?.papeis.some((p) => ["Admin", "GestorMaster", "SupervisorComercial", "GestorComercial"].includes(p));
+  const emTopico = chave?.startsWith("topico:") ?? false;
+  const grupoDeBase = topicoAtual?.grupo ?? chave;
+
+  // Trocou de conversa pela lista: fecha busca/fixadas e esquece o tópico aberto (o tópico guarda o grupo a que pertence).
+  useEffect(() => {
+    setPainel(null);
+    setTermoDeBusca("");
+    setResultados(null);
+    setTopicosAbertos(false);
+    if (!chave?.startsWith("topico:")) setTopicoAtual(null);
+  }, [chave]);
+
+  // Tópicos do grupo aberto (atualiza a cada 30 s com a aba visível).
+  useEffect(() => {
+    setTopicos([]);
+    const grupo = topicoAtual?.grupo ?? chave;
+    if (!grupo || grupo.startsWith("dm:") || grupo.startsWith("topico:")) return;
+    const controller = new AbortController();
+    const carregar = () =>
+      api
+        .get<DiscordChatTopico[]>(`/crm/discord/chat/canais/${encodeURIComponent(grupo)}/topicos`, controller.signal)
+        .then(setTopicos)
+        .catch(() => undefined);
+    void carregar();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void carregar();
+    }, 30000);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+    };
+  }, [chave, topicoAtual?.grupo, versaoDosTopicos]);
+
+  function abrirTopico(t: DiscordChatTopico) {
+    setTopicosAbertos(false);
+    setTopicoAtual({ chave: t.chave, nome: t.nome, grupo: grupoDeBase ?? "" });
+    setChave(t.chave);
+  }
+
+  async function reagir(mensagemId: string, emoji: string) {
+    if (!chave) return;
+    try {
+      const reacoes = await api.post<DiscordChatReacao[]>(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/mensagens/${mensagemId}/reacoes`, { emoji });
+      setDados((atual) => atual && { ...atual, mensagens: atual.mensagens.map((m) => (m.id === mensagemId ? { ...m, reacoes } : m)) });
+      setResultados((atual) => atual && atual.map((m) => (m.id === mensagemId ? { ...m, reacoes } : m)));
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível reagir à mensagem.");
+    }
+  }
+
+  async function alternarFixada(m: DiscordChatMensagem) {
+    if (!chave) return;
+    const fixar = !m.fixada;
+    try {
+      await api.put(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/mensagens/${m.id}/fixada`, { fixar });
+      setDados((atual) => atual && { ...atual, mensagens: atual.mensagens.map((x) => (x.id === m.id ? { ...x, fixada: fixar } : x)) });
+      if (painel === "fixadas") void abrirPainel("fixadas");
+      notificar("success", fixar ? "Mensagem fixada." : "Mensagem desafixada.");
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível fixar a mensagem.");
+    }
+  }
+
+  async function abrirPainel(qual: "busca" | "fixadas") {
+    if (!chave) return;
+    setPainel(qual);
+    if (qual === "fixadas") {
+      setCarregandoPainel(true);
+      try {
+        setResultados(await api.get<DiscordChatMensagem[]>(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/fixadas`));
+      } catch (e) {
+        setResultados([]);
+        notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível carregar as mensagens fixadas.");
+      } finally {
+        setCarregandoPainel(false);
+      }
+    } else {
+      setResultados(null);
+    }
+  }
+
+  async function buscar() {
+    const termo = termoDeBusca.trim();
+    if (!chave || termo.length < 2) return;
+    setCarregandoPainel(true);
+    try {
+      setResultados(await api.get<DiscordChatMensagem[]>(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/busca?termo=${encodeURIComponent(termo)}`));
+    } catch (e) {
+      setResultados([]);
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível buscar.");
+    } finally {
+      setCarregandoPainel(false);
+    }
   }
 
   // Mensagem que o servidor devolveu (tópico, enquete): entra no fim da conversa sem esperar a próxima atualização.
@@ -414,7 +519,16 @@ export function ChatPage() {
                 ) : (
                   <Hash className="size-4 text-[var(--fg-muted)]" aria-hidden />
                 )}{" "}
-                {nomeDoGrupo}
+                {emTopico ? (
+                  <>
+                    <button type="button" onClick={() => setChave(topicoAtual?.grupo ?? null)} className="text-[var(--fg-muted)] hover:underline" title="Voltar ao grupo">
+                      {canais?.find((c) => c.chave === topicoAtual?.grupo)?.nome ?? "Grupo"}
+                    </button>
+                    <span aria-hidden className="text-[var(--fg-muted)]">›</span> 🧵 {topicoAtual?.nome}
+                  </>
+                ) : (
+                  nomeDoGrupo
+                )}
               </p>
               <div className="flex items-center gap-3">
               {online.length > 0 && (
@@ -427,9 +541,38 @@ export function ChatPage() {
                   {atual?.tipo === "direta" ? "online" : `${online.length} online`}
                 </span>
               )}
-              <Button variant="secondary" size="sm" onClick={ligar} loading={ligando} title="Abre o canal de voz no Discord e avisa a conversa">
-                <Phone className="size-4" /> Chamada de voz
+              <div className="relative">
+                {topicos.length > 0 && !emTopico && (
+                  <Button variant="ghost" size="sm" onClick={() => setTopicosAbertos((v) => !v)} aria-expanded={topicosAbertos} title="Tópicos deste grupo">
+                    <MessageSquarePlus className="size-4" /> Tópicos ({topicos.length})
+                  </Button>
+                )}
+                {topicosAbertos && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setTopicosAbertos(false)} aria-hidden />
+                    <ul role="menu" aria-label="Tópicos" className="absolute right-0 top-full z-20 mt-1 max-h-64 w-60 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--bg)] py-1 shadow-xl">
+                      {topicos.map((t) => (
+                        <li key={t.chave} role="none">
+                          <button type="button" role="menuitem" onClick={() => abrirTopico(t)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-[var(--surface-hover)]">
+                            🧵 <span className="truncate">{t.nome}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => (painel === "fixadas" ? setPainel(null) : void abrirPainel("fixadas"))} aria-pressed={painel === "fixadas"} title="Mensagens fixadas">
+                <Pin className="size-4" /> <span className="hidden sm:inline">Fixadas</span>
               </Button>
+              <Button variant="ghost" size="sm" onClick={() => (painel === "busca" ? setPainel(null) : void abrirPainel("busca"))} aria-pressed={painel === "busca"} title="Buscar nas mensagens">
+                <Search className="size-4" /> <span className="hidden sm:inline">Buscar</span>
+              </Button>
+              {!emTopico && (
+                <Button variant="secondary" size="sm" onClick={ligar} loading={ligando} title="Abre o canal de voz no Discord e avisa a conversa">
+                  <Phone className="size-4" /> Chamada de voz
+                </Button>
+              )}
               </div>
             </div>
 
@@ -448,6 +591,31 @@ export function ChatPage() {
                 O Discord não está entregando o texto das mensagens de algumas pessoas. Um administrador precisa ligar <strong>Message Content Intent</strong> no portal do
                 desenvolvedor do Discord (aplicação → Bot → Privileged Gateway Intents) e clicar em <strong>Save Changes</strong>.
               </p>
+            )}
+
+            {painel === "busca" && (
+              <form
+                className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void buscar();
+                }}
+              >
+                <Search className="size-4 shrink-0 text-[var(--fg-muted)]" aria-hidden />
+                <Input value={termoDeBusca} onChange={(e) => setTermoDeBusca(e.target.value)} placeholder="Buscar nas últimas mensagens (texto ou nome)" aria-label="Buscar nas mensagens" autoFocus maxLength={100} />
+                <Button type="submit" size="sm" loading={carregandoPainel} disabled={termoDeBusca.trim().length < 2}>
+                  Buscar
+                </Button>
+              </form>
+            )}
+            {painel && (painel === "fixadas" || resultados !== null) && (
+              <PainelDeMensagens
+                titulo={painel === "fixadas" ? "Fixadas" : `Resultados da busca (${resultados?.length ?? 0})`}
+                mensagens={resultados}
+                carregando={carregandoPainel}
+                vazio={painel === "fixadas" ? "Nenhuma mensagem fixada nesta conversa." : "Nada encontrado nas últimas 300 mensagens."}
+                aoFechar={() => setPainel(null)}
+              />
             )}
 
             <div ref={rolagem} onScroll={aoRolar} className="flex-1 space-y-3 overflow-y-auto px-4 py-3" aria-live="polite">
@@ -482,6 +650,9 @@ export function ChatPage() {
                       aoSalvarEdicao={() => void salvarEdicao()}
                       aoCancelarEdicao={() => setEditando(null)}
                       salvandoEdicao={salvandoEdicao}
+                      aoReagir={(emoji) => void reagir(m.id, emoji)}
+                      podeFixar={podeFixar}
+                      aoFixar={() => void alternarFixada(m)}
                     />
                   ))}
                 </>
@@ -555,13 +726,13 @@ export function ChatPage() {
                         <button
                           type="button"
                           role="menuitem"
-                          disabled={chave?.startsWith("dm:") ?? false}
+                          disabled={(chave?.startsWith("dm:") || chave?.startsWith("topico:")) ?? false}
                           onClick={() => {
                             setMenuMaisAberto(false);
                             setTopicoAberto(true);
                           }}
                           className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-                          title={chave?.startsWith("dm:") ? "Tópicos só existem nos grupos" : "Abrir um tópico para conversar sobre um assunto"}
+                          title={(chave?.startsWith("dm:") || chave?.startsWith("topico:")) ? "Tópicos só existem nos grupos" : "Abrir um tópico para conversar sobre um assunto"}
                         >
                           <MessageSquarePlus className="size-4 text-[var(--fg-muted)]" aria-hidden /> Criar tópico
                         </button>
@@ -651,7 +822,10 @@ export function ChatPage() {
       )}
 
       <NovaConversa aberta={novaConversa} aoFechar={() => setNovaConversa(false)} aoAbrir={aoAbrirConversa} />
-      {chave && <NovoTopico chave={chave} aberto={topicoAberto} aoFechar={() => setTopicoAberto(false)} aoCriado={acrescentarMensagem} />}
+      {chave && <NovoTopico chave={chave} aberto={topicoAberto} aoFechar={() => setTopicoAberto(false)} aoCriado={(aviso) => {
+          acrescentarMensagem(aviso);
+          setVersaoDosTopicos((v) => v + 1);
+        }} />}
       {chave && <NovaEnquete chave={chave} aberto={enqueteAberta} aoFechar={() => setEnqueteAberta(false)} aoCriada={acrescentarMensagem} />}
 
       <ConfirmDialog
@@ -783,6 +957,9 @@ function Balao({
   aoSalvarEdicao,
   aoCancelarEdicao,
   salvandoEdicao,
+  aoReagir,
+  podeFixar,
+  aoFixar,
 }: {
   mensagem: DiscordChatMensagem;
   minha: boolean;
@@ -795,7 +972,11 @@ function Balao({
   aoSalvarEdicao: () => void;
   aoCancelarEdicao: () => void;
   salvandoEdicao: boolean;
+  aoReagir: (emoji: string) => void;
+  podeFixar: boolean;
+  aoFixar: () => void;
 }) {
+  const [reagindo, setReagindo] = useState(false);
   return (
     <div className={`group flex items-start gap-2 ${minha ? "flex-row-reverse" : ""}`}>
       <Avatar nome={mensagem.autorNome} fotoUrl={mensagem.autorFotoUrl} className="size-8 text-xs" />
@@ -805,6 +986,7 @@ function Balao({
           {!mensagem.doCrm && <Badge variant="neutral">Discord</Badge>}
           <span>{formatarDataHora(mensagem.criadaEm)}</span>
           {mensagem.editada && <span>(editada)</span>}
+          {mensagem.fixada && <span title="Mensagem fixada" aria-label="Mensagem fixada">📌</span>}
         </p>
         {edicao !== null ? (
           <div className="mt-1 space-y-2">
@@ -850,8 +1032,27 @@ function Balao({
           ) : null
         )}
         {mensagem.enquete && <EnqueteNaMensagem enquete={mensagem.enquete} />}
+        {mensagem.reacoes && <ReacoesDaMensagem reacoes={mensagem.reacoes} aoReagir={aoReagir} />}
         {edicao === null && (
           <div className="mt-1 flex gap-1 opacity-60 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+            <span className="relative">
+              <button type="button" onClick={() => setReagindo((v) => !v)} aria-label="Reagir" title="Reagir" aria-expanded={reagindo} className="rounded p-1 text-[var(--fg-muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]">
+                <SmilePlus className="size-3.5" />
+              </button>
+              {reagindo && (
+                <ReacoesRapidas
+                  aoEscolher={(e) => {
+                    setReagindo(false);
+                    aoReagir(e);
+                  }}
+                />
+              )}
+            </span>
+            {podeFixar && (
+              <button type="button" onClick={aoFixar} aria-label={mensagem.fixada ? "Desafixar" : "Fixar"} title={mensagem.fixada ? "Desafixar" : "Fixar"} className="rounded p-1 text-[var(--fg-muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]">
+                <Pin className="size-3.5" />
+              </button>
+            )}
             <button type="button" onClick={aoResponder} aria-label="Responder" title="Responder" className="rounded p-1 text-[var(--fg-muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]">
               <CornerUpLeft className="size-3.5" />
             </button>

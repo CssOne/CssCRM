@@ -1575,6 +1575,23 @@ export interface DiscordChatMensagem {
   editada?: boolean;
   /** Enquete da mensagem (só para mostrar; votar é no Discord). */
   enquete?: DiscordChatEnquete | null;
+  reacoes?: DiscordChatReacao[];
+  fixada?: boolean;
+}
+
+/** Reação a uma mensagem: <c>texto</c> é o emoji (ou :nome:); <c>url</c> a imagem do emoji personalizado. */
+export interface DiscordChatReacao {
+  chave: string;
+  texto: string;
+  url?: string | null;
+  contagem: number;
+  reagi: boolean;
+}
+
+/** Tópico de um grupo: abre no chat pela chave (<c>topico:{id}</c>). */
+export interface DiscordChatTopico {
+  chave: string;
+  nome: string;
 }
 
 export interface DiscordChatEnquete {

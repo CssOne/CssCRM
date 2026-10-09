@@ -196,6 +196,64 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
         return Task.CompletedTask;
     }
 
+    public List<(string Onde, string MensagemId, string Emoji)> ReacoesDoBot { get; } = [];
+    public List<DiscordTopico> TopicosDoServidor { get; } = [];
+
+    public Task AdicionarReacaoAsync(string canalOuThreadId, string mensagemId, string emoji, CancellationToken ct)
+    {
+        if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para reagir.");
+        if (!ReacoesDoBot.Contains((canalOuThreadId, mensagemId, emoji))) ReacoesDoBot.Add((canalOuThreadId, mensagemId, emoji));
+        AtualizarReacoes(canalOuThreadId, mensagemId);
+        return Task.CompletedTask;
+    }
+
+    public Task RemoverReacaoAsync(string canalOuThreadId, string mensagemId, string emoji, CancellationToken ct)
+    {
+        ReacoesDoBot.Remove((canalOuThreadId, mensagemId, emoji));
+        AtualizarReacoes(canalOuThreadId, mensagemId);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Reações de outras pessoas no Discord (além do bot): mensagem → emoji → quantas.</summary>
+    public Dictionary<string, Dictionary<string, int>> ReacoesDePessoas { get; } = [];
+
+    /// <summary>Faz a mensagem guardada refletir as reações atuais (as do bot, uma por emoji, mais as de pessoas), como o Discord faz.</summary>
+    private void AtualizarReacoes(string onde, string mensagemId)
+    {
+        if (!Mensagens.TryGetValue(onde, out var lista)) return;
+        var i = lista.FindIndex(m => m.Id == mensagemId);
+        if (i < 0) return;
+        var chaves = ReacoesDoBot.Where(r => r.Onde == onde && r.MensagemId == mensagemId).Select(r => r.Emoji)
+            .Concat(ReacoesDePessoas.GetValueOrDefault(mensagemId)?.Keys ?? Enumerable.Empty<string>()).Distinct();
+        var reacoes = chaves.Select(k =>
+        {
+            var doBot = ReacoesDoBot.Any(r => r.Onde == onde && r.MensagemId == mensagemId && r.Emoji == k);
+            var pessoas = ReacoesDePessoas.GetValueOrDefault(mensagemId)?.GetValueOrDefault(k) ?? 0;
+            var partes = k.Split(':');
+            return new DiscordReacao(k, partes.Length == 2 ? partes[0] : k, partes.Length == 2 ? partes[1] : null, false, pessoas + (doBot ? 1 : 0), doBot);
+        }).ToList();
+        lista[i] = lista[i] with { Reacoes = reacoes };
+    }
+
+    public Task DesafixarMensagemAsync(string canalId, string mensagemId, CancellationToken ct)
+    {
+        if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para desafixar.");
+        Fixadas.Remove((canalId, mensagemId));
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<DiscordMensagem>> ListarFixadasAsync(string canalId, CancellationToken ct)
+    {
+        var todas = Mensagens.TryGetValue(canalId, out var l) ? l : [];
+        return Task.FromResult<IReadOnlyList<DiscordMensagem>>(todas.Where(m => Fixadas.Contains((canalId, m.Id))).Reverse().ToList());
+    }
+
+    public Task<IReadOnlyList<DiscordTopico>> ListarTopicosAtivosAsync(CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<DiscordTopico>>(TopicosDoServidor.Where(t => !t.Arquivado).ToList());
+
+    public Task<DiscordTopico?> ObterTopicoAsync(string topicoId, CancellationToken ct) =>
+        Task.FromResult(TopicosDoServidor.FirstOrDefault(t => t.Id == topicoId));
+
     public List<(string CanalId, string Nome)> TopicosCriados { get; } = [];
     public List<(string Onde, string Autor, string Pergunta, IReadOnlyList<string> Respostas, int Horas, bool Varias)> EnquetesEnviadas { get; } = [];
 

@@ -58,6 +58,24 @@ public interface IDiscordGuildApi
     /// <summary>Troca o nome (e, se informado, o tópico) de um canal do servidor. Exige "Gerenciar canais". O Discord limita a 2 trocas de nome a cada 10 minutos por canal.</summary>
     Task RenomearCanalAsync(string canalId, string nome, string? topico, CancellationToken ct);
 
+    /// <summary>Reage à mensagem como o bot do CRM. <paramref name="emoji"/>: o caractere ou <c>nome:id</c>.</summary>
+    Task AdicionarReacaoAsync(string canalOuThreadId, string mensagemId, string emoji, CancellationToken ct);
+
+    /// <summary>Tira a reação do bot do CRM da mensagem.</summary>
+    Task RemoverReacaoAsync(string canalOuThreadId, string mensagemId, string emoji, CancellationToken ct);
+
+    /// <summary>Tira a fixação de uma mensagem (exige "Gerenciar mensagens" ou "Fixar mensagens").</summary>
+    Task DesafixarMensagemAsync(string canalId, string mensagemId, CancellationToken ct);
+
+    /// <summary>Mensagens fixadas do canal, da mais recente para a mais antiga.</summary>
+    Task<IReadOnlyList<DiscordMensagem>> ListarFixadasAsync(string canalId, CancellationToken ct);
+
+    /// <summary>Tópicos (threads públicas) ativos do servidor.</summary>
+    Task<IReadOnlyList<DiscordTopico>> ListarTopicosAtivosAsync(CancellationToken ct);
+
+    /// <summary>Um canal ou tópico (para saber a que canal um tópico pertence). Nulo se não existe mais.</summary>
+    Task<DiscordTopico?> ObterTopicoAsync(string topicoId, CancellationToken ct);
+
     /// <summary>Cria um tópico (thread pública) no canal e devolve o id dele.</summary>
     Task<string> CriarTopicoAsync(string canalId, string nome, CancellationToken ct);
 
@@ -104,7 +122,17 @@ public interface IDiscordGuildApi
 public record DiscordPermitido(string Id, bool Pessoa);
 
 /// <summary>Mensagem de um canal do Discord, já com menções resolvidas para nomes.</summary>
-public record DiscordMensagem(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordAnexo> Anexos, bool DoCrm, bool Editada = false, bool AutorEhBot = false, DiscordEnquete? Enquete = null);
+public record DiscordMensagem(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordAnexo> Anexos, bool DoCrm, bool Editada = false, bool AutorEhBot = false, DiscordEnquete? Enquete = null,
+    IReadOnlyList<DiscordReacao>? Reacoes = null, bool Fixada = false);
+
+/// <summary>
+/// Reação de uma mensagem. <see cref="Chave"/> é como o Discord identifica o emoji nas chamadas: o próprio caractere (emoji comum) ou <c>nome:id</c> (personalizado).
+/// <see cref="EuReagi"/> é a reação do próprio bot do CRM (as reações feitas pelo CRM saem em nome dele).
+/// </summary>
+public record DiscordReacao(string Chave, string Nome, string? EmojiId, bool Animado, int Contagem, bool EuReagi);
+
+/// <summary>Tópico (thread) do servidor: onde ele mora (<see cref="CanalPaiId"/>) e se já foi arquivado.</summary>
+public record DiscordTopico(string Id, string Nome, string CanalPaiId, bool Arquivado);
 
 /// <summary>Enquete (poll) de uma mensagem: a pergunta, as respostas com os votos até agora e se ainda aceita votos.</summary>
 public record DiscordEnquete(string Pergunta, IReadOnlyList<DiscordRespostaDaEnquete> Respostas, bool VariasEscolhas, DateTimeOffset? EncerraEm, bool Encerrada);
@@ -297,6 +325,92 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
             return requisicao;
         }, ct);
         await GarantirAsync(resposta, "renomear o canal", ct);
+    }
+
+    public async Task AdicionarReacaoAsync(string canalOuThreadId, string mensagemId, string emoji, CancellationToken ct)
+    {
+        using var resposta = await EnviarAsync(() => Bot(HttpMethod.Put, $"channels/{canalOuThreadId}/messages/{Uri.EscapeDataString(mensagemId)}/reactions/{Uri.EscapeDataString(emoji)}/@me"), ct);
+        await GarantirAsync(resposta, "reagir à mensagem", ct);
+    }
+
+    public async Task RemoverReacaoAsync(string canalOuThreadId, string mensagemId, string emoji, CancellationToken ct)
+    {
+        using var resposta = await EnviarAsync(() => Bot(HttpMethod.Delete, $"channels/{canalOuThreadId}/messages/{Uri.EscapeDataString(mensagemId)}/reactions/{Uri.EscapeDataString(emoji)}/@me"), ct);
+        if (resposta.StatusCode == HttpStatusCode.NotFound) return; // a reação já não estava lá
+        await GarantirAsync(resposta, "tirar a reação", ct);
+    }
+
+    public async Task DesafixarMensagemAsync(string canalId, string mensagemId, CancellationToken ct)
+    {
+        using var resposta = await EnviarAsync(() => Bot(HttpMethod.Delete, $"channels/{canalId}/pins/{Uri.EscapeDataString(mensagemId)}"), ct);
+        if (resposta.StatusCode == HttpStatusCode.NotFound) return;
+        await GarantirAsync(resposta, "desafixar a mensagem", ct);
+    }
+
+    public async Task<IReadOnlyList<DiscordMensagem>> ListarFixadasAsync(string canalId, CancellationToken ct)
+    {
+        using var resposta = await EnviarAsync(() => Bot(HttpMethod.Get, $"channels/{canalId}/pins"), ct);
+        await GarantirAsync(resposta, "ler as mensagens fixadas", ct);
+        using var documento = await LerAsync(resposta, ct);
+        return documento.RootElement.ValueKind == JsonValueKind.Array ? documento.RootElement.EnumerateArray().Select(LerMensagem).ToList() : [];
+    }
+
+    public async Task<IReadOnlyList<DiscordTopico>> ListarTopicosAtivosAsync(CancellationToken ct)
+    {
+        using var resposta = await EnviarAsync(() => Bot(HttpMethod.Get, $"guilds/{Opcoes.GuildId}/threads/active"), ct);
+        await GarantirAsync(resposta, "listar os tópicos", ct);
+        using var documento = await LerAsync(resposta, ct);
+        var lista = new List<DiscordTopico>();
+        if (documento.RootElement.TryGetProperty("threads", out var threads) && threads.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var t in threads.EnumerateArray())
+            {
+                // type 11 = thread pública (as privadas das conversas 1:1 ficam de fora).
+                if (!t.TryGetProperty("type", out var tipo) || tipo.ValueKind != JsonValueKind.Number || tipo.GetInt32() != 11) continue;
+                if (LerTopico(t) is { } topico) lista.Add(topico);
+            }
+        }
+
+        return lista;
+    }
+
+    public async Task<DiscordTopico?> ObterTopicoAsync(string topicoId, CancellationToken ct)
+    {
+        using var resposta = await EnviarAsync(() => Bot(HttpMethod.Get, $"channels/{Uri.EscapeDataString(topicoId)}"), ct);
+        if (resposta.StatusCode == HttpStatusCode.NotFound) return null;
+        await GarantirAsync(resposta, "ler o tópico", ct);
+        using var documento = await LerAsync(resposta, ct);
+        return LerTopico(documento.RootElement);
+    }
+
+    private static DiscordTopico? LerTopico(JsonElement t)
+    {
+        var id = Texto(t, "id");
+        var pai = Texto(t, "parent_id");
+        if (id is null || pai is null) return null;
+        var arquivado = t.TryGetProperty("thread_metadata", out var meta) && meta.ValueKind == JsonValueKind.Object
+            && meta.TryGetProperty("archived", out var arq) && arq.ValueKind == JsonValueKind.True;
+        return new DiscordTopico(id, Texto(t, "name") ?? "tópico", pai, arquivado);
+    }
+
+    /// <summary>Reações da mensagem (<c>reactions</c>): emoji comum ou personalizado, quantas pessoas reagiram e se o bot é uma delas.</summary>
+    private static List<DiscordReacao> LerReacoes(JsonElement m)
+    {
+        var lista = new List<DiscordReacao>();
+        if (!m.TryGetProperty("reactions", out var reacoes) || reacoes.ValueKind != JsonValueKind.Array) return lista;
+        foreach (var r in reacoes.EnumerateArray())
+        {
+            if (!r.TryGetProperty("emoji", out var emoji) || emoji.ValueKind != JsonValueKind.Object) continue;
+            var nome = Texto(emoji, "name");
+            if (string.IsNullOrEmpty(nome)) continue;
+            var id = Texto(emoji, "id");
+            var contagem = r.TryGetProperty("count", out var c) && c.ValueKind == JsonValueKind.Number ? c.GetInt32() : 0;
+            var eu = r.TryGetProperty("me", out var me) && me.ValueKind == JsonValueKind.True;
+            var animado = emoji.TryGetProperty("animated", out var an) && an.ValueKind == JsonValueKind.True;
+            lista.Add(new DiscordReacao(id is null ? nome : $"{nome}:{id}", nome, id, animado, contagem, eu));
+        }
+
+        return lista;
     }
 
     public async Task<string> CriarTopicoAsync(string canalId, string nome, CancellationToken ct) =>
@@ -665,7 +779,7 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
             && (Texto(m, "application_id") == Opcoes.ClientId || webhooks.Values.Any(w => w.Id == wid));
         var quando = DateTimeOffset.Parse(Texto(m, "timestamp")!, System.Globalization.CultureInfo.InvariantCulture);
         var autorEhBot = autor.TryGetProperty("bot", out var bot) && bot.ValueKind == JsonValueKind.True;
-        return new DiscordMensagem(m.GetProperty("id").GetString()!, nome, avatar, conteudo, quando, anexos, doCrm, Texto(m, "edited_timestamp") is not null, autorEhBot, LerEnquete(m));
+        return new DiscordMensagem(m.GetProperty("id").GetString()!, nome, avatar, conteudo, quando, anexos, doCrm, Texto(m, "edited_timestamp") is not null, autorEhBot, LerEnquete(m), LerReacoes(m), m.TryGetProperty("pinned", out var fixada) && fixada.ValueKind == JsonValueKind.True);
     }
 
     /// <summary>Texto corrido de um cartão: título em negrito, descrição e cada campo como "**Nome:** valor".</summary>

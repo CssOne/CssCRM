@@ -26,6 +26,33 @@ public class CrmDiscordChatController(IDiscordChatService chat, ICurrentUserServ
     public async Task<ActionResult<DiscordChatMensagemDto>> CriarEnquete(string chave, [FromBody] DiscordChatEnqueteRequest request, CancellationToken ct) =>
         Ok(await chat.CriarEnqueteAsync(currentUser.UserId, chave, request.Pergunta, request.Respostas, request.Horas, request.VariasEscolhas, ct));
 
+    /// <summary>Reage (ou tira a reação) a uma mensagem; devolve as reações atualizadas dela.</summary>
+    [HttpPost("canais/{chave}/mensagens/{mensagemId}/reacoes")]
+    public async Task<ActionResult<IReadOnlyList<DiscordChatReacaoDto>>> Reagir(string chave, string mensagemId, [FromBody] DiscordChatReacaoRequest request, CancellationToken ct) =>
+        Ok(await chat.AlternarReacaoAsync(currentUser.UserId, chave, mensagemId, request.Emoji, ct));
+
+    /// <summary>Fixa ou desafixa uma mensagem (só gestores e administradores).</summary>
+    [HttpPut("canais/{chave}/mensagens/{mensagemId}/fixada")]
+    public async Task<IActionResult> Fixar(string chave, string mensagemId, [FromBody] DiscordChatFixarRequest request, CancellationToken ct)
+    {
+        await chat.FixarMensagemAsync(currentUser.UserId, chave, mensagemId, request.Fixar, ct);
+        return NoContent();
+    }
+
+    [HttpGet("canais/{chave}/fixadas")]
+    public async Task<ActionResult<IReadOnlyList<DiscordChatMensagemDto>>> Fixadas(string chave, CancellationToken ct) =>
+        Ok(await chat.ListarFixadasAsync(currentUser.UserId, chave, ct));
+
+    /// <summary>Procura um texto nas últimas mensagens da conversa.</summary>
+    [HttpGet("canais/{chave}/busca")]
+    public async Task<ActionResult<IReadOnlyList<DiscordChatMensagemDto>>> Buscar(string chave, [FromQuery] string termo, CancellationToken ct) =>
+        Ok(await chat.BuscarMensagensAsync(currentUser.UserId, chave, termo, ct));
+
+    /// <summary>Tópicos ativos do grupo.</summary>
+    [HttpGet("canais/{chave}/topicos")]
+    public async Task<ActionResult<IReadOnlyList<DiscordChatTopicoDto>>> Topicos(string chave, CancellationToken ct) =>
+        Ok(await chat.ListarTopicosAsync(currentUser.UserId, chave, ct));
+
     /// <summary>Emojis e figurinhas do servidor para o seletor do chat.</summary>
     [HttpGet("extras")]
     public async Task<ActionResult<DiscordChatExtrasDto>> Extras(CancellationToken ct) =>
