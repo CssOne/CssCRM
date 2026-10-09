@@ -102,11 +102,23 @@ public sealed class ReativarLeadsMg134BackgroundService(
         var antigos = await daRegional.CountAsync(l => l.Arquivado && l.ArquivadoPorId == null && l.ArquivadoEm < ArquivadosAPartirDe, ct);
         var semData = await daRegional.CountAsync(l => l.Arquivado && l.ArquivadoPorId == null && l.ArquivadoEm == null, ct);
 
-        var reativados = await db.CrmLeads
-            .Where(l => l.Regional == "MG134" && l.Arquivado && l.ArquivadoPorId == null && l.ArquivadoEm >= ArquivadosAPartirDe)
+        // Candidatos: o que o sistema arquivou na MG134 a partir de 04/10. E-mail e CPF/CNPJ são únicos entre os leads ATIVOS (índices
+        // IX_CrmLeads_EmailNormalizado / IX_CrmLeads_DocumentoNormalizado): o cliente que foi cadastrado de novo enquanto o antigo estava
+        // arquivado, ou dois arquivados com o mesmo e-mail, quebravam o UPDATE inteiro (foi o que impediu a volta em produção). Esses ficam
+        // arquivados — o ativo vence e, entre arquivados repetidos, volta só um — e são contados no diagnóstico.
+        var inicio = ArquivadosAPartirDe;
+        var candidatos = db.CrmLeads.Where(l => l.Regional == "MG134" && l.Arquivado && l.ArquivadoPorId == null && l.ArquivadoEm >= inicio);
+        var seguros = candidatos.Where(l => l.VeiculoAdicionalDeLeadId != null
+            || (!(l.EmailNormalizado != null && db.CrmLeads.Any(o => o.Id != l.Id && !o.Arquivado && o.VeiculoAdicionalDeLeadId == null && o.EmailNormalizado == l.EmailNormalizado))
+                && !(l.DocumentoNormalizado != null && db.CrmLeads.Any(o => o.Id != l.Id && !o.Arquivado && o.VeiculoAdicionalDeLeadId == null && o.DocumentoNormalizado == l.DocumentoNormalizado))
+                && !(l.EmailNormalizado != null && db.CrmLeads.Any(o => o.Id.CompareTo(l.Id) < 0 && o.Regional == "MG134" && o.Arquivado && o.ArquivadoPorId == null && o.ArquivadoEm >= inicio && o.VeiculoAdicionalDeLeadId == null && o.EmailNormalizado == l.EmailNormalizado))
+                && !(l.DocumentoNormalizado != null && db.CrmLeads.Any(o => o.Id.CompareTo(l.Id) < 0 && o.Regional == "MG134" && o.Arquivado && o.ArquivadoPorId == null && o.ArquivadoEm >= inicio && o.VeiculoAdicionalDeLeadId == null && o.DocumentoNormalizado == l.DocumentoNormalizado))));
+        var elegiveis = await candidatos.CountAsync(ct);
+        var reativados = await seguros
             .ExecuteUpdateAsync(s => s
                 .SetProperty(l => l.Arquivado, false)
                 .SetProperty(l => l.ArquivadoEm, (DateTimeOffset?)null), ct);
+        var ficaramArquivados = elegiveis - reativados; // e-mail/CPF já usado por outro lead ativo ou repetido entre os arquivados
 
         // Só marca como feita quando algo voltou: com 0 a próxima inicialização tenta de novo (a consulta é barata) e o diagnóstico mostra
         // por que não houve nada. Depois de voltar, exclusão futura (por pessoa ou pelo sistema) nunca é desfeita: o marcador impede.
@@ -116,7 +128,7 @@ public sealed class ReativarLeadsMg134BackgroundService(
             await db.SaveChangesAsync(ct);
         }
         await GravarAsync(db, ChaveStatus,
-            $"{DateTimeOffset.UtcNow:O} | MG134 arquivados: {arquivados} (por pessoa: {porPessoa}; sistema antes de 04/10: {antigos}; sistema sem data: {semData}) | desarquivados agora: {reativados}", ct);
+            $"{DateTimeOffset.UtcNow:O} | MG134 arquivados: {arquivados} (por pessoa: {porPessoa}; sistema antes de 04/10: {antigos}; sistema sem data: {semData}) | elegíveis: {elegiveis}; ficaram arquivados por e-mail/CPF repetido: {ficaramArquivados} | desarquivados agora: {reativados}", ct);
         return reativados;
     }
 }
