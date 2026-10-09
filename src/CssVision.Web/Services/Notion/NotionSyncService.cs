@@ -331,7 +331,8 @@ public sealed class NotionSyncService(
     /// data — em lote, direto no banco —, então é rápida mesmo relendo a base inteira.
     /// </summary>
     /// <summary>
-    /// Passada única por base: relê o "Tipo de Indicação?" de cada card "VENDA CONCLUIDA" e grava o Canal de Aquisição no lead e na venda —
+    /// Passada única por base: relê o "Tipo de Indicação?" de cada card "VENDA CONCLUIDA" e grava o Canal de Aquisição no lead e na venda,
+    /// e os valores da venda (mensalidade, adesão, porcentagem, indicação, estado, rastreador, vistoria) —
     /// "Pessoal" fica "Pessoal"; "Lead" com "Indicação?" = SIM vira "Indicação Lead" (e o card vai para a coluna das indicações).
     /// Só mexe em lead que veio do Notion e já está ligado ao card.
     /// </summary>
@@ -356,12 +357,12 @@ public sealed class NotionSyncService(
                 if (eraIndicacao != NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao)) TrocarColunaLeadIndicacao(lead, etapasPorNome);
                 if (antes != (lead.TipoIndicacao, lead.CriadoManualmente, lead.EtapaId)) leadsAtualizados++;
 
-                var vendas = await db.CrmOpportunities.Where(o => o.LeadId == lead.Id && !o.Arquivado && o.NotionPageId == pageId).ToListAsync(ct);
+                var vendas = await db.CrmOpportunities.Include(o => o.Veiculo).Where(o => o.LeadId == lead.Id && !o.Arquivado && o.NotionPageId == pageId).ToListAsync(ct);
                 foreach (var venda in vendas)
                 {
-                    var (indicacaoAntes, tipoAntes) = (venda.Indicacao, venda.TipoIndicacao);
                     AplicarIndicacaoNaOportunidade(venda, page);
-                    if (indicacaoAntes != venda.Indicacao || tipoAntes != venda.TipoIndicacao) vendasAtualizadas++;
+                    AplicarValoresDaVenda(venda, page);
+                    if (db.Entry(venda).State == EntityState.Modified || (venda.Veiculo is not null && db.Entry(venda.Veiculo).State == EntityState.Modified)) vendasAtualizadas++;
                 }
                 await db.SaveChangesAsync(ct);
             }
@@ -380,7 +381,7 @@ public sealed class NotionSyncService(
         checkpoint!.TipoIndicacaoVendasCorrigidoEm = inicio;
         await db.SaveChangesAsync(ct);
         if (leadsAtualizados + vendasAtualizadas > 0) eventos?.PublicarQuadroAtualizado("notion");
-        return $"{baseNome}: {lidos} vendas lidas, {leadsAtualizados} leads e {vendasAtualizadas} vendas com o Canal de Aquisição acertado, {erros} erros (correção do tipo de indicação)";
+        return $"{baseNome}: {lidos} vendas lidas, {leadsAtualizados} leads e {vendasAtualizadas} vendas com o Canal de Aquisição e os valores acertados, {erros} erros (correção do tipo de indicação e dos valores)";
     }
 
     private async Task<string> CorrigirDataDeChegadaAsync(NotionClient notion, string dataSourceId, string regionalNome, string baseNome, DateTimeOffset inicio, CancellationToken ct)
@@ -1057,10 +1058,6 @@ public sealed class NotionSyncService(
 
         var dataVenda = DataDoNotion.ParaInstante(page.DateStart("Data da venda"));
         var mensalidade = page.Number("Mensalidade") is { } m ? (decimal)m : (decimal?)null;
-        var mensalidadeComDesconto = page.FormulaDecimal("Mensalidade com desconto");
-        var adesao = page.Number("Adesão") is { } a ? (decimal)a : (decimal?)null;
-        // O Notion guarda o percentual como fração (0,23 = 23%); o CRM guarda em pontos (23), como a tela de venda.
-        var porcentagem = page.Number("Porcentagem") is { } pc ? Math.Round((decimal)pc * 100m, 2) : (decimal?)null;
         var total = page.FormulaDecimal("Total");
         var ativoEm = ParseUtc(page.DateStart("Ativo em"));
         var oQue = page.Select("O que");
@@ -1084,12 +1081,7 @@ public sealed class NotionSyncService(
         oportunidade.DataEfetivaFechamento = dataVenda ?? oportunidade.DataEfetivaFechamento ?? lead.CriadoEm;
         oportunidade.DataAdesao = dataVenda.HasValue ? DateOnly.FromDateTime(dataVenda.Value.UtcDateTime) : oportunidade.DataAdesao;
         oportunidade.AtivoEm = ativoEm ?? oportunidade.AtivoEm;
-        oportunidade.Mensalidade = mensalidade ?? oportunidade.Mensalidade;
-        oportunidade.MensalidadeComDesconto = mensalidadeComDesconto ?? oportunidade.MensalidadeComDesconto;
-        oportunidade.MensalidadeComCupom = page.Number("Mensalidade (Cupom)") is { } cupom ? (decimal)cupom : oportunidade.MensalidadeComCupom;
-        oportunidade.PagamentoAdesao = adesao ?? oportunidade.PagamentoAdesao;
-        oportunidade.Porcentagem = porcentagem ?? oportunidade.Porcentagem;
-        oportunidade.ValorIndicacao = page.Number("Indicação") is { } valorIndicacao ? (decimal)valorIndicacao : oportunidade.ValorIndicacao;
+        AplicarValoresDaVenda(oportunidade, page);
         AplicarIndicacaoNaOportunidade(oportunidade, page);
         oportunidade.TermoAdesaoAceito = page.HasFiles("Termo Adesão") || oportunidade.TermoAdesaoAceito;
         oportunidade.Migracao = page.Select("Migração", "Migração?") is not null || oportunidade.Migracao;
@@ -1116,6 +1108,32 @@ public sealed class NotionSyncService(
         veiculo.Fipe = page.Number("FIPE") is { } fipe ? (decimal)fipe : veiculo.Fipe;
         veiculo.Rastreador = page.Number("Rastreador") is { } rastreador ? (decimal)rastreador : veiculo.Rastreador;
         veiculo.ValorVistoria = page.Number("Vistoriador") is { } vistoriador ? (decimal)vistoriador : veiculo.ValorVistoria;
+    }
+
+    /// <summary>
+    /// Valores da venda no card do Notion: mensalidade (e com desconto/cupom), adesão, porcentagem, valor da indicação, estado e, no veículo,
+    /// rastreador e vistoria. Só grava o que o card tem preenchido — campo vazio no Notion não apaga o que já está no CRM.
+    /// </summary>
+    internal static void AplicarValoresDaVenda(CrmOpportunity oportunidade, JsonElement page)
+    {
+        if (page.Number("Mensalidade") is { } mensalidade) oportunidade.Mensalidade = (decimal)mensalidade;
+        if (page.FormulaDecimal("Mensalidade com desconto") is { } comDesconto) oportunidade.MensalidadeComDesconto = comDesconto;
+        if (page.Number("Mensalidade (Cupom)") is { } cupom) oportunidade.MensalidadeComCupom = (decimal)cupom;
+        if (page.Number("Adesão") is { } adesao) oportunidade.PagamentoAdesao = (decimal)adesao;
+        // O Notion guarda o percentual como fração (0,23 = 23%); o CRM guarda em pontos (23), como a tela de venda.
+        if (page.Number("Porcentagem") is { } porcentagem) oportunidade.Porcentagem = Math.Round((decimal)porcentagem * 100m, 2);
+        if (page.Number("Indicação") is { } valorIndicacao) oportunidade.ValorIndicacao = (decimal)valorIndicacao;
+
+        var estadoSelect = page.Select("Estado");
+        var estadoTexto = page.Text("ESTADO");
+        var estado = estadoSelect is { Length: 2 } ? estadoSelect : estadoTexto is { Length: 2 } ? estadoTexto : null;
+        if (estado is not null) oportunidade.Estado = estado.ToUpperInvariant();
+
+        if (oportunidade.Veiculo is { } veiculo)
+        {
+            if (page.Number("Rastreador") is { } rastreador) veiculo.Rastreador = (decimal)rastreador;
+            if (page.Number("Vistoriador") is { } vistoriador) veiculo.ValorVistoria = (decimal)vistoriador;
+        }
     }
 
     private readonly Dictionary<string, Guid> _vendedorPorEmailCache = new();
