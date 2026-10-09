@@ -245,15 +245,14 @@ public sealed class LeadKanbanService(
             var fimUtc = chegadaFim.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
             query = query.Where(l => l.CriadoEm <= fimUtc);
         }
-        if (filtro.DataVendaInicio is { } vendaInicio)
+        if (filtro.DataVendaInicio is not null || filtro.DataVendaFim is not null)
         {
-            var inicioUtc = vendaInicio.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-            query = query.Where(l => l.Oportunidades.Any(o => o.DataEfetivaFechamento >= inicioUtc));
-        }
-        if (filtro.DataVendaFim is { } vendaFim)
-        {
-            var fimUtc = vendaFim.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
-            query = query.Where(l => l.Oportunidades.Any(o => o.DataEfetivaFechamento <= fimUtc));
+            // Pela data de ATIVAÇÃO da venda (sem ela, a data da venda em Brasília), na MESMA venda (ganha, não excluída): antes início e
+            // fim eram checados em vendas diferentes e uma perda (que também grava data de fechamento) aparecia como venda.
+            var per = PeriodoDeAtivacao.De(filtro.DataVendaInicio, filtro.DataVendaFim);
+            query = query.Where(l => l.Oportunidades.Any(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho
+                && ((o.AtivoEm != null && o.AtivoEm >= per.AtivacaoDe && o.AtivoEm < per.AtivacaoAte)
+                    || (o.AtivoEm == null && o.DataEfetivaFechamento >= per.VendaDe && o.DataEfetivaFechamento <= per.VendaAte))));
         }
 
         return (query, podeVerOrigem);
