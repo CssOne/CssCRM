@@ -20,7 +20,7 @@ import { useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { Link } from "react-router-dom";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarDataHora, formatarMoeda } from "../../lib/format";
-import { TipoAnuncio, TipoAtividade, type Activity, type Announcement, type Dashboard, type MeuAviso } from "../../lib/types";
+import { TipoAnuncio, TipoAtividade, type Activity, type Announcement, type Dashboard, type MeuAviso, type TvRanking } from "../../lib/types";
 import { useAuth } from "../../context/AuthContext";
 import { Badge, Card, ErrorState, Skeleton, useToast } from "../../components/ui";
 import { PortalStatCard } from "../../components/portal/PortalStatCard";
@@ -43,6 +43,8 @@ export function PortalDashboardPage() {
   const [proximas, setProximas] = useState<Activity[]>([]);
   const [avisos, setAvisos] = useState<Announcement[]>([]);
   const [pagamentos, setPagamentos] = useState<MeuAviso[]>([]);
+  // Ranking do mês igual ao do painel da TV (todas as regionais, por vendas).
+  const [rankingTv, setRankingTv] = useState<TvRanking[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -60,8 +62,10 @@ export function PortalDashboardPage() {
       api.get<Announcement[]>(`/crm/portal/announcements?tipo=${TipoAnuncio.Aviso}`, controller.signal),
       // Pagamentos em aberto avisados pelo financeiro/gestão: se falhar, o resto do painel segue.
       api.get<MeuAviso[]>("/crm/avisos-pagamento/meus", controller.signal).catch(() => [] as MeuAviso[]),
+      api.get<{ ranking: TvRanking[] }>("/crm/tv/ranking", controller.signal).then((r) => r.ranking).catch(() => [] as TvRanking[]),
     ])
-      .then(([dash, ativ, av, pag]) => {
+      .then(([dash, ativ, av, pag, rank]) => {
+        setRankingTv(rank);
         setDashboard(dash);
         setProximas(ativ.itens);
         setAvisos(av);
@@ -97,10 +101,10 @@ export function PortalDashboardPage() {
     return <ErrorState message={erro ?? "Não foi possível carregar o painel."} />;
   }
 
-  const { indicadores, meta, evolucaoVendas, desempenhoPorVendedor } = dashboard;
+  const { indicadores, meta, evolucaoVendas } = dashboard;
   const primeiroNome = sessao?.nomeCompleto.split(" ")[0] ?? "";
   const valorGanho = indicadores.vendasGanhasAdesaoValor;
-  const ranking = [...desempenhoPorVendedor].sort((a, b) => b.valorAdesao - a.valorAdesao).slice(0, 5);
+  const ranking = rankingTv.slice(0, 5);
   const medalhas = [Trophy, Medal, Medal];
 
   return (
@@ -186,19 +190,21 @@ export function PortalDashboardPage() {
             <ul className="space-y-2">
               {ranking.map((v, i) => {
                 const Medalha = medalhas[i];
-                const destaque = sessao && v.vendedorNome === sessao.nomeCompleto;
-                const maiorValor = ranking[0]?.valorAdesao || 1;
+                const destaque = sessao && v.consultorId === sessao.id;
+                const maiorValor = Math.max(...ranking.map((r) => r.valorVendido), 1);
                 return (
-                  <li key={v.vendedorId} className={`flex items-center gap-3 rounded-lg px-2 py-2 ${destaque ? "bg-[var(--brand-soft)]" : ""}`}>
+                  <li key={v.consultorId} className={`flex items-center gap-3 rounded-lg px-2 py-2 ${destaque ? "bg-[var(--brand-soft)]" : ""}`}>
                     <span className="flex w-5 shrink-0 items-center justify-center text-sm font-semibold text-[var(--fg-muted)]">
                       {Medalha ? <Medalha className={`size-4 ${i === 0 ? "text-amber-500" : "text-slate-400"}`} /> : i + 1}
                     </span>
                     <span className="min-w-32 shrink-0 truncate text-sm font-medium text-[var(--fg)]">
-                      {destaque ? `${v.vendedorNome} (você)` : v.vendedorNome}
+                      {destaque ? `${v.nome} (você)` : v.nome}
                     </span>
-                    <span className="w-28 shrink-0 text-sm text-[var(--fg-muted)]">{formatarMoeda(v.valorAdesao)}</span>
+                    <span className="w-36 shrink-0 text-sm text-[var(--fg-muted)]">
+                      {v.quantidadeVendas} {v.quantidadeVendas === 1 ? "venda" : "vendas"} · {formatarMoeda(v.valorVendido)}
+                    </span>
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-[var(--surface-hover)]">
-                      <div className="h-full rounded-full bg-[var(--brand)]" style={{ width: `${(v.valorAdesao / maiorValor) * 100}%` }} />
+                      <div className="h-full rounded-full bg-[var(--brand)]" style={{ width: `${(v.valorVendido / maiorValor) * 100}%` }} />
                     </div>
                   </li>
                 );

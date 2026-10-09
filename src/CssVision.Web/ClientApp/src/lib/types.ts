@@ -1153,6 +1153,8 @@ export interface VendedorResumo {
   recebeSomenteOQue?: string[] | null;
   /** Leads de tráfego pago que chegaram para o vendedor no mês anterior. */
   leadsTrafegoMesAnterior?: number;
+  /** Regional do cadastro do consultor (filtro da Gestão comercial). */
+  regionalNome?: string | null;
   /** Leads de tráfego pago (Notion + sistema novo) que chegaram no mês. */
   leadsTrafegoNoMes?: number;
 }
@@ -1278,6 +1280,8 @@ export interface UserSummary {
   /** Regionais ocultas para este administrador (ele não vê os dados delas). */
   regionaisOcultasIds?: string[] | null;
   regionaisOcultasNomes?: string[] | null;
+  /** Administrador que pega leads / atua nas vendas. Falso = só administra a plataforma (some de tudo que remete a vendas). */
+  atuaNasVendas?: boolean;
 }
 
 export interface UserFilterRequest {
@@ -1303,6 +1307,7 @@ export interface UserCreateRequest {
   recebeSomenteOQue?: string[] | null;
   limiteDiarioLeads?: number | null;
   regionaisOcultasIds?: string[] | null;
+  atuaNasVendas?: boolean | null;
 }
 
 export interface UserUpdateRequest {
@@ -1319,6 +1324,7 @@ export interface UserUpdateRequest {
   regionaisOcultasIds?: string[] | null;
   /** Verdadeiro quando a lista acima foi mexida (lista vazia + verdadeiro = mostra todas de novo). */
   alterarRegionaisOcultas?: boolean;
+  atuaNasVendas?: boolean | null;
 }
 
 export interface GrupoMembro {

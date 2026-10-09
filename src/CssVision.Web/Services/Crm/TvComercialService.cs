@@ -10,6 +10,12 @@ namespace CssVision.Web.Services.Crm;
 public interface ITvComercialService
 {
     Task<TvComercialDto> ObterAsync(int? mes, int? ano, CancellationToken ct);
+
+    /// <summary>
+    /// O mesmo ranking do painel da TV (todas as regionais, qualquer que seja o escopo de quem pede) — usado no Portal do consultor, que
+    /// espelha a TV.
+    /// </summary>
+    Task<TvRankingGeralDto> ObterRankingGeralAsync(int? mes, int? ano, CancellationToken ct);
 }
 
 /// <summary>
@@ -32,14 +38,22 @@ public sealed class TvComercialService(
 
     private sealed record PessoaTv(Guid Id, string NomeCompleto, string? FotoUrl, Guid? RegionalId, string? Regional);
 
-    public async Task<TvComercialDto> ObterAsync(int? mes, int? ano, CancellationToken ct)
+    public Task<TvComercialDto> ObterAsync(int? mes, int? ano, CancellationToken ct) => ObterInternoAsync(mes, ano, escopoCompleto: false, ct);
+
+    public async Task<TvRankingGeralDto> ObterRankingGeralAsync(int? mes, int? ano, CancellationToken ct)
+    {
+        var tv = await ObterInternoAsync(mes, ano, escopoCompleto: true, ct);
+        return new TvRankingGeralDto(tv.Periodo, tv.RankingConsultores);
+    }
+
+    private async Task<TvComercialDto> ObterInternoAsync(int? mes, int? ano, bool escopoCompleto, CancellationToken ct)
     {
         var hoje = HorarioBrasilia.Hoje;
         var primeiro = new DateOnly(ano ?? hoje.Year, mes ?? hoje.Month, 1);
         if (primeiro > HorarioBrasilia.PrimeiroDiaDoMes(hoje)) primeiro = HorarioBrasilia.PrimeiroDiaDoMes(hoje);
 
         // O painel da TV mostra todas as regionais, mesmo para o administrador que oculta alguma nas demais telas.
-        var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct, ignorarRegionaisOcultas: true);
+        var visiveis = escopoCompleto ? null : await equipe.ObterVendedoresVisiveisAsync(ct, ignorarRegionaisOcultas: true);
         // A TV da regional MG134 mostra também os dados da MG132.
         if (visiveis is not null && currentUser is not null)
         {
@@ -119,7 +133,7 @@ public sealed class TvComercialService(
 
         var ids = vendas.Select(v => v.ResponsavelId).Concat(leadsPorConsultor.Keys).Distinct().ToList();
         var pessoas = await db.Users.AsNoTracking()
-            .Where(u => ids.Contains(u.Id) && !u.NomeCompleto.StartsWith(NotionPageExtensions.PrefixoNomeProvisorio))
+            .Where(u => ids.Contains(u.Id) && u.AtuaNasVendas && !u.NomeCompleto.StartsWith(NotionPageExtensions.PrefixoNomeProvisorio))
             .Select(u => new PessoaTv(u.Id, u.NomeCompleto, u.FotoUrl, u.RegionalId, u.Regional != null ? u.Regional.Nome : null))
             .ToDictionaryAsync(u => u.Id, ct);
         foreach (var (id, pessoa) in pessoasDoNotion) pessoas.TryAdd(id, pessoa);

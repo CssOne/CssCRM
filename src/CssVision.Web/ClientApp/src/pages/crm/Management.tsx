@@ -1,10 +1,10 @@
 import { usePaginacao } from "../../lib/usePaginacao";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, isAbortError } from "../../lib/api";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { GestaoComercialResumo, RedistribuicaoHistorico, VendedorResumo } from "../../lib/types";
-import { Badge, Card, ErrorState, Skeleton, useToast, Pagination } from "../../components/ui";
+import { Badge, Card, ErrorState, Input, Select, Skeleton, useToast, Pagination } from "../../components/ui";
 import { OPCOES_O_QUE } from "../../lib/opcoesLead";
 import { useAtualizarAoVivo } from "../../lib/useAoVivo";
 
@@ -400,10 +400,46 @@ export function ManagementPage() {
   // Tempo real: ranking, carteira e métricas se atualizam sozinhos (vendas, leads) e quando o mês vira.
   useAtualizarAoVivo(() => setRecarregar((n) => n + 1));
 
+  // Filtros da Gestão comercial: nome, regional, situação da conta e "recebe leads". A busca por nome vale também para o ranking e
+  // para o tempo até o 1º contato; regional/situação/recebe leads filtram a carteira.
+  const [buscaNome, setBuscaNome] = useState("");
+  const [filtroRegional, setFiltroRegional] = useState("");
+  const [filtroSituacao, setFiltroSituacao] = useState<"" | "ativos" | "inativos">("");
+  const [filtroRecebe, setFiltroRecebe] = useState<"" | "sim" | "nao">("");
+  const termo = buscaNome.trim().toLowerCase();
+  const casaNome = (nome: string) => !termo || nome.toLowerCase().includes(termo);
+  const regionaisDisponiveis = useMemo(
+    () => [...new Set((vendedores ?? []).map((v) => v.regionalNome).filter((r): r is string => !!r))].sort(),
+    [vendedores]
+  );
+  const vendedoresFiltrados = useMemo(
+    () =>
+      (vendedores ?? []).filter(
+        (v) =>
+          casaNome(v.nome) &&
+          (!filtroRegional || v.regionalNome === filtroRegional) &&
+          (filtroSituacao === "" || (filtroSituacao === "ativos") === (v.ativo !== false)) &&
+          (filtroRecebe === "" || (filtroRecebe === "sim") === !!v.recebeLeads)
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [vendedores, termo, filtroRegional, filtroSituacao, filtroRecebe]
+  );
+  const rankingFiltrado = useMemo(
+    () => (resumo?.ranking ?? []).filter((r) => casaNome(r.vendedorNome)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [resumo, termo]
+  );
+  const contatoFiltrado = useMemo(
+    () => (resumo?.primeiroContatoPorVendedor ?? []).filter((r) => casaNome(r.vendedorNome)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [resumo, termo]
+  );
+  const temFiltro = !!(termo || filtroRegional || filtroSituacao || filtroRecebe);
+
   // Paginação das listas (hooks antes dos retornos de carregando/erro).
-  const paginaContato = usePaginacao(resumo?.primeiroContatoPorVendedor, 8);
-  const paginaCarteira = usePaginacao(vendedores, 9);
-  const paginaRanking = usePaginacao(resumo?.ranking, 10);
+  const paginaContato = usePaginacao(contatoFiltrado, 8);
+  const paginaCarteira = usePaginacao(vendedoresFiltrados, 9);
+  const paginaRanking = usePaginacao(rankingFiltrado, 10);
   const paginaParadas = usePaginacao(resumo?.oportunidadesSemMovimentacao, 8);
   const paginaHistorico = usePaginacao(historico, 10);
 
@@ -432,6 +468,49 @@ export function ManagementPage() {
 
       <LeadsDoDiaCard vendedores={vendedores} />
 
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+        <div className="w-56">
+          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Consultor</label>
+          <Input placeholder="Buscar pelo nome" value={buscaNome} onChange={(e) => setBuscaNome(e.target.value)} />
+        </div>
+        <div className="w-44">
+          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Regional</label>
+          <Select value={filtroRegional} onChange={(e) => setFiltroRegional(e.target.value)}>
+            <option value="">Todas</option>
+            {regionaisDisponiveis.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div className="w-40">
+          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Situação</label>
+          <Select value={filtroSituacao} onChange={(e) => setFiltroSituacao(e.target.value as typeof filtroSituacao)}>
+            <option value="">Todos</option>
+            <option value="ativos">Ativos</option>
+            <option value="inativos">Inativos</option>
+          </Select>
+        </div>
+        <div className="w-40">
+          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Recebe leads</label>
+          <Select value={filtroRecebe} onChange={(e) => setFiltroRecebe(e.target.value as typeof filtroRecebe)}>
+            <option value="">Todos</option>
+            <option value="sim">Recebe</option>
+            <option value="nao">Não recebe</option>
+          </Select>
+        </div>
+        {temFiltro && (
+          <button
+            type="button"
+            className="focus-ring cursor-pointer pb-2 text-sm font-medium text-[var(--brand)] hover:underline"
+            onClick={() => { setBuscaNome(""); setFiltroRegional(""); setFiltroSituacao(""); setFiltroRecebe(""); }}
+          >
+            Limpar filtros
+          </button>
+        )}
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="p-4">
           <h2 className="mb-2 text-sm font-semibold text-[var(--fg)]">Tempo médio até 1º contato</h2>
@@ -446,7 +525,7 @@ export function ManagementPage() {
               <p className="text-xs text-[var(--fg-muted)]">
                 média de {resumo.leadsComPrimeiroContato} lead(s) deste mês, da chegada até o consultor mover de etapa ou concluir uma atividade
               </p>
-              {(resumo.primeiroContatoPorVendedor?.length ?? 0) > 0 && (
+              {contatoFiltrado.length > 0 && (
                 <ul className="mt-3 space-y-1.5 border-t border-[var(--border)] pt-3">
                   {paginaContato.itensDaPagina.map((v) => (
                     <li key={v.vendedorId} className="flex items-center justify-between gap-2 text-xs">
@@ -502,7 +581,7 @@ export function ManagementPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="overflow-x-auto p-4">
           <h2 className="mb-3 text-sm font-semibold text-[var(--fg)]">Ranking comercial</h2>
-          {resumo.ranking.length === 0 ? (
+          {rankingFiltrado.length === 0 ? (
             <p className="text-sm text-[var(--fg-muted)]">Sem vendas no período.</p>
           ) : (
             <table className="w-full text-sm">

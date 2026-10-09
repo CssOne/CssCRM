@@ -53,6 +53,12 @@ public class ApplicationUser : IdentityUser<Guid>
     public bool RecebeLeads { get; set; } = true;
 
     /// <summary>
+    /// Administrador (visão total) que só administra a plataforma: com <c>false</c> ele não pega leads e o nome dele não aparece em nada que
+    /// remete a vendas (Gestão comercial, listas de consultores, quadro, rankings, TV). Os demais papéis são sempre <c>true</c>.
+    /// </summary>
+    public bool AtuaNasVendas { get; set; } = true;
+
+    /// <summary>
     /// Id do usuário no Notion (campo "Vendedor" dos cards). Liga o card ao usuário mesmo quando o Notion
     /// não informa o e-mail da pessoa — assim o lead não cai em "Vendedor não identificado".
     /// </summary>

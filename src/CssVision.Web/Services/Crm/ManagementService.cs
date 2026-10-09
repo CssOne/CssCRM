@@ -84,12 +84,14 @@ public sealed class ManagementService(
             query = query.Where(u => u.Ativo || (u.GrupoId != null && comercialEmGrupo.Contains(u.Id)));
         }
         if (visiveis is not null) query = query.Where(u => visiveis.Contains(u.Id));
+        // Administrador que só administra (não atua nas vendas) não aparece na carteira nem nas listas de consultores.
+        query = query.Where(u => u.AtuaNasVendas);
         // Vendedores que o Notion não identifica ("Vendedor Notion xxxx") ficam fora do filtro e da carteira até alguém renomeá-los.
         query = query.Where(u => !u.NomeCompleto.StartsWith(NotionPageExtensions.PrefixoNomeProvisorio));
 
         var vendedores = await query
             .OrderByDescending(u => u.Ativo).ThenBy(u => u.NomeCompleto)
-            .Select(u => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.Ativo, u.RecebeLeads, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads, u.RecebeSomenteOQue })
+            .Select(u => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.Ativo, u.RecebeLeads, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads, u.RecebeSomenteOQue, RegionalNome = u.Regional != null ? u.Regional.Nome : null })
             .ToListAsync(ct);
         var inicioMes = HorarioBrasilia.Inicio(HorarioBrasilia.PrimeiroDiaDoMes(HorarioBrasilia.Hoje));
         var inicioDia = LeadAssignmentService.InicioDoDia();
@@ -113,7 +115,7 @@ public sealed class ManagementService(
             v.LimiteMensalLeads, recebidosNoMes.GetValueOrDefault(v.Id), v.LimiteDiarioLeads, recebidosHoje.GetValueOrDefault(v.Id),
             v.Ativo, v.RecebeLeads, trafegoNoMes.GetValueOrDefault(v.Id),
             v.HorarioInicioLeads?.ToString("HH:mm"), v.HorarioFimLeads?.ToString("HH:mm"), JanelaRecebimentoLeads.MascaraParaDias(v.DiasSemanaLeads),
-            FiltroOQue.Separar(v.RecebeSomenteOQue), trafegoMesAnterior.GetValueOrDefault(v.Id))).ToList();
+            FiltroOQue.Separar(v.RecebeSomenteOQue), trafegoMesAnterior.GetValueOrDefault(v.Id), v.RegionalNome)).ToList();
     }
 
     public async Task<IReadOnlyList<ConsultorDesempenhoDto>> ObterDesempenhoConsultoresAsync(DateOnly? mesReferencia, CancellationToken ct)
@@ -128,7 +130,7 @@ public sealed class ManagementService(
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
         var idsComPapelComercial = (await userManager.GetUsersInRoleAsync(Roles.Comercial)).Select(u => u.Id).ToHashSet();
 
-        var query = db.Users.AsNoTracking().Include(u => u.Regional).Where(u => idsComPapelComercial.Contains(u.Id))
+        var query = db.Users.AsNoTracking().Include(u => u.Regional).Where(u => idsComPapelComercial.Contains(u.Id) && u.AtuaNasVendas)
             .Where(u => !u.NomeCompleto.StartsWith(NotionPageExtensions.PrefixoNomeProvisorio));
         if (visiveis is not null) query = query.Where(u => visiveis.Contains(u.Id));
 
@@ -437,7 +439,7 @@ public sealed class ManagementService(
 
     private async Task<List<RankingComercialDto>> ObterRankingAsync(List<Guid>? visiveis, DateTimeOffset inicio, DateTimeOffset fim, CancellationToken ct)
     {
-        var vendedoresQuery = db.Users.AsNoTracking().Where(u => u.Ativo);
+        var vendedoresQuery = db.Users.AsNoTracking().Where(u => u.Ativo && u.AtuaNasVendas);
         if (visiveis is not null) vendedoresQuery = vendedoresQuery.Where(u => visiveis.Contains(u.Id));
         var vendedores = await vendedoresQuery.Select(u => new { u.Id, u.NomeCompleto }).ToListAsync(ct);
         var ids = vendedores.Select(v => v.Id).ToList();
