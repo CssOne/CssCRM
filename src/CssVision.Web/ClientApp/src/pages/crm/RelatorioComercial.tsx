@@ -4,7 +4,7 @@ import type { ApexOptions } from "apexcharts";
 import { api, isAbortError } from "../../lib/api";
 import { formatarMoeda, formatarPercentual } from "../../lib/format";
 import { usePaginacao } from "../../lib/usePaginacao";
-import type { LeadStage, RelatorioComercial, VendedorResumo } from "../../lib/types";
+import type { LeadStage, Regional, RelatorioComercial, VendedorResumo } from "../../lib/types";
 import { useTheme } from "../../context/ThemeContext";
 import { Button, Card, ErrorState, Input, Pagination, Select, Skeleton } from "../../components/ui";
 import { OPCOES_FILTRO_TIPO_INDICACAO } from "../../lib/opcoesLead";
@@ -115,10 +115,14 @@ export function RelatorioComercialPage() {
     setChegadaInicio(""); setChegadaFim(""); setVendaInicio(""); setVendaFim(""); setIndicacao(""); setTiposIndicacao([]);
   };
   const [consultores, setConsultores] = useState<VendedorResumo[]>([]);
+  // Abas por regional: "Todas" + uma por regional (mesmo com uma só cadastrada).
+  const [regionais, setRegionais] = useState<Regional[]>([]);
+  const [regionalId, setRegionalId] = useState("");
   const [etapas, setEtapas] = useState<LeadStage[]>([]);
 
   useEffect(() => {
     api.get<VendedorResumo[]>("/crm/management/vendedores?incluirInativos=true").then(setConsultores).catch(() => setConsultores([]));
+    api.get<Regional[]>("/crm/settings/regionals").then(setRegionais).catch(() => setRegionais([]));
     api.get<LeadStage[]>("/crm/settings/lead-stages").then(setEtapas).catch(() => setEtapas([]));
   }, []);
 
@@ -129,6 +133,7 @@ export function RelatorioComercialPage() {
     setErro(null);
     const filtros = new URLSearchParams({ dataInicio: inicio, dataFim: fim });
     if (consultorId) filtros.set("consultorId", consultorId);
+    if (regionalId) filtros.set("regionalId", regionalId);
     // "Sem etapa" (id nulo) vai como Guid vazio.
     etapaIds.forEach((id) => filtros.append("etapaId", id));
     if (chegadaInicio) filtros.set("chegadaInicio", chegadaInicio);
@@ -143,7 +148,7 @@ export function RelatorioComercialPage() {
       .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar o relatório."); })
       .finally(() => { if (!controller.signal.aborted) setCarregando(false); });
     return () => controller.abort();
-  }, [inicio, fim, consultorId, etapaIds, chegadaInicio, chegadaFim, vendaInicio, vendaFim, indicacao, tiposIndicacao, recarregar]);
+  }, [inicio, fim, consultorId, regionalId, etapaIds, chegadaInicio, chegadaFim, vendaInicio, vendaFim, indicacao, tiposIndicacao, recarregar]);
 
   // Tempo real (vendas, leads, sincronização); na virada do dia, o período que terminava "hoje" passa a
   // terminar no dia novo — quem escolheu um período passado continua nele.
@@ -240,7 +245,7 @@ export function RelatorioComercialPage() {
       </div>
       <div className="flex items-end gap-1" title="Vazio = usa o período acima.">
         <label className="text-xs text-[var(--fg-muted)]">
-          Venda de
+          Ativação de
           <Input type="date" className="mt-0.5 h-8 w-36" value={vendaInicio} max={vendaFim || undefined} onChange={(e) => setVendaInicio(e.target.value)} />
         </label>
         <label className="text-xs text-[var(--fg-muted)]">
@@ -259,10 +264,26 @@ export function RelatorioComercialPage() {
       <div>
         <h1 className="text-xl font-semibold text-[var(--fg)]">Relatório comercial</h1>
         <p className="text-sm text-[var(--fg-muted)]">
-          Vendas, leads, origem e retorno — os relatórios do Notion, calculados com os dados do CRM. Vendas pela data da venda; leads pela data de chegada.
+          Vendas, leads, origem e retorno — os relatórios do Notion, calculados com os dados do CRM. Vendas pela data de ativação; leads pela data de chegada.
         </p>
       </div>
       {filtro}
+      <div role="tablist" aria-label="Regional" className="flex w-full flex-wrap gap-1.5 border-b border-[var(--border)] pb-2">
+        {[{ id: "", nome: "Todas as regionais" }, ...regionais.filter((r) => r.ativa)].map((r) => (
+          <button
+            key={r.id || "todas"}
+            type="button"
+            role="tab"
+            aria-selected={regionalId === r.id}
+            onClick={() => { setRegionalId(r.id); setConsultorId(""); }}
+            className={`focus-ring cursor-pointer rounded-lg px-3 py-1.5 text-sm font-medium ${
+              regionalId === r.id ? "bg-[var(--brand)] text-white" : "text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+            }`}
+          >
+            {r.nome}
+          </button>
+        ))}
+      </div>
     </div>
   );
 

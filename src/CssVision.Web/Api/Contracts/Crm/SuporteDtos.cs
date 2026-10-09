@@ -4,11 +4,11 @@ using CssVision.Web.Domain.Crm;
 namespace CssVision.Web.Api.Contracts.Crm;
 
 public record SuporteChamadoCreateRequest(
-    [property: Required, StringLength(200, MinimumLength = 3)] string Assunto,
-    [property: Required, StringLength(40)] string Categoria,
-    [property: Required, StringLength(4000, MinimumLength = 3)] string Mensagem);
+    [Required, StringLength(200, MinimumLength = 3)] string Assunto,
+    [Required, StringLength(40)] string Categoria,
+    [Required, StringLength(4000, MinimumLength = 3)] string Mensagem);
 
-public record SuporteMensagemRequest([property: Required, StringLength(4000, MinimumLength = 1)] string Texto);
+public record SuporteMensagemRequest([Required, StringLength(4000, MinimumLength = 1)] string Texto);
 
 public record SuporteStatusRequest(StatusChamadoSuporte Status);
 

@@ -37,11 +37,12 @@ public sealed class GoalService(
             .ToListAsync(ct);
         var metaPorVendedor = metas.ToDictionary(m => m.VendedorId);
 
-        var inicioMes = mes.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var fimMes = mes.AddMonths(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        // Mês de Brasília, como o painel da TV e a Visão geral: venda de 30/09 à noite não pode virar venda de outubro.
+        var inicioMes = HorarioBrasilia.Inicio(mes);
+        var fimMes = HorarioBrasilia.Inicio(mes.AddMonths(1));
 
         var realizadoPorVendedor = await db.CrmOpportunities.AsNoTracking()
-            .Where(o => vendedorIds.Contains(o.ResponsavelId) && o.Etapa.Tipo == TipoEtapaPipeline.Ganho &&
+            .Where(o => !o.Arquivado && vendedorIds.Contains(o.ResponsavelId) && o.Etapa.Tipo == TipoEtapaPipeline.Ganho &&
                         o.DataEfetivaFechamento >= inicioMes && o.DataEfetivaFechamento < fimMes)
             .GroupBy(o => o.ResponsavelId)
             .Select(g => new { VendedorId = g.Key, Valor = g.Sum(o => o.PagamentoAdesao) ?? 0m, Quantidade = g.Count() })
@@ -112,16 +113,18 @@ public sealed class GoalService(
     /// </summary>
     public async Task<IReadOnlyList<RegionalGoalDto>> ListarRegionaisAsync(DateOnly? mesReferencia, CancellationToken ct)
     {
-        if (!currentUser.TemVisaoTotal)
+        if (!currentUser.PodeGerirComercial)
         {
-            throw new CrmForbiddenException("Apenas administradores podem ver as metas gerais por regional.");
+            throw new CrmForbiddenException("Apenas a gestão comercial pode ver as metas gerais por regional.");
         }
+        var suaRegionalId = await RegionalDoGestorAsync(ct);
 
         var mes = NormalizarMes(mesReferencia ?? HorarioBrasilia.Hoje);
 
         var ocultas = await EscopoRegional.OcultasAsync(db, currentUser, ct);
         var regionais = await db.CrmRegionais.AsNoTracking()
             .Where(r => r.Ativa && !ocultas.Contains(r.Id))
+            .Where(r => suaRegionalId == null || r.Id == suaRegionalId) // gestor regional: só a regional dele
             .OrderBy(r => r.Nome)
             .ToListAsync(ct);
         var regionalIds = regionais.Select(r => r.Id).ToList();
@@ -131,11 +134,12 @@ public sealed class GoalService(
             .ToListAsync(ct);
         var metaPorRegional = metas.ToDictionary(m => m.RegionalId);
 
-        var inicioMes = mes.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var fimMes = mes.AddMonths(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        // Mês de Brasília, como o painel da TV e a Visão geral: venda de 30/09 à noite não pode virar venda de outubro.
+        var inicioMes = HorarioBrasilia.Inicio(mes);
+        var fimMes = HorarioBrasilia.Inicio(mes.AddMonths(1));
 
         var realizadoPorRegional = await db.CrmOpportunities.AsNoTracking()
-            .Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho &&
+            .Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho &&
                         o.DataEfetivaFechamento >= inicioMes && o.DataEfetivaFechamento < fimMes &&
                         o.Responsavel.RegionalId != null && regionalIds.Contains(o.Responsavel.RegionalId.Value))
             .GroupBy(o => o.Responsavel.RegionalId!.Value)
@@ -155,11 +159,24 @@ public sealed class GoalService(
             .ToList();
     }
 
+    /// <summary>Quem tem visão total mexe em qualquer regional (nulo); o gestor regional, só na dele.</summary>
+    private async Task<Guid?> RegionalDoGestorAsync(CancellationToken ct)
+    {
+        if (currentUser.TemVisaoTotal) return null;
+        var regionalId = await db.Users.AsNoTracking().Where(u => u.Id == currentUser.UserId).Select(u => u.RegionalId).FirstOrDefaultAsync(ct);
+        // Sem regional cadastrada o gestor não tem meta de regional para mexer (Guid.Empty não casa com nenhuma).
+        return regionalId ?? Guid.Empty;
+    }
+
     public async Task<RegionalGoalDto> DefinirMetaRegionalAsync(RegionalGoalUpsertRequest request, CancellationToken ct)
     {
-        if (!currentUser.TemVisaoTotal)
+        if (!currentUser.PodeGerirComercial)
         {
-            throw new CrmForbiddenException("Apenas administradores podem definir a meta geral de uma regional.");
+            throw new CrmForbiddenException("Apenas a gestão comercial pode definir a meta geral de uma regional.");
+        }
+        if (await RegionalDoGestorAsync(ct) is { } suaRegional && suaRegional != request.RegionalId)
+        {
+            throw new CrmForbiddenException("Você só pode definir a meta da regional atribuída a você.");
         }
 
         if ((await EscopoRegional.OcultasAsync(db, currentUser, ct)).Contains(request.RegionalId))

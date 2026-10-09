@@ -226,8 +226,36 @@ public sealed class LeadService(
         return itens.OrderByDescending(i => i.OcorridoEm).ToList();
     }
 
+    /// <summary>Cadastro de cliente (novo ou editado) exige telefone, cidade, estado (UF) e placa.</summary>
+    private static void ExigirDadosDoCliente(string? telefone, string? cidade, string? estado, string? placa)
+    {
+        if (DocumentValidation.NormalizarTelefone(telefone) is not { Length: > 0 })
+            throw new CrmBusinessException("Informe o telefone do cliente.", "telefone_obrigatorio");
+        if (string.IsNullOrWhiteSpace(cidade))
+            throw new CrmBusinessException("Informe a cidade do cliente.", "cidade_obrigatoria");
+        if (estado?.Trim() is not { Length: 2 })
+            throw new CrmBusinessException("Informe o estado (UF) do cliente.", "estado_obrigatorio");
+        if (placa?.Trim() is not { Length: > 0 and <= 10 })
+            throw new CrmBusinessException("Informe a placa do veículo.", "placa_obrigatoria");
+    }
+
+    /// <summary>
+    /// A regional do cadastro é a do consultor responsável. Sem consultor (ou consultor sem regional) vale a regional informada; sem
+    /// nenhuma das duas o cadastro não pode ser salvo.
+    /// </summary>
+    private async Task<string> RegionalDoCadastroAsync(Guid? responsavelId, string? regionalInformada, CancellationToken ct)
+    {
+        var doConsultor = responsavelId is null ? null
+            : await db.Users.AsNoTracking().Where(u => u.Id == responsavelId).Select(u => u.Regional != null ? u.Regional.Nome : null).FirstOrDefaultAsync(ct);
+        var regional = !string.IsNullOrWhiteSpace(doConsultor) ? doConsultor : regionalInformada?.Trim();
+        if (string.IsNullOrWhiteSpace(regional))
+            throw new CrmBusinessException("Não foi possível definir a regional: o consultor responsável não tem regional cadastrada.", "regional_obrigatoria");
+        return regional;
+    }
+
     public async Task<CriarLeadResultado> CriarAsync(LeadCreateRequest request, CancellationToken ct)
     {
+        ExigirDadosDoCliente(request.Telefone, request.Cidade, request.Estado, request.Placa);
         var documentoNormalizado = DocumentValidation.NormalizarDocumento(request.Documento, out var documentoValido);
         if (!string.IsNullOrEmpty(documentoNormalizado) && !documentoValido)
         {
@@ -274,6 +302,7 @@ public sealed class LeadService(
         // ainda" — mas um lead cadastrado manualmente já é trabalhado por quem o cadastrou, então
         // entra direto na primeira etapa ativa do funil em vez de cair na coluna "Sem etapa".
         var etapaId = request.EtapaId ?? await ObterEtapaInicialIdAsync(ct);
+        var regionalDoCadastro = await RegionalDoCadastroAsync(responsavelId, request.Regional, ct);
 
         var lead = new CrmLead
         {
@@ -289,7 +318,7 @@ public sealed class LeadService(
             DataNascimento = request.DataNascimento,
             Cidade = request.Cidade,
             Estado = request.Estado?.ToUpperInvariant(),
-            Regional = request.Regional,
+            Regional = regionalDoCadastro,
             Origem = request.Origem,
             Campanha = request.Campanha,
             ProdutoInteresse = request.ProdutoInteresse,
@@ -335,6 +364,7 @@ public sealed class LeadService(
     public async Task<LeadDetailDto> AtualizarAsync(Guid id, LeadUpdateRequest request, CancellationToken ct)
     {
         var lead = await CarregarComEscopoAsync(id, ct);
+        ExigirDadosDoCliente(request.Telefone, request.Cidade, request.Estado, request.Placa);
 
         db.Entry(lead).Property(l => l.RowVersion).OriginalValue = request.RowVersion;
 
@@ -375,7 +405,7 @@ public sealed class LeadService(
         lead.DataNascimento = request.DataNascimento;
         lead.Cidade = request.Cidade;
         lead.Estado = request.Estado?.ToUpperInvariant();
-        lead.Regional = request.Regional;
+        lead.Regional = await RegionalDoCadastroAsync(lead.ResponsavelId, request.Regional ?? lead.Regional, ct);
         if (PodeVerOrigem) lead.Origem = request.Origem;
         lead.Campanha = request.Campanha;
         lead.ProdutoInteresse = request.ProdutoInteresse;
@@ -393,7 +423,9 @@ public sealed class LeadService(
         lead.MetaFormId = request.MetaFormId;
         lead.MetaLeadId = request.MetaLeadId;
         lead.IndicadoPorLeadId = request.IndicadoPorLeadId;
+        var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
         lead.TipoIndicacao = request.TipoIndicacao;
+        var etapaAcertada = await AcertarColunaDaEtiquetaAsync(lead, eraIndicacao, ct);
         lead.Observacoes = request.Observacoes;
         lead.ConsentimentoContato = request.ConsentimentoContato;
         lead.ConsentimentoOrigem = request.ConsentimentoOrigem;
@@ -414,9 +446,38 @@ public sealed class LeadService(
         }
 
         await audit.RegistrarAsync("LeadAtualizado", nameof(CrmLead), lead.Id, null, ct);
+        if (etapaAcertada is { } novaEtapaId)
+        {
+            await audit.RegistrarAsync("LeadMudouEtapa", nameof(CrmLead), lead.Id, new { EtapaNova = novaEtapaId, Motivo = "etiqueta Lead/Indicação alterada na edição" }, ct);
+        }
+
         eventos?.PublicarQuadroAtualizado("crm");
 
         return await ObterPorIdAsync(lead.Id, ct);
+    }
+
+    /// <summary>
+    /// Editar o cadastro e trocar a etiqueta entre Lead e Indicação (o "Canal de Aquisição") precisa levar o card junto para a coluna irmã
+    /// ("Venda concluída (Leads)" ↔ "(Indicação)", e o mesmo para "Em atendimento"): sem isso o card ficava numa coluna que contradizia a própria
+    /// etiqueta — foi assim que uma venda de indicação ficou em "Venda concluída (Leads)". Só mexe quando a classificação mudou, o card está numa
+    /// coluna dividida e a coluna irmã existe; qualquer outra coluna (Cotação, Perdido...) não tem versão Leads/Indicação e fica onde está.
+    /// </summary>
+    /// <returns>A coluna nova, se o card foi movido.</returns>
+    private async Task<Guid?> AcertarColunaDaEtiquetaAsync(CrmLead lead, bool eraIndicacao, CancellationToken ct)
+    {
+        var ehIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
+        if (ehIndicacao == eraIndicacao || lead.EtapaId is not { } etapaId) return null;
+
+        var atual = await db.CrmLeadStages.AsNoTracking().Where(e => e.Id == etapaId).Select(e => e.Nome).FirstOrDefaultAsync(ct);
+        var (de, para) = ehIndicacao ? (" (Leads)", " (Indicação)") : (" (Indicação)", " (Leads)");
+        if (atual is null || !atual.EndsWith(de, StringComparison.Ordinal)) return null;
+
+        var nomeIrmao = atual[..^de.Length] + para;
+        var irma = await db.CrmLeadStages.AsNoTracking().Where(e => e.Ativa && e.Nome == nomeIrmao).Select(e => (Guid?)e.Id).FirstOrDefaultAsync(ct);
+        if (irma is null) return null;
+
+        lead.EtapaId = irma;
+        return irma;
     }
 
     public async Task<IReadOnlyList<Guid>> CriarVeiculosAdicionaisAsync(Guid id, LeadVeiculosAdicionaisRequest request, CancellationToken ct)
@@ -757,12 +818,8 @@ public sealed class LeadService(
     /// </summary>
     public async Task ExcluirAsync(Guid id, CancellationToken ct)
     {
-        if (!currentUser.TemVisaoTotal)
-        {
-            throw new CrmForbiddenException("Apenas administradores podem excluir leads.");
-        }
-
         var lead = await CarregarComEscopoAsync(id, ct);
+        ExigirPermissaoDaLixeira(lead);
         var agora = DateTimeOffset.UtcNow;
 
         lead.Arquivado = true;
@@ -780,6 +837,67 @@ public sealed class LeadService(
         await db.SaveChangesAsync(ct);
         await audit.RegistrarAsync("LeadExcluido", nameof(CrmLead), lead.Id,
             new { lead.NomeOuRazaoSocial, OportunidadesArquivadas = oportunidades.Count }, ct);
+        eventos?.PublicarQuadroAtualizado("crm");
+    }
+
+    /// <summary>Administrador mexe em qualquer lead; o consultor só nos de indicação (cadastro manual ou canal diferente de "Lead") da própria carteira.</summary>
+    private void ExigirPermissaoDaLixeira(CrmLead lead)
+    {
+        if (currentUser.TemVisaoTotal) return;
+        if (!NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao))
+        {
+            throw new CrmForbiddenException("Você só pode excluir cards de indicação. Para excluir um lead, fale com a gestão.");
+        }
+    }
+
+    public async Task<IReadOnlyList<LeadLixeiraDto>> ListarLixeiraAsync(CancellationToken ct)
+    {
+        var query = await QueryEscopadaAsync(incluirArquivados: true, ct, incluirLixeira: true);
+        var excluidos = await query
+            .Where(l => l.Arquivado && l.ArquivadoPorId != null)
+            .OrderByDescending(l => l.ArquivadoEm)
+            .Take(500)
+            .Select(l => new
+            {
+                l.Id, l.NomeOuRazaoSocial, l.Placa, l.Telefone, l.TipoIndicacao, l.CriadoManualmente, l.ArquivadoEm, l.ArquivadoPorId,
+                Responsavel = l.Responsavel != null ? l.Responsavel.NomeCompleto : null,
+                Etapa = l.Etapa != null ? l.Etapa.Nome : null,
+            })
+            .ToListAsync(ct);
+        // O consultor só enxerga (e restaura) na lixeira o que ele pode excluir: os cards de indicação.
+        if (!currentUser.TemVisaoTotal) excluidos = excluidos.Where(l => NotionEtapaLead.EhIndicacao(l.CriadoManualmente, l.TipoIndicacao)).ToList();
+
+        var quemIds = excluidos.Select(l => l.ArquivadoPorId!.Value).Distinct().ToList();
+        var nomes = await db.Users.AsNoTracking().Where(u => quemIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.NomeCompleto, ct);
+        return excluidos.Take(200)
+            .Select(l => new LeadLixeiraDto(l.Id, l.NomeOuRazaoSocial, l.Placa, l.Telefone, l.Responsavel, l.Etapa, l.TipoIndicacao, l.ArquivadoEm,
+                nomes.GetValueOrDefault(l.ArquivadoPorId!.Value)))
+            .ToList();
+    }
+
+    public async Task RestaurarAsync(Guid id, CancellationToken ct)
+    {
+        var lead = await db.CrmLeads.FirstOrDefaultAsync(l => l.Id == id && l.Arquivado && l.ArquivadoPorId != null, ct)
+            ?? throw new CrmNotFoundException("Lead na lixeira", id);
+        if (!await equipe.PodeAcessarVendedorAsync(lead.ResponsavelId ?? Guid.Empty, ct)) throw new CrmForbiddenException();
+        ExigirPermissaoDaLixeira(lead);
+
+        // Volta o lead e só as oportunidades que saíram junto com ele (as excluídas antes, uma a uma, continuam fora).
+        var excluidoEm = lead.ArquivadoEm;
+        var oportunidades = await db.CrmOpportunities.Where(o => o.LeadId == lead.Id && o.Arquivado && o.ArquivadoEm == excluidoEm).ToListAsync(ct);
+        lead.Arquivado = false;
+        lead.ArquivadoEm = null;
+        lead.ArquivadoPorId = null;
+        foreach (var oportunidade in oportunidades)
+        {
+            oportunidade.Arquivado = false;
+            oportunidade.ArquivadoEm = null;
+            oportunidade.ArquivadoPorId = null;
+        }
+
+        await db.SaveChangesAsync(ct);
+        await audit.RegistrarAsync("LeadRestaurado", nameof(CrmLead), lead.Id,
+            new { lead.NomeOuRazaoSocial, OportunidadesRestauradas = oportunidades.Count }, ct);
         eventos?.PublicarQuadroAtualizado("crm");
     }
 
@@ -980,10 +1098,12 @@ public sealed class LeadService(
 
     // --- Métodos auxiliares privados ---
 
-    private async Task<IQueryable<CrmLead>> QueryEscopadaAsync(bool incluirArquivados, CancellationToken ct)
+    private async Task<IQueryable<CrmLead>> QueryEscopadaAsync(bool incluirArquivados, CancellationToken ct, bool incluirLixeira = false)
     {
         var query = db.CrmLeads.AsNoTracking().AsQueryable();
         if (!incluirArquivados) query = query.Where(l => !l.Arquivado);
+        // Excluídos pelo CRM ficam só na lixeira, nem o "inclui arquivados" os traz de volta.
+        else if (!incluirLixeira) query = query.Where(LixeiraDoQuadro.ForaDaLixeira);
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
         if (visiveis is not null)
@@ -1030,9 +1150,17 @@ public sealed class LeadService(
         if (!string.IsNullOrWhiteSpace(filtro.Busca))
         {
             var busca = filtro.Busca.Trim();
-            var buscaDigitos = DocumentValidation.SomenteDigitos(busca);
+            // Documento/telefone só entram quando a busca é um número (sem letras): a placa "EXN3C02" não pode virar "302" e casar com
+            // qualquer telefone que tenha esses dígitos.
+            var buscaDigitos = busca.Any(char.IsLetter) ? "" : DocumentValidation.SomenteDigitos(busca);
+            // Placa: do cadastro do lead ou do veículo da venda, com ou sem hífen/espaço ("ABC-1D23" acha "ABC1D23").
+            var buscaPlaca = new string(busca.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+            var buscarPlaca = buscaPlaca.Length >= 3;
             query = query.Where(l =>
                 EF.Functions.ILike(l.NomeOuRazaoSocial, $"%{busca}%") ||
+                (buscarPlaca && l.Placa != null && EF.Functions.ILike(l.Placa.Replace("-", "").Replace(" ", ""), $"%{buscaPlaca}%")) ||
+                (buscarPlaca && l.Oportunidades.Any(o => o.Veiculo != null && o.Veiculo.Placa != null
+                    && EF.Functions.ILike(o.Veiculo.Placa.Replace("-", "").Replace(" ", ""), $"%{buscaPlaca}%"))) ||
                 (l.Email != null && EF.Functions.ILike(l.Email, $"%{busca}%")) ||
                 (buscaDigitos != "" && l.DocumentoNormalizado != null && l.DocumentoNormalizado.Contains(buscaDigitos)) ||
                 (buscaDigitos != "" && l.TelefoneNormalizado != null && l.TelefoneNormalizado.Contains(buscaDigitos)));
@@ -1070,9 +1198,11 @@ public sealed class LeadService(
         }
         if (filtro.DataVendaInicio.HasValue || filtro.DataVendaFim.HasValue)
         {
-            var de = filtro.DataVendaInicio?.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) ?? DateTime.MinValue;
-            var ate = filtro.DataVendaFim?.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc) ?? DateTime.MaxValue;
-            query = query.Where(l => l.Oportunidades.Any(o => !o.Arquivado && o.DataEfetivaFechamento >= de && o.DataEfetivaFechamento <= ate));
+            // Pela data de ativação da venda (sem ela, a data da venda) e só venda ganha (a perda também grava data de fechamento).
+            var per = PeriodoDeAtivacao.De(filtro.DataVendaInicio, filtro.DataVendaFim);
+            query = query.Where(l => l.Oportunidades.Any(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho
+                && ((o.AtivoEm != null && o.AtivoEm >= per.AtivacaoDe && o.AtivoEm < per.AtivacaoAte)
+                    || (o.AtivoEm == null && o.DataEfetivaFechamento >= per.VendaDe && o.DataEfetivaFechamento <= per.VendaAte))));
         }
         if (filtro.EtapaId.HasValue) query = query.Where(l => l.Oportunidades.Any(o => o.EtapaId == filtro.EtapaId && !o.Arquivado));
         if (filtro.DataInicio.HasValue)

@@ -10,7 +10,9 @@ public record RelatorioFiltroExtra(
     DateOnly? VendaInicio = null,
     DateOnly? VendaFim = null,
     bool? Indicacao = null,
-    IReadOnlyCollection<string>? TiposIndicacao = null);
+    IReadOnlyCollection<string>? TiposIndicacao = null,
+    /// <summary>Só os consultores desta regional (a regional do cadastro do consultor); nulo = todas.</summary>
+    Guid? RegionalId = null);
 
 /// <summary>Relatório comercial: os gráficos e tabelas dos "Relatórios" do Notion, calculados com os dados do CRM.</summary>
 public record RelatorioComercialDto(

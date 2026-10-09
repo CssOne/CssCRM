@@ -99,7 +99,7 @@ public sealed class ManagementService(
         var idsOportunidade = vendedores.Select(v => v.Id).ToList();
 
         // Agrupado por vendedor no banco — antes eram 5 consultas por vendedor.
-        var leadsDosVendedores = db.CrmLeads.AsNoTracking().Where(l => ids.Contains(l.ResponsavelId));
+        var leadsDosVendedores = db.CrmLeads.AsNoTracking().Where(LixeiraDoQuadro.ForaDaLixeira).Where(l => ids.Contains(l.ResponsavelId));
         var leadsAtivos = await ContagensPorVendedor.ContarLeadsAsync(leadsDosVendedores.Where(l => !l.Arquivado), ct);
         var abertas = await ContagensPorVendedor.AbertasAsync(
             db.CrmOpportunities.AsNoTracking().Where(o => !o.Arquivado && idsOportunidade.Contains(o.ResponsavelId)), ct);
@@ -142,7 +142,7 @@ public sealed class ManagementService(
 
         var ids = consultores.Select(c => (Guid?)c.Id).ToList();
         var idsOportunidade = consultores.Select(c => c.Id).ToList();
-        var leadsDosConsultores = db.CrmLeads.AsNoTracking().Where(l => ids.Contains(l.ResponsavelId));
+        var leadsDosConsultores = db.CrmLeads.AsNoTracking().Where(LixeiraDoQuadro.ForaDaLixeira).Where(l => ids.Contains(l.ResponsavelId));
         var oportunidades = db.CrmOpportunities.AsNoTracking().Where(o => !o.Arquivado && idsOportunidade.Contains(o.ResponsavelId));
 
         // Agrupado por consultor no banco — antes eram 8 consultas por consultor.

@@ -169,7 +169,7 @@ public class GoalServiceTests
     }
 
     [Fact]
-    public async Task DefinirMetaRegionalAsync_GestorComercial_DeveSerNegado()
+    public async Task GestorComercial_EditaESoVeAMetaDaPropriaRegional_ENaoDeOutra()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
@@ -177,17 +177,25 @@ public class GoalServiceTests
         using var userManager = TestDbContextFactory.CreateUserManager(db);
 
         var gestor = await factory.CriarUsuarioAsync(db, "Gestor");
-        var regional = await factory.CriarRegionalAsync(db, "Grande BH");
+        var minha = await factory.CriarRegionalAsync(db, "MG134");
+        var outra = await factory.CriarRegionalAsync(db, "MG132");
+        gestor.RegionalId = minha.Id;
+        await db.SaveChangesAsync();
 
         var currentUser = TestDbContextFactory.MockCurrentUser(gestor.Id, gestorComercial: true, podeGerir: true);
         var service = new GoalService(db, currentUser.Object, new EquipeComercialService(db, currentUser.Object), userManager);
 
+        var definida = await service.DefinirMetaRegionalAsync(new RegionalGoalUpsertRequest(minha.Id, MesAtual(), MetaQuantidadeVendas: 80, MetaValor: null), CancellationToken.None);
+        Assert.Equal(80, definida.MetaQuantidadeVendas);
         await Assert.ThrowsAsync<CrmForbiddenException>(() =>
-            service.DefinirMetaRegionalAsync(new RegionalGoalUpsertRequest(regional.Id, MesAtual(), MetaQuantidadeVendas: 50, MetaValor: null), CancellationToken.None));
+            service.DefinirMetaRegionalAsync(new RegionalGoalUpsertRequest(outra.Id, MesAtual(), MetaQuantidadeVendas: 50, MetaValor: null), CancellationToken.None));
+
+        var lista = await service.ListarRegionaisAsync(null, CancellationToken.None);
+        Assert.Equal(["MG134"], lista.Select(r => r.RegionalNome).ToArray());
     }
 
     [Fact]
-    public async Task ListarRegionaisAsync_NaoAdministrador_DeveSerNegado()
+    public async Task GestorSemRegional_NaoEditaMetaDeRegional_EANaoAdministradorSemGestaoEhNegado()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
@@ -195,10 +203,18 @@ public class GoalServiceTests
         using var userManager = TestDbContextFactory.CreateUserManager(db);
 
         var gestor = await factory.CriarUsuarioAsync(db, "Gestor");
-        var currentUser = TestDbContextFactory.MockCurrentUser(gestor.Id, gestorComercial: true, podeGerir: true);
-        var service = new GoalService(db, currentUser.Object, new EquipeComercialService(db, currentUser.Object), userManager);
+        var consultor = await factory.CriarUsuarioAsync(db, "Consultor");
+        var regional = await factory.CriarRegionalAsync(db, "Grande BH");
 
-        await Assert.ThrowsAsync<CrmForbiddenException>(() => service.ListarRegionaisAsync(null, CancellationToken.None));
+        var comoGestor = TestDbContextFactory.MockCurrentUser(gestor.Id, gestorComercial: true, podeGerir: true);
+        var servicoGestor = new GoalService(db, comoGestor.Object, new EquipeComercialService(db, comoGestor.Object), userManager);
+        Assert.Empty(await servicoGestor.ListarRegionaisAsync(null, CancellationToken.None));
+        await Assert.ThrowsAsync<CrmForbiddenException>(() =>
+            servicoGestor.DefinirMetaRegionalAsync(new RegionalGoalUpsertRequest(regional.Id, MesAtual(), MetaQuantidadeVendas: 50, MetaValor: null), CancellationToken.None));
+
+        var comoConsultor = TestDbContextFactory.MockCurrentUser(consultor.Id);
+        var servicoConsultor = new GoalService(db, comoConsultor.Object, new EquipeComercialService(db, comoConsultor.Object), userManager);
+        await Assert.ThrowsAsync<CrmForbiddenException>(() => servicoConsultor.ListarRegionaisAsync(null, CancellationToken.None));
     }
 
     [Fact]

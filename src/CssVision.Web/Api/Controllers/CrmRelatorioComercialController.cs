@@ -17,7 +17,7 @@ public class CrmRelatorioComercialController(IRelatorioComercialService relatori
         [FromQuery] Guid? consultorId, [FromQuery] Guid[]? etapaId,
         [FromQuery] DateOnly? chegadaInicio, [FromQuery] DateOnly? chegadaFim,
         [FromQuery] DateOnly? vendaInicio, [FromQuery] DateOnly? vendaFim,
-        [FromQuery] bool? indicacao, [FromQuery] string[]? tipoIndicacao, CancellationToken ct) =>
+        [FromQuery] bool? indicacao, [FromQuery] string[]? tipoIndicacao, [FromQuery] Guid? regionalId, CancellationToken ct) =>
         Ok(await relatorio.ObterAsync(dataInicio, dataFim, consultorId, etapaId,
-            new RelatorioFiltroExtra(chegadaInicio, chegadaFim, vendaInicio, vendaFim, indicacao, tipoIndicacao), ct));
+            new RelatorioFiltroExtra(chegadaInicio, chegadaFim, vendaInicio, vendaFim, indicacao, tipoIndicacao, regionalId), ct));
 }

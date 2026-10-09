@@ -318,7 +318,7 @@ export function LeadsPage() {
             <Input type="date" className="w-40" value={chegadaAte} min={chegadaDe || undefined} onChange={(e) => comPagina1(setChegadaAte)(e.target.value)} />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Venda de</label>
+            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Ativação de</label>
             <Input type="date" className="w-40" value={vendaDe} max={vendaAte || undefined} onChange={(e) => comPagina1(setVendaDe)(e.target.value)} />
           </div>
           <div>

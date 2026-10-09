@@ -171,6 +171,7 @@ public sealed class LeadKanbanService(
         var query = db.CrmLeads.AsNoTracking();
 
         if (!filtro.IncluirArquivados) query = query.Where(l => !l.Arquivado);
+        else query = query.Where(LixeiraDoQuadro.ForaDaLixeira); // excluídos pelo CRM ficam só na lixeira
         if (filtro.CriadoManualmente.HasValue) query = query.Where(l => l.CriadoManualmente == filtro.CriadoManualmente.Value);
 
         if (visiveis is not null)
@@ -181,9 +182,17 @@ public sealed class LeadKanbanService(
         if (!string.IsNullOrWhiteSpace(filtro.Busca))
         {
             var busca = filtro.Busca.Trim();
-            var buscaDigitos = DocumentValidation.SomenteDigitos(busca);
+            // Documento/telefone só entram quando a busca é um número (sem letras): a placa "EXN3C02" não pode virar "302" e casar com
+            // qualquer telefone que tenha esses dígitos.
+            var buscaDigitos = busca.Any(char.IsLetter) ? "" : DocumentValidation.SomenteDigitos(busca);
+            // Placa: do cadastro do lead ou do veículo da venda, com ou sem hífen/espaço ("ABC-1D23" acha "ABC1D23").
+            var buscaPlaca = new string(busca.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+            var buscarPlaca = buscaPlaca.Length >= 3;
             query = query.Where(l =>
                 EF.Functions.ILike(l.NomeOuRazaoSocial, $"%{busca}%") ||
+                (buscarPlaca && l.Placa != null && EF.Functions.ILike(l.Placa.Replace("-", "").Replace(" ", ""), $"%{buscaPlaca}%")) ||
+                (buscarPlaca && l.Oportunidades.Any(o => o.Veiculo != null && o.Veiculo.Placa != null
+                    && EF.Functions.ILike(o.Veiculo.Placa.Replace("-", "").Replace(" ", ""), $"%{buscaPlaca}%"))) ||
                 (l.Email != null && EF.Functions.ILike(l.Email, $"%{busca}%")) ||
                 (buscaDigitos != "" && l.DocumentoNormalizado != null && l.DocumentoNormalizado.Contains(buscaDigitos)) ||
                 (buscaDigitos != "" && l.TelefoneNormalizado != null && l.TelefoneNormalizado.Contains(buscaDigitos)));
@@ -245,15 +254,14 @@ public sealed class LeadKanbanService(
             var fimUtc = chegadaFim.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
             query = query.Where(l => l.CriadoEm <= fimUtc);
         }
-        if (filtro.DataVendaInicio is { } vendaInicio)
+        if (filtro.DataVendaInicio is not null || filtro.DataVendaFim is not null)
         {
-            var inicioUtc = vendaInicio.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-            query = query.Where(l => l.Oportunidades.Any(o => o.DataEfetivaFechamento >= inicioUtc));
-        }
-        if (filtro.DataVendaFim is { } vendaFim)
-        {
-            var fimUtc = vendaFim.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
-            query = query.Where(l => l.Oportunidades.Any(o => o.DataEfetivaFechamento <= fimUtc));
+            // Pela data de ATIVAÇÃO da venda (sem ela, a data da venda em Brasília), na MESMA venda (ganha, não excluída): antes início e
+            // fim eram checados em vendas diferentes e uma perda (que também grava data de fechamento) aparecia como venda.
+            var per = PeriodoDeAtivacao.De(filtro.DataVendaInicio, filtro.DataVendaFim);
+            query = query.Where(l => l.Oportunidades.Any(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho
+                && ((o.AtivoEm != null && o.AtivoEm >= per.AtivacaoDe && o.AtivoEm < per.AtivacaoAte)
+                    || (o.AtivoEm == null && o.DataEfetivaFechamento >= per.VendaDe && o.DataEfetivaFechamento <= per.VendaAte))));
         }
 
         return (query, podeVerOrigem);

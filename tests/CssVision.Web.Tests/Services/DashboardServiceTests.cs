@@ -50,7 +50,7 @@ public class DashboardServiceTests
     }
 
     [Fact]
-    public async Task ObterAsync_DeveSomarMetaGeralDaRegionalDoUsuario_NaMetaDoMes()
+    public async Task ObterAsync_UsaAMetaGeralDaRegionalDoUsuario_NoLugarDasIndividuais_NaMetaDoMes()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
@@ -73,6 +73,6 @@ public class DashboardServiceTests
 
         var resultado = await service.ObterAsync(new DashboardFilterRequest(new DateOnly(hoje.Year, hoje.Month, 1), hoje, null), CancellationToken.None);
 
-        Assert.Equal(40, resultado.Meta.MetaQuantidade); // 10 do consultor + 30 da regional
+        Assert.Equal(30, resultado.Meta.MetaQuantidade); // a meta da regional vale no lugar da individual (10): não soma 40
     }
 }

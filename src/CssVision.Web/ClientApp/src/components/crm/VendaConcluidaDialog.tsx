@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { OPCOES_TIPO_INDICACAO, TIPO_INDICACAO_LEAD } from "../../lib/opcoesLead";
 import { Paperclip } from "lucide-react";
 import { api, ApiRequestError, isAbortError, uploadFile } from "../../lib/api";
-import { TipoEtapaPipeline, type ChangeStageRequest, type LeadDetail, type Opportunity, type OpportunityCreateRequest, type OpportunityUpdateRequest, type PipelineBoard } from "../../lib/types";
+import { TipoEtapaPipeline, TipoPessoa, type LeadDuplicateWarning, type ChangeStageRequest, type LeadDetail, type Opportunity, type OpportunityCreateRequest, type OpportunityUpdateRequest, type PipelineBoard } from "../../lib/types";
 import { ESTADOS_BRASIL } from "../../lib/estados";
 import { formatarData, hojeBrasilia } from "../../lib/format";
 import { Button, Checkbox, CpfInput, Input, Label, Modal, MoneyInput, Select, useToast } from "../ui";
+import { leadFormVazio, paraLeadCreateRequest } from "./LeadForm";
 import { useAuth } from "../../context/AuthContext";
 
 export type DadosVendaConcluida = Omit<ChangeStageRequest, "novaEtapaId" | "motivoPerdaId">;
@@ -42,6 +43,11 @@ const valoresIniciais: DadosVendaConcluida = {
   veiculo: { descricao: "", placa: "", chassi: "", fipe: null, rastreador: null, valorVistoria: null, vistoriadorId: null, dataChegada: "" },
   dataPagamentoAdesaoPrevista: null,
 };
+
+/** Canal que não é "Lead" (Indicação Lead, Pessoal, Parceria...) é venda de indicação. */
+function ehCanalDeIndicacao(tipo?: string | null): boolean {
+  return !!tipo?.trim() && tipo.trim().toLowerCase() !== "lead";
+}
 
 function hojeLocal() {
   const d = new Date();
@@ -105,6 +111,7 @@ export function VendaConcluidaDialog({
   indicacaoLead = false,
   permitirVeiculosAdicionais = false,
   novoVeiculo = false,
+  novoCliente = null,
   clienteInicial,
   tituloExtra,
   onConfirm,
@@ -134,6 +141,11 @@ export function VendaConcluidaDialog({
    * com essa venda — o card do cliente e a venda dele não mudam.
    */
   novoVeiculo?: boolean;
+  /**
+   * Cliente NOVO direto em "Venda concluída": um formulário só, com os dados do cliente e os da venda (campos repetidos — CPF, estado, canal,
+   * placa — aparecem uma vez). Ao confirmar, cadastra o cliente na etapa `etapaId` e conclui a venda dele.
+   */
+  novoCliente?: { etapaId: string } | null;
   /**
    * Nome e documento do cliente, para o "outro veículo" de um cliente que é de OUTRO consultor: o card original
    * não abre para quem não é dono dele, então os dados vêm do que a pessoa acabou de digitar no cadastro.
@@ -167,6 +179,13 @@ export function VendaConcluidaDialog({
   /** Card do veículo novo já criado (se algo falhar depois, confirmar de novo não cria outro). */
   const [novoLeadCriadoId, setNovoLeadCriadoId] = useState<string | null>(null);
   const ehVenda = modo === "venda";
+  const ehNovoCliente = !!novoCliente;
+  const [telefone, setTelefone] = useState("");
+  const [telefone2, setTelefone2] = useState("");
+  const [email, setEmail] = useState("");
+  const [cidade, setCidade] = useState("");
+  const [temSeguro, setTemSeguro] = useState("");
+  const [utilidadeVeiculo, setUtilidadeVeiculo] = useState("");
 
   /** Venda de card "Lead" em "Venda concluída (Indicação)": já marcada como indicação "Indicação Lead". */
   function comIndicacaoLead(v: DadosVendaConcluida): DadosVendaConcluida {
@@ -174,7 +193,7 @@ export function VendaConcluidaDialog({
   }
 
   useEffect(() => {
-    if (!open || !leadId) return;
+    if (!open || (!leadId && !novoCliente)) return;
     setTermoArquivo(null);
     setPagamentoArquivo(null);
     setDataChegadaLead(null);
@@ -186,6 +205,23 @@ export function VendaConcluidaDialog({
     setVeiculosAdicionais(1);
     setCarroZero(!!oportunidadeEditar?.veiculo?.chassi && !oportunidadeEditar?.veiculo?.placa);
     setNovoLeadCriadoId(null);
+
+    if (novoCliente && !leadId) {
+      // Cliente novo: nada para carregar — o formulário começa em branco (canal de indicação, que é o da coluna).
+      setValores({ ...valoresIniciais, indicacao: true, dataEfetivaFechamento: hojeBrasilia() });
+      setOportunidadeResolvidaId(null);
+      setResponsavelIdLead(null);
+      setTemRastreador(false);
+      setTemVistoria(false);
+      setCarroZero(false);
+      setTelefone("");
+      setTelefone2("");
+      setEmail("");
+      setCidade("");
+      setTemSeguro("");
+      setUtilidadeVeiculo("");
+      return;
+    }
 
     if (oportunidadeEditar) {
       setValores({
@@ -236,7 +272,11 @@ export function VendaConcluidaDialog({
         setDataChegadaLead(lead.criadoEm);
         setNomeCliente(lead.nomeOuRazaoSocial);
         setLeadEraTipoLead(lead.tipoIndicacao?.trim().toLowerCase() === "lead");
-        if (oportunidadeEditar) return;
+        if (oportunidadeEditar) {
+          // Editando uma venda que não guardou estado/canal: valem os do cadastro do cliente.
+          setValores((v) => ({ ...v, estado: v.estado || lead.estado || "", tipoIndicacao: v.tipoIndicacao || lead.tipoIndicacao || "" }));
+          return;
+        }
         // Dados do cadastro do cliente e o valor da adesão informado na Cotação. Card de outro
         // veículo do mesmo cliente não guarda CPF: vem do card original.
         setValores((v) =>
@@ -244,7 +284,9 @@ export function VendaConcluidaDialog({
             ...v,
             cpf: lead.documento ?? lead.veiculoAdicionalDeDocumento ?? "",
             estado: lead.estado ?? "",
+            // O canal escolhido no cadastro do cliente já vem marcado; canal de indicação (diferente de "Lead") marca a indicação.
             tipoIndicacao: lead.tipoIndicacao ?? "",
+            indicacao: ehCanalDeIndicacao(lead.tipoIndicacao) ? true : v.indicacao,
             // Outro veículo: a adesão e a placa são do veículo novo, não do card do cliente.
             pagamentoAdesao: novoVeiculo ? v.pagamentoAdesao : v.pagamentoAdesao ?? lead.valorAdesao ?? null,
             veiculo: { ...v.veiculo, placa: novoVeiculo ? "" : lead.placa ?? "" },
@@ -315,6 +357,18 @@ export function VendaConcluidaDialog({
   // Datas "AAAA-MM-DD" comparam certo como texto. O servidor também recusa (data_venda_futura).
   const dataDaVendaFutura = ehVenda && !!valores.dataEfetivaFechamento && valores.dataEfetivaFechamento > hojeBrasilia();
 
+  // Cliente novo: dados do cliente (os campos repetidos — CPF, estado, canal, placa — são os do bloco da venda).
+  const dadosNovoClienteOk =
+    !ehNovoCliente ||
+    (!!nomeCliente.trim() &&
+      telefone.replace(/\D/g, "").length >= 8 &&
+      /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) &&
+      !!cidade.trim() &&
+      !!temSeguro &&
+      !!utilidadeVeiculo &&
+      !!valores.tipoIndicacao &&
+      !carroZero);
+
   const podeConfirmar = !ehVenda
     ? !!nomeCliente.trim() && !enviandoArquivos && !enviando
     : (valores.valorFinal ?? -1) >= 0 &&
@@ -336,6 +390,7 @@ export function VendaConcluidaDialog({
     (!!termoArquivo || !!oportunidadeEditar?.termoAdesaoArquivoUrl) &&
     (temComprovantePagamento || pagamentoAgendado) &&
     quantidadeVeiculosValida &&
+    dadosNovoClienteOk &&
     !enviandoArquivos &&
     !enviando;
 
@@ -389,14 +444,15 @@ export function VendaConcluidaDialog({
 
   async function confirmar() {
     if (!ehVenda) return criarOportunidade();
-    if (!leadId) return;
+    if (!leadId && !novoCliente) return;
     const precisaTermo = !termoArquivo && !oportunidadeEditar?.termoAdesaoArquivoUrl;
     const precisaPagamento = !temComprovantePagamento && !pagamentoAgendado;
     if (precisaTermo || precisaPagamento) return;
     setEnviandoArquivos(true);
 
     let idOportunidade = novoVeiculo ? null : oportunidadeResolvidaId;
-    let leadDaVenda = leadId;
+    let leadDaVenda: string | null = leadId ?? novoLeadCriadoId;
+    let responsavelDaVenda = responsavelIdLead;
     let etapaGanho = pipelineGanhoEtapaId;
     // Cada upload de anexo (e a criação da oportunidade, quando é o caso) salva a oportunidade
     // (SaveChanges), o que avança o RowVersion — por isso sempre repassamos o valor mais recente
@@ -405,6 +461,35 @@ export function VendaConcluidaDialog({
     let rowVersionAtual = valores.rowVersion;
 
     try {
+      if (novoCliente) {
+        if (!leadDaVenda) {
+          // Cadastra o cliente já na etapa da coluna, com o que foi digitado neste mesmo formulário.
+          const formulario = {
+            ...leadFormVazio,
+            nomeOuRazaoSocial: nomeCliente.trim(),
+            tipoPessoa: TipoPessoa.Fisica,
+            documento: valores.cpf ?? "",
+            telefone,
+            telefone2,
+            email,
+            cidade,
+            estado: valores.estado ?? "",
+            placa: valores.veiculo?.placa ?? "",
+            temSeguro,
+            utilidadeVeiculo,
+            tipoIndicacao: valores.tipoIndicacao ?? "",
+          };
+          const criado = await api.post<LeadDetail>("/crm/leads", { ...paraLeadCreateRequest(formulario), etapaId: novoCliente.etapaId });
+          leadDaVenda = criado.id;
+          responsavelDaVenda = criado.responsavelId ?? null;
+          setNovoLeadCriadoId(criado.id);
+          setResponsavelIdLead(responsavelDaVenda);
+        }
+        if (!etapaGanho) {
+          const pipeline = await api.get<PipelineBoard>("/crm/pipeline");
+          etapaGanho = pipeline.colunas.find((c) => c.etapa.tipo === TipoEtapaPipeline.Ganho)?.etapa.id;
+        }
+      }
       if (novoVeiculo) {
         // Card novo do veículo, já em "Venda concluída" (Leads/Indicação pela etiqueta do cliente).
         leadDaVenda =
@@ -417,7 +502,7 @@ export function VendaConcluidaDialog({
         }
       }
       if (!idOportunidade) {
-        if (!responsavelIdLead) {
+        if (!responsavelDaVenda) {
           notificar("error", "Este lead não tem um responsável definido. Atribua um consultor antes de concluir a venda.");
           setEnviandoArquivos(false);
           return;
@@ -425,7 +510,7 @@ export function VendaConcluidaDialog({
         const nova = await api.post<Opportunity>("/crm/opportunities", {
           leadId: leadDaVenda,
           titulo: "Venda concluída",
-          responsavelId: responsavelIdLead,
+          responsavelId: responsavelDaVenda,
           valorEstimado: valores.valorFinal ?? 0,
           termoAdesaoAceito: false,
           migracao: valores.migracao ?? false,
@@ -443,7 +528,12 @@ export function VendaConcluidaDialog({
         rowVersionAtual = r2.rowVersion;
       }
     } catch (e) {
-      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível enviar os anexos.");
+      if (e instanceof ApiRequestError && e.codigo === "duplicidade") {
+        const d = e.detalhes as LeadDuplicateWarning;
+        notificar("error", `Já existe um cliente com o mesmo ${d.campoDuplicado} (${d.nomeExistente}). Para outro veículo dele, use "Outro veículo" no card do cliente.`);
+      } else {
+        notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível enviar os anexos.");
+      }
       setEnviandoArquivos(false);
       return;
     }
@@ -537,11 +627,72 @@ export function VendaConcluidaDialog({
           ? "Nova oportunidade"
           : oportunidadeEditar
             ? "Editar venda concluída"
-            : novoVeiculo
+            : ehNovoCliente
+              ? "Novo cliente — venda concluída"
+              : novoVeiculo
               ? `Outro veículo de ${nomeCliente || "cliente"}${tituloExtra ? ` (${tituloExtra})` : ""} — venda concluída`
               : `Concluir venda — mover para "${etapaNome}"`
       } size="lg">
       <div className="space-y-5">
+        {ehNovoCliente && (
+          <div>
+            <h3 className="mb-3 text-sm font-semibold text-[var(--fg)]">Dados do cliente</h3>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Label htmlFor="venda-novo-nome" required>
+                  Nome do cliente
+                </Label>
+                <Input id="venda-novo-nome" value={nomeCliente} onChange={(e) => setNomeCliente(e.target.value)} />
+              </div>
+              <div>
+                <Label htmlFor="venda-novo-tel" required>
+                  Telefone
+                </Label>
+                <Input id="venda-novo-tel" value={telefone} onChange={(e) => setTelefone(e.target.value)} />
+              </div>
+              <div>
+                <Label htmlFor="venda-novo-tel2">Telefone 2</Label>
+                <Input id="venda-novo-tel2" value={telefone2} onChange={(e) => setTelefone2(e.target.value)} />
+              </div>
+              <div>
+                <Label htmlFor="venda-novo-email" required>
+                  E-mail
+                </Label>
+                <Input id="venda-novo-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              </div>
+              <div>
+                <Label htmlFor="venda-novo-cidade" required>
+                  Cidade
+                </Label>
+                <Input id="venda-novo-cidade" value={cidade} onChange={(e) => setCidade(e.target.value)} />
+              </div>
+              <div>
+                <Label htmlFor="venda-novo-seguro" required>
+                  Tem seguro?
+                </Label>
+                <Select id="venda-novo-seguro" value={temSeguro} onChange={(e) => setTemSeguro(e.target.value)}>
+                  <option value="">Selecione...</option>
+                  <option value="sim">Sim</option>
+                  <option value="nao">Não</option>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor="venda-novo-utilidade" required>
+                  Utilidade do veículo
+                </Label>
+                <Select id="venda-novo-utilidade" value={utilidadeVeiculo} onChange={(e) => setUtilidadeVeiculo(e.target.value)}>
+                  <option value="">Selecione...</option>
+                  <option value="Particular">Particular</option>
+                  <option value="Trabalho">Trabalho</option>
+                  <option value="Aplicativo">Aplicativo (Uber/99)</option>
+                  <option value="Comercial">Comercial</option>
+                  <option value="Outro">Outro</option>
+                </Select>
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-[var(--fg-muted)]">CPF, estado, canal de aquisição e placa são preenchidos uma vez só, abaixo.</p>
+          </div>
+        )}
         <div>
           <h3 className="mb-3 text-sm font-semibold text-[var(--fg)]">{ehVenda ? "Dados da venda" : "Dados da oportunidade"}</h3>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -553,10 +704,12 @@ export function VendaConcluidaDialog({
                 <Input id="venda-nome-cliente" value={nomeCliente} onChange={(e) => setNomeCliente(e.target.value)} />
               </div>
             )}
-            <div>
-              <Label htmlFor="venda-chegada">Data de chegada</Label>
-              <Input id="venda-chegada" disabled value={dataChegadaLead ? formatarData(dataChegadaLead) : "—"} />
-            </div>
+            {!ehNovoCliente && (
+              <div>
+                <Label htmlFor="venda-chegada">Data de chegada</Label>
+                <Input id="venda-chegada" disabled value={dataChegadaLead ? formatarData(dataChegadaLead) : "—"} />
+              </div>
+            )}
             {ehVenda ? (
               <div>
                 <Label htmlFor="venda-data" required={ehVenda}>
@@ -624,21 +777,29 @@ export function VendaConcluidaDialog({
                 }));
               }}
             />
+            <div className="w-48">
+              <Label htmlFor="venda-tipo-indicacao" required={ehVenda && !!valores.indicacao}>
+                Canal de Aquisição
+              </Label>
+              <Select
+                id="venda-tipo-indicacao"
+                value={valores.tipoIndicacao ?? ""}
+                onChange={(e) => {
+                  const tipo = e.target.value;
+                  // Escolher um canal de indicação marca a indicação; "Lead" não.
+                  setValores((v) => ({ ...v, tipoIndicacao: tipo, indicacao: tipo ? ehCanalDeIndicacao(tipo) : v.indicacao }));
+                }}
+              >
+                <option value="">Selecione...</option>
+                {OPCOES_TIPO_INDICACAO.filter((tipo) => !ehNovoCliente || tipo !== "Lead").map((tipo) => (
+                  <option key={tipo} value={tipo}>
+                    {tipo}
+                  </option>
+                ))}
+              </Select>
+            </div>
             {valores.indicacao && (
               <>
-                <div className="w-48">
-                  <Label htmlFor="venda-tipo-indicacao" required={ehVenda}>
-                    Canal de Aquisição
-                  </Label>
-                  <Select id="venda-tipo-indicacao" value={valores.tipoIndicacao ?? ""} onChange={(e) => set("tipoIndicacao", e.target.value)}>
-                    <option value="">Selecione...</option>
-                    {OPCOES_TIPO_INDICACAO.map((tipo) => (
-                      <option key={tipo} value={tipo}>
-                        {tipo}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
                 <div className="w-40">
                   <Label htmlFor="venda-valor-indicacao" required={ehVenda}>
                     Valor da indicação (R$)
@@ -660,9 +821,11 @@ export function VendaConcluidaDialog({
               </Label>
               <Input id="venda-veiculo-descricao" value={valores.veiculo?.descricao ?? ""} onChange={(e) => setVeiculo("descricao", e.target.value)} />
             </div>
-            <div className="sm:col-span-2">
-              <Checkbox label="Carro zero (ainda sem placa)" checked={carroZero} onChange={(e) => setCarroZero(e.target.checked)} />
-            </div>
+            {!ehNovoCliente && (
+              <div className="sm:col-span-2">
+                <Checkbox label="Carro zero (ainda sem placa)" checked={carroZero} onChange={(e) => setCarroZero(e.target.checked)} />
+              </div>
+            )}
             {carroZero ? (
               <div>
                 <Label htmlFor="venda-veiculo-chassi" required={ehVenda}>
