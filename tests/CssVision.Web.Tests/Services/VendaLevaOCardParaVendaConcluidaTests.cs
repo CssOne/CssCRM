@@ -185,4 +185,18 @@ public class VendaLevaOCardParaVendaConcluidaTests
         Assert.Equal(c.Ganho.Id, concluida.EtapaId);
         Assert.Equal(c.EmAtendimento.Id, (await RecarregarAsync(c, lead.Id)).EtapaId);
     }
+
+    [Fact]
+    public async Task OportunidadeCriadaJaComoGanho_TambemLevaOCard()
+    {
+        using var factory = new TestDbContextFactory();
+        var c = await MontarAsync(factory);
+        var lead = await LeadAsync(c, "Lead", manual: false);
+
+        await c.Servico.CriarAsync(
+            new OpportunityCreateRequest(lead.Id, "Venda", c.VendedorId, c.Ganho.Id, null, 1000m, null, null, null, null, null, null, null, null, null, null, false, false, null),
+            CancellationToken.None);
+
+        Assert.Equal(c.VendaLeads.Id, (await RecarregarAsync(c, lead.Id)).EtapaId);
+    }
 }
