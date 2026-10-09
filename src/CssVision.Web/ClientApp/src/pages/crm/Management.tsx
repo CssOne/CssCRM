@@ -274,6 +274,98 @@ function formatarDuracao(horas: number) {
   return `${(horas / 24).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} dias`;
 }
 
+/** Dia da semana (0 = domingo) hoje em Brasília. */
+function diaDaSemanaBrasilia(): number {
+  const nome = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "America/Sao_Paulo" }).format(new Date());
+  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(nome);
+}
+
+/** Quantos leads de tráfego pago cada consultor marcado para receber já pegou hoje e quantos ainda faltam (até o limite diário). */
+function LeadsDoDiaCard({ vendedores }: { vendedores: VendedorResumo[] }) {
+  const hoje = diaDaSemanaBrasilia();
+  const linhas = vendedores
+    .filter((v) => v.ativo !== false && v.recebeLeads)
+    .map((v) => {
+      const pegou = v.leadsRecebidosHoje ?? 0;
+      const limite = v.limiteDiarioLeads ?? null;
+      return {
+        v,
+        pegou,
+        limite,
+        faltam: limite === null ? null : Math.max(limite - pegou, 0),
+        foraDoDia: !!v.diasSemanaLeads && v.diasSemanaLeads.length > 0 && !v.diasSemanaLeads.includes(hoje),
+      };
+    })
+    .sort((a, b) => (a.foraDoDia === b.foraDoDia ? a.pegou - b.pegou || a.v.nome.localeCompare(b.v.nome) : a.foraDoDia ? 1 : -1));
+  const totalPegou = linhas.reduce((n, l) => n + l.pegou, 0);
+  const totalFaltam = linhas.reduce((n, l) => n + (l.foraDoDia ? 0 : (l.faltam ?? 0)), 0);
+  const semLimite = linhas.filter((l) => l.limite === null && !l.foraDoDia).length;
+  const semLeadHoje = linhas.filter((l) => l.pegou === 0 && !l.foraDoDia).length;
+  const pagina = usePaginacao(linhas, 12);
+
+  return (
+    <Card className="p-4">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-[var(--fg)]">Leads de hoje por vendedor</h2>
+          <p className="text-xs text-[var(--fg-muted)]">Só quem está marcado para receber leads. Conta os leads de tráfego pago atribuídos hoje.</p>
+        </div>
+        <div className="flex flex-wrap gap-4 text-center">
+          <div>
+            <p className="text-xl font-semibold text-[var(--brand)]">{totalPegou}</p>
+            <p className="text-[11px] text-[var(--fg-muted)]">pegos hoje</p>
+          </div>
+          <div title="Soma do que falta até o limite diário de quem tem limite">
+            <p className="text-xl font-semibold text-[var(--fg)]">{totalFaltam}</p>
+            <p className="text-[11px] text-[var(--fg-muted)]">faltam (com limite)</p>
+          </div>
+          <div title="Ainda não receberam nenhum lead hoje">
+            <p className="text-xl font-semibold text-[var(--fg)]">{semLeadHoje}</p>
+            <p className="text-[11px] text-[var(--fg-muted)]">sem lead hoje</p>
+          </div>
+          {semLimite > 0 && (
+            <div title="Sem limite diário: recebem enquanto houver lead, na ordem do rodízio">
+              <p className="text-xl font-semibold text-[var(--fg)]">{semLimite}</p>
+              <p className="text-[11px] text-[var(--fg-muted)]">sem limite diário</p>
+            </div>
+          )}
+        </div>
+      </div>
+      {linhas.length === 0 ? (
+        <p className="text-sm text-[var(--fg-muted)]">Ninguém está marcado para receber leads.</p>
+      ) : (
+        <>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {pagina.itensDaPagina.map(({ v, pegou, limite, faltam, foraDoDia }) => (
+              <div
+                key={v.id}
+                className={`flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-hover)]/60 px-3 py-2 text-sm ${foraDoDia ? "opacity-60" : ""}`}
+              >
+                <span className="truncate font-medium text-[var(--fg)]" title={v.nome}>
+                  {v.nome}
+                </span>
+                <span className="shrink-0 text-right text-xs text-[var(--fg-muted)]">
+                  <strong className="text-[var(--fg)]">{pegou}</strong> pegou
+                  {foraDoDia ? (
+                    <span className="block">não recebe hoje</span>
+                  ) : faltam === null ? (
+                    <span className="block">sem limite diário</span>
+                  ) : (
+                    <span className="block">
+                      {faltam === 0 ? "limite atingido" : `faltam ${faltam}`} (de {limite})
+                    </span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+          <Pagination pagina={pagina.pagina} totalPaginas={pagina.totalPaginas} onChange={pagina.setPagina} />
+        </>
+      )}
+    </Card>
+  );
+}
+
 export function ManagementPage() {
   const [resumo, setResumo] = useState<GestaoComercialResumo | null>(null);
   const [vendedores, setVendedores] = useState<VendedorResumo[] | null>(null);
@@ -337,6 +429,8 @@ export function ManagementPage() {
           Distribua leads na página de Leads (seleção em lote) e acompanhe aqui o desempenho da equipe.
         </p>
       </div>
+
+      <LeadsDoDiaCard vendedores={vendedores} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="p-4">
