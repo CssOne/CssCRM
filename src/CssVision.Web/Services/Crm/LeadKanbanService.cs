@@ -205,7 +205,7 @@ public sealed class LeadKanbanService(
         var responsaveis = Valores(filtro.ResponsavelId?.Select(id => (Guid?)id));
         if (responsaveis.Count > 0) query = query.Where(l => responsaveis.Contains(l.ResponsavelId));
         // Origem é informação só de administrador (visão total): para os demais, nem filtra nem aparece no cartão.
-        var podeVerOrigem = visiveis is null;
+        var podeVerOrigem = currentUser?.TemVisaoTotal ?? visiveis is null; // administrador com regionais ocultas também vê a origem
         var origens = Valores(filtro.Origem);
         if (podeVerOrigem && origens.Count > 0) query = query.Where(l => origens.Contains(l.Origem));
         // Regional do lead, a do consultor responsável ou, sem nenhuma das duas, o rodízio geral (ver FiltroDeRegional).
@@ -233,7 +233,8 @@ public sealed class LeadKanbanService(
         var tipos = Valores(filtro.TipoIndicacao).Select(t => t!.ToLower()).ToList();
         if (tipos.Count > 0) query = query.Where(l => l.TipoIndicacao != null && tipos.Contains(l.TipoIndicacao.ToLower()));
 
-        var fontes = Valores(filtro.Fonte);
+        // "Fonte" (Notion x tráfego pago) revela a origem do lead: só quem vê a Origem (visão total) filtra por ela.
+        var fontes = podeVerOrigem ? Valores(filtro.Fonte) : [];
         if (fontes.Count > 0)
         {
             var notion = fontes.Contains("Notion");
