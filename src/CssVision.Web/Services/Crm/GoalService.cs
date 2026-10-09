@@ -37,11 +37,12 @@ public sealed class GoalService(
             .ToListAsync(ct);
         var metaPorVendedor = metas.ToDictionary(m => m.VendedorId);
 
-        var inicioMes = mes.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var fimMes = mes.AddMonths(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        // Mês de Brasília, como o painel da TV e a Visão geral: venda de 30/09 à noite não pode virar venda de outubro.
+        var inicioMes = HorarioBrasilia.Inicio(mes);
+        var fimMes = HorarioBrasilia.Inicio(mes.AddMonths(1));
 
         var realizadoPorVendedor = await db.CrmOpportunities.AsNoTracking()
-            .Where(o => vendedorIds.Contains(o.ResponsavelId) && o.Etapa.Tipo == TipoEtapaPipeline.Ganho &&
+            .Where(o => !o.Arquivado && vendedorIds.Contains(o.ResponsavelId) && o.Etapa.Tipo == TipoEtapaPipeline.Ganho &&
                         o.DataEfetivaFechamento >= inicioMes && o.DataEfetivaFechamento < fimMes)
             .GroupBy(o => o.ResponsavelId)
             .Select(g => new { VendedorId = g.Key, Valor = g.Sum(o => o.PagamentoAdesao) ?? 0m, Quantidade = g.Count() })
@@ -131,11 +132,12 @@ public sealed class GoalService(
             .ToListAsync(ct);
         var metaPorRegional = metas.ToDictionary(m => m.RegionalId);
 
-        var inicioMes = mes.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var fimMes = mes.AddMonths(1).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        // Mês de Brasília, como o painel da TV e a Visão geral: venda de 30/09 à noite não pode virar venda de outubro.
+        var inicioMes = HorarioBrasilia.Inicio(mes);
+        var fimMes = HorarioBrasilia.Inicio(mes.AddMonths(1));
 
         var realizadoPorRegional = await db.CrmOpportunities.AsNoTracking()
-            .Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho &&
+            .Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho &&
                         o.DataEfetivaFechamento >= inicioMes && o.DataEfetivaFechamento < fimMes &&
                         o.Responsavel.RegionalId != null && regionalIds.Contains(o.Responsavel.RegionalId.Value))
             .GroupBy(o => o.Responsavel.RegionalId!.Value)

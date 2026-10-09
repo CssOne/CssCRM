@@ -245,15 +245,14 @@ public sealed class LeadKanbanService(
             var fimUtc = chegadaFim.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
             query = query.Where(l => l.CriadoEm <= fimUtc);
         }
-        if (filtro.DataVendaInicio is { } vendaInicio)
+        if (filtro.DataVendaInicio is not null || filtro.DataVendaFim is not null)
         {
-            var inicioUtc = vendaInicio.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-            query = query.Where(l => l.Oportunidades.Any(o => o.DataEfetivaFechamento >= inicioUtc));
-        }
-        if (filtro.DataVendaFim is { } vendaFim)
-        {
-            var fimUtc = vendaFim.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
-            query = query.Where(l => l.Oportunidades.Any(o => o.DataEfetivaFechamento <= fimUtc));
+            // Dias de Brasília, e a MESMA venda (ganha, não excluída) dentro do período — antes início e fim eram checados em vendas
+            // diferentes e uma perda (que também grava a data de fechamento) aparecia como se fosse venda.
+            var de = filtro.DataVendaInicio is { } vi ? HorarioBrasilia.Inicio(vi) : DateTimeOffset.MinValue;
+            var ate = filtro.DataVendaFim is { } vf ? HorarioBrasilia.Fim(vf) : DateTimeOffset.MaxValue;
+            query = query.Where(l => l.Oportunidades.Any(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho
+                && o.DataEfetivaFechamento >= de && o.DataEfetivaFechamento <= ate));
         }
 
         return (query, podeVerOrigem);
