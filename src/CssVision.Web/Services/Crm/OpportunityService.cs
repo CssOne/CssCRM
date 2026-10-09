@@ -100,6 +100,10 @@ public sealed class OpportunityService(
             ? await db.CrmPipelineStages.FirstOrDefaultAsync(s => s.Id == request.EtapaId, ct)
               ?? throw new CrmNotFoundException("Etapa", request.EtapaId.Value)
             : await db.CrmPipelineStages.Where(s => s.Ativa).OrderBy(s => s.Ordem).FirstAsync(ct);
+        if (etapaInicial.Tipo == TipoEtapaPipeline.Ganho)
+        {
+            await GarantirUmaVendaConcluidaPorLeadAsync(lead.Id, null, ct);
+        }
 
         var opportunity = new CrmOpportunity
         {
@@ -266,6 +270,8 @@ public sealed class OpportunityService(
             }
 
             ExigirDataDeVendaNaoFutura(request.DataEfetivaFechamento.Value);
+            await GarantirUmaVendaConcluidaPorLeadAsync(opportunity.LeadId, opportunity.Id, ct);
+            TravarLeadDuranteAVenda(opportunity.Lead);
 
             opportunity.ValorFinal = request.ValorFinal;
             opportunity.DataEfetivaFechamento = DataDaVendaAoMeioDia(request.DataEfetivaFechamento.Value);
@@ -361,6 +367,29 @@ public sealed class OpportunityService(
     }
 
     // --- auxiliares ---
+
+    /// <summary>
+    /// Um cliente (lead) tem no máximo UMA venda concluída: outro veículo dele é outro card ("Outro veículo"). Sem isto, uma venda
+    /// repetida (reenvio do formulário, nova venda sobre um card já concluído) duplicava vendas, comissões e números. As vendas já
+    /// importadas do Notion com mais de um veículo no mesmo card não são afetadas — só o que se conclui daqui para frente.
+    /// </summary>
+    private async Task GarantirUmaVendaConcluidaPorLeadAsync(Guid leadId, Guid? ignorarOportunidadeId, CancellationToken ct)
+    {
+        var jaTem = await db.CrmOpportunities.AnyAsync(
+            o => o.LeadId == leadId && o.Id != ignorarOportunidadeId && !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho, ct);
+        if (jaTem)
+        {
+            throw new CrmBusinessException(
+                "Este cliente já tem uma venda concluída. Para outro veículo dele, use \"Outro veículo\" no card do cliente.", "venda_ja_concluida");
+        }
+    }
+
+    /// <summary>
+    /// Duas vendas do mesmo cliente concluídas ao mesmo tempo passariam as duas pela conferência acima. Gravar o lead na mesma operação
+    /// faz a segunda falhar pelo token de concorrência do banco (xmin), e o servidor responde com conflito em vez de duplicar a venda.
+    /// </summary>
+    private void TravarLeadDuranteAVenda(CrmLead lead) =>
+        db.Entry(lead).Property(l => l.AtualizadoEm).IsModified = true;
 
     private async Task<IQueryable<CrmOpportunity>> QueryEscopadaAsync(CancellationToken ct)
     {
