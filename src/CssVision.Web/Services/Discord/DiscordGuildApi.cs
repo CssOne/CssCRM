@@ -55,6 +55,9 @@ public interface IDiscordGuildApi
 
     Task AdicionarAThreadAsync(string threadId, string discordUserId, CancellationToken ct);
 
+    /// <summary>Troca o nome (e, se informado, o tópico) de um canal do servidor. Exige "Gerenciar canais". O Discord limita a 2 trocas de nome a cada 10 minutos por canal.</summary>
+    Task RenomearCanalAsync(string canalId, string nome, string? topico, CancellationToken ct);
+
     /// <summary>Cria um tópico (thread pública) no canal e devolve o id dele.</summary>
     Task<string> CriarTopicoAsync(string canalId, string nome, CancellationToken ct);
 
@@ -282,6 +285,18 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
         await GarantirAsync(resposta, "enviar a mensagem", ct);
         using var documento = await LerAsync(resposta, ct);
         return LerMensagem(documento.RootElement);
+    }
+
+    public async Task RenomearCanalAsync(string canalId, string nome, string? topico, CancellationToken ct)
+    {
+        object corpo = topico is null ? new { name = Cortar(nome, 100) } : new { name = Cortar(nome, 100), topic = Cortar(topico, 1024) };
+        using var resposta = await EnviarAsync(() =>
+        {
+            var requisicao = Bot(HttpMethod.Patch, $"channels/{canalId}");
+            requisicao.Content = new StringContent(JsonSerializer.Serialize(corpo, Json), Encoding.UTF8, "application/json");
+            return requisicao;
+        }, ct);
+        await GarantirAsync(resposta, "renomear o canal", ct);
     }
 
     public async Task<string> CriarTopicoAsync(string canalId, string nome, CancellationToken ct) =>

@@ -18,7 +18,11 @@ public record DiscordAvisosRequest(bool Ativos);
 public record DiscordTesteDto(bool Enviado, string Mensagem);
 
 /// <summary>Grupo do CRM que existe como canal no Discord.</summary>
-public record DiscordCanalDto(string Chave, string Nome, bool Ativo);
+public record DiscordCanalDto(string Chave, string Nome, bool Ativo, bool Extra = false, string? AcessoChave = null);
+
+public record DiscordCriarCanalRequest(string Nome, string AcessoChave, string? Topico = null);
+
+public record DiscordRenomearCanalRequest(string Nome);
 
 /// <summary>O que a sincronização dos grupos fez, e o que não conseguiu fazer (com o motivo).</summary>
 public record DiscordSincronizacaoDto(int CanaisCriados, int CargosCriados, int MembrosAtualizados, int MembrosForaDoServidor, IReadOnlyList<string> Falhas, int CanaisDeVozCriados = 0, int ApelidosDefinidos = 0, bool BoasVindasPublicadas = false);

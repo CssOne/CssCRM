@@ -231,6 +231,10 @@ export interface DiscordCanal {
   chave: string;
   nome: string;
   ativo: boolean;
+  /** Canal extra, criado por um administrador (não é de regional nem de grupo). */
+  extra?: boolean;
+  /** Só nos extras: a chave do grupo que vê o canal. */
+  acessoChave?: string | null;
 }
 
 /** O que a sincronização dos grupos do Discord fez e o que não conseguiu fazer. */

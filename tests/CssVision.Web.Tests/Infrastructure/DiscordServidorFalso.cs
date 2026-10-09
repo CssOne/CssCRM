@@ -49,9 +49,13 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
         return Task.FromResult(id);
     }
 
+    public List<(string Id, string Nome, string CargoId, string Topico)> TextosCriados { get; } = [];
+
     public Task<string> CriarCanalDeTextoAsync(string nome, string categoriaId, string cargoId, string topico, CancellationToken ct)
     {
+        if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para criar o canal.");
         var id = Novo();
+        TextosCriados.Add((id, nome, cargoId, topico));
         Canais.Add(id);
         return Task.FromResult(id);
     }
@@ -181,6 +185,16 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
 
     /// <summary>Arquivos enviados ao chat (destino = thread ou canal).</summary>
     public List<(string CanalId, string Nome, string Texto, DiscordArquivo Arquivo)> ArquivosEnviados { get; } = [];
+
+    public List<(string CanalId, string Nome, string? Topico)> Renomeados { get; } = [];
+
+    public Task RenomearCanalAsync(string canalId, string nome, string? topico, CancellationToken ct)
+    {
+        if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para renomear o canal.");
+        if (!Canais.Contains(canalId)) throw new DiscordApiException("Canal não encontrado.");
+        Renomeados.Add((canalId, nome, topico));
+        return Task.CompletedTask;
+    }
 
     public List<(string CanalId, string Nome)> TopicosCriados { get; } = [];
     public List<(string Onde, string Autor, string Pergunta, IReadOnlyList<string> Respostas, int Horas, bool Varias)> EnquetesEnviadas { get; } = [];

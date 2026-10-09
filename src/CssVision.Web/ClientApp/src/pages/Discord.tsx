@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { formatarDataHora } from "../lib/format";
 import type { DiscordAvisosCanais, DiscordCanal, DiscordIniciar, DiscordSincronizacao, DiscordStatus, DiscordTeste } from "../lib/types";
 import { Badge, Button, Card, Checkbox, ErrorState, Skeleton, useToast } from "../components/ui";
+import { GestaoDeCanais } from "../components/discord/GestaoDeCanais";
 
 /**
  * Vínculo da conta do Discord com o CRM. Vinculada, a pessoa recebe os avisos do CRM (lead novo, pagamento em aberto, alertas...)
@@ -234,15 +235,7 @@ function GruposDoDiscord() {
         </p>
       </div>
 
-      {canais && canais.length > 0 && (
-        <ul className="flex flex-wrap gap-2">
-          {canais.map((c) => (
-            <li key={c.chave}>
-              <Badge variant={c.ativo ? "success" : "neutral"}>{c.nome}</Badge>
-            </li>
-          ))}
-        </ul>
-      )}
+      {canais && canais.length > 0 && <GestaoDeCanais canais={canais} aoMudar={carregar} />}
 
       <Button variant="secondary" onClick={sincronizar} loading={sincronizando}>
         <RefreshCw className="size-4" /> {canais && canais.length > 0 ? "Sincronizar grupos" : "Criar grupos no Discord"}

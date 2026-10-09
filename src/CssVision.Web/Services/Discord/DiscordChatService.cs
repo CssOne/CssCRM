@@ -118,7 +118,7 @@ public sealed class DiscordChatService(
         var grupos = (await CanaisDaPessoaAsync(usuarioId, ct))
             .OrderBy(c => c.Chave == DiscordGruposService.ChaveGeral ? 0 : c.Chave == DiscordGruposService.ChaveGestao ? 1 : 2)
             .ThenBy(c => c.Nome)
-            .Select(c => new DiscordChatCanalDto(c.Chave, c.Nome))
+            .Select(c => new DiscordChatCanalDto(c.Chave, c.NomeExibido))
             .ToList();
 
         var conversas = await db.CrmDiscordConversas.AsNoTracking()
@@ -754,7 +754,10 @@ public sealed class DiscordChatService(
         }
 
         // Grupo: quem pode abrir este grupo, pelas mesmas regras da lista de conversas (e só se a própria pessoa pode abri-lo).
-        if ((await CanaisDaPessoaAsync(usuarioId, ct)).All(c => c.Chave != chave)) throw new CrmForbiddenException("Você não tem acesso a esta conversa.");
+        var canalAberto = (await CanaisDaPessoaAsync(usuarioId, ct)).FirstOrDefault(c => c.Chave == chave)
+            ?? throw new CrmForbiddenException("Você não tem acesso a esta conversa.");
+        // Canal extra: participa quem está no grupo que o enxerga.
+        var chaveDeAcesso = canalAberto.AcessoChave ?? chave;
 
         var candidatos = await db.Users.AsNoTracking().Where(u => u.Ativo && onlineIds.Contains(u.Id))
             .Select(u => new { u.Id, u.NomeCompleto, u.FotoUrl, u.RegionalId, u.GrupoId }).ToListAsync(ct);
@@ -765,11 +768,11 @@ public sealed class DiscordChatService(
         {
             var seus = papeis.Where(p => p.UserId == id).Select(p => p.Papel).ToList();
             if (seus.Any(p => Roles.VisaoTotal.Contains(p))) return true;
-            return chave switch
+            return chaveDeAcesso switch
             {
                 DiscordGruposService.ChaveGeral => true,
                 DiscordGruposService.ChaveGestao => seus.Any(p => Roles.GestaoComercial.Contains(p)),
-                _ => chave == $"regional:{regionalId}" || chave == $"grupo:{grupoId}",
+                _ => chaveDeAcesso == $"regional:{regionalId}" || chaveDeAcesso == $"grupo:{grupoId}",
             };
         }
 
@@ -819,7 +822,7 @@ public sealed class DiscordChatService(
         if (papeis.Any(p => Roles.GestaoComercial.Contains(p))) permitidas.Add(DiscordGruposService.ChaveGestao);
         if (pessoa.RegionalId is { } regional) permitidas.Add($"regional:{regional}");
         if (pessoa.GrupoId is { } grupo) permitidas.Add($"grupo:{grupo}");
-        return canais.Where(c => permitidas.Contains(c.Chave)).ToList();
+        return canais.Where(c => permitidas.Contains(c.AcessoChave ?? c.Chave)).ToList();
     }
 
     /// <summary>Falha do Discord vira mensagem para a tela (sem derrubar a página com erro 500).</summary>
