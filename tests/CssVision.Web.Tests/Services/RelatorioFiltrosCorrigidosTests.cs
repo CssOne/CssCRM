@@ -43,6 +43,43 @@ public class RelatorioFiltrosCorrigidosTests
     }
 
     [Fact]
+    public async Task FiltroAtivacao_IgnoraPerdaEExcluida_ERespeitaOsDoisLimitesDoDia()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var admin = await factory.CriarUsuarioAsync(db, "Admin");
+        var ana = await factory.CriarUsuarioAsync(db, "Ana");
+        await factory.AtribuirPapelAsync(db, ana, Roles.Comercial);
+        var ganho = await factory.CriarEtapaAsync(db, "Ganho", 9, TipoEtapaPipeline.Ganho);
+        var perdido = await factory.CriarEtapaAsync(db, "Perdido", 10, TipoEtapaPipeline.Perdido);
+        var lead = new CrmLead { NomeOuRazaoSocial = "C", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id };
+        db.CrmLeads.Add(lead);
+        await db.SaveChangesAsync();
+        CrmOpportunity Op(Guid etapa, DateTimeOffset venda, DateTimeOffset? ativo, bool arquivada = false) => new()
+        {
+            LeadId = lead.Id, Titulo = "V", ResponsavelId = ana.Id, EtapaId = etapa, PagamentoAdesao = 100m,
+            DataEfetivaFechamento = venda, AtivoEm = ativo, Arquivado = arquivada,
+        };
+        var meioDia = new DateTimeOffset(2026, 10, 5, 12, 0, 0, TimeSpan.Zero);
+        db.CrmOpportunities.AddRange(
+            Op(ganho.Id, meioDia, new DateTimeOffset(2026, 10, 5, 0, 0, 0, TimeSpan.Zero)),        // conta
+            Op(perdido.Id, meioDia, new DateTimeOffset(2026, 10, 5, 0, 0, 0, TimeSpan.Zero)),      // perda: não é venda
+            Op(ganho.Id, meioDia, new DateTimeOffset(2026, 10, 5, 0, 0, 0, TimeSpan.Zero), true),  // excluída
+            Op(ganho.Id, meioDia, new DateTimeOffset(2026, 10, 6, 0, 0, 0, TimeSpan.Zero)));       // dia seguinte
+        await db.SaveChangesAsync();
+        var usuario = TestDbContextFactory.MockCurrentUser(admin.Id, visaoTotal: true, podeGerir: true).Object;
+        var rel = new RelatorioComercialService(db, usuario, new EquipeComercialService(db, usuario));
+        var principal = (new DateOnly(2026, 9, 1), new DateOnly(2026, 10, 31));
+
+        async Task<int> Vendas(DateOnly de, DateOnly ate) =>
+            (await rel.ObterAsync(principal.Item1, principal.Item2, null, null, new RelatorioFiltroExtra(VendaInicio: de, VendaFim: ate), CancellationToken.None)).Totais.Vendas;
+
+        Assert.Equal(1, await Vendas(new DateOnly(2026, 10, 5), new DateOnly(2026, 10, 5)));
+        Assert.Equal(2, await Vendas(new DateOnly(2026, 10, 5), new DateOnly(2026, 10, 6)));
+        Assert.Equal(0, await Vendas(new DateOnly(2026, 10, 7), new DateOnly(2026, 10, 31)));
+    }
+
+    [Fact]
     public async Task IndicacaoSimENao_DoLead_SegueARegraDoQuadro_CadastroManualSemTipoEIndicacao()
     {
         using var factory = new TestDbContextFactory();
