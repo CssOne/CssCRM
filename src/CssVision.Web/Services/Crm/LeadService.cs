@@ -1091,7 +1091,9 @@ public sealed class LeadService(
         if (!string.IsNullOrWhiteSpace(filtro.Busca))
         {
             var busca = filtro.Busca.Trim();
-            var buscaDigitos = DocumentValidation.SomenteDigitos(busca);
+            // Documento/telefone só entram quando a busca é um número (sem letras): a placa "EXN3C02" não pode virar "302" e casar com
+            // qualquer telefone que tenha esses dígitos.
+            var buscaDigitos = busca.Any(char.IsLetter) ? "" : DocumentValidation.SomenteDigitos(busca);
             // Placa: do cadastro do lead ou do veículo da venda, com ou sem hífen/espaço ("ABC-1D23" acha "ABC1D23").
             var buscaPlaca = new string(busca.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
             var buscarPlaca = buscaPlaca.Length >= 3;
