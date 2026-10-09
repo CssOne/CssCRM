@@ -100,6 +100,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddCrmServices(this IServiceCollection services)
     {
         services.AddSingleton<ICrmEventHub, CrmEventHub>();
+        services.AddSingleton<IPresencaService, PresencaService>();
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IEquipeComercialService, EquipeComercialService>();
         services.AddScoped<IAuditSink, CrmAuditLogSink>();
@@ -233,7 +234,11 @@ public static class ServiceCollectionExtensions
             http.Timeout = TimeSpan.FromSeconds(15);
         });
         services.AddScoped<Services.Discord.IDiscordGruposService, Services.Discord.DiscordGruposService>();
+        services.AddScoped<ILeadCompartilhavel, LeadCompartilhavelService>();
         services.AddScoped<Services.Discord.IDiscordChatService, Services.Discord.DiscordChatService>();
+        services.AddScoped<Services.Discord.IDiscordAvisosNosCanaisService, Services.Discord.DiscordAvisosNosCanaisService>();
+        services.AddScoped<IVendaPublicador>(sp => sp.GetRequiredService<Services.Discord.IDiscordAvisosNosCanaisService>());
+        services.AddHostedService<Services.Discord.DiscordAvisosBackgroundService>();
         services.AddHostedService<Services.Discord.DiscordGruposBackgroundService>();
         return services;
     }

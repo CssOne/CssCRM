@@ -1,3 +1,4 @@
+using System.Text;
 using CssVision.Web.Api.Contracts.Common;
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Authorization;
@@ -17,8 +18,26 @@ public interface IDiscordChatService
     /// <summary>Últimas mensagens da conversa (ou as anteriores a <paramref name="antesDeId"/>).</summary>
     Task<DiscordChatMensagensDto> ListarMensagensAsync(Guid usuarioId, string chave, string? antesDeId, CancellationToken ct);
 
-    /// <summary>Publica na conversa, no Discord, com o nome e a foto da pessoa.</summary>
-    Task<DiscordChatMensagemDto> EnviarAsync(Guid usuarioId, string chave, string texto, CancellationToken ct);
+    /// <summary>Publica na conversa, no Discord, com o nome e a foto da pessoa. <paramref name="mencoes"/>: pessoas "@marcadas" (recebem aviso no Discord).</summary>
+    Task<DiscordChatMensagemDto> EnviarAsync(Guid usuarioId, string chave, string texto, CancellationToken ct, IReadOnlyList<Guid>? mencoes = null);
+
+    /// <summary>
+    /// Publica na conversa um resumo do lead (nome, etapa, responsável e produto — sem telefone, e-mail nem documento) com o link para abri-lo
+    /// no CRM. Só vale para um lead que a própria pessoa pode ver.
+    /// </summary>
+    Task<DiscordChatMensagemDto> CompartilharLeadAsync(Guid usuarioId, string chave, Guid leadId, string? comentario, CancellationToken ct);
+
+    /// <summary>Troca o texto de uma mensagem da própria pessoa (só as publicadas pelo CRM).</summary>
+    Task EditarMensagemAsync(Guid usuarioId, string chave, string mensagemId, string texto, CancellationToken ct);
+
+    /// <summary>Apaga uma mensagem da própria pessoa (só as publicadas pelo CRM).</summary>
+    Task ApagarMensagemAsync(Guid usuarioId, string chave, string mensagemId, CancellationToken ct);
+
+    /// <summary>Publica um arquivo (imagem, PDF, planilha...) na conversa, com legenda opcional.</summary>
+    Task<DiscordChatMensagemDto> EnviarArquivoAsync(Guid usuarioId, string chave, string? texto, string nomeDoArquivo, string tipoDeConteudo, byte[] conteudo, CancellationToken ct);
+
+    /// <summary>Quem está com o CRM aberto agora na conversa (grupo: entre os que participam dele; 1:1: a outra pessoa). Não inclui quem pergunta.</summary>
+    Task<DiscordChatOnlineDto> ListarOnlineAsync(Guid usuarioId, string chave, CancellationToken ct);
 
     /// <summary>Pessoas com quem dá para iniciar uma conversa 1:1: quem vinculou o Discord e já está no servidor.</summary>
     Task<IReadOnlyList<DiscordChatContatoDto>> ListarContatosAsync(Guid usuarioId, string? busca, CancellationToken ct);
@@ -48,9 +67,20 @@ public sealed class DiscordChatService(
     ApplicationDbContext db,
     IDiscordGuildApi api,
     IMemoryCache cache,
-    IOptions<DiscordOptions> options) : IDiscordChatService
+    IOptions<DiscordOptions> options,
+    Crm.IPresencaService? presenca = null,
+    Crm.ILeadCompartilhavel? leads = null) : IDiscordChatService
 {
     public const int LimiteDoTexto = 2000;
+
+    /// <summary>Tamanho máximo de um arquivo no chat (o Discord aceita 10 MB no mínimo em qualquer servidor).</summary>
+    public const int LimiteDoArquivo = 10 * 1024 * 1024;
+
+    /// <summary>Tipos aceitos: imagens, PDF, documentos do Office, texto/CSV e ZIP. Nada executável nem script.</summary>
+    internal static readonly HashSet<string> ExtensoesPermitidas = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".zip",
+    };
     public const string PrefixoConversa = "dm:";
     private const int MensagensPorPagina = 50;
     private const int MaximoDeContatos = 30;
@@ -88,7 +118,7 @@ public sealed class DiscordChatService(
 
         var diretas = conversas
             .Where(c => pessoas.ContainsKey(c.OutraId))
-            .Select(c => new DiscordChatCanalDto($"{PrefixoConversa}{c.Id}", pessoas[c.OutraId].NomeCompleto, "direta", FotoAbsoluta(pessoas[c.OutraId].FotoUrl)))
+            .Select(c => new DiscordChatCanalDto($"{PrefixoConversa}{c.Id}", pessoas[c.OutraId].NomeCompleto, "direta", FotoAbsoluta(pessoas[c.OutraId].FotoUrl), presenca?.EstaOnline(c.OutraId) ?? false))
             .OrderBy(c => c.Nome, StringComparer.OrdinalIgnoreCase);
 
         return grupos.Concat(diretas).ToList();
@@ -120,7 +150,7 @@ public sealed class DiscordChatService(
             ConteudoOculto: conteudoOculto);
     }
 
-    public async Task<DiscordChatMensagemDto> EnviarAsync(Guid usuarioId, string chave, string texto, CancellationToken ct)
+    public async Task<DiscordChatMensagemDto> EnviarAsync(Guid usuarioId, string chave, string texto, CancellationToken ct, IReadOnlyList<Guid>? mencoes = null)
     {
         texto = (texto ?? "").Trim();
         if (texto.Length == 0)
@@ -136,11 +166,176 @@ public sealed class DiscordChatService(
         var destino = await ObterDestinoPermitidoAsync(usuarioId, chave, ct);
         var pessoa = await db.Users.AsNoTracking().Where(u => u.Id == usuarioId).Select(u => new { u.NomeCompleto, u.FotoUrl }).FirstAsync(ct);
 
-        var enviada = await LerAsync(async () => await api.EnviarMensagemAsync(destino.CanalDoWebhook, pessoa.NomeCompleto, FotoAbsoluta(pessoa.FotoUrl), texto, ct, destino.ThreadId));
+        var (textoFinal, discordIds) = await ResolverMencoesAsync(texto, mencoes, ct);
+        if (textoFinal.Length > LimiteDoTexto)
+        {
+            throw new CrmBusinessException($"A mensagem pode ter no máximo {LimiteDoTexto} caracteres.", "mensagem_longa");
+        }
+
+        var enviada = await LerAsync(async () => await api.EnviarMensagemAsync(destino.CanalDoWebhook, pessoa.NomeCompleto, FotoAbsoluta(pessoa.FotoUrl), textoFinal, ct, destino.ThreadId, discordIds));
         cache.Remove(ChaveDeCache(destino.LeituraId));
         cache.Remove(ChaveDaUltima(destino.LeituraId));
         await MarcarComoLidaAsync(usuarioId, chave, enviada.Id, ct); // a mensagem que a própria pessoa mandou nunca é "não lida" para ela
         return Converter(enviada);
+    }
+
+    /// <summary>
+    /// Troca "@Nome" pela menção do Discord (<c>&lt;@id&gt;</c>) das pessoas escolhidas na lista, para elas receberem o aviso. Só vale para quem vinculou
+    /// o Discord e já está no servidor; as demais ficam como texto "@Nome". Nada além dessas pessoas é marcado.
+    /// </summary>
+    private async Task<(string Texto, IReadOnlyList<string> DiscordIds)> ResolverMencoesAsync(string texto, IReadOnlyList<Guid>? mencoes, CancellationToken ct)
+    {
+        if (mencoes is null || mencoes.Count == 0) return (texto, []);
+
+        var ids = mencoes.Distinct().Take(20).ToList();
+        var marcadas = await db.CrmDiscordVinculos.AsNoTracking().Where(v => ids.Contains(v.UsuarioId) && v.NoServidor)
+            .Join(db.Users.AsNoTracking().Where(u => u.Ativo), v => v.UsuarioId, u => u.Id, (v, u) => new { u.NomeCompleto, v.DiscordUserId })
+            .ToListAsync(ct);
+
+        var discordIds = new List<string>();
+        // Nomes maiores primeiro: "@Ana Maria" não pode virar "@Ana" + " Maria".
+        foreach (var pessoa in marcadas.OrderByDescending(p => p.NomeCompleto.Length))
+        {
+            var marca = $"@{pessoa.NomeCompleto}";
+            if (!texto.Contains(marca, StringComparison.Ordinal)) continue;
+            texto = texto.Replace(marca, $"<@{pessoa.DiscordUserId}>", StringComparison.Ordinal);
+            discordIds.Add(pessoa.DiscordUserId);
+        }
+
+        return (texto, discordIds);
+    }
+
+    public const int LimiteDoComentario = 500;
+
+    public async Task<DiscordChatMensagemDto> CompartilharLeadAsync(Guid usuarioId, string chave, Guid leadId, string? comentario, CancellationToken ct)
+    {
+        ExigirConfigurado();
+        comentario = (comentario ?? "").Trim();
+        if (comentario.Length > LimiteDoComentario)
+        {
+            throw new CrmBusinessException($"O comentário pode ter no máximo {LimiteDoComentario} caracteres.", "comentario_longo");
+        }
+
+        if (leads is null) throw new CrmBusinessException("Compartilhar lead não está disponível.", "indisponivel");
+
+        // Primeiro a conversa (quem não participa dela não descobre nada), depois o lead (quem não enxerga o lead não o compartilha).
+        _ = await ObterDestinoPermitidoAsync(usuarioId, chave, ct);
+        var lead = await leads.ObterAsync(leadId, ct);
+
+        var detalhes = new List<string>();
+        if (!string.IsNullOrWhiteSpace(lead.Etapa)) detalhes.Add($"etapa: {lead.Etapa}");
+        if (!string.IsNullOrWhiteSpace(lead.Responsavel)) detalhes.Add($"responsável: {lead.Responsavel}");
+        if (!string.IsNullOrWhiteSpace(lead.Produto)) detalhes.Add($"produto: {lead.Produto}");
+        if (!string.IsNullOrWhiteSpace(lead.Regional)) detalhes.Add(lead.Regional!);
+
+        var nome = lead.Nome.Length > 100 ? lead.Nome[..100] : lead.Nome;
+        var texto = new StringBuilder($"🔗 Lead para conversar: **{nome}**");
+        if (detalhes.Count > 0) texto.Append($" ({string.Join(" · ", detalhes)})");
+        if (comentario.Length > 0) texto.Append('\n').Append(comentario);
+        var baseUrl = options.Value.UrlPublica.TrimEnd('/');
+        if (baseUrl.Length > 0) texto.Append('\n').Append($"{baseUrl}/app/crm/leads/{lead.Id}");
+
+        return await EnviarAsync(usuarioId, chave, texto.ToString(), ct);
+    }
+
+    public async Task EditarMensagemAsync(Guid usuarioId, string chave, string mensagemId, string texto, CancellationToken ct)
+    {
+        texto = (texto ?? "").Trim();
+        if (texto.Length == 0)
+        {
+            throw new CrmBusinessException("Escreva uma mensagem.", "mensagem_vazia");
+        }
+
+        if (texto.Length > LimiteDoTexto)
+        {
+            throw new CrmBusinessException($"A mensagem pode ter no máximo {LimiteDoTexto} caracteres.", "mensagem_longa");
+        }
+
+        var destino = await ObterMensagemDaPessoaAsync(usuarioId, chave, mensagemId, ct);
+        await LerAsync(async () =>
+        {
+            await api.EditarMensagemAsync(destino.CanalDoWebhook, destino.ThreadId, mensagemId, texto, ct);
+            return true;
+        });
+        cache.Remove(ChaveDeCache(destino.LeituraId));
+    }
+
+    public async Task ApagarMensagemAsync(Guid usuarioId, string chave, string mensagemId, CancellationToken ct)
+    {
+        var destino = await ObterMensagemDaPessoaAsync(usuarioId, chave, mensagemId, ct);
+        await LerAsync(async () =>
+        {
+            await api.ApagarMensagemAsync(destino.CanalDoWebhook, destino.ThreadId, mensagemId, ct);
+            return true;
+        });
+        cache.Remove(ChaveDeCache(destino.LeituraId));
+        cache.Remove(ChaveDaUltima(destino.LeituraId));
+    }
+
+    /// <summary>Confere que a pessoa pode abrir a conversa e que a mensagem é dela (publicada pelo CRM com o nome dela) antes de mexer.</summary>
+    private async Task<Destino> ObterMensagemDaPessoaAsync(Guid usuarioId, string chave, string mensagemId, CancellationToken ct)
+    {
+        // O id vira parte do endereço do Discord: só números (os ids do Discord são números).
+        if (mensagemId.Length is 0 or > 25 || !mensagemId.All(char.IsAsciiDigit))
+        {
+            throw new CrmBusinessException("Mensagem inválida.", "mensagem_invalida");
+        }
+
+        var destino = await ObterDestinoPermitidoAsync(usuarioId, chave, ct);
+        var nome = await db.Users.AsNoTracking().Where(u => u.Id == usuarioId).Select(u => u.NomeCompleto).FirstAsync(ct);
+        var mensagem = await LerAsync(() => api.ObterMensagemAsync(destino.LeituraId, mensagemId, ct));
+        if (!mensagem.DoCrm || mensagem.AutorNome != nome)
+        {
+            throw new CrmForbiddenException("Você só pode alterar as suas próprias mensagens enviadas pelo CRM.");
+        }
+
+        return destino;
+    }
+
+    public async Task<DiscordChatMensagemDto> EnviarArquivoAsync(Guid usuarioId, string chave, string? texto, string nomeDoArquivo, string tipoDeConteudo, byte[] conteudo, CancellationToken ct)
+    {
+        texto = (texto ?? "").Trim();
+        if (texto.Length > LimiteDoTexto)
+        {
+            throw new CrmBusinessException($"A mensagem pode ter no máximo {LimiteDoTexto} caracteres.", "mensagem_longa");
+        }
+
+        if (conteudo.Length == 0)
+        {
+            throw new CrmBusinessException("O arquivo está vazio.", "arquivo_vazio");
+        }
+
+        if (conteudo.Length > LimiteDoArquivo)
+        {
+            throw new CrmBusinessException($"O arquivo pode ter no máximo {LimiteDoArquivo / (1024 * 1024)} MB.", "arquivo_grande");
+        }
+
+        var nome = NomeSeguro(nomeDoArquivo);
+        if (!ExtensoesPermitidas.Contains(Path.GetExtension(nome)))
+        {
+            throw new CrmBusinessException("Esse tipo de arquivo não pode ser enviado. Use imagem, PDF, documento do Office, texto/CSV ou ZIP.", "arquivo_tipo_invalido");
+        }
+
+        var destino = await ObterDestinoPermitidoAsync(usuarioId, chave, ct);
+        var pessoa = await db.Users.AsNoTracking().Where(u => u.Id == usuarioId).Select(u => new { u.NomeCompleto, u.FotoUrl }).FirstAsync(ct);
+
+        var enviada = await LerAsync(async () => await api.EnviarArquivoAsync(
+            destino.CanalDoWebhook, pessoa.NomeCompleto, FotoAbsoluta(pessoa.FotoUrl), texto, new DiscordArquivo(nome, tipoDeConteudo, conteudo), ct, destino.ThreadId));
+        cache.Remove(ChaveDeCache(destino.LeituraId));
+        cache.Remove(ChaveDaUltima(destino.LeituraId));
+        await MarcarComoLidaAsync(usuarioId, chave, enviada.Id, ct);
+        return Converter(enviada);
+    }
+
+    /// <summary>Só o nome do arquivo (sem pasta), com letras, números, espaço, ponto, hífen e parênteses; cortado em 100 caracteres sem perder a extensão.</summary>
+    internal static string NomeSeguro(string? nome)
+    {
+        var simples = Path.GetFileName((nome ?? "").Replace('\\', '/'));
+        var limpo = new string(simples.Select(c => char.IsLetterOrDigit(c) || c is '.' or '-' or '_' or ' ' or '(' or ')' ? c : '_').ToArray()).Trim();
+        if (limpo.Length == 0) return "arquivo";
+        if (limpo.Length <= 100) return limpo;
+        var extensao = Path.GetExtension(limpo);
+        return limpo[..(100 - extensao.Length)] + extensao;
     }
 
     public async Task<DiscordChatNaoLidasDto> ContarNaoLidasAsync(Guid usuarioId, CancellationToken ct)
@@ -334,8 +529,11 @@ public sealed class DiscordChatService(
             consulta = consulta.Where(u => u.NomeCompleto.ToLower().Contains(termo));
         }
 
-        return (await consulta.OrderBy(u => u.NomeCompleto).Take(MaximoDeContatos).ToListAsync(ct))
-            .Select(u => new DiscordChatContatoDto(u.Id, u.NomeCompleto, FotoAbsoluta(u.FotoUrl), u.RegionalNome))
+        // Quem está online vem primeiro (depois, ordem alfabética).
+        return (await consulta.ToListAsync(ct))
+            .Select(u => new DiscordChatContatoDto(u.Id, u.NomeCompleto, FotoAbsoluta(u.FotoUrl), u.RegionalNome, presenca?.EstaOnline(u.Id) ?? false))
+            .OrderByDescending(u => u.Online).ThenBy(u => u.Nome, StringComparer.OrdinalIgnoreCase)
+            .Take(MaximoDeContatos)
             .ToList();
     }
 
@@ -407,6 +605,52 @@ public sealed class DiscordChatService(
         }
     }
 
+    public async Task<DiscordChatOnlineDto> ListarOnlineAsync(Guid usuarioId, string chave, CancellationToken ct)
+    {
+        ExigirConfigurado();
+        var vazio = new DiscordChatOnlineDto([]);
+        if (presenca is null) return vazio;
+
+        var onlineIds = presenca.TodosOnline().Where(id => id != usuarioId).ToList();
+        if (onlineIds.Count == 0) return vazio;
+
+        if (chave.StartsWith(PrefixoConversa, StringComparison.Ordinal))
+        {
+            if (!Guid.TryParse(chave[PrefixoConversa.Length..], out var conversaId)) throw new CrmForbiddenException("Você não tem acesso a esta conversa.");
+            var conversa = await db.CrmDiscordConversas.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == conversaId && (c.UsuarioAId == usuarioId || c.UsuarioBId == usuarioId), ct)
+                ?? throw new CrmForbiddenException("Você não tem acesso a esta conversa.");
+            var outraId = conversa.UsuarioAId == usuarioId ? conversa.UsuarioBId : conversa.UsuarioAId;
+            if (!onlineIds.Contains(outraId)) return vazio;
+            var outra = await db.Users.AsNoTracking().Where(u => u.Id == outraId).Select(u => new DiscordChatPessoaOnlineDto(u.Id, u.NomeCompleto, u.FotoUrl)).FirstAsync(ct);
+            return new DiscordChatOnlineDto([outra with { FotoUrl = FotoAbsoluta(outra.FotoUrl) }]);
+        }
+
+        // Grupo: quem pode abrir este grupo, pelas mesmas regras da lista de conversas (e só se a própria pessoa pode abri-lo).
+        if ((await CanaisDaPessoaAsync(usuarioId, ct)).All(c => c.Chave != chave)) throw new CrmForbiddenException("Você não tem acesso a esta conversa.");
+
+        var candidatos = await db.Users.AsNoTracking().Where(u => u.Ativo && onlineIds.Contains(u.Id))
+            .Select(u => new { u.Id, u.NomeCompleto, u.FotoUrl, u.RegionalId, u.GrupoId }).ToListAsync(ct);
+        var papeis = await db.UserRoles.Where(ur => onlineIds.Contains(ur.UserId))
+            .Join(db.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => new { ur.UserId, Papel = r.Name! }).ToListAsync(ct);
+
+        bool Participa(Guid id, Guid? regionalId, Guid? grupoId)
+        {
+            var seus = papeis.Where(p => p.UserId == id).Select(p => p.Papel).ToList();
+            if (seus.Any(p => Roles.VisaoTotal.Contains(p))) return true;
+            return chave switch
+            {
+                DiscordGruposService.ChaveGeral => true,
+                DiscordGruposService.ChaveGestao => seus.Any(p => Roles.GestaoComercial.Contains(p)),
+                _ => chave == $"regional:{regionalId}" || chave == $"grupo:{grupoId}",
+            };
+        }
+
+        return new DiscordChatOnlineDto(candidatos.Where(c => Participa(c.Id, c.RegionalId, c.GrupoId))
+            .OrderBy(c => c.NomeCompleto, StringComparer.OrdinalIgnoreCase)
+            .Select(c => new DiscordChatPessoaOnlineDto(c.Id, c.NomeCompleto, FotoAbsoluta(c.FotoUrl))).ToList());
+    }
+
     private async Task<Destino> ObterDestinoPermitidoAsync(Guid usuarioId, string chave, CancellationToken ct)
     {
         ExigirConfigurado();
@@ -474,5 +718,5 @@ public sealed class DiscordChatService(
     }
 
     private static DiscordChatMensagemDto Converter(DiscordMensagem m) =>
-        new(m.Id, m.AutorNome, m.AutorFotoUrl, m.Conteudo, m.CriadaEm, m.Anexos.Select(a => new DiscordChatAnexoDto(a.Nome, a.Url, a.Imagem)).ToList(), m.DoCrm);
+        new(m.Id, m.AutorNome, m.AutorFotoUrl, m.Conteudo, m.CriadaEm, m.Anexos.Select(a => new DiscordChatAnexoDto(a.Nome, a.Url, a.Imagem)).ToList(), m.DoCrm, m.Editada);
 }

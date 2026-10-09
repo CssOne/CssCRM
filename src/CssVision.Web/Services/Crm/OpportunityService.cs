@@ -15,7 +15,8 @@ public sealed class OpportunityService(
     IMetaConversionService conversion,
     IAuditSink audit,
     IFileStorageService armazenamento,
-    ICrmEventHub? eventos = null) : IOpportunityService
+    ICrmEventHub? eventos = null,
+    IVendaPublicador? publicador = null) : IOpportunityService
 {
     private static readonly string[] ExtensoesAnexoPermitidas = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
     private static readonly HashSet<string> TiposAnexoValidos = new(StringComparer.OrdinalIgnoreCase)
@@ -340,6 +341,19 @@ public sealed class OpportunityService(
             {
                 opportunity.ConversaoOfflineEnviadaEm = DateTimeOffset.UtcNow;
                 await db.SaveChangesAsync(ct);
+            }
+
+            // Aviso no canal da regional (ligado pelo administrador). A venda já está salva: nada daqui pode desfazê-la nem fazê-la falhar.
+            if (publicador is not null)
+            {
+                try
+                {
+                    await publicador.PublicarVendaAsync(opportunity.Id, ct);
+                }
+                catch (Exception) when (!ct.IsCancellationRequested)
+                {
+                    // aviso é um extra
+                }
             }
         }
 

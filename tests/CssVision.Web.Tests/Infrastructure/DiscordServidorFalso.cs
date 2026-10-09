@@ -83,8 +83,12 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
 
     public List<(string CanalPaiId, string Nome)> ThreadsCriadas { get; } = [];
 
-    public Task<DiscordMensagem> EnviarMensagemAsync(string canalId, string nome, string? fotoUrl, string texto, CancellationToken ct, string? threadId = null)
+    /// <summary>Pessoas marcadas (ids do Discord) em cada envio com menção.</summary>
+    public List<IReadOnlyList<string>> MencoesEnviadas { get; } = [];
+
+    public Task<DiscordMensagem> EnviarMensagemAsync(string canalId, string nome, string? fotoUrl, string texto, CancellationToken ct, string? threadId = null, IReadOnlyList<string>? mencionar = null)
     {
+        if (mencionar is { Count: > 0 }) MencoesEnviadas.Add(mencionar);
         if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para enviar a mensagem.");
         Enviadas.Add((threadId ?? canalId, nome, fotoUrl, texto));
         var mensagem = new DiscordMensagem(Novo(), nome, fotoUrl, texto, DateTimeOffset.UtcNow, [], true);
@@ -126,5 +130,57 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
         Canais.Add(id);
         VozesCriadas.Add((nome, categoriaId, permitidos));
         return Task.FromResult(id);
+    }
+
+    /// <summary>Avisos do CRM publicados nos canais (como bot).</summary>
+    public List<(string CanalId, string Texto)> Avisos { get; } = [];
+
+    public Task PublicarAvisoAsync(string canalId, string texto, CancellationToken ct)
+    {
+        if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para publicar o aviso.");
+        Avisos.Add((canalId, texto));
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Arquivos enviados ao chat (destino = thread ou canal).</summary>
+    public List<(string CanalId, string Nome, string Texto, DiscordArquivo Arquivo)> ArquivosEnviados { get; } = [];
+
+    public Task<DiscordMensagem> EnviarArquivoAsync(string canalId, string nome, string? fotoUrl, string texto, DiscordArquivo arquivo, CancellationToken ct, string? threadId = null)
+    {
+        if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para enviar o arquivo.");
+        var onde = threadId ?? canalId;
+        ArquivosEnviados.Add((onde, nome, texto, arquivo));
+        var mensagem = new DiscordMensagem(Novo(), nome, fotoUrl, texto, DateTimeOffset.UtcNow, [new DiscordAnexo(arquivo.Nome, $"https://cdn.exemplo.com/{arquivo.Nome}", arquivo.Nome.EndsWith(".png"))], true);
+        if (!Mensagens.TryGetValue(onde, out var lista)) Mensagens[onde] = lista = [];
+        lista.Add(mensagem);
+        return Task.FromResult(mensagem);
+    }
+
+    public List<(string Onde, string MensagemId, string Texto)> Edicoes { get; } = [];
+
+    public List<(string Onde, string MensagemId)> Apagadas { get; } = [];
+
+    public Task<DiscordMensagem> ObterMensagemAsync(string canalOuThreadId, string mensagemId, CancellationToken ct)
+    {
+        var m = Mensagens.TryGetValue(canalOuThreadId, out var l) ? l.FirstOrDefault(x => x.Id == mensagemId) : null;
+        return m is null ? throw new DiscordApiException("O Discord recusou ao ler a mensagem (HTTP 404).") : Task.FromResult(m);
+    }
+
+    public Task EditarMensagemAsync(string canalId, string? threadId, string mensagemId, string texto, CancellationToken ct)
+    {
+        var onde = threadId ?? canalId;
+        var lista = Mensagens[onde];
+        var i = lista.FindIndex(x => x.Id == mensagemId);
+        lista[i] = lista[i] with { Conteudo = texto, Editada = true };
+        Edicoes.Add((onde, mensagemId, texto));
+        return Task.CompletedTask;
+    }
+
+    public Task ApagarMensagemAsync(string canalId, string? threadId, string mensagemId, CancellationToken ct)
+    {
+        var onde = threadId ?? canalId;
+        Mensagens[onde].RemoveAll(x => x.Id == mensagemId);
+        Apagadas.Add((onde, mensagemId));
+        return Task.CompletedTask;
     }
 }

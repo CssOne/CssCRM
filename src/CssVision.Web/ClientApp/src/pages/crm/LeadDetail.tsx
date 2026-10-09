@@ -1,4 +1,4 @@
-import { ArrowLeft, Calendar, Car, FileText, Handshake, IdCard, Mail, MapPin, Pencil, Percent, Phone, Plus, ShieldCheck, Trash2, Wallet } from "lucide-react";
+import { ArrowLeft, Calendar, Car, FileText, Handshake, IdCard, Mail, MapPin, MessagesSquare, Pencil, Percent, Phone, Plus, ShieldCheck, Trash2, Wallet } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, ApiRequestError, isAbortError } from "../../lib/api";
@@ -15,6 +15,7 @@ import {
 } from "../../lib/types";
 import { Badge, Button, Card, ConfirmDialog, ErrorState, Modal, Skeleton, Textarea, useToast } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
+import { ConversarSobreLeadDialog } from "../../components/crm/ConversarSobreLeadDialog";
 import { LeadForm, type LeadFormValues } from "../../components/crm/LeadForm";
 import { ActivityForm, type ActivityFormValues } from "../../components/crm/ActivityForm";
 import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog";
@@ -109,6 +110,7 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
   const [excluindoOportunidade, setExcluindoOportunidade] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
   const [modalVeiculos, setModalVeiculos] = useState(false);
+  const [modalConversar, setModalConversar] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Vindo do aviso "já existe um lead com o mesmo CPF" (?outroVeiculo=1): abre a venda do outro veículo.
@@ -352,6 +354,11 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
+            {sessao?.menu.some((m) => m.chave === "chat") && (
+              <Button variant="secondary" onClick={() => setModalConversar(true)} title="Publica este lead numa conversa do chat para a equipe conversar sobre ele">
+                <MessagesSquare className="size-4" /> Conversar
+              </Button>
+            )}
             <Button variant="secondary" onClick={() => setModalVeiculos(true)} title="O cliente fechou outro veículo: registra a venda dele num card novo em Venda concluída">
               <Car className="size-4" /> Outro veículo
             </Button>
@@ -569,6 +576,8 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
           carregar();
         }}
       />
+
+      <ConversarSobreLeadDialog open={modalConversar} leadId={lead.id} nomeDoLead={lead.nomeOuRazaoSocial} onClose={() => setModalConversar(false)} />
 
       {/* Outro veículo: a venda do veículo novo vira um card novo já em "Venda concluída". */}
       <VendaConcluidaDialog

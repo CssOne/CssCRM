@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { api, ApiRequestError, isAbortError } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { formatarDataHora } from "../lib/format";
-import type { DiscordCanal, DiscordIniciar, DiscordSincronizacao, DiscordStatus, DiscordTeste } from "../lib/types";
+import type { DiscordAvisosCanais, DiscordCanal, DiscordIniciar, DiscordSincronizacao, DiscordStatus, DiscordTeste } from "../lib/types";
 import { Badge, Button, Card, Checkbox, ErrorState, Skeleton, useToast } from "../components/ui";
 
 /**
@@ -181,10 +181,13 @@ function GruposDoDiscord() {
   const [canais, setCanais] = useState<DiscordCanal[] | null>(null);
   const [resultado, setResultado] = useState<DiscordSincronizacao | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
+  const [avisos, setAvisos] = useState<DiscordAvisosCanais | null>(null);
+  const [salvandoAvisos, setSalvandoAvisos] = useState(false);
   const permitido = temPapel("Admin", "GestorMaster", "SupervisorComercial");
 
   const carregar = useCallback(() => {
     api.get<DiscordCanal[]>("/crm/discord/grupos").then(setCanais).catch(() => setCanais([]));
+    api.get<DiscordAvisosCanais>("/crm/discord/grupos/avisos").then(setAvisos).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -192,6 +195,18 @@ function GruposDoDiscord() {
   }, [permitido, carregar]);
 
   if (!permitido) return null;
+
+  async function alterarAviso(mudanca: Partial<DiscordAvisosCanais>) {
+    if (!avisos) return;
+    setSalvandoAvisos(true);
+    try {
+      setAvisos(await api.put<DiscordAvisosCanais>("/crm/discord/grupos/avisos", { ...avisos, ...mudanca }));
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível salvar os avisos.");
+    } finally {
+      setSalvandoAvisos(false);
+    }
+  }
 
   async function sincronizar() {
     setSincronizando(true);
@@ -232,6 +247,31 @@ function GruposDoDiscord() {
       <Button variant="secondary" onClick={sincronizar} loading={sincronizando}>
         <RefreshCw className="size-4" /> {canais && canais.length > 0 ? "Sincronizar grupos" : "Criar grupos no Discord"}
       </Button>
+
+      {avisos && canais && canais.length > 0 && (
+        <div className="space-y-2 border-t border-[var(--border)] pt-4">
+          <p className="text-sm font-semibold text-[var(--fg)]">Avisos automáticos nos canais das regionais</p>
+          <p className="text-xs text-[var(--fg-muted)]">Saem no canal da regional, sem nome nem telefone de cliente: só o consultor, a regional e números.</p>
+          <Checkbox
+            label="Venda fechada (“Fulano fechou uma venda”)"
+            checked={avisos.venda}
+            disabled={salvandoAvisos}
+            onChange={(e) => alterarAviso({ venda: e.target.checked })}
+          />
+          <Checkbox
+            label="Meta do mês batida (uma vez por regional e mês)"
+            checked={avisos.metaBatida}
+            disabled={salvandoAvisos}
+            onChange={(e) => alterarAviso({ metaBatida: e.target.checked })}
+          />
+          <Checkbox
+            label="Resumo diário de leads parados (depois das 9h30)"
+            checked={avisos.leadsParados}
+            disabled={salvandoAvisos}
+            onChange={(e) => alterarAviso({ leadsParados: e.target.checked })}
+          />
+        </div>
+      )}
 
       {resultado && (
         <div className="space-y-1 text-sm text-[var(--fg)]">

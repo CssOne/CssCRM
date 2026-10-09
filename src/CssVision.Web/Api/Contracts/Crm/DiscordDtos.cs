@@ -25,23 +25,41 @@ public record DiscordSincronizacaoDto(int CanaisCriados, int CargosCriados, int 
 
 /// <summary>Grupo de conversa que o usuário pode abrir no chat do CRM.</summary>
 /// <param name="Tipo"><c>grupo</c> ou <c>direta</c> (conversa 1:1: o nome é o da outra pessoa).</param>
-public record DiscordChatCanalDto(string Chave, string Nome, string Tipo = "grupo", string? FotoUrl = null);
+/// <param name="Online">Só nas conversas 1:1: a outra pessoa está com o CRM aberto agora.</param>
+public record DiscordChatCanalDto(string Chave, string Nome, string Tipo = "grupo", string? FotoUrl = null, bool Online = false);
 
 /// <summary>Pessoa com quem dá para iniciar uma conversa 1:1.</summary>
-public record DiscordChatContatoDto(Guid Id, string Nome, string? FotoUrl, string? Regional);
+public record DiscordChatContatoDto(Guid Id, string Nome, string? FotoUrl, string? Regional, bool Online = false);
 
 public record DiscordChatIniciarRequest(Guid UsuarioId);
 
 public record DiscordChatAnexoDto(string Nome, string Url, bool Imagem);
 
 /// <param name="DoCrm">Publicada pelo CRM (a tela alinha as mensagens do próprio usuário à direita pelo nome do autor).</param>
-public record DiscordChatMensagemDto(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordChatAnexoDto> Anexos, bool DoCrm);
+public record DiscordChatMensagemDto(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordChatAnexoDto> Anexos, bool DoCrm, bool Editada = false);
 
 /// <param name="TemMais">Pode haver mensagens mais antigas (pedir de novo com <c>antes</c>).</param>
 /// <param name="ConteudoOculto">O Discord entregou as mensagens sem texto: falta ligar "Message Content Intent" no portal do desenvolvedor.</param>
 public record DiscordChatMensagensDto(IReadOnlyList<DiscordChatMensagemDto> Mensagens, bool TemMais, bool ConteudoOculto);
 
-public record DiscordChatEnviarRequest(string Texto);
+/// <param name="Mencoes">Pessoas escolhidas na lista de menção (o texto traz "@Nome" de cada uma); só entram as que vincularam o Discord.</param>
+public record DiscordChatEnviarRequest(string Texto, IReadOnlyList<Guid>? Mencoes = null);
+
+public record DiscordChatEditarRequest(string Texto);
+
+/// <param name="Comentario">Texto opcional da pessoa, publicado junto do lead (até 500 caracteres).</param>
+public record DiscordChatLeadRequest(Guid LeadId, string? Comentario = null);
+
+/// <summary>Quais avisos automáticos o CRM publica nos canais das regionais (todos desligados até o administrador ligar).</summary>
+/// <param name="Venda">"Fulano fechou uma venda".</param>
+/// <param name="MetaBatida">"A regional bateu a meta do mês" (uma vez por mês).</param>
+/// <param name="LeadsParados">Resumo diário (depois das 9h30) de quantos leads de anúncio estão parados há mais de 5 dias.</param>
+public record DiscordAvisosCanaisDto(bool Venda, bool MetaBatida, bool LeadsParados);
+
+/// <summary>Quem está online (com o CRM aberto) numa conversa.</summary>
+public record DiscordChatOnlineDto(IReadOnlyList<DiscordChatPessoaOnlineDto> Pessoas);
+
+public record DiscordChatPessoaOnlineDto(Guid Id, string Nome, string? FotoUrl);
 
 /// <param name="Url">Endereço do canal de voz no Discord (abre o app ou o navegador).</param>
 /// <param name="Avisou">O CRM publicou na conversa o aviso "fulano está numa chamada" com o link (não repete se a pessoa clicar de novo logo em seguida).</param>

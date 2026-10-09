@@ -39,7 +39,7 @@ public interface IDiscordGuildApi
     /// Publica no canal com o nome e a foto da pessoa do CRM (via webhook do próprio CRM) e devolve a mensagem criada. Para uma thread,
     /// <paramref name="canalId"/> é o canal pai (dono do webhook) e <paramref name="threadId"/> a thread.
     /// </summary>
-    Task<DiscordMensagem> EnviarMensagemAsync(string canalId, string nome, string? fotoUrl, string texto, CancellationToken ct, string? threadId = null);
+    Task<DiscordMensagem> EnviarMensagemAsync(string canalId, string nome, string? fotoUrl, string texto, CancellationToken ct, string? threadId = null, IReadOnlyList<string>? mencionar = null);
 
     /// <summary>
     /// Cria o canal "Conversas diretas": quem tem o cargo vê o canal (e as threads em que foi adicionado) e pode escrever nas threads, mas
@@ -52,6 +52,21 @@ public interface IDiscordGuildApi
 
     Task AdicionarAThreadAsync(string threadId, string discordUserId, CancellationToken ct);
 
+    /// <summary>Igual a <see cref="EnviarMensagemAsync"/>, com um arquivo anexado (o texto pode ser vazio).</summary>
+    Task<DiscordMensagem> EnviarArquivoAsync(string canalId, string nome, string? fotoUrl, string texto, DiscordArquivo arquivo, CancellationToken ct, string? threadId = null);
+
+    /// <summary>Lê uma mensagem (para conferir de quem é antes de editar ou apagar).</summary>
+    Task<DiscordMensagem> ObterMensagemAsync(string canalOuThreadId, string mensagemId, CancellationToken ct);
+
+    /// <summary>Troca o texto de uma mensagem publicada pelo webhook do CRM. <paramref name="canalId"/> é o canal dono do webhook.</summary>
+    Task EditarMensagemAsync(string canalId, string? threadId, string mensagemId, string texto, CancellationToken ct);
+
+    /// <summary>Apaga uma mensagem publicada pelo webhook do CRM.</summary>
+    Task ApagarMensagemAsync(string canalId, string? threadId, string mensagemId, CancellationToken ct);
+
+    /// <summary>Publica um aviso do próprio CRM (como bot) num canal. Nunca marca ninguém (@everyone/@here/cargos).</summary>
+    Task PublicarAvisoAsync(string canalId, string texto, CancellationToken ct);
+
     /// <summary>
     /// Cria um canal de voz que só os <paramref name="permitidos"/> veem e usam (cargos ou pessoas). O CRM não consegue embutir a chamada:
     /// a tela abre este canal no Discord.
@@ -63,9 +78,12 @@ public interface IDiscordGuildApi
 public record DiscordPermitido(string Id, bool Pessoa);
 
 /// <summary>Mensagem de um canal do Discord, já com menções resolvidas para nomes.</summary>
-public record DiscordMensagem(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordAnexo> Anexos, bool DoCrm);
+public record DiscordMensagem(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordAnexo> Anexos, bool DoCrm, bool Editada = false);
 
 public record DiscordAnexo(string Nome, string Url, bool Imagem);
+
+/// <summary>Arquivo a anexar: o conteúdo fica em memória (o limite do chat é pequeno) para poder reenviar se o Discord pedir calma (429).</summary>
+public record DiscordArquivo(string Nome, string TipoDeConteudo, byte[] Conteudo);
 
 public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> options, ILogger<DiscordGuildApi> logger) : IDiscordGuildApi
 {
@@ -177,7 +195,7 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
         return documento.RootElement.EnumerateArray().Select(LerMensagem).Reverse().ToList();
     }
 
-    public async Task<DiscordMensagem> EnviarMensagemAsync(string canalId, string nome, string? fotoUrl, string texto, CancellationToken ct, string? threadId = null)
+    public async Task<DiscordMensagem> EnviarMensagemAsync(string canalId, string nome, string? fotoUrl, string texto, CancellationToken ct, string? threadId = null, IReadOnlyList<string>? mencionar = null)
     {
         var (webhookId, webhookToken) = await ObterWebhookAsync(canalId, ct);
         var corpo = new
@@ -185,8 +203,8 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
             content = texto,
             username = Cortar(nome, 80),
             avatar_url = string.IsNullOrWhiteSpace(fotoUrl) ? null : fotoUrl,
-            // Nunca marca @everyone/@here nem cargos por texto digitado no CRM.
-            allowed_mentions = new { parse = Array.Empty<string>() },
+            // Nunca marca @everyone/@here nem cargos por texto digitado no CRM; só as pessoas escolhidas na lista de menção.
+            allowed_mentions = new { parse = Array.Empty<string>(), users = (mencionar ?? []).Distinct().Take(20).ToArray() },
         };
         var destino = $"webhooks/{webhookId}/{webhookToken}?wait=true" + (threadId is null ? "" : $"&thread_id={Uri.EscapeDataString(threadId)}");
         using var resposta = await EnviarAsync(() => new HttpRequestMessage(HttpMethod.Post, destino)
@@ -202,6 +220,100 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
 
         if (resposta.StatusCode == HttpStatusCode.NotFound) webhooks.TryRemove(canalId, out _); // webhook apagado no Discord: recria na próxima
         await GarantirAsync(resposta, "enviar a mensagem", ct);
+        using var documento = await LerAsync(resposta, ct);
+        return LerMensagem(documento.RootElement);
+    }
+
+    public async Task<DiscordMensagem> EnviarArquivoAsync(string canalId, string nome, string? fotoUrl, string texto, DiscordArquivo arquivo, CancellationToken ct, string? threadId = null)
+    {
+        var (webhookId, webhookToken) = await ObterWebhookAsync(canalId, ct);
+        var corpo = new
+        {
+            content = texto,
+            username = Cortar(nome, 80),
+            avatar_url = string.IsNullOrWhiteSpace(fotoUrl) ? null : fotoUrl,
+            allowed_mentions = new { parse = Array.Empty<string>() },
+        };
+        var destino = $"webhooks/{webhookId}/{webhookToken}?wait=true" + (threadId is null ? "" : $"&thread_id={Uri.EscapeDataString(threadId)}");
+        using var resposta = await EnviarAsync(() => new HttpRequestMessage(HttpMethod.Post, destino) { Content = Multipart(corpo, arquivo) }, ct);
+
+        if (threadId is not null && !resposta.IsSuccessStatusCode && resposta.StatusCode != HttpStatusCode.NotFound)
+        {
+            // Mesmo plano B do texto: o bot publica na thread com o nome de quem enviou.
+            var legenda = texto.Length == 0 ? $"**{nome}** enviou um arquivo" : $"**{nome}:** {texto}";
+            var plano = new { content = legenda, allowed_mentions = new { parse = Array.Empty<string>() } };
+            using var comoBot = await EnviarAsync(() =>
+            {
+                var requisicao = Bot(HttpMethod.Post, $"channels/{threadId}/messages");
+                requisicao.Content = Multipart(plano, arquivo);
+                return requisicao;
+            }, ct);
+            await GarantirAsync(comoBot, "enviar o arquivo", ct);
+            using var documentoBot = await LerAsync(comoBot, ct);
+            return LerMensagem(documentoBot.RootElement);
+        }
+
+        if (resposta.StatusCode == HttpStatusCode.NotFound) webhooks.TryRemove(canalId, out _);
+        await GarantirAsync(resposta, "enviar o arquivo", ct);
+        using var documento = await LerAsync(resposta, ct);
+        return LerMensagem(documento.RootElement);
+    }
+
+    /// <summary>Corpo "multipart": o JSON da mensagem em <c>payload_json</c> e o arquivo em <c>files[0]</c>.</summary>
+    private static MultipartFormDataContent Multipart(object payload, DiscordArquivo arquivo)
+    {
+        var conteudo = new MultipartFormDataContent
+        {
+            { new StringContent(JsonSerializer.Serialize(payload, Json), Encoding.UTF8, "application/json"), "payload_json" },
+        };
+        var parte = new ByteArrayContent(arquivo.Conteudo);
+        parte.Headers.ContentType = MediaTypeHeaderValue.TryParse(arquivo.TipoDeConteudo, out var tipo) ? tipo : new MediaTypeHeaderValue("application/octet-stream");
+        conteudo.Add(parte, "files[0]", arquivo.Nome);
+        return conteudo;
+    }
+
+    public async Task<DiscordMensagem> ObterMensagemAsync(string canalOuThreadId, string mensagemId, CancellationToken ct)
+    {
+        using var resposta = await EnviarAsync(() => Bot(HttpMethod.Get, $"channels/{canalOuThreadId}/messages/{Uri.EscapeDataString(mensagemId)}"), ct);
+        await GarantirAsync(resposta, "ler a mensagem", ct);
+        using var documento = await LerAsync(resposta, ct);
+        return LerMensagem(documento.RootElement);
+    }
+
+    public async Task EditarMensagemAsync(string canalId, string? threadId, string mensagemId, string texto, CancellationToken ct)
+    {
+        var (webhookId, webhookToken) = await ObterWebhookAsync(canalId, ct);
+        var corpo = new { content = texto, allowed_mentions = new { parse = Array.Empty<string>() } };
+        using var resposta = await EnviarAsync(() => new HttpRequestMessage(HttpMethod.Patch, CaminhoDaMensagemDoWebhook(webhookId, webhookToken, mensagemId, threadId))
+        {
+            Content = new StringContent(JsonSerializer.Serialize(corpo, Json), Encoding.UTF8, "application/json"),
+        }, ct);
+        await GarantirAsync(resposta, "editar a mensagem", ct);
+    }
+
+    public async Task ApagarMensagemAsync(string canalId, string? threadId, string mensagemId, CancellationToken ct)
+    {
+        var (webhookId, webhookToken) = await ObterWebhookAsync(canalId, ct);
+        using var resposta = await EnviarAsync(() => new HttpRequestMessage(HttpMethod.Delete, CaminhoDaMensagemDoWebhook(webhookId, webhookToken, mensagemId, threadId)), ct);
+        await GarantirAsync(resposta, "apagar a mensagem", ct);
+    }
+
+    private static string CaminhoDaMensagemDoWebhook(string webhookId, string webhookToken, string mensagemId, string? threadId) =>
+        $"webhooks/{webhookId}/{webhookToken}/messages/{Uri.EscapeDataString(mensagemId)}" + (threadId is null ? "" : $"?thread_id={Uri.EscapeDataString(threadId)}");
+
+    public async Task PublicarAvisoAsync(string canalId, string texto, CancellationToken ct) =>
+        await EnviarComoBotAsync(canalId, texto, ct);
+
+    private async Task<DiscordMensagem> EnviarComoBotAsync(string canalId, string texto, CancellationToken ct)
+    {
+        var corpo = new { content = Cortar(texto, 2000), allowed_mentions = new { parse = Array.Empty<string>() } };
+        using var resposta = await EnviarAsync(() =>
+        {
+            var requisicao = Bot(HttpMethod.Post, $"channels/{canalId}/messages");
+            requisicao.Content = new StringContent(JsonSerializer.Serialize(corpo, Json), Encoding.UTF8, "application/json");
+            return requisicao;
+        }, ct);
+        await GarantirAsync(resposta, "publicar o aviso", ct);
         using var documento = await LerAsync(resposta, ct);
         return LerMensagem(documento.RootElement);
     }
@@ -293,7 +405,7 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
     private static string? Texto(JsonElement e, string propriedade) =>
         e.TryGetProperty(propriedade, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
-    private static DiscordMensagem LerMensagem(JsonElement m)
+    private DiscordMensagem LerMensagem(JsonElement m)
     {
         var autor = m.GetProperty("author");
         var autorId = autor.GetProperty("id").GetString()!;
@@ -322,10 +434,12 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
             }
         }
 
-        // "DoCrm": mensagem publicada por um webhook do CRM (a tela alinha as suas à direita).
-        var doCrm = Texto(m, "webhook_id") is { } wid && webhooks.Values.Any(w => w.Id == wid);
+        // "DoCrm": mensagem publicada por um webhook do CRM (a tela alinha as suas à direita). Reconhece pelo dono do webhook (a aplicação do CRM),
+        // que vale mesmo depois de reiniciar o servidor; o guardado em memória cobre respostas que não trazem o dono.
+        var doCrm = Texto(m, "webhook_id") is { } wid
+            && (Texto(m, "application_id") == Opcoes.ClientId || webhooks.Values.Any(w => w.Id == wid));
         var quando = DateTimeOffset.Parse(Texto(m, "timestamp")!, System.Globalization.CultureInfo.InvariantCulture);
-        return new DiscordMensagem(m.GetProperty("id").GetString()!, nome, avatar, conteudo, quando, anexos, doCrm);
+        return new DiscordMensagem(m.GetProperty("id").GetString()!, nome, avatar, conteudo, quando, anexos, doCrm, Texto(m, "edited_timestamp") is not null);
     }
 
     private static readonly System.Text.RegularExpressions.Regex EmojiPersonalizado = new(@"<a?(:\w+:)\d+>", System.Text.RegularExpressions.RegexOptions.Compiled);

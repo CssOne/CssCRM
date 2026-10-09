@@ -21,10 +21,31 @@ public class CrmDiscordChatController(IDiscordChatService chat, ICurrentUserServ
     public async Task<ActionResult<DiscordChatNaoLidasDto>> NaoLidas(CancellationToken ct) =>
         Ok(await chat.ContarNaoLidasAsync(currentUser.UserId, ct));
 
+    /// <summary>Envia um arquivo (imagem, PDF, planilha...) para a conversa, com legenda opcional. Até 10 MB.</summary>
+    [HttpPost("canais/{chave}/anexos")]
+    [RequestSizeLimit(12 * 1024 * 1024)]
+    public async Task<ActionResult<DiscordChatMensagemDto>> EnviarArquivo(string chave, IFormFile arquivo, [FromForm] string? texto, CancellationToken ct)
+    {
+        // Confere o tamanho antes de ler para a memória: um arquivo enorme é recusado sem ocupar o servidor.
+        if (arquivo.Length > DiscordChatService.LimiteDoArquivo)
+        {
+            throw new CssVision.Web.Api.Contracts.Common.CrmBusinessException($"O arquivo pode ter no máximo {DiscordChatService.LimiteDoArquivo / (1024 * 1024)} MB.", "arquivo_grande");
+        }
+
+        await using var memoria = new MemoryStream();
+        await arquivo.CopyToAsync(memoria, ct);
+        return Ok(await chat.EnviarArquivoAsync(currentUser.UserId, chave, texto, arquivo.FileName, arquivo.ContentType, memoria.ToArray(), ct));
+    }
+
     /// <summary>Endereço do canal de voz da conversa no Discord; também avisa a conversa de que a pessoa está numa chamada.</summary>
     [HttpPost("canais/{chave}/chamada")]
     public async Task<ActionResult<DiscordChatChamadaDto>> Chamada(string chave, CancellationToken ct) =>
         Ok(await chat.IniciarChamadaAsync(currentUser.UserId, chave, ct));
+
+    /// <summary>Quem está com o CRM aberto agora nesta conversa.</summary>
+    [HttpGet("canais/{chave}/online")]
+    public async Task<ActionResult<DiscordChatOnlineDto>> Online(string chave, CancellationToken ct) =>
+        Ok(await chat.ListarOnlineAsync(currentUser.UserId, chave, ct));
 
     /// <summary>Pessoas com quem dá para iniciar uma conversa 1:1 (quem vinculou o Discord e já está no servidor).</summary>
     [HttpGet("contatos")]
@@ -42,5 +63,26 @@ public class CrmDiscordChatController(IDiscordChatService chat, ICurrentUserServ
 
     [HttpPost("canais/{chave}/mensagens")]
     public async Task<ActionResult<DiscordChatMensagemDto>> Enviar(string chave, DiscordChatEnviarRequest request, CancellationToken ct) =>
-        Ok(await chat.EnviarAsync(currentUser.UserId, chave, request.Texto, ct));
+        Ok(await chat.EnviarAsync(currentUser.UserId, chave, request.Texto, ct, request.Mencoes));
+
+    /// <summary>Compartilha um lead (resumo + link) na conversa, para a equipe conversar sobre ele.</summary>
+    [HttpPost("canais/{chave}/lead")]
+    public async Task<ActionResult<DiscordChatMensagemDto>> CompartilharLead(string chave, DiscordChatLeadRequest request, CancellationToken ct) =>
+        Ok(await chat.CompartilharLeadAsync(currentUser.UserId, chave, request.LeadId, request.Comentario, ct));
+
+    /// <summary>Edita uma mensagem da própria pessoa (publicada pelo CRM).</summary>
+    [HttpPut("canais/{chave}/mensagens/{mensagemId}")]
+    public async Task<IActionResult> Editar(string chave, string mensagemId, DiscordChatEditarRequest request, CancellationToken ct)
+    {
+        await chat.EditarMensagemAsync(currentUser.UserId, chave, mensagemId, request.Texto, ct);
+        return NoContent();
+    }
+
+    /// <summary>Apaga uma mensagem da própria pessoa (publicada pelo CRM).</summary>
+    [HttpDelete("canais/{chave}/mensagens/{mensagemId}")]
+    public async Task<IActionResult> Apagar(string chave, string mensagemId, CancellationToken ct)
+    {
+        await chat.ApagarMensagemAsync(currentUser.UserId, chave, mensagemId, ct);
+        return NoContent();
+    }
 }
