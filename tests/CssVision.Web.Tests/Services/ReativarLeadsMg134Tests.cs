@@ -105,4 +105,40 @@ public class ReativarLeadsMg134Tests
         var depois = (await db.CrmParametros.AsNoTracking().SingleAsync(p => p.Chave == ReativarLeadsMg134BackgroundService.ChaveStatus)).Valor;
         Assert.Contains("já executada antes", depois);
     }
+
+    [Fact]
+    public async Task EmailOuCpfJaUsadoPorLeadAtivo_OuRepetidoEntreArquivados_FicaArquivado_SemQuebrarOResto()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var dia5 = new DateTimeOffset(2026, 10, 5, 12, 0, 0, TimeSpan.Zero);
+        CrmLead Com(string nome, bool arquivado, string? email = null, string? doc = null)
+        {
+            var l = Lead(nome, "MG134", arquivado, arquivado ? dia5 : null);
+            l.EmailNormalizado = email; l.DocumentoNormalizado = doc;
+            return l;
+        }
+        db.CrmLeads.AddRange(
+            Com("ativo-novo-cadastro", false, email: "a@x.com"),             // cliente recadastrado enquanto o antigo estava arquivado
+            Com("arquivado-mesmo-email-do-ativo", true, email: "a@x.com"),   // não pode voltar (índice único de e-mail entre ativos)
+            Com("ativo-cpf", false, doc: "11122233344"),
+            Com("arquivado-mesmo-cpf-do-ativo", true, doc: "11122233344"),   // idem para CPF
+            Com("repetido-1", true, email: "r@x.com"),                        // dois arquivados com o mesmo e-mail: volta só um
+            Com("repetido-2", true, email: "r@x.com"),
+            Com("normal", true, email: "n@x.com"),
+            Com("sem-dados", true));
+        await db.SaveChangesAsync();
+
+        var reativados = await ReativarLeadsMg134BackgroundService.ExecutarAsync(db, CancellationToken.None);
+
+        db.ChangeTracker.Clear();
+        Assert.True(await ArquivadoAsync(db, "arquivado-mesmo-email-do-ativo"));
+        Assert.True(await ArquivadoAsync(db, "arquivado-mesmo-cpf-do-ativo"));
+        Assert.Equal(1, await db.CrmLeads.CountAsync(l => (l.NomeOuRazaoSocial == "repetido-1" || l.NomeOuRazaoSocial == "repetido-2") && !l.Arquivado));
+        Assert.False(await ArquivadoAsync(db, "normal"));
+        Assert.False(await ArquivadoAsync(db, "sem-dados"));
+        Assert.Equal(3, reativados); // normal, sem-dados e um dos repetidos
+        var status = (await db.CrmParametros.AsNoTracking().SingleAsync(p => p.Chave == ReativarLeadsMg134BackgroundService.ChaveStatus)).Valor;
+        Assert.Contains("ficaram arquivados por e-mail/CPF repetido: 3", status);
+    }
 }
