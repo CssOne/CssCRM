@@ -160,7 +160,7 @@ public record DiscordAparenciaCargo(int Cor, bool Destacar);
 public record DiscordCampo(string Nome, string Valor, bool Lado = true);
 
 /// <summary>Aviso do CRM no formato "cartão" do Discord: título, texto, cor da barra lateral e campos organizados.</summary>
-public record DiscordCartao(string Titulo, string? Descricao, int Cor, IReadOnlyList<DiscordCampo>? Campos = null, string? Rodape = null);
+public record DiscordCartao(string Titulo, string? Descricao, int Cor, IReadOnlyList<DiscordCampo>? Campos = null, string? Rodape = null, string? Url = null);
 
 /// <summary>Arquivo a anexar: o conteúdo fica em memória (o limite do chat é pequeno) para poder reenviar se o Discord pedir calma (429).</summary>
 public record DiscordArquivo(string Nome, string TipoDeConteudo, byte[] Conteudo);
@@ -607,6 +607,7 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
         {
             ["title"] = Cortar(cartao.Titulo, 256),
             ["color"] = cartao.Cor,
+            ["url"] = string.IsNullOrWhiteSpace(cartao.Url) ? null : cartao.Url,
             ["timestamp"] = DateTimeOffset.UtcNow.ToString("O"),
         };
         if (!string.IsNullOrWhiteSpace(cartao.Descricao)) embed["description"] = Cortar(cartao.Descricao, 4000);

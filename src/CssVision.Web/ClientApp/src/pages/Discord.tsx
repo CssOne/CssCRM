@@ -258,6 +258,18 @@ function GruposDoDiscord() {
             onChange={(e) => alterarAviso({ metaBatida: e.target.checked })}
           />
           <Checkbox
+            label="Lead novo de anúncio (um aviso por lead, com link para abrir no CRM)"
+            checked={!!avisos.leadNovo}
+            disabled={salvandoAvisos}
+            onChange={(e) => alterarAviso({ leadNovo: e.target.checked })}
+          />
+          <Checkbox
+            label="Resumo do dia da regional (depois das 18h: vendas, adesão, melhores e meta)"
+            checked={!!avisos.resumoDiario}
+            disabled={salvandoAvisos}
+            onChange={(e) => alterarAviso({ resumoDiario: e.target.checked })}
+          />
+          <Checkbox
             label="Resumo diário de leads parados (depois das 9h30)"
             checked={avisos.leadsParados}
             disabled={salvandoAvisos}
