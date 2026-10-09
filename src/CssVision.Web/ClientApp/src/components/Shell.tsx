@@ -17,6 +17,7 @@ import {
   Megaphone,
   Menu as MenuIcon,
   MessageCircle,
+  MessagesSquare,
   Monitor,
   Moon,
   Search,
@@ -60,6 +61,7 @@ const iconesPorChave: Record<string, typeof Gauge> = {
   database: Database,
   "life-buoy": LifeBuoy,
   "message-circle": MessageCircle,
+  "messages-square": MessagesSquare,
   wallet: Wallet,
   monitor: Monitor,
 };

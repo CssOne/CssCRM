@@ -14,67 +14,12 @@ namespace CssVision.Web.Tests.Services;
 /// <summary>Grupos da empresa no Discord: um canal + um cargo por regional/grupo, e os cargos de cada pessoa seguem o CRM.</summary>
 public class DiscordGruposServiceTests
 {
-    private sealed class ServidorFalso : IDiscordGuildApi
-    {
-        private int _proximoId = 1000;
-        public HashSet<string> Cargos { get; } = [];
-        public HashSet<string> Canais { get; } = [];
-        public Dictionary<string, string> NomesDeCargo { get; } = [];
-        /// <summary>Membros do servidor (id do Discord → cargos). Quem não está aqui "não entrou no servidor".</summary>
-        public Dictionary<string, HashSet<string>> Membros { get; } = [];
-        public bool SemPermissao { get; set; }
-
-        private string Novo() => (_proximoId++).ToString();
-
-        public Task<HashSet<string>> ListarIdsDeCargosAsync(CancellationToken ct) => Task.FromResult(new HashSet<string>(Cargos));
-
-        public Task<string> CriarCargoAsync(string nome, CancellationToken ct)
-        {
-            if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para criar um cargo.");
-            var id = Novo();
-            Cargos.Add(id);
-            NomesDeCargo[id] = nome;
-            return Task.FromResult(id);
-        }
-
-        public Task<string> CriarCategoriaAsync(string nome, CancellationToken ct)
-        {
-            var id = Novo();
-            Canais.Add(id);
-            return Task.FromResult(id);
-        }
-
-        public Task<string> CriarCanalDeTextoAsync(string nome, string categoriaId, string cargoId, string topico, CancellationToken ct)
-        {
-            var id = Novo();
-            Canais.Add(id);
-            return Task.FromResult(id);
-        }
-
-        public Task<bool> CanalExisteAsync(string canalId, CancellationToken ct) => Task.FromResult(Canais.Contains(canalId));
-
-        public Task<IReadOnlyCollection<string>?> ObterCargosDoMembroAsync(string discordUserId, CancellationToken ct) =>
-            Task.FromResult<IReadOnlyCollection<string>?>(Membros.TryGetValue(discordUserId, out var c) ? c.ToList() : null);
-
-        public Task AtribuirCargoAsync(string discordUserId, string cargoId, CancellationToken ct)
-        {
-            Membros[discordUserId].Add(cargoId);
-            return Task.CompletedTask;
-        }
-
-        public Task RemoverCargoAsync(string discordUserId, string cargoId, CancellationToken ct)
-        {
-            Membros[discordUserId].Remove(cargoId);
-            return Task.CompletedTask;
-        }
-    }
-
     private static DiscordOptions Configurado() => new()
     {
         BotToken = "bot", ClientId = "app-1", ClientSecret = "segredo", GuildId = "servidor-1", UrlPublica = "https://crm.exemplo.com/",
     };
 
-    private static DiscordGruposService Montar(ApplicationDbContext db, ServidorFalso servidor, DiscordOptions? opcoes = null) =>
+    private static DiscordGruposService Montar(ApplicationDbContext db, DiscordServidorFalso servidor, DiscordOptions? opcoes = null) =>
         new(db, servidor, Options.Create(opcoes ?? Configurado()), NullLogger<DiscordGruposService>.Instance);
 
     private static async Task VincularAsync(ApplicationDbContext db, Guid usuarioId, string discordId)
@@ -96,7 +41,7 @@ public class DiscordGruposServiceTests
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
-        var servico = Montar(db, new ServidorFalso(), new DiscordOptions());
+        var servico = Montar(db, new DiscordServidorFalso(), new DiscordOptions());
 
         var ex = await Assert.ThrowsAsync<CrmBusinessException>(() => servico.SincronizarAsync(CancellationToken.None));
         Assert.Equal("discord_nao_configurado", ex.Codigo);
@@ -109,7 +54,7 @@ public class DiscordGruposServiceTests
         await using var db = factory.CreateContext();
         var regional = await factory.CriarRegionalAsync(db, "MG132");
         await factory.CriarGrupoAsync(db, regional.Id, "Growth Sales");
-        var servidor = new ServidorFalso();
+        var servidor = new DiscordServidorFalso();
 
         var resultado = await Montar(db, servidor).SincronizarAsync(CancellationToken.None);
 
@@ -129,7 +74,7 @@ public class DiscordGruposServiceTests
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
         await factory.CriarRegionalAsync(db, "MG132");
-        var servidor = new ServidorFalso();
+        var servidor = new DiscordServidorFalso();
         var servico = Montar(db, servidor);
 
         await servico.SincronizarAsync(CancellationToken.None);
@@ -146,7 +91,7 @@ public class DiscordGruposServiceTests
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
         await factory.CriarRegionalAsync(db, "MG132");
-        var servidor = new ServidorFalso();
+        var servidor = new DiscordServidorFalso();
         var servico = Montar(db, servidor);
         await servico.SincronizarAsync(CancellationToken.None);
 
@@ -172,7 +117,7 @@ public class DiscordGruposServiceTests
         ana.GrupoId = grupo.Id;
         await db.SaveChangesAsync();
         await VincularAsync(db, ana.Id, "d-ana");
-        var servidor = new ServidorFalso();
+        var servidor = new DiscordServidorFalso();
         servidor.Membros["d-ana"] = [];
 
         var resultado = await Montar(db, servidor).SincronizarAsync(CancellationToken.None);
@@ -195,7 +140,7 @@ public class DiscordGruposServiceTests
         ana.RegionalId = regional.Id;
         await db.SaveChangesAsync();
         await VincularAsync(db, ana.Id, "d-ana");
-        var servidor = new ServidorFalso();
+        var servidor = new DiscordServidorFalso();
         servidor.Membros["d-ana"] = ["cargo-de-fora-do-crm"];
         var servico = Montar(db, servidor);
         await servico.SincronizarAsync(CancellationToken.None);
@@ -217,7 +162,7 @@ public class DiscordGruposServiceTests
         await using var db = factory.CreateContext();
         var ana = await factory.CriarUsuarioAsync(db, "Ana");
         await VincularAsync(db, ana.Id, "d-ana");
-        var servidor = new ServidorFalso(); // d-ana não é membro
+        var servidor = new DiscordServidorFalso(); // d-ana não é membro
 
         var resultado = await Montar(db, servidor).SincronizarAsync(CancellationToken.None);
 
@@ -233,7 +178,7 @@ public class DiscordGruposServiceTests
         var gestora = await factory.CriarUsuarioAsync(db, "Gestora");
         await factory.AtribuirPapelAsync(db, gestora, Roles.GestorComercial);
         await VincularAsync(db, gestora.Id, "d-gestora");
-        var servidor = new ServidorFalso();
+        var servidor = new DiscordServidorFalso();
         servidor.Membros["d-gestora"] = [];
 
         await Montar(db, servidor).SincronizarAsync(CancellationToken.None);
@@ -248,7 +193,7 @@ public class DiscordGruposServiceTests
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
         await factory.CriarRegionalAsync(db, "MG132");
-        var servidor = new ServidorFalso { SemPermissao = true };
+        var servidor = new DiscordServidorFalso { SemPermissao = true };
 
         var resultado = await Montar(db, servidor).SincronizarAsync(CancellationToken.None);
 
@@ -264,7 +209,7 @@ public class DiscordGruposServiceTests
         await using var db = factory.CreateContext();
         var regional = await factory.CriarRegionalAsync(db, "MG132");
         var grupo = await factory.CriarGrupoAsync(db, regional.Id, "Growth Sales");
-        var servico = Montar(db, new ServidorFalso());
+        var servico = Montar(db, new DiscordServidorFalso());
         await servico.SincronizarAsync(CancellationToken.None);
 
         grupo.Ativo = false;

@@ -1529,3 +1529,34 @@ export interface AlertaDistribuicao {
   leadsBloqueadosPorHorario: number;
   consultoresForaDoHorario: number;
 }
+
+/** Grupo de conversa que o usuário pode abrir no chat. */
+export interface DiscordChatCanal {
+  chave: string;
+  nome: string;
+}
+
+export interface DiscordChatAnexo {
+  nome: string;
+  url: string;
+  imagem: boolean;
+}
+
+export interface DiscordChatMensagem {
+  id: string;
+  autorNome: string;
+  autorFotoUrl?: string | null;
+  conteudo: string;
+  criadaEm: string;
+  anexos: DiscordChatAnexo[];
+  /** Publicada pelo CRM (a tela alinha à direita as do próprio usuário). */
+  doCrm: boolean;
+}
+
+export interface DiscordChatMensagens {
+  mensagens: DiscordChatMensagem[];
+  /** Pode haver mensagens mais antigas. */
+  temMais: boolean;
+  /** O Discord entregou as mensagens sem texto: falta ligar "Message Content Intent" no portal do desenvolvedor. */
+  conteudoOculto: boolean;
+}

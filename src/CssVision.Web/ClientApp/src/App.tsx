@@ -24,6 +24,7 @@ import { ConfiguracoesPage } from "./pages/portal/Configuracoes";
 import { TrafegoPagoPage } from "./pages/marketing/TrafegoPago";
 import { BackupsPage } from "./pages/admin/Backups";
 import { SuportePage } from "./pages/Suporte";
+import { ChatPage } from "./pages/Chat";
 import { DiscordPage } from "./pages/Discord";
 import { TvComercialPage } from "./pages/tv/TvComercial";
 import { GestaoFinanceiraPage } from "./pages/crm/GestaoFinanceira";
@@ -137,6 +138,7 @@ export default function App() {
 
       <Route path="/tv/comercial" element={<RotaTelaCheia papeis={PAPEIS_GESTAO}><TvComercialPage /></RotaTelaCheia>} />
       <Route path="/app/suporte" element={<RotaProtegida><SuportePage /></RotaProtegida>} />
+      <Route path="/app/chat" element={<RotaProtegida><ChatPage /></RotaProtegida>} />
       <Route path="/app/discord" element={<RotaProtegida><DiscordPage /></RotaProtegida>} />
 
       <Route path="/app/portal" element={<RotaProtegida><PortalDashboardPage /></RotaProtegida>} />
