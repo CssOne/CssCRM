@@ -18,7 +18,7 @@ public sealed class ActivityService(
             .Include(a => a.Lead)
             .Include(a => a.Opportunity)
             .Include(a => a.Responsavel)
-            .Where(a => !a.Arquivado)
+            .Where(a => !a.Arquivado && !a.Lead.Arquivado) // atividade de lead excluído (lixeira) não aparece
             .AsQueryable();
 
         if (filtro.ResponsavelId.HasValue)

@@ -852,7 +852,7 @@ public sealed class LeadService(
 
     public async Task<IReadOnlyList<LeadLixeiraDto>> ListarLixeiraAsync(CancellationToken ct)
     {
-        var query = await QueryEscopadaAsync(incluirArquivados: true, ct);
+        var query = await QueryEscopadaAsync(incluirArquivados: true, ct, incluirLixeira: true);
         var excluidos = await query
             .Where(l => l.Arquivado && l.ArquivadoPorId != null)
             .OrderByDescending(l => l.ArquivadoEm)
@@ -1098,10 +1098,12 @@ public sealed class LeadService(
 
     // --- Métodos auxiliares privados ---
 
-    private async Task<IQueryable<CrmLead>> QueryEscopadaAsync(bool incluirArquivados, CancellationToken ct)
+    private async Task<IQueryable<CrmLead>> QueryEscopadaAsync(bool incluirArquivados, CancellationToken ct, bool incluirLixeira = false)
     {
         var query = db.CrmLeads.AsNoTracking().AsQueryable();
         if (!incluirArquivados) query = query.Where(l => !l.Arquivado);
+        // Excluídos pelo CRM ficam só na lixeira, nem o "inclui arquivados" os traz de volta.
+        else if (!incluirLixeira) query = query.Where(LixeiraDoQuadro.ForaDaLixeira);
 
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
         if (visiveis is not null)
