@@ -15,6 +15,12 @@ public interface IDiscordGuildApi
 {
     Task<HashSet<string>> ListarIdsDeCargosAsync(CancellationToken ct);
 
+    /// <summary>Todos os membros do servidor (até 5.000). Exige a "Intenção dos membros do servidor" ligada no portal.</summary>
+    Task<IReadOnlyList<DiscordMembroDoServidor>> ListarMembrosAsync(CancellationToken ct);
+
+    /// <summary>Cargos do servidor, com o nome.</summary>
+    Task<IReadOnlyList<DiscordCargoDoServidor>> ListarCargosAsync(CancellationToken ct);
+
     Task<string> CriarCargoAsync(string nome, CancellationToken ct, DiscordAparenciaCargo? aparencia = null);
 
     /// <summary>Cria a categoria que agrupa os canais do CRM (invisível para quem não tem cargo).</summary>
@@ -156,6 +162,12 @@ public record DiscordAnexo(string Nome, string Url, bool Imagem);
 /// <summary>O que se sabe do membro do servidor: cargos e apelido (nulo = sem apelido; o Discord mostra o nome de usuário).</summary>
 public record DiscordMembro(IReadOnlyCollection<string> Cargos, string? Apelido);
 
+/// <summary>Pessoa no servidor do Discord (membro), como o Discord a devolve.</summary>
+public record DiscordMembroDoServidor(string Id, string Usuario, string? NomeGlobal, string? Apelido, string? AvatarUrl, bool Bot, DateTimeOffset? EntrouEm, IReadOnlyList<string> Cargos);
+
+/// <summary>Cargo do servidor (id e nome).</summary>
+public record DiscordCargoDoServidor(string Id, string Nome);
+
 /// <summary>Cor do cargo (RGB, ex.: <c>0x3498DB</c>) e se aparece separado na lista de membros ("destacar").</summary>
 public record DiscordAparenciaCargo(int Cor, bool Destacar);
 
@@ -211,6 +223,44 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
         return documento.RootElement.EnumerateArray().Select(e => e.GetProperty("id").GetString()!).ToHashSet();
     }
 
+    public async Task<IReadOnlyList<DiscordMembroDoServidor>> ListarMembrosAsync(CancellationToken ct)
+    {
+        var membros = new List<DiscordMembroDoServidor>();
+        string? depois = null;
+        for (var pagina = 0; pagina < 5; pagina++)
+        {
+            var caminho = $"guilds/{Opcoes.GuildId}/members?limit=1000" + (depois is null ? "" : $"&after={Uri.EscapeDataString(depois)}");
+            using var resposta = await EnviarAsync(() => Bot(HttpMethod.Get, caminho), ct);
+            await GarantirAsync(resposta, "listar os membros do servidor", ct);
+            using var documento = await LerAsync(resposta, ct);
+            var lote = documento.RootElement.EnumerateArray().ToList();
+            foreach (var m in lote)
+            {
+                if (!m.TryGetProperty("user", out var u)) continue;
+                var id = Texto(u, "id");
+                if (id is null) continue;
+                var avatar = Texto(u, "avatar") is { } hash ? $"https://cdn.discordapp.com/avatars/{id}/{hash}.png?size=64" : null;
+                var cargos = m.TryGetProperty("roles", out var r) && r.ValueKind == JsonValueKind.Array ? r.EnumerateArray().Select(x => x.GetString()!).ToList() : [];
+                DateTimeOffset? entrou = Texto(m, "joined_at") is { } j && DateTimeOffset.TryParse(j, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : null;
+                membros.Add(new DiscordMembroDoServidor(id, Texto(u, "username") ?? id, Texto(u, "global_name"), Texto(m, "nick"), avatar,
+                    u.TryGetProperty("bot", out var bot) && bot.ValueKind == JsonValueKind.True, entrou, cargos));
+            }
+
+            if (lote.Count < 1000) break;
+            depois = membros[^1].Id;
+        }
+
+        return membros;
+    }
+
+    public async Task<IReadOnlyList<DiscordCargoDoServidor>> ListarCargosAsync(CancellationToken ct)
+    {
+        using var resposta = await EnviarAsync(() => Bot(HttpMethod.Get, $"guilds/{Opcoes.GuildId}/roles"), ct);
+        await GarantirAsync(resposta, "listar os cargos do servidor", ct);
+        using var documento = await LerAsync(resposta, ct);
+        return documento.RootElement.EnumerateArray().Select(e => new DiscordCargoDoServidor(e.GetProperty("id").GetString()!, Texto(e, "name") ?? "cargo")).ToList();
+    }
+
     public async Task<string> CriarCargoAsync(string nome, CancellationToken ct, DiscordAparenciaCargo? aparencia = null) =>
         await CriarAsync($"guilds/{Opcoes.GuildId}/roles",
             new { name = Cortar(nome, 100), permissions = "0", hoist = aparencia?.Destacar ?? false, mentionable = false, color = aparencia?.Cor ?? 0 },
@@ -241,6 +291,7 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
 
     public async Task<bool> CanalExisteAsync(string canalId, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(canalId)) return false; // grupo sem canal (apagado): não há o que consultar
         using var resposta = await EnviarAsync(() => Bot(HttpMethod.Get, $"channels/{canalId}"), ct);
         if (resposta.StatusCode == HttpStatusCode.NotFound) return false;
         await GarantirAsync(resposta, "consultar um canal", ct);

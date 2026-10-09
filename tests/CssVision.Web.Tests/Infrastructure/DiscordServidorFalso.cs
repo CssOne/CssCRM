@@ -58,6 +58,20 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
         return Task.CompletedTask;
     }
 
+    public List<DiscordMembroDoServidor> MembrosDoServidor { get; } = [];
+    public List<DiscordCargoDoServidor> CargosComNome { get; } = [];
+    public int LeiturasDeMembros { get; private set; }
+
+    public Task<IReadOnlyList<DiscordMembroDoServidor>> ListarMembrosAsync(CancellationToken ct)
+    {
+        if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para listar os membros.");
+        LeiturasDeMembros++;
+        return Task.FromResult<IReadOnlyList<DiscordMembroDoServidor>>(MembrosDoServidor.ToList());
+    }
+
+    public Task<IReadOnlyList<DiscordCargoDoServidor>> ListarCargosAsync(CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<DiscordCargoDoServidor>>(CargosComNome.ToList());
+
     public List<string> CanaisApagados { get; } = [];
 
     public Task ApagarCanalAsync(string canalId, CancellationToken ct)

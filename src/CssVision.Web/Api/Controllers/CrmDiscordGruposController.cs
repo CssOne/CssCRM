@@ -28,6 +28,10 @@ public class CrmDiscordGruposController(IDiscordGruposService grupos, IDiscordAv
         return NoContent();
     }
 
+    /// <summary>Volta a ligar um grupo cujo canal foi apagado (depois, "Sincronizar grupos" recria o canal).</summary>
+    [HttpPut("canais/{chave}/religar")]
+    public async Task<ActionResult<DiscordCanalDto>> ReligarCanal(string chave, CancellationToken ct) => Ok(await grupos.ReligarCanalAsync(chave, ct));
+
     /// <summary>Esconde (ou mostra de novo) um canal extra no chat, sem mexer no Discord.</summary>
     [HttpPut("canais/{chave}/arquivado")]
     public async Task<ActionResult<DiscordCanalDto>> ArquivarCanal(string chave, [FromBody] DiscordArquivarCanalRequest request, CancellationToken ct) =>

@@ -1049,7 +1049,7 @@ public sealed class DiscordChatService(
 
         var papeis = await db.UserRoles.Where(ur => ur.UserId == usuarioId)
             .Join(db.Roles, ur => ur.RoleId, r => r.Id, (_, r) => r.Name!).ToListAsync(ct);
-        var canais = await db.CrmDiscordCanais.AsNoTracking().Where(c => c.Ativo && c.Chave != DiscordGruposService.ChaveConversas && !c.Chave.StartsWith(DiscordGruposService.PrefixoExtraVoz)).ToListAsync(ct);
+        var canais = await db.CrmDiscordCanais.AsNoTracking().Where(c => c.Ativo && c.Chave != DiscordGruposService.ChaveConversas && !c.Desligado && !c.Chave.StartsWith(DiscordGruposService.PrefixoExtraVoz)).ToListAsync(ct);
 
         if (papeis.Any(p => Roles.VisaoTotal.Contains(p))) return canais;
 

@@ -80,16 +80,15 @@ public class DiscordApagarEVozExtraTests
     }
 
     [Fact]
-    public async Task Apagar_CanalDeGrupoOuDeConversas_NuncaE()
+    public async Task Apagar_CanalDeConversasOuInexistente_NaoE()
     {
         using var factory = new TestDbContextFactory();
         var c = await MontarAsync(factory);
 
-        var geral = await Assert.ThrowsAsync<CrmBusinessException>(() => c.Grupos().ApagarCanalAsync("geral", "Geral", CancellationToken.None));
         var conversas = await Assert.ThrowsAsync<CrmBusinessException>(() => c.Grupos().ApagarCanalAsync("conversas", "Conversas diretas", CancellationToken.None));
         var inexistente = await Assert.ThrowsAsync<CrmBusinessException>(() => c.Grupos().ApagarCanalAsync("extra:nao-existe", "x", CancellationToken.None));
 
-        Assert.All([geral, conversas, inexistente], e => Assert.Equal("canal_nao_apagavel", e.Codigo));
+        Assert.All([conversas, inexistente], e => Assert.Equal("canal_nao_apagavel", e.Codigo));
         Assert.Empty(c.Servidor.CanaisApagados);
     }
 

@@ -243,6 +243,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<Services.Discord.IDiscordChatService, Services.Discord.DiscordChatService>();
         services.AddScoped<Services.Discord.IDiscordAvisosNosCanaisService, Services.Discord.DiscordAvisosNosCanaisService>();
         services.AddScoped<Services.Discord.IDiscordComandosService, Services.Discord.DiscordComandosService>();
+        services.AddScoped<Services.Discord.IDiscordMembrosService, Services.Discord.DiscordMembrosService>();
         services.AddScoped<IVendaPublicador>(sp => sp.GetRequiredService<Services.Discord.IDiscordAvisosNosCanaisService>());
         services.AddHostedService<Services.Discord.DiscordAvisosBackgroundService>();
         services.AddHostedService<Services.Discord.DiscordGruposBackgroundService>();

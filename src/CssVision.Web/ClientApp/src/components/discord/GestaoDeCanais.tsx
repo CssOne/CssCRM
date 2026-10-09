@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, Check, Pencil, Plus, Trash2, Volume2, X } from "lucide-react";
+import { Archive, ArchiveRestore, Check, Pencil, Plus, Trash2, Unplug, Volume2, X } from "lucide-react";
 import { useState } from "react";
 import { api, ApiRequestError } from "../../lib/api";
 import type { DiscordCanal } from "../../lib/types";
@@ -40,6 +40,16 @@ export function GestaoDeCanais({ canais, aoMudar }: { canais: DiscordCanal[]; ao
       notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível apagar o canal.");
     } finally {
       setApagandoEmAndamento(false);
+    }
+  }
+
+  async function religar(c: DiscordCanal) {
+    try {
+      await api.put(`/crm/discord/grupos/canais/${encodeURIComponent(c.chave)}/religar`);
+      aoMudar();
+      notificar("success", "Canal religado. Clique em “Sincronizar grupos” para recriá-lo no Discord.");
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível religar o canal.");
     }
   }
 
@@ -93,8 +103,21 @@ export function GestaoDeCanais({ canais, aoMudar }: { canais: DiscordCanal[]; ao
                 <span className="font-medium text-[var(--fg)]">{c.nome}</span>
                 {!c.ativo && <Badge variant="neutral">inativo</Badge>}
                 {c.voz && <Volume2 className="size-4 text-[var(--fg-muted)]" aria-label="canal de voz" />}
+                {c.desligado && <Badge variant="warning">sem canal no Discord</Badge>}
                 {c.extra && <Badge variant="info">extra · vê: {nomeDoGrupo(c.acessoChave)}</Badge>}
                 <span className="ml-auto flex items-center gap-1">
+                  {c.desligado && (
+                    <button
+                      type="button"
+                      onClick={() => void religar(c)}
+                      className="flex items-center gap-1 rounded p-1 text-xs text-[var(--brand)] hover:bg-[var(--surface-hover)]"
+                      aria-label={`Religar ${c.nome}`}
+                      title="Permite recriar o canal na próxima sincronização"
+                    >
+                      <Unplug className="size-4" /> Religar
+                    </button>
+                  )}
+                  {!c.desligado && (
                   <button
                     type="button"
                     onClick={() => setEditando({ chave: c.chave, nome: c.nome })}
@@ -104,6 +127,7 @@ export function GestaoDeCanais({ canais, aoMudar }: { canais: DiscordCanal[]; ao
                   >
                     <Pencil className="size-4" />
                   </button>
+                  )}
                   {c.extra && !c.voz && (
                     <button
                       type="button"
@@ -115,7 +139,7 @@ export function GestaoDeCanais({ canais, aoMudar }: { canais: DiscordCanal[]; ao
                       {c.ativo ? <Archive className="size-4" /> : <ArchiveRestore className="size-4" />}
                     </button>
                   )}
-                  {c.extra && (
+                  {c.chave !== "conversas" && !c.desligado && (
                     <button
                       type="button"
                       onClick={() => {
@@ -156,8 +180,13 @@ export function GestaoDeCanais({ canais, aoMudar }: { canais: DiscordCanal[]; ao
       >
         <div className="space-y-2">
           <p className="text-sm text-[var(--fg)]">
-            Isto apaga o canal <strong>{apagando?.nome}</strong> no Discord, com todas as mensagens. <strong>Não dá para desfazer.</strong>
+            Isto apaga o canal <strong>{apagando?.nome}</strong> no Discord (texto e voz), com todas as mensagens. <strong>Não dá para desfazer.</strong>
           </p>
+          {!apagando?.extra && (
+            <p className="text-sm text-[var(--fg-muted)]">
+              É um canal de grupo: o grupo e o cargo continuam, e ele só volta se você clicar em Religar e depois em “Sincronizar grupos”, já vazio.
+            </p>
+          )}
           <label htmlFor="apagar-confirmacao" className="text-sm font-medium text-[var(--fg)]">
             Digite o nome do canal para confirmar
           </label>

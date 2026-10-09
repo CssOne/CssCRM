@@ -18,7 +18,7 @@ public record DiscordAvisosRequest(bool Ativos);
 public record DiscordTesteDto(bool Enviado, string Mensagem);
 
 /// <summary>Grupo do CRM que existe como canal no Discord.</summary>
-public record DiscordCanalDto(string Chave, string Nome, bool Ativo, bool Extra = false, string? AcessoChave = null, bool Voz = false);
+public record DiscordCanalDto(string Chave, string Nome, bool Ativo, bool Extra = false, string? AcessoChave = null, bool Voz = false, bool Desligado = false);
 
 public record DiscordCriarCanalRequest(string Nome, string AcessoChave, string? Topico = null, bool Voz = false);
 
@@ -104,3 +104,12 @@ public record DiscordChatChamadaDto(string Url, bool Avisou);
 /// <param name="Total">Soma das mensagens não lidas de todas as conversas (o número do menu).</param>
 /// <param name="PorConversa">Não lidas por conversa (chave da conversa → quantidade; só as que têm alguma). 50 significa "50 ou mais".</param>
 public record DiscordChatNaoLidasDto(int Total, IReadOnlyDictionary<string, int> PorConversa);
+
+/// <summary>Pessoa do CRM ligada a um membro do Discord.</summary>
+public record DiscordMembroVinculoDto(Guid UsuarioId, string Nome, string? Regional, bool Ativo);
+
+/// <summary>Membro do servidor do Discord, com o vínculo no CRM (se houver) e os cargos.</summary>
+public record DiscordMembroDto(string Id, string Nome, string Usuario, string? AvatarUrl, bool Bot, DateTimeOffset? EntrouEm, IReadOnlyList<string> Cargos, DiscordMembroVinculoDto? Vinculo);
+
+/// <summary>Quem está no servidor e quem vinculou o Discord ao CRM mas não está mais lá.</summary>
+public record DiscordMembrosDto(int Total, int Vinculados, int SemVinculo, int Bots, IReadOnlyList<DiscordMembroDto> Itens, IReadOnlyList<DiscordMembroVinculoDto> ForaDoServidor);
