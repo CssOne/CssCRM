@@ -69,4 +69,40 @@ public class ReativarLeadsMg134Tests
         db.ChangeTracker.Clear();
         Assert.True(await ArquivadoAsync(db, "sistema-134"));
     }
+
+    [Fact]
+    public async Task SemNadaElegivel_NaoMarcaComoFeita_GravaODiagnostico_ETentaDeNovoNaProximaInicializacao()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var pessoa = await factory.CriarUsuarioAsync(db, "Admin");
+        db.CrmLeads.AddRange(
+            Lead("por-pessoa", "MG134", true, new DateTimeOffset(2026, 10, 5, 12, 0, 0, TimeSpan.Zero), pessoa.Id),
+            Lead("antigo", "MG134", true, new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.Zero)),
+            Lead("sem-data", "MG134", true, null));
+        await db.SaveChangesAsync();
+
+        Assert.Equal(0, await ReativarLeadsMg134BackgroundService.ExecutarAsync(db, CancellationToken.None));
+
+        // Nada voltou: não há marcador, e o diagnóstico (chave "notion:", visível na tela de sincronização) explica o porquê.
+        Assert.False(await db.CrmParametros.AnyAsync(p => p.Chave == ReativarLeadsMg134BackgroundService.ChaveExecutado));
+        var status = (await db.CrmParametros.AsNoTracking().SingleAsync(p => p.Chave == ReativarLeadsMg134BackgroundService.ChaveStatus)).Valor;
+        Assert.StartsWith("notion:", ReativarLeadsMg134BackgroundService.ChaveStatus);
+        Assert.Contains("MG134 arquivados: 3", status);
+        Assert.Contains("por pessoa: 1", status);
+        Assert.Contains("antes de 04/10: 1", status);
+        Assert.Contains("sem data: 1", status);
+        Assert.Contains("desarquivados agora: 0", status);
+
+        // Na próxima inicialização, um lead elegível aparece e então volta (e aí sim marca como feita).
+        db.CrmLeads.Add(Lead("elegivel", "MG134", true, new DateTimeOffset(2026, 10, 6, 12, 0, 0, TimeSpan.Zero)));
+        await db.SaveChangesAsync();
+        Assert.Equal(1, await ReativarLeadsMg134BackgroundService.ExecutarAsync(db, CancellationToken.None));
+        Assert.True(await db.CrmParametros.AnyAsync(p => p.Chave == ReativarLeadsMg134BackgroundService.ChaveExecutado));
+
+        // Já feita: o diagnóstico mostra o marcador.
+        Assert.Null(await ReativarLeadsMg134BackgroundService.ExecutarAsync(db, CancellationToken.None));
+        var depois = (await db.CrmParametros.AsNoTracking().SingleAsync(p => p.Chave == ReativarLeadsMg134BackgroundService.ChaveStatus)).Valor;
+        Assert.Contains("já executada antes", depois);
+    }
 }
