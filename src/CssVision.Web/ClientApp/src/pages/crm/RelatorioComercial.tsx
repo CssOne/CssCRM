@@ -40,6 +40,8 @@ function atalhosPeriodo() {
   const primeiroDoMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
   return [
     { rotulo: "Este mês", inicio: dataIso(primeiroDoMes), fim: dataIso(hoje) },
+    // Do dia 1 ao último dia do mês anterior (o dia 0 de um mês é o último do anterior).
+    { rotulo: "Mês passado", inicio: dataIso(new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1)), fim: dataIso(new Date(hoje.getFullYear(), hoje.getMonth(), 0)) },
     { rotulo: "Últimos 3 meses", inicio: dataIso(new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1)), fim: dataIso(hoje) },
     { rotulo: "Este ano", inicio: `${hoje.getFullYear()}-01-01`, fim: dataIso(hoje) },
     { rotulo: "Desde 01/01/2025", inicio: "2025-01-01", fim: dataIso(hoje) },
@@ -95,7 +97,8 @@ export function RelatorioComercialPage() {
   const { tema } = useTheme();
   const base = baseOptions(tema === "dark");
   const atalhos = useMemo(atalhosPeriodo, []);
-  const [inicio, setInicio] = useState("2025-01-01");
+  // Abre em "Este mês": do dia 1 até hoje.
+  const [inicio, setInicio] = useState(() => atalhos[0].inicio);
   const [fim, setFim] = useState(() => dataIso(new Date()));
   const [dados, setDados] = useState<RelatorioComercial | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -154,6 +157,10 @@ export function RelatorioComercialPage() {
   // terminar no dia novo — quem escolheu um período passado continua nele.
   useCrmEventos(() => setRecarregar((n) => n + 1), 500);
   useMudancaDeDia((hoje, anterior) => {
+    // "Este mês" aberto na virada do mês: o período passa para o mês novo (início e fim juntos).
+    if (fim === anterior && inicio.slice(0, 7) === anterior.slice(0, 7) && inicio.endsWith("-01") && hoje.slice(0, 7) !== anterior.slice(0, 7)) {
+      setInicio(`${hoje.slice(0, 7)}-01`);
+    }
     setFim((atual) => (atual === anterior ? hoje : atual));
     setRecarregar((n) => n + 1);
   });
