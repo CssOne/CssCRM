@@ -1,7 +1,7 @@
-import { Activity, ArrowLeft, ArrowUpRight, CheckCircle2, CircleDollarSign, Info, RefreshCw, Satellite, ShoppingBag, Target, TrendingUp, X } from "lucide-react";
+import { Activity, ArrowLeft, ArrowUpRight, CheckCircle2, CircleDollarSign, Info, RefreshCw, RotateCcw, Satellite, ShoppingBag, Target, TrendingUp, X } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useMemo } from "react";
-import type { TvAdministrativoIndicador, TvAdministrativoRegistro, TvComercial, TvVendaMes } from "../../lib/types";
+import type { TvAdministrativoIndicador, TvAdministrativoRegistro, TvComercial, TvVenda, TvVendaMes } from "../../lib/types";
 import { diaBrasilia, diaMesBr, dataBr, Foto, horaBr, moeda, moedaExata } from "./tvComum";
 
 /** O que a janela de detalhes mostra: cada card do painel abre o seu, e dá para navegar de um para o outro (Voltar). */
@@ -100,9 +100,11 @@ function LinhaConsultor({ nome, fotoUrl, regional, destaque, detalhe, valor, aoA
     : <div className="indicator-sale-row">{conteudo}</div>;
 }
 
-export function TvDetalhes({ dados, detalhe, mediaPorDia, projecao, aoAbrir, aoVoltar, aoFechar }: {
+export function TvDetalhes({ dados, detalhe, mediaPorDia, projecao, aoAbrir, aoVoltar, aoFechar, aoRepetir }: {
   dados: TvComercial; detalhe: Detalhe; mediaPorDia: number; projecao: number;
   aoAbrir: (d: Detalhe) => void; aoVoltar?: () => void; aoFechar: () => void;
+  /** Toca de novo a animação de venda concluída desta venda. */
+  aoRepetir?: (v: TvVenda) => void;
 }) {
   useEffect(() => {
     const tecla = (e: KeyboardEvent) => { if (e.key === "Escape") aoFechar(); };
@@ -295,9 +297,19 @@ export function TvDetalhes({ dados, detalhe, mediaPorDia, projecao, aoAbrir, aoV
         ["Placa / contrato", venda?.placa ?? ultima?.numeroContrato ?? "Não informado"],
         ["Origem", venda?.origem ?? ultima?.origem ?? "Não informado"],
       ]} />
-      {consultorId && (
-        <div style={{ marginTop: "1em" }}>
-          <button type="button" className="operational-test-button" style={{ marginLeft: 0 }} onClick={abrirConsultor(consultorId)}>Ver o desempenho de {consultor}</button>
+      {(consultorId || aoRepetir) && (
+        <div style={{ marginTop: "1em", display: "flex", flexWrap: "wrap", gap: "0.6em" }}>
+          {consultorId && <button type="button" className="operational-test-button" style={{ marginLeft: 0 }} onClick={abrirConsultor(consultorId)}>Ver o desempenho de {consultor}</button>}
+          {aoRepetir && (
+            <button type="button" className="operational-test-button sale-replay-button" style={{ marginLeft: 0 }}
+              onClick={() => aoRepetir({
+                vendaId: detalhe.id, consultor, fotoUrl: venda?.fotoUrl ?? ultima?.fotoUrl, regional: venda?.regional ?? ultima!.regional,
+                cliente: venda?.cliente ?? ultima?.cliente, numeroContrato: ultima?.numeroContrato, origem: venda?.origem ?? ultima?.origem,
+                valor: venda?.valor ?? ultima!.valor, dataVenda: data, atualizadaEm: ultima?.atualizadaEm ?? data,
+              })}>
+              <RotateCcw /> Repetir animação da venda
+            </button>
+          )}
         </div>
       )}
     </Moldura>

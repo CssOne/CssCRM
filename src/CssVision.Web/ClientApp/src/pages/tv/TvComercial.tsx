@@ -495,7 +495,7 @@ export function TvComercialPage() {
         <audio ref={audio} src="/sounds/nova-venda.mp3" preload="auto" />
         {pilha.length > 0 && !ativa && (
           <TvDetalhes dados={dados} detalhe={pilha[pilha.length - 1]} mediaPorDia={mediaPorDia} projecao={projecao}
-            aoAbrir={abrirDetalhe} aoVoltar={pilha.length > 1 ? voltarDetalhe : undefined} aoFechar={fecharDetalhe} />
+            aoAbrir={abrirDetalhe} aoVoltar={pilha.length > 1 ? voltarDetalhe : undefined} aoFechar={fecharDetalhe} aoRepetir={repetirAnimacao} />
         )}
         {ativa && <Comemoracao key={ativa.venda.vendaId} venda={ativa.venda} posicao={ativa.posicao} vendasNoMes={ativa.vendasNoMes} aoFechar={fecharAtiva} />}
       </main>
