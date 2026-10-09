@@ -16,3 +16,9 @@ public record DiscordIniciarDto(string Url);
 public record DiscordAvisosRequest(bool Ativos);
 
 public record DiscordTesteDto(bool Enviado, string Mensagem);
+
+/// <summary>Grupo do CRM que existe como canal no Discord.</summary>
+public record DiscordCanalDto(string Chave, string Nome, bool Ativo);
+
+/// <summary>O que a sincronização dos grupos fez, e o que não conseguiu fazer (com o motivo).</summary>
+public record DiscordSincronizacaoDto(int CanaisCriados, int CargosCriados, int MembrosAtualizados, int MembrosForaDoServidor, IReadOnlyList<string> Falhas);

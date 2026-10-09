@@ -224,6 +224,16 @@ public static class ServiceCollectionExtensions
             http.Timeout = TimeSpan.FromSeconds(15);
         });
         services.AddScoped<Services.Discord.IDiscordService, Services.Discord.DiscordService>();
+
+        // Grupos: um canal + um cargo por regional/grupo do CRM, mantidos em dia pela sincronização.
+        services.AddHttpClient<Services.Discord.IDiscordGuildApi, Services.Discord.DiscordGuildApi>(http =>
+        {
+            http.BaseAddress = new Uri(Services.Discord.DiscordApi.UrlBase);
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("DiscordBot (https://cssbrasil.duckdns.org, 1.0)");
+            http.Timeout = TimeSpan.FromSeconds(15);
+        });
+        services.AddScoped<Services.Discord.IDiscordGruposService, Services.Discord.DiscordGruposService>();
+        services.AddHostedService<Services.Discord.DiscordGruposBackgroundService>();
         return services;
     }
 }
