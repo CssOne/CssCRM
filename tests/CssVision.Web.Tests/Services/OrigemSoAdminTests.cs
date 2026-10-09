@@ -68,8 +68,8 @@ public class OrigemSoAdminTests
 
         // O formulário do consultor não tem o campo, então manda Origem nula.
         await service.AtualizarAsync(lead.Id, new LeadUpdateRequest(
-            "Cliente editado", TipoPessoa.Fisica, null, null, null, null, null, null, null, null, null,
-            Origem: null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+            "Cliente editado", TipoPessoa.Fisica, null, "31999990000", null, null, null, null, "Belo Horizonte", "MG", "MG132",
+            Origem: null, null, null, "ABC1D23", null, null, null, null, null, null, null, null, null, null, null,
             null, null, false, null, lead.RowVersion), CancellationToken.None);
 
         var salvo = await db.CrmLeads.AsNoTracking().SingleAsync(l => l.Id == lead.Id);

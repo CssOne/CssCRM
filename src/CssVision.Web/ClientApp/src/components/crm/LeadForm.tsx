@@ -134,6 +134,7 @@ export function LeadForm({
   const [valores, setValores] = useState<LeadFormValues>(valoresIniciais ?? leadFormVazio);
   const [erros, setErros] = useState<Record<string, string>>({});
   const { temPapel } = useAuth();
+  const ehConsultor = temPapel("Comercial") && !temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
   const podeVerMarketing = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
   // Origem do lead é só para administradores (o servidor também não a envia nem a altera para os demais).
   const podeVerOrigem = temPapel("Admin", "GestorMaster", "SupervisorComercial");
@@ -146,7 +147,10 @@ export function LeadForm({
     const novosErros: Record<string, string> = {};
     if (!valores.nomeOuRazaoSocial.trim()) novosErros.nome = "Informe o nome ou razão social.";
     if (valores.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(valores.email)) novosErros.email = "E-mail inválido.";
-    if (valores.estado && valores.estado.length !== 2) novosErros.estado = "Use a sigla do estado (ex: SP).";
+    if (valores.telefone.replace(/\D/g, "").length < 8) novosErros.telefone = "Informe o telefone do cliente.";
+    if (!valores.cidade.trim()) novosErros.cidade = "Informe a cidade.";
+    if (valores.estado.length !== 2) novosErros.estado = "Selecione o estado.";
+    if (!valores.placa.trim()) novosErros.placa = "Informe a placa do veículo.";
     setErros(novosErros);
     return Object.keys(novosErros).length === 0;
   }
@@ -190,8 +194,11 @@ export function LeadForm({
         </div>
 
         <div>
-          <Label htmlFor={`${idPrefix}-tel`}>Telefone</Label>
-          <Input id={`${idPrefix}-tel`} value={valores.telefone} onChange={(e) => set("telefone", e.target.value)} />
+          <Label htmlFor={`${idPrefix}-tel`} required>
+            Telefone
+          </Label>
+          <Input id={`${idPrefix}-tel`} value={valores.telefone} onChange={(e) => set("telefone", e.target.value)} required />
+          <FieldError>{erros.telefone}</FieldError>
         </div>
 
         <div>
@@ -206,12 +213,17 @@ export function LeadForm({
         </div>
 
         <div>
-          <Label htmlFor={`${idPrefix}-cidade`}>Cidade</Label>
-          <Input id={`${idPrefix}-cidade`} value={valores.cidade} onChange={(e) => set("cidade", e.target.value)} />
+          <Label htmlFor={`${idPrefix}-cidade`} required>
+            Cidade
+          </Label>
+          <Input id={`${idPrefix}-cidade`} value={valores.cidade} onChange={(e) => set("cidade", e.target.value)} required />
+          <FieldError>{erros.cidade}</FieldError>
         </div>
 
         <div>
-          <Label htmlFor={`${idPrefix}-estado`}>Estado</Label>
+          <Label htmlFor={`${idPrefix}-estado`} required>
+            Estado
+          </Label>
           <Select id={`${idPrefix}-estado`} value={valores.estado} onChange={(e) => set("estado", e.target.value)}>
             <option value="">Selecione...</option>
             {ESTADOS_BRASIL.map((uf) => (
@@ -225,7 +237,18 @@ export function LeadForm({
 
         <div>
           <Label htmlFor={`${idPrefix}-regional`}>Regional</Label>
-          <Input id={`${idPrefix}-regional`} value={valores.regional} onChange={(e) => set("regional", e.target.value)} />
+          {ehConsultor ? (
+            // Consultor: a regional é sempre a dele (o servidor preenche pelo cadastro do consultor responsável).
+            <Input id={`${idPrefix}-regional`} value={valores.regional} placeholder="Definida pelo consultor responsável" disabled readOnly />
+          ) : (
+            <Input
+              id={`${idPrefix}-regional`}
+              value={valores.regional}
+              placeholder="Vem do consultor responsável"
+              title="Obrigatória: é a regional do consultor responsável; só vale a digitada se ele não tiver regional."
+              onChange={(e) => set("regional", e.target.value)}
+            />
+          )}
         </div>
 
         {podeVerOrigem && (
@@ -249,13 +272,17 @@ export function LeadForm({
         )}
 
         <div>
-          <Label htmlFor={`${idPrefix}-placa`}>Placa do veículo</Label>
+          <Label htmlFor={`${idPrefix}-placa`} required>
+            Placa do veículo
+          </Label>
           <Input
             id={`${idPrefix}-placa`}
             maxLength={10}
             value={valores.placa}
             onChange={(e) => set("placa", e.target.value.toUpperCase())}
+            required
           />
+          <FieldError>{erros.placa}</FieldError>
         </div>
 
         <div>

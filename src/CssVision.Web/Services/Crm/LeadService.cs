@@ -226,8 +226,36 @@ public sealed class LeadService(
         return itens.OrderByDescending(i => i.OcorridoEm).ToList();
     }
 
+    /// <summary>Cadastro de cliente (novo ou editado) exige telefone, cidade, estado (UF) e placa.</summary>
+    private static void ExigirDadosDoCliente(string? telefone, string? cidade, string? estado, string? placa)
+    {
+        if (DocumentValidation.NormalizarTelefone(telefone) is not { Length: > 0 })
+            throw new CrmBusinessException("Informe o telefone do cliente.", "telefone_obrigatorio");
+        if (string.IsNullOrWhiteSpace(cidade))
+            throw new CrmBusinessException("Informe a cidade do cliente.", "cidade_obrigatoria");
+        if (estado?.Trim() is not { Length: 2 })
+            throw new CrmBusinessException("Informe o estado (UF) do cliente.", "estado_obrigatorio");
+        if (placa?.Trim() is not { Length: > 0 and <= 10 })
+            throw new CrmBusinessException("Informe a placa do veículo.", "placa_obrigatoria");
+    }
+
+    /// <summary>
+    /// A regional do cadastro é a do consultor responsável. Sem consultor (ou consultor sem regional) vale a regional informada; sem
+    /// nenhuma das duas o cadastro não pode ser salvo.
+    /// </summary>
+    private async Task<string> RegionalDoCadastroAsync(Guid? responsavelId, string? regionalInformada, CancellationToken ct)
+    {
+        var doConsultor = responsavelId is null ? null
+            : await db.Users.AsNoTracking().Where(u => u.Id == responsavelId).Select(u => u.Regional != null ? u.Regional.Nome : null).FirstOrDefaultAsync(ct);
+        var regional = !string.IsNullOrWhiteSpace(doConsultor) ? doConsultor : regionalInformada?.Trim();
+        if (string.IsNullOrWhiteSpace(regional))
+            throw new CrmBusinessException("Não foi possível definir a regional: o consultor responsável não tem regional cadastrada.", "regional_obrigatoria");
+        return regional;
+    }
+
     public async Task<CriarLeadResultado> CriarAsync(LeadCreateRequest request, CancellationToken ct)
     {
+        ExigirDadosDoCliente(request.Telefone, request.Cidade, request.Estado, request.Placa);
         var documentoNormalizado = DocumentValidation.NormalizarDocumento(request.Documento, out var documentoValido);
         if (!string.IsNullOrEmpty(documentoNormalizado) && !documentoValido)
         {
@@ -274,6 +302,7 @@ public sealed class LeadService(
         // ainda" — mas um lead cadastrado manualmente já é trabalhado por quem o cadastrou, então
         // entra direto na primeira etapa ativa do funil em vez de cair na coluna "Sem etapa".
         var etapaId = request.EtapaId ?? await ObterEtapaInicialIdAsync(ct);
+        var regionalDoCadastro = await RegionalDoCadastroAsync(responsavelId, request.Regional, ct);
 
         var lead = new CrmLead
         {
@@ -289,7 +318,7 @@ public sealed class LeadService(
             DataNascimento = request.DataNascimento,
             Cidade = request.Cidade,
             Estado = request.Estado?.ToUpperInvariant(),
-            Regional = request.Regional,
+            Regional = regionalDoCadastro,
             Origem = request.Origem,
             Campanha = request.Campanha,
             ProdutoInteresse = request.ProdutoInteresse,
@@ -335,6 +364,7 @@ public sealed class LeadService(
     public async Task<LeadDetailDto> AtualizarAsync(Guid id, LeadUpdateRequest request, CancellationToken ct)
     {
         var lead = await CarregarComEscopoAsync(id, ct);
+        ExigirDadosDoCliente(request.Telefone, request.Cidade, request.Estado, request.Placa);
 
         db.Entry(lead).Property(l => l.RowVersion).OriginalValue = request.RowVersion;
 
@@ -375,7 +405,7 @@ public sealed class LeadService(
         lead.DataNascimento = request.DataNascimento;
         lead.Cidade = request.Cidade;
         lead.Estado = request.Estado?.ToUpperInvariant();
-        lead.Regional = request.Regional;
+        lead.Regional = await RegionalDoCadastroAsync(lead.ResponsavelId, request.Regional ?? lead.Regional, ct);
         if (PodeVerOrigem) lead.Origem = request.Origem;
         lead.Campanha = request.Campanha;
         lead.ProdutoInteresse = request.ProdutoInteresse;
