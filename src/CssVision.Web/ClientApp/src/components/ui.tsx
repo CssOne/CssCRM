@@ -324,6 +324,26 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
   );
 }
 
+// --- Fundo de modal/gaveta ---
+
+/**
+ * Fecha ao clicar no fundo, mas só quando o clique COMEÇOU no fundo. Selecionar um texto dentro do formulário arrastando o mouse até fora da
+ * caixa termina o clique no fundo; sem esta checagem o formulário fechava no meio da seleção.
+ */
+function useFecharPeloFundo(onClose: () => void) {
+  const comecouNoFundo = useRef(false);
+  return {
+    onMouseDown: (e: React.MouseEvent<HTMLElement>) => {
+      comecouNoFundo.current = e.target === e.currentTarget;
+    },
+    onClick: (e: React.MouseEvent<HTMLElement>) => {
+      const fechar = comecouNoFundo.current && e.target === e.currentTarget;
+      comecouNoFundo.current = false;
+      if (fechar) onClose();
+    },
+  };
+}
+
 // --- Modal ---
 
 export function Modal({
@@ -348,18 +368,18 @@ export function Modal({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  const fundo = useFecharPeloFundo(onClose);
   if (!open) return null;
 
   const widths = { sm: "max-w-sm", md: "max-w-lg", lg: "max-w-2xl" };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" {...fundo}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
         className={`max-h-[85vh] w-full ${widths[size]} overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl flex flex-col`}
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
           <h2 className="text-base font-semibold text-[var(--fg)]">{title}</h2>
@@ -384,16 +404,16 @@ export function Drawer({ open, onClose, title, children }: { open: boolean; onCl
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  const fundo = useFecharPeloFundo(onClose);
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" role="presentation" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" role="presentation" {...fundo}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
         className="flex h-full w-full max-w-md flex-col border-l border-[var(--border)] bg-[var(--surface)] shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
           <h2 className="text-base font-semibold text-[var(--fg)]">{title}</h2>
