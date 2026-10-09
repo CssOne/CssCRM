@@ -710,7 +710,7 @@ export function LeadsKanbanPage() {
         </div>
         <div className="flex items-end gap-1">
           <div className="w-36">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Venda de</label>
+            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Ativação de</label>
             <Input type="date" value={dataVendaInicio} onChange={(e) => setDataVendaInicio(e.target.value)} />
           </div>
           <div className="w-36">

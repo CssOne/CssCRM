@@ -1101,11 +1101,11 @@ public sealed class LeadService(
         }
         if (filtro.DataVendaInicio.HasValue || filtro.DataVendaFim.HasValue)
         {
-            // Dias de Brasília e só venda ganha (a perda também grava a data de fechamento).
-            var de = filtro.DataVendaInicio is { } vi ? HorarioBrasilia.Inicio(vi) : DateTimeOffset.MinValue;
-            var ate = filtro.DataVendaFim is { } vf ? HorarioBrasilia.Fim(vf) : DateTimeOffset.MaxValue;
+            // Pela data de ativação da venda (sem ela, a data da venda) e só venda ganha (a perda também grava data de fechamento).
+            var per = PeriodoDeAtivacao.De(filtro.DataVendaInicio, filtro.DataVendaFim);
             query = query.Where(l => l.Oportunidades.Any(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho
-                && o.DataEfetivaFechamento >= de && o.DataEfetivaFechamento <= ate));
+                && ((o.AtivoEm != null && o.AtivoEm >= per.AtivacaoDe && o.AtivoEm < per.AtivacaoAte)
+                    || (o.AtivoEm == null && o.DataEfetivaFechamento >= per.VendaDe && o.DataEfetivaFechamento <= per.VendaAte))));
         }
         if (filtro.EtapaId.HasValue) query = query.Where(l => l.Oportunidades.Any(o => o.EtapaId == filtro.EtapaId && !o.Arquivado));
         if (filtro.DataInicio.HasValue)
