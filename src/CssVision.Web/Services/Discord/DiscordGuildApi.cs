@@ -55,6 +55,9 @@ public interface IDiscordGuildApi
 
     Task AdicionarAThreadAsync(string threadId, string discordUserId, CancellationToken ct);
 
+    /// <summary>Registra (substitui) os comandos de barra do bot neste servidor: <c>/vendas</c> e <c>/meta</c>.</summary>
+    Task RegistrarComandosAsync(CancellationToken ct);
+
     /// <summary>Apaga um canal do servidor (irreversível). Canal que já não existe conta como apagado. Exige "Gerenciar canais".</summary>
     Task ApagarCanalAsync(string canalId, CancellationToken ct);
 
@@ -316,6 +319,34 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
         await GarantirAsync(resposta, "enviar a mensagem", ct);
         using var documento = await LerAsync(resposta, ct);
         return LerMensagem(documento.RootElement);
+    }
+
+    public async Task RegistrarComandosAsync(CancellationToken ct)
+    {
+        var comandos = new object[]
+        {
+            new
+            {
+                name = "vendas",
+                description = "Suas vendas e as da sua regional (só você vê a resposta)",
+                options = new object[]
+                {
+                    new
+                    {
+                        type = 3, name = "periodo", description = "Hoje ou o mês todo", required = false,
+                        choices = new object[] { new { name = "hoje", value = "hoje" }, new { name = "mês", value = "mes" } },
+                    },
+                },
+            },
+            new { name = "meta", description = "Andamento da meta do mês da sua regional (só você vê a resposta)" },
+        };
+        using var resposta = await EnviarAsync(() =>
+        {
+            var requisicao = Bot(HttpMethod.Put, $"applications/{Opcoes.ClientId}/guilds/{Opcoes.GuildId}/commands");
+            requisicao.Content = new StringContent(JsonSerializer.Serialize(comandos, Json), Encoding.UTF8, "application/json");
+            return requisicao;
+        }, ct);
+        await GarantirAsync(resposta, "registrar os comandos", ct);
     }
 
     public async Task ApagarCanalAsync(string canalId, CancellationToken ct)

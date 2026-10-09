@@ -278,6 +278,18 @@ function GruposDoDiscord() {
         </div>
       )}
 
+      {canais && canais.length > 0 && (
+        <div className="space-y-1 border-t border-[var(--border)] pt-4">
+          <p className="text-sm font-semibold text-[var(--fg)]">Comandos no Discord: /vendas e /meta</p>
+          <p className="text-xs text-[var(--fg-muted)]">
+            Quem vinculou a conta digita <code>/vendas</code> (suas vendas e as da sua regional; hoje ou no mês) ou <code>/meta</code> (andamento da meta do mês) e vê a resposta só para si, sem dados de clientes.
+            Para ligar: no Portal do Desenvolvedor do Discord, em <em>General Information</em>, copie a <strong>Public Key</strong> para o segredo <code>DISCORD_PUBLIC_KEY</code> do servidor e
+            cole este endereço em <strong>Interactions Endpoint URL</strong>; depois clique em <strong>Sincronizar grupos</strong> para registrar os comandos.
+          </p>
+          <code className="block break-all rounded bg-[var(--bg-muted)] px-2 py-1 text-xs text-[var(--fg)]">{`${window.location.origin}/api/discord/interacoes`}</code>
+        </div>
+      )}
+
       {resultado && (
         <div className="space-y-1 text-sm text-[var(--fg)]">
           <p>
