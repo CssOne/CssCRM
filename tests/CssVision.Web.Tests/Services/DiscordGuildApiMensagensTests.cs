@@ -153,4 +153,83 @@ public class DiscordGuildApiMensagensTests
         // Sem o esquecimento, a segunda tentativa reusaria o webhook morto sem criar outro.
         Assert.Equal(2, manipulador.Chamadas.Count(c => c.Metodo == HttpMethod.Post && c.CaminhoEQuery.EndsWith("/webhooks")));
     }
+
+    [Fact]
+    public async Task CriarConversaPrivada_CriaThreadPrivadaQueNinguemPodeConvidarTerceiros()
+    {
+        var (api, manipulador) = Montar(_ => Json(HttpStatusCode.OK, """{"id":"t1"}"""));
+
+        var id = await api.CriarConversaPrivadaAsync("pai-1", "dm-ana-bia", CancellationToken.None);
+
+        Assert.Equal("t1", id);
+        var chamada = Assert.Single(manipulador.Chamadas);
+        Assert.Equal("/api/v10/channels/pai-1/threads", chamada.CaminhoEQuery);
+        Assert.Contains("\"type\":12", chamada.Corpo);
+        Assert.Contains("\"invitable\":false", chamada.Corpo);
+        Assert.Contains("\"name\":\"dm-ana-bia\"", chamada.Corpo);
+    }
+
+    [Fact]
+    public async Task AdicionarAThread_ChamaOEndpointDeMembroDaThread()
+    {
+        var (api, manipulador) = Montar(_ => new HttpResponseMessage(HttpStatusCode.NoContent));
+
+        await api.AdicionarAThreadAsync("t1", "u9", CancellationToken.None);
+
+        var chamada = Assert.Single(manipulador.Chamadas);
+        Assert.Equal(HttpMethod.Put, chamada.Metodo);
+        Assert.Equal("/api/v10/channels/t1/thread-members/u9", chamada.CaminhoEQuery);
+    }
+
+    [Fact]
+    public async Task CriarCanalDeConversas_EscondeDoEveryone_PermiteAoCargoEscreverNasThreads_ENegaEscreverNoCanal()
+    {
+        var (api, manipulador) = Montar(_ => Json(HttpStatusCode.OK, """{"id":"c1"}"""));
+
+        await api.CriarCanalDeConversasAsync("conversas-diretas", "cat-1", "cargo-geral", CancellationToken.None);
+
+        var corpo = Assert.Single(manipulador.Chamadas).Corpo;
+        Assert.Contains("\"parent_id\":\"cat-1\"", corpo);
+        Assert.Contains("\"id\":\"cargo-geral\"", corpo);
+        Assert.Contains("\"deny\":\"2048\"", corpo);          // ninguém escreve no canal em si
+        Assert.Contains("\"id\":\"app-1\",\"type\":1", corpo);  // o bot tem permissão própria
+    }
+
+    [Fact]
+    public async Task EnviarMensagem_NaThread_UsaOWebhookDoCanalPaiComThreadId()
+    {
+        var canal = $"canal-{Guid.NewGuid():N}";
+        var (api, manipulador) = Montar(c =>
+        {
+            if (c.Metodo == HttpMethod.Get) return Json(HttpStatusCode.OK, "[]");
+            if (c.CaminhoEQuery.EndsWith("/webhooks")) return Json(HttpStatusCode.OK, """{"id":"w3","token":"tk3"}""");
+            return Json(HttpStatusCode.OK, """{"id":"m1","content":"oi","timestamp":"2026-10-07T18:00:00+00:00","webhook_id":"w3","author":{"id":"w3","username":"Ana"}}""");
+        });
+
+        await api.EnviarMensagemAsync(canal, "Ana", null, "oi", CancellationToken.None, "thread-7");
+
+        var envio = manipulador.Chamadas.Single(c => c.CaminhoEQuery.StartsWith("/api/v10/webhooks/w3/tk3"));
+        Assert.Contains("thread_id=thread-7", envio.CaminhoEQuery);
+    }
+
+    [Fact]
+    public async Task EnviarMensagem_NaThread_SeOWebhookNaoServe_OBotPublicaComONomeDeQuemEscreveu()
+    {
+        var canal = $"canal-{Guid.NewGuid():N}";
+        var (api, manipulador) = Montar(c =>
+        {
+            if (c.Metodo == HttpMethod.Get) return Json(HttpStatusCode.OK, "[]");
+            if (c.CaminhoEQuery.EndsWith("/webhooks")) return Json(HttpStatusCode.OK, """{"id":"w4","token":"tk4"}""");
+            if (c.CaminhoEQuery.StartsWith("/api/v10/webhooks/")) return Json(HttpStatusCode.BadRequest, """{"code":220003}""");
+            return Json(HttpStatusCode.OK, """{"id":"m2","content":"**Ana:** oi","timestamp":"2026-10-07T18:00:00+00:00","author":{"id":"bot","username":"CRM"}}""");
+        });
+
+        var enviada = await api.EnviarMensagemAsync(canal, "Ana", null, "oi", CancellationToken.None, "thread-8");
+
+        Assert.Equal("**Ana:** oi", enviada.Conteudo);
+        var plano = manipulador.Chamadas.Last();
+        Assert.Equal("/api/v10/channels/thread-8/messages", plano.CaminhoEQuery);
+        Assert.Equal("Bot token-do-bot", plano.Autorizacao);
+        Assert.Contains("\"parse\":[]", plano.Corpo);
+    }
 }

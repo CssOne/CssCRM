@@ -35,8 +35,22 @@ public interface IDiscordGuildApi
     /// <summary>Últimas mensagens do canal, da mais antiga para a mais nova. <paramref name="antesDeId"/> pagina para trás.</summary>
     Task<IReadOnlyList<DiscordMensagem>> ListarMensagensAsync(string canalId, int limite, string? antesDeId, CancellationToken ct);
 
-    /// <summary>Publica no canal com o nome e a foto da pessoa do CRM (via webhook do próprio CRM) e devolve a mensagem criada.</summary>
-    Task<DiscordMensagem> EnviarMensagemAsync(string canalId, string nome, string? fotoUrl, string texto, CancellationToken ct);
+    /// <summary>
+    /// Publica no canal com o nome e a foto da pessoa do CRM (via webhook do próprio CRM) e devolve a mensagem criada. Para uma thread,
+    /// <paramref name="canalId"/> é o canal pai (dono do webhook) e <paramref name="threadId"/> a thread.
+    /// </summary>
+    Task<DiscordMensagem> EnviarMensagemAsync(string canalId, string nome, string? fotoUrl, string texto, CancellationToken ct, string? threadId = null);
+
+    /// <summary>
+    /// Cria o canal "Conversas diretas": quem tem o cargo vê o canal (e as threads em que foi adicionado) e pode escrever nas threads, mas
+    /// não escreve no canal em si. As conversas 1:1 são threads privadas dentro dele.
+    /// </summary>
+    Task<string> CriarCanalDeConversasAsync(string nome, string categoriaId, string cargoId, CancellationToken ct);
+
+    /// <summary>Cria uma thread privada no canal de conversas e devolve o id dela.</summary>
+    Task<string> CriarConversaPrivadaAsync(string canalPaiId, string nome, CancellationToken ct);
+
+    Task AdicionarAThreadAsync(string threadId, string discordUserId, CancellationToken ct);
 }
 
 /// <summary>Mensagem de um canal do Discord, já com menções resolvidas para nomes.</summary>
@@ -54,6 +68,15 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
 
     /// <summary>O bot (membro cujo id é o da aplicação) precisa ver, ler e gerenciar webhooks nos canais que criou: o canal nega a visão ao @everyone.</summary>
     private const string PermissoesDoBot = "536939520"; // ver canal + enviar + ler histórico + gerenciar webhooks
+
+    /// <summary>No canal de conversas, quem tem o cargo vê o canal, lê o histórico e escreve nas threads (1024 + 65536 + 274877906944).</summary>
+    private const string PermissoesNoCanalDeConversas = "274877973504";
+
+    /// <summary>
+    /// O bot no canal de conversas: o que já tem nos outros canais (536939520) mais criar threads privadas (1 &lt;&lt; 36), gerenciar threads
+    /// (1 &lt;&lt; 34) e escrever em threads (1 &lt;&lt; 38).
+    /// </summary>
+    private const string PermissoesDoBotNoCanalDeConversas = "361314192384";
 
     private const string NomeDoWebhook = "CRM CSS Brasil";
     private const string MotivoAuditoria = "CRM CSS Brasil: sincronizacao de grupos";
@@ -139,7 +162,7 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
         return documento.RootElement.EnumerateArray().Select(LerMensagem).Reverse().ToList();
     }
 
-    public async Task<DiscordMensagem> EnviarMensagemAsync(string canalId, string nome, string? fotoUrl, string texto, CancellationToken ct)
+    public async Task<DiscordMensagem> EnviarMensagemAsync(string canalId, string nome, string? fotoUrl, string texto, CancellationToken ct, string? threadId = null)
     {
         var (webhookId, webhookToken) = await ObterWebhookAsync(canalId, ct);
         var corpo = new
@@ -150,14 +173,64 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
             // Nunca marca @everyone/@here nem cargos por texto digitado no CRM.
             allowed_mentions = new { parse = Array.Empty<string>() },
         };
-        using var resposta = await EnviarAsync(() => new HttpRequestMessage(HttpMethod.Post, $"webhooks/{webhookId}/{webhookToken}?wait=true")
+        var destino = $"webhooks/{webhookId}/{webhookToken}?wait=true" + (threadId is null ? "" : $"&thread_id={Uri.EscapeDataString(threadId)}");
+        using var resposta = await EnviarAsync(() => new HttpRequestMessage(HttpMethod.Post, destino)
         {
             Content = new StringContent(JsonSerializer.Serialize(corpo, Json), Encoding.UTF8, "application/json"),
         }, ct);
+
+        // Thread que o webhook não consegue usar (ex.: privada e arquivada): o bot, que é membro, publica com o nome de quem escreveu no começo.
+        if (threadId is not null && !resposta.IsSuccessStatusCode && resposta.StatusCode != HttpStatusCode.NotFound)
+        {
+            return await EnviarComoBotAsync(threadId, nome, texto, ct);
+        }
+
         if (resposta.StatusCode == HttpStatusCode.NotFound) webhooks.TryRemove(canalId, out _); // webhook apagado no Discord: recria na próxima
         await GarantirAsync(resposta, "enviar a mensagem", ct);
         using var documento = await LerAsync(resposta, ct);
         return LerMensagem(documento.RootElement);
+    }
+
+    private async Task<DiscordMensagem> EnviarComoBotAsync(string canalId, string nome, string texto, CancellationToken ct)
+    {
+        var corpo = new { content = $"**{nome}:** {texto}", allowed_mentions = new { parse = Array.Empty<string>() } };
+        using var resposta = await EnviarAsync(() =>
+        {
+            var requisicao = Bot(HttpMethod.Post, $"channels/{canalId}/messages");
+            requisicao.Content = new StringContent(JsonSerializer.Serialize(corpo, Json), Encoding.UTF8, "application/json");
+            return requisicao;
+        }, ct);
+        await GarantirAsync(resposta, "enviar a mensagem", ct);
+        using var documento = await LerAsync(resposta, ct);
+        return LerMensagem(documento.RootElement);
+    }
+
+    public async Task<string> CriarCanalDeConversasAsync(string nome, string categoriaId, string cargoId, CancellationToken ct) =>
+        await CriarAsync($"guilds/{Opcoes.GuildId}/channels",
+            new
+            {
+                name = Cortar(nome, 100),
+                type = 0,
+                parent_id = categoriaId,
+                topic = "Conversas diretas entre pessoas da equipe. Cada conversa é uma thread privada: só as duas pessoas veem.",
+                permission_overwrites = new object[]
+                {
+                    // @everyone não vê; quem tem o cargo vê o canal e escreve nas threads, mas não no canal em si (para ficar só com as conversas).
+                    Sobrescrita(Opcoes.GuildId, allow: null, deny: VerCanal),
+                    new { id = cargoId, type = 0, allow = PermissoesNoCanalDeConversas, deny = "2048" },
+                    new { id = Opcoes.ClientId, type = 1, allow = PermissoesDoBotNoCanalDeConversas, deny = "0" },
+                },
+            },
+            "criar o canal de conversas", ct);
+
+    public async Task<string> CriarConversaPrivadaAsync(string canalPaiId, string nome, CancellationToken ct) =>
+        // type 12 = thread privada; "invitable: false" impede que as pessoas convidem terceiros; arquiva sozinha após 7 dias sem uso (volta ao escrever).
+        await CriarAsync($"channels/{canalPaiId}/threads", new { name = Cortar(nome, 100), type = 12, invitable = false, auto_archive_duration = 10080 }, "criar a conversa", ct);
+
+    public async Task AdicionarAThreadAsync(string threadId, string discordUserId, CancellationToken ct)
+    {
+        using var resposta = await EnviarAsync(() => Bot(HttpMethod.Put, $"channels/{threadId}/thread-members/{discordUserId}"), ct);
+        await GarantirAsync(resposta, "adicionar alguém à conversa", ct);
     }
 
     /// <summary>Webhook do CRM no canal (criado na primeira mensagem e guardado em memória; se não estiver guardado, procura o existente antes de criar).</summary>

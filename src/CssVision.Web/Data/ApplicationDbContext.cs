@@ -46,6 +46,7 @@ public class ApplicationDbContext(
     public DbSet<CrmParametro> CrmParametros => Set<CrmParametro>();
     public DbSet<CrmDiscordVinculo> CrmDiscordVinculos => Set<CrmDiscordVinculo>();
     public DbSet<CrmDiscordCanal> CrmDiscordCanais => Set<CrmDiscordCanal>();
+    public DbSet<CrmDiscordConversa> CrmDiscordConversas => Set<CrmDiscordConversa>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

@@ -1,17 +1,17 @@
-import { ChevronUp, Hash, MessagesSquare, Send } from "lucide-react";
+import { ChevronUp, Hash, MessagesSquare, Plus, Search, Send } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { api, ApiRequestError, isAbortError } from "../lib/api";
 import { formatarDataHora } from "../lib/format";
-import type { DiscordChatCanal, DiscordChatMensagem, DiscordChatMensagens } from "../lib/types";
-import { Avatar, Badge, Button, Card, EmptyState, ErrorState, Skeleton, useToast } from "../components/ui";
+import type { DiscordChatCanal, DiscordChatContato, DiscordChatMensagem, DiscordChatMensagens } from "../lib/types";
+import { Avatar, Badge, Button, Card, EmptyState, ErrorState, Input, Modal, Skeleton, useToast } from "../components/ui";
 
 const LIMITE_TEXTO = 2000;
 const INTERVALO_MS = 4000;
 
 /**
- * Chat de texto dos grupos da empresa. As conversas ficam no Discord (um canal por grupo) e aparecem aqui, com o nome e a foto de cada pessoa;
+ * Chat de texto: grupos da empresa e conversas 1:1. As conversas ficam no Discord (um canal por grupo, uma thread privada por conversa 1:1) e aparecem aqui, com o nome e a foto de cada pessoa;
  * o que se escreve aqui chega ao Discord (inclusive no celular de quem usa o app). Quem pode abrir cada grupo é decidido pelo CRM.
  * Sem tempo real de verdade: a lista se atualiza sozinha a cada poucos segundos enquanto a aba está aberta.
  */
@@ -26,6 +26,7 @@ export function ChatPage() {
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [carregandoAntigas, setCarregandoAntigas] = useState(false);
+  const [novaConversa, setNovaConversa] = useState(false);
   const rolagem = useRef<HTMLDivElement>(null);
   const colarNoFim = useRef(true);
   const chaveAtual = useRef<string | null>(null);
@@ -130,7 +131,16 @@ export function ChatPage() {
     }
   }
 
-  const nomeDoGrupo = canais?.find((c) => c.chave === chave)?.nome;
+  function aoAbrirConversa(conversa: DiscordChatCanal) {
+    setNovaConversa(false);
+    setCanais((atual) => (atual?.some((c) => c.chave === conversa.chave) ? atual : [...(atual ?? []), conversa]));
+    setChave(conversa.chave);
+  }
+
+  const atual = canais?.find((c) => c.chave === chave);
+  const nomeDoGrupo = atual?.nome;
+  const grupos = canais?.filter((c) => c.tipo !== "direta") ?? [];
+  const diretas = canais?.filter((c) => c.tipo === "direta") ?? [];
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
@@ -158,27 +168,29 @@ export function ChatPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-[14rem_1fr]">
           <nav aria-label="Conversas" className="flex gap-2 overflow-x-auto md:flex-col md:overflow-visible">
-            {canais.map((c) => (
-              <button
-                key={c.chave}
-                type="button"
-                onClick={() => setChave(c.chave)}
-                aria-current={c.chave === chave ? "true" : undefined}
-                className={`flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                  c.chave === chave
-                    ? "border-[var(--brand)] bg-[var(--brand)]/10 font-semibold text-[var(--fg)]"
-                    : "border-[var(--border)] text-[var(--fg-muted)] hover:bg-[var(--bg-muted)]"
-                }`}
-              >
-                <Hash className="size-4 shrink-0" aria-hidden /> {c.nome}
-              </button>
+            {grupos.map((c) => (
+              <ItemDaLista key={c.chave} conversa={c} ativa={c.chave === chave} aoEscolher={() => setChave(c.chave)} />
+            ))}
+            <div className="flex shrink-0 items-center gap-2 md:mt-2 md:justify-between">
+              <span className="hidden text-xs font-semibold uppercase tracking-wide text-[var(--fg-muted)] md:inline">Conversas diretas</span>
+              <Button variant="ghost" size="sm" onClick={() => setNovaConversa(true)} aria-label="Nova conversa">
+                <Plus className="size-4" /> <span className="md:hidden">Nova conversa</span>
+              </Button>
+            </div>
+            {diretas.map((c) => (
+              <ItemDaLista key={c.chave} conversa={c} ativa={c.chave === chave} aoEscolher={() => setChave(c.chave)} />
             ))}
           </nav>
 
           <Card className="flex h-[calc(100dvh-15rem)] min-h-[22rem] flex-col p-0">
             <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-2">
               <p className="flex items-center gap-1.5 text-sm font-semibold text-[var(--fg)]">
-                <Hash className="size-4 text-[var(--fg-muted)]" aria-hidden /> {nomeDoGrupo}
+                {atual?.tipo === "direta" ? (
+                  <Avatar nome={atual.nome} fotoUrl={atual.fotoUrl} className="size-6 text-[10px]" />
+                ) : (
+                  <Hash className="size-4 text-[var(--fg-muted)]" aria-hidden />
+                )}{" "}
+                {nomeDoGrupo}
               </p>
             </div>
 
@@ -242,7 +254,98 @@ export function ChatPage() {
           </Card>
         </div>
       )}
+
+      <NovaConversa aberta={novaConversa} aoFechar={() => setNovaConversa(false)} aoAbrir={aoAbrirConversa} />
     </div>
+  );
+}
+
+function ItemDaLista({ conversa, ativa, aoEscolher }: { conversa: DiscordChatCanal; ativa: boolean; aoEscolher: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={aoEscolher}
+      aria-current={ativa ? "true" : undefined}
+      className={`flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+        ativa ? "border-[var(--brand)] bg-[var(--brand)]/10 font-semibold text-[var(--fg)]" : "border-[var(--border)] text-[var(--fg-muted)] hover:bg-[var(--bg-muted)]"
+      }`}
+    >
+      {conversa.tipo === "direta" ? <Avatar nome={conversa.nome} fotoUrl={conversa.fotoUrl} className="size-5 text-[9px]" /> : <Hash className="size-4 shrink-0" aria-hidden />}
+      <span className="truncate">{conversa.nome}</span>
+    </button>
+  );
+}
+
+/** Busca uma pessoa que já vinculou o Discord e abre (ou cria) a conversa 1:1 com ela. */
+function NovaConversa({ aberta, aoFechar, aoAbrir }: { aberta: boolean; aoFechar: () => void; aoAbrir: (conversa: DiscordChatCanal) => void }) {
+  const { notificar } = useToast();
+  const [busca, setBusca] = useState("");
+  const [contatos, setContatos] = useState<DiscordChatContato[] | null>(null);
+  const [abrindo, setAbrindo] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!aberta) return;
+    const controller = new AbortController();
+    setContatos(null);
+    // Espera a pessoa parar de digitar um instante antes de consultar.
+    const timer = window.setTimeout(() => {
+      const consulta = busca.trim() ? `?busca=${encodeURIComponent(busca.trim())}` : "";
+      api
+        .get<DiscordChatContato[]>(`/crm/discord/chat/contatos${consulta}`, controller.signal)
+        .then(setContatos)
+        .catch((e) => {
+          if (!isAbortError(e)) setContatos([]);
+        });
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [aberta, busca]);
+
+  async function abrir(contato: DiscordChatContato) {
+    setAbrindo(contato.id);
+    try {
+      aoAbrir(await api.post<DiscordChatCanal>("/crm/discord/chat/conversas", { usuarioId: contato.id }));
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível abrir a conversa.");
+    } finally {
+      setAbrindo(null);
+    }
+  }
+
+  return (
+    <Modal open={aberta} onClose={aoFechar} title="Nova conversa">
+      <div className="space-y-3">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--fg-muted)]" aria-hidden />
+          <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar pessoa pelo nome" aria-label="Buscar pessoa" className="pl-9" autoFocus />
+        </div>
+        <p className="text-xs text-[var(--fg-muted)]">Aparecem as pessoas que já vincularam o Discord e entraram no servidor da empresa.</p>
+        {!contatos ? (
+          <Skeleton className="h-32" />
+        ) : contatos.length === 0 ? (
+          <p className="py-6 text-center text-sm text-[var(--fg-muted)]">Ninguém encontrado.</p>
+        ) : (
+          <ul className="max-h-80 space-y-1 overflow-y-auto">
+            {contatos.map((c) => (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => abrir(c)}
+                  disabled={abrindo !== null}
+                  className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-[var(--bg-muted)] disabled:opacity-60"
+                >
+                  <Avatar nome={c.nome} fotoUrl={c.fotoUrl} className="size-8 text-xs" />
+                  <span className="flex-1 text-sm font-medium text-[var(--fg)]">{c.nome}</span>
+                  {c.regional && <Badge variant="neutral">{c.regional}</Badge>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Modal>
   );
 }
 
