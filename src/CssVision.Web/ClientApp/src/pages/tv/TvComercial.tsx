@@ -1,4 +1,4 @@
-import { ArrowUp, ChevronLeft, ChevronRight, CheckCircle2, CircleDollarSign, Activity, Pause, Play, Radio, RefreshCw, Satellite, ShoppingBag, SlidersHorizontal, Target, TrendingUp, ArrowUpRight, Wifi, WifiOff, X } from "lucide-react";
+import { ArrowUp, RotateCcw, ChevronLeft, ChevronRight, CheckCircle2, CircleDollarSign, Activity, Pause, Play, Radio, RefreshCw, Satellite, ShoppingBag, SlidersHorizontal, Target, TrendingUp, ArrowUpRight, Wifi, WifiOff, X } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Chart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
@@ -211,18 +211,29 @@ function PainelRegionais({ itens, compacto = false, aoAbrir }: { itens: TvRegion
   );
 }
 
-function PainelUltimas({ itens, agora, aoAbrir }: { itens: TvVenda[]; agora: Date; aoAbrir: (d: Detalhe) => void }) {
+function PainelUltimas({ itens, agora, aoAbrir, aoRepetir }: { itens: TvVenda[]; agora: Date; aoAbrir: (d: Detalhe) => void; aoRepetir: (v: TvVenda) => void }) {
   return (
     <div className="panel latest">
       <div className="panel-title compact-title"><div><span className="eyebrow">TEMPO REAL</span><h1>Últimas vendas</h1></div><Activity size={20} className="pulse" /></div>
       <div className="sales-list">
-        {itens.slice(0, 5).map((x) => (
-          <button type="button" className="sale-row" key={x.vendaId} onClick={() => aoAbrir({ tipo: "venda", id: x.vendaId })} aria-label={`Venda de ${x.consultor}. Abrir detalhes`}>
-            <Foto nome={x.consultor} url={x.fotoUrl} />
-            <div><strong>{x.consultor}</strong><span>{x.regional}{x.cliente ? ` · ${x.cliente}` : ""}</span></div>
-            <div><strong>{moeda.format(x.valor)}</strong><span>{ha(x.atualizadaEm, agora)}</span></div>
-          </button>
-        ))}
+        {itens.slice(0, 5).map((x) => {
+          const abrir = () => aoAbrir({ tipo: "venda", id: x.vendaId });
+          // A linha inteira abre os detalhes; o botão de repetir fica dentro dela, por isso a linha não pode ser um <button>.
+          return (
+            <div className="sale-row" key={x.vendaId} role="button" tabIndex={0} onClick={abrir} aria-label={`Venda de ${x.consultor}. Abrir detalhes`}
+              onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); abrir(); } }}>
+              <Foto nome={x.consultor} url={x.fotoUrl} />
+              <div><strong>{x.consultor}</strong><span>{x.regional}{x.cliente ? ` · ${x.cliente}` : ""}</span></div>
+              <div className="sale-value-wrap">
+                <div className="sale-value"><strong>{moeda.format(x.valor)}</strong><span>{ha(x.atualizadaEm, agora)}</span></div>
+                <button type="button" className="sale-replay" title="Repetir animação da venda" aria-label={`Repetir a animação da venda de ${x.consultor}`}
+                  onClick={(e) => { e.stopPropagation(); aoRepetir(x); }}>
+                  <RotateCcw />
+                </button>
+              </div>
+            </div>
+          );
+        })}
         {!itens.length && <div className="empty">Nenhuma venda neste período</div>}
       </div>
     </div>
@@ -351,6 +362,11 @@ export function TvComercialPage() {
     void audio.current.play().catch(() => undefined);
   }, [ativa]);
   const fecharAtiva = useCallback(() => setFila((f) => f.slice(1)), []);
+  // Botão "repetir" das últimas vendas: coloca a venda de novo na fila da comemoração (uma vez só por venda enquanto ela estiver na fila).
+  const repetirAnimacao = useCallback((venda: TvVenda) => {
+    const rank = dados?.rankingConsultores.find((r) => r.nome === venda.consultor);
+    setFila((f) => (f.some((i) => i.venda.vendaId === venda.vendaId) ? f : [...f, { venda, posicao: rank?.posicao ?? 0, vendasNoMes: rank?.quantidadeVendas ?? 0 }]));
+  }, [dados]);
 
   const mudarMes = (dir: 1 | -1) => {
     if (!dados) return;
@@ -468,7 +484,7 @@ export function TvComercialPage() {
                 <PainelAdministrativo indicadores={dados.administrativo?.indicadores} aoAbrir={abrirDetalhe} />
                 <PainelRegionais itens={dados.rankingRegionais} compacto aoAbrir={abrirDetalhe} />
               </div>
-              <PainelUltimas itens={dados.ultimasVendas} agora={agora} aoAbrir={abrirDetalhe} />
+              <PainelUltimas itens={dados.ultimasVendas} agora={agora} aoAbrir={abrirDetalhe} aoRepetir={repetirAnimacao} />
             </div>
           </div>
         </section>
