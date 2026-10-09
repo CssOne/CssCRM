@@ -43,6 +43,11 @@ const valoresIniciais: DadosVendaConcluida = {
   dataPagamentoAdesaoPrevista: null,
 };
 
+/** Canal que não é "Lead" (Indicação Lead, Pessoal, Parceria...) é venda de indicação. */
+function ehCanalDeIndicacao(tipo?: string | null): boolean {
+  return !!tipo?.trim() && tipo.trim().toLowerCase() !== "lead";
+}
+
 function hojeLocal() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -236,7 +241,11 @@ export function VendaConcluidaDialog({
         setDataChegadaLead(lead.criadoEm);
         setNomeCliente(lead.nomeOuRazaoSocial);
         setLeadEraTipoLead(lead.tipoIndicacao?.trim().toLowerCase() === "lead");
-        if (oportunidadeEditar) return;
+        if (oportunidadeEditar) {
+          // Editando uma venda que não guardou estado/canal: valem os do cadastro do cliente.
+          setValores((v) => ({ ...v, estado: v.estado || lead.estado || "", tipoIndicacao: v.tipoIndicacao || lead.tipoIndicacao || "" }));
+          return;
+        }
         // Dados do cadastro do cliente e o valor da adesão informado na Cotação. Card de outro
         // veículo do mesmo cliente não guarda CPF: vem do card original.
         setValores((v) =>
@@ -244,7 +253,9 @@ export function VendaConcluidaDialog({
             ...v,
             cpf: lead.documento ?? lead.veiculoAdicionalDeDocumento ?? "",
             estado: lead.estado ?? "",
+            // O canal escolhido no cadastro do cliente já vem marcado; canal de indicação (diferente de "Lead") marca a indicação.
             tipoIndicacao: lead.tipoIndicacao ?? "",
+            indicacao: ehCanalDeIndicacao(lead.tipoIndicacao) ? true : v.indicacao,
             // Outro veículo: a adesão e a placa são do veículo novo, não do card do cliente.
             pagamentoAdesao: novoVeiculo ? v.pagamentoAdesao : v.pagamentoAdesao ?? lead.valorAdesao ?? null,
             veiculo: { ...v.veiculo, placa: novoVeiculo ? "" : lead.placa ?? "" },
@@ -624,21 +635,29 @@ export function VendaConcluidaDialog({
                 }));
               }}
             />
+            <div className="w-48">
+              <Label htmlFor="venda-tipo-indicacao" required={ehVenda && !!valores.indicacao}>
+                Canal de Aquisição
+              </Label>
+              <Select
+                id="venda-tipo-indicacao"
+                value={valores.tipoIndicacao ?? ""}
+                onChange={(e) => {
+                  const tipo = e.target.value;
+                  // Escolher um canal de indicação marca a indicação; "Lead" não.
+                  setValores((v) => ({ ...v, tipoIndicacao: tipo, indicacao: tipo ? ehCanalDeIndicacao(tipo) : v.indicacao }));
+                }}
+              >
+                <option value="">Selecione...</option>
+                {OPCOES_TIPO_INDICACAO.map((tipo) => (
+                  <option key={tipo} value={tipo}>
+                    {tipo}
+                  </option>
+                ))}
+              </Select>
+            </div>
             {valores.indicacao && (
               <>
-                <div className="w-48">
-                  <Label htmlFor="venda-tipo-indicacao" required={ehVenda}>
-                    Canal de Aquisição
-                  </Label>
-                  <Select id="venda-tipo-indicacao" value={valores.tipoIndicacao ?? ""} onChange={(e) => set("tipoIndicacao", e.target.value)}>
-                    <option value="">Selecione...</option>
-                    {OPCOES_TIPO_INDICACAO.map((tipo) => (
-                      <option key={tipo} value={tipo}>
-                        {tipo}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
                 <div className="w-40">
                   <Label htmlFor="venda-valor-indicacao" required={ehVenda}>
                     Valor da indicação (R$)

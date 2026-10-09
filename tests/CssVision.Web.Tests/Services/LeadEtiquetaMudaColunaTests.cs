@@ -40,7 +40,7 @@ public class LeadEtiquetaMudaColunaTests
     }
 
     private static LeadUpdateRequest Pedido(string? tipo, uint rowVersion) => new(
-        "Katy", TipoPessoa.Fisica, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
+        "Katy", TipoPessoa.Fisica, null, "31999990000", null, null, null, null, "Belo Horizonte", "MG", "MG132", null, null, null, "ABC1D23", null, null, null, null, null,
         null, null, null, null, null, tipo, null, null, false, null, rowVersion);
 
     private static async Task<string?> EtapaAtualAsync(CssVision.Web.Data.ApplicationDbContext db, Guid leadId)
