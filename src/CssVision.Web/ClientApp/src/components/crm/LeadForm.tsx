@@ -6,6 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 import { ESTADOS_BRASIL } from "../../lib/estados";
 import { OPCOES_ORIGEM, OPCOES_TIPO_INDICACAO, TIPO_INDICACAO_LEAD } from "../../lib/opcoesLead";
 import { TagSelect } from "./TagSelect";
+import { CidadeInput } from "../CidadeInput";
 
 export interface LeadFormValues {
   nomeOuRazaoSocial: string;
@@ -217,7 +218,17 @@ export function LeadForm({
           <Label htmlFor={`${idPrefix}-cidade`} required>
             Cidade
           </Label>
-          <Input id={`${idPrefix}-cidade`} value={valores.cidade} onChange={(e) => set("cidade", e.target.value)} required />
+          <CidadeInput
+            id={`${idPrefix}-cidade`}
+            value={valores.cidade}
+            estado={valores.estado}
+            onChange={(cidade) => set("cidade", cidade)}
+            onEscolher={(cidade, uf) => {
+              set("cidade", cidade);
+              set("estado", uf);
+            }}
+            required
+          />
           <FieldError>{erros.cidade}</FieldError>
         </div>
 

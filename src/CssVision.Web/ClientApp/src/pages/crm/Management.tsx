@@ -281,7 +281,7 @@ function diaDaSemanaBrasilia(): number {
 }
 
 /** Quantos leads de tráfego pago cada consultor marcado para receber já pegou hoje e quantos ainda faltam (até o limite diário). */
-function LeadsDoDiaCard({ vendedores }: { vendedores: VendedorResumo[] }) {
+function LeadsDoDiaCard({ vendedores, filtrado = false }: { vendedores: VendedorResumo[]; filtrado?: boolean }) {
   const hoje = diaDaSemanaBrasilia();
   const linhas = vendedores
     .filter((v) => v.ativo !== false && v.recebeLeads)
@@ -308,7 +308,7 @@ function LeadsDoDiaCard({ vendedores }: { vendedores: VendedorResumo[] }) {
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-[var(--fg)]">Leads de hoje por vendedor</h2>
-          <p className="text-xs text-[var(--fg-muted)]">Só quem está marcado para receber leads. Conta os leads de tráfego pago atribuídos hoje.</p>
+          <p className="text-xs text-[var(--fg-muted)]">Só quem está marcado para receber leads. Conta os leads de tráfego pago atribuídos hoje. Segue os filtros acima.</p>
         </div>
         <div className="flex flex-wrap gap-4 text-center">
           <div>
@@ -332,7 +332,7 @@ function LeadsDoDiaCard({ vendedores }: { vendedores: VendedorResumo[] }) {
         </div>
       </div>
       {linhas.length === 0 ? (
-        <p className="text-sm text-[var(--fg-muted)]">Ninguém está marcado para receber leads.</p>
+        <p className="text-sm text-[var(--fg-muted)]">{filtrado ? "Ninguém que está marcado para receber leads combina com os filtros." : "Ninguém está marcado para receber leads."}</p>
       ) : (
         <>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -466,8 +466,6 @@ export function ManagementPage() {
         </p>
       </div>
 
-      <LeadsDoDiaCard vendedores={vendedores} />
-
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
         <div className="w-56">
           <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Consultor</label>
@@ -510,6 +508,8 @@ export function ManagementPage() {
           </button>
         )}
       </div>
+
+      <LeadsDoDiaCard vendedores={vendedoresFiltrados} filtrado={temFiltro} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="p-4">

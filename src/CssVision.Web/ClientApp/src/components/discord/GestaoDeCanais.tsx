@@ -2,7 +2,7 @@ import { Archive, ArchiveRestore, Check, Pencil, Plus, Trash2, Unplug, Volume2, 
 import { useState } from "react";
 import { api, ApiRequestError } from "../../lib/api";
 import type { DiscordCanal } from "../../lib/types";
-import { Badge, Button, Input, Modal, useToast } from "../ui";
+import { Badge, Button, Input, Modal, Select, useToast } from "../ui";
 
 /**
  * Canais do Discord que o CRM gerencia: renomear (no Discord e no CRM) e criar canais extras, visíveis só para quem está no grupo escolhido.
@@ -272,18 +272,13 @@ function NovoCanal({ aberto, canais, aoFechar, aoCriado }: { aberto: boolean; ca
           <label htmlFor="canal-acesso" className="text-sm font-medium text-[var(--fg)]">
             Quem vê o canal
           </label>
-          <select
-            id="canal-acesso"
-            value={acessoEscolhido}
-            onChange={(e) => setAcesso(e.target.value)}
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--fg)]"
-          >
+          <Select id="canal-acesso" value={acessoEscolhido} onChange={(e) => setAcesso(e.target.value)}>
             {grupos.map((g) => (
               <option key={g.chave} value={g.chave}>
                 {g.nome}
               </option>
             ))}
-          </select>
+          </Select>
           <p className="text-xs text-[var(--fg-muted)]">Só as pessoas desse grupo veem o canal, no Discord e no chat do CRM.</p>
         </div>
       </div>
