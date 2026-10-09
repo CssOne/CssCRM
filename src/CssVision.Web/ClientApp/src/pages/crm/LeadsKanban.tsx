@@ -847,7 +847,7 @@ export function LeadsKanbanPage() {
           description={filtrosAtivos ? "Ajuste os filtros ou cadastre um novo lead." : "Cadastre um novo lead para começar."}
         />
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-3">
+        <div className="flex gap-4 overflow-x-auto pb-1">
           {colunasExibidas.map((coluna) => {
             const chaveColuna = coluna.etapa.id ?? "sem-etapa";
             const restantes = Math.max(0, coluna.total - coluna.cartoes.length);
@@ -903,7 +903,7 @@ export function LeadsKanbanPage() {
                   )}
                 </header>
 
-                <div className="max-h-[calc(100vh-22rem)] min-h-24 space-y-2.5 overflow-y-auto p-2.5">
+                <div className="max-h-[calc(100vh-17rem)] min-h-24 space-y-2.5 overflow-y-auto p-2.5">
                   {coluna.cartoes.length === 0 && (
                     <p className="rounded-xl border border-dashed border-[var(--border)] px-3 py-6 text-center text-xs text-[var(--fg-muted)]">
                       Nenhum lead aqui

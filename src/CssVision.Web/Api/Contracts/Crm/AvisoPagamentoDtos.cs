@@ -5,11 +5,11 @@ namespace CssVision.Web.Api.Contracts.Crm;
 
 /// <summary>Aviso de pagamento em aberto para um ou mais consultores (um aviso por consultor).</summary>
 public record AvisoPagamentoCreateRequest(
-    [property: Required, MinLength(1), MaxLength(100)] IReadOnlyList<Guid> ConsultorIds,
-    [property: Required, StringLength(1000, MinimumLength = 3)] string Mensagem,
+    [Required, MinLength(1), MaxLength(100)] IReadOnlyList<Guid> ConsultorIds,
+    [Required, StringLength(1000, MinimumLength = 3)] string Mensagem,
     decimal? Valor = null,
-    [property: StringLength(200)] string? Referencia = null,
-    [property: StringLength(120)] string? Titulo = null);
+    [StringLength(200)] string? Referencia = null,
+    [StringLength(120)] string? Titulo = null);
 
 /// <summary>Visão de quem envia (gestão/financeiro).</summary>
 public record AvisoPagamentoDto(
