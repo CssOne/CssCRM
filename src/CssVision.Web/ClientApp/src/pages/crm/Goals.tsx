@@ -77,7 +77,6 @@ export function GoalsPage() {
     setRecarregar((n) => n + 1);
   });
   const podeGerir = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
-  const ehAdministrador = temPapel("Admin", "GestorMaster", "SupervisorComercial");
   const { notificar } = useToast();
 
   const [mesReferencia, setMesReferencia] = useState(mesAtualIso());
@@ -159,7 +158,7 @@ export function GoalsPage() {
     }
   }
 
-  // --- Metas gerais por regional (administrador) ---
+  // --- Metas gerais por regional (administrador: todas; gestor regional: a dele) ---
 
   const [metasRegionais, setMetasRegionais] = useState<RegionalGoal[] | null>(null);
   const [carregandoRegionais, setCarregandoRegionais] = useState(true);
@@ -174,7 +173,7 @@ export function GoalsPage() {
 
   const carregarRegionais = useCallback(
     (signal?: AbortSignal) => {
-      if (!ehAdministrador) return;
+      if (!podeGerir) return;
       setCarregandoRegionais(true);
       setErroRegionais(null);
       api
@@ -183,7 +182,7 @@ export function GoalsPage() {
         .catch((e) => { if (!isAbortError(e)) setErroRegionais(e instanceof Error ? e.message : "Não foi possível carregar as metas por regional."); })
         .finally(() => { if (!signal?.aborted) setCarregandoRegionais(false); });
     },
-    [mesReferencia, ehAdministrador]
+    [mesReferencia, podeGerir]
   );
 
   useEffect(() => {
@@ -274,7 +273,7 @@ export function GoalsPage() {
         </>
       )}
 
-      {ehAdministrador && (
+      {podeGerir && (
         <div className="space-y-3 pt-2">
           <div>
             <h2 className="text-lg font-semibold text-[var(--fg)]">Metas gerais por regional</h2>
