@@ -33,6 +33,12 @@ public interface IDiscordChatService
     /// <summary>Apaga uma mensagem da própria pessoa (só as publicadas pelo CRM).</summary>
     Task ApagarMensagemAsync(Guid usuarioId, string chave, string mensagemId, CancellationToken ct);
 
+    /// <summary>Emojis e figurinhas do servidor para o seletor do chat (guardados por alguns minutos). Sem Discord ativado, devolve listas vazias.</summary>
+    Task<DiscordChatExtrasDto> ListarExtrasAsync(CancellationToken ct);
+
+    /// <summary>Publica uma figurinha do servidor na conversa, com o nome e a foto da pessoa.</summary>
+    Task<DiscordChatMensagemDto> EnviarFigurinhaAsync(Guid usuarioId, string chave, string figurinhaId, CancellationToken ct);
+
     /// <summary>Publica um arquivo (imagem, PDF, planilha...) na conversa, com legenda opcional.</summary>
     Task<DiscordChatMensagemDto> EnviarArquivoAsync(Guid usuarioId, string chave, string? texto, string nomeDoArquivo, string tipoDeConteudo, byte[] conteudo, CancellationToken ct);
 
@@ -142,7 +148,11 @@ public sealed class DiscordChatService(
 
         // O Discord só entrega o texto das mensagens a um bot que tenha a permissão "Message Content Intent" ligada no portal do desenvolvedor.
         // Sem ela as mensagens chegam sem texto — a tela avisa o administrador em vez de mostrar balões vazios.
-        var conteudoOculto = mensagens.Count > 0 && mensagens.All(m => m.Conteudo.Length == 0 && m.Anexos.Count == 0);
+        // Também avisa quando só parte vem vazia: uma pessoa de verdade (não bot nem webhook) que escreveu e a mensagem chegou sem texto nem anexo
+        // (o primeiro texto do bot, como a boas-vindas, chega normalmente e escondia o problema).
+        var conteudoOculto = mensagens.Count > 0
+            && (mensagens.All(m => m.Conteudo.Length == 0 && m.Anexos.Count == 0)
+                || mensagens.Any(m => !m.AutorEhBot && m.Conteudo.Length == 0 && m.Anexos.Count == 0));
 
         return new DiscordChatMensagensDto(
             mensagens.Select(Converter).ToList(),
@@ -290,6 +300,48 @@ public sealed class DiscordChatService(
         }
 
         return destino;
+    }
+
+    private const string ChaveDosExtras = "discord:chat:extras";
+
+    public async Task<DiscordChatExtrasDto> ListarExtrasAsync(CancellationToken ct)
+    {
+        if (!options.Value.Configurado) return new DiscordChatExtrasDto([], []);
+        var extras = await cache.GetOrCreateAsync(ChaveDosExtras, async entrada =>
+        {
+            entrada.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            // Falha do Discord não derruba o chat: o seletor só fica sem os extras até a próxima tentativa.
+            try
+            {
+                var emojis = await api.ListarEmojisAsync(ct);
+                var figurinhas = await api.ListarStickersAsync(ct);
+                return new DiscordChatExtrasDto(
+                    emojis.Select(e => new DiscordChatEmojiDto(e.Id, e.Nome, e.Animado, e.Url)).ToList(),
+                    figurinhas.Select(f => new DiscordChatFigurinhaDto(f.Id, f.Nome, f.Url)).ToList());
+            }
+            catch (DiscordApiException)
+            {
+                entrada.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
+                return new DiscordChatExtrasDto([], []);
+            }
+        });
+        return extras ?? new DiscordChatExtrasDto([], []);
+    }
+
+    public async Task<DiscordChatMensagemDto> EnviarFigurinhaAsync(Guid usuarioId, string chave, string figurinhaId, CancellationToken ct)
+    {
+        var destino = await ObterDestinoPermitidoAsync(usuarioId, chave, ct);
+        // Só figurinhas que o servidor realmente tem: o endereço da imagem nunca vem do navegador.
+        var figurinha = (await ListarExtrasAsync(ct)).Figurinhas.FirstOrDefault(f => f.Id == figurinhaId)
+            ?? throw new CrmBusinessException("Essa figurinha não existe no servidor.", "figurinha_invalida");
+        var pessoa = await db.Users.AsNoTracking().Where(u => u.Id == usuarioId).Select(u => new { u.NomeCompleto, u.FotoUrl }).FirstAsync(ct);
+
+        var enviada = await LerAsync(async () => await api.EnviarImagemAsync(
+            destino.CanalDoWebhook, pessoa.NomeCompleto, FotoAbsoluta(pessoa.FotoUrl), figurinha.Url, figurinha.Nome, ct, destino.ThreadId));
+        cache.Remove(ChaveDeCache(destino.LeituraId));
+        cache.Remove(ChaveDaUltima(destino.LeituraId));
+        await MarcarComoLidaAsync(usuarioId, chave, enviada.Id, ct);
+        return Converter(enviada);
     }
 
     public async Task<DiscordChatMensagemDto> EnviarArquivoAsync(Guid usuarioId, string chave, string? texto, string nomeDoArquivo, string tipoDeConteudo, byte[] conteudo, CancellationToken ct)

@@ -1,4 +1,4 @@
-import { ChevronUp, CornerUpLeft, Hash, MessagesSquare, Paperclip, Pencil, Phone, Plus, Search, Send, Trash2, X } from "lucide-react";
+import { ChevronUp, CornerUpLeft, Hash, MessagesSquare, Paperclip, Pencil, Phone, Plus, Search, Send, Smile, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -6,7 +6,8 @@ import { api, ApiRequestError, isAbortError, uploadFile } from "../lib/api";
 import { desligarNotificacao, definirSom, ligarNotificacao, notificacaoLigada, notificacaoSuportada, somLigado } from "../lib/avisosDoChat";
 import { formatarDataHora } from "../lib/format";
 import { rotuloNaoLidas, useChatNaoLidas } from "../lib/useChatNaoLidas";
-import type { DiscordChatCanal, DiscordChatChamada, DiscordChatContato, DiscordChatMensagem, DiscordChatMensagens, DiscordChatOnline } from "../lib/types";
+import type { DiscordChatCanal, DiscordChatChamada, DiscordChatContato, DiscordChatExtras, DiscordChatMensagem, DiscordChatMensagens, DiscordChatOnline } from "../lib/types";
+import { SeletorDeEmojis } from "../components/chat/SeletorDeEmojis";
 import { Avatar, Badge, Button, Card, Checkbox, ConfirmDialog, EmptyState, ErrorState, Input, Modal, Skeleton, useToast } from "../components/ui";
 
 const LIMITE_TEXTO = 2000;
@@ -42,6 +43,9 @@ export function ChatPage() {
   const [apagando, setApagando] = useState<DiscordChatMensagem | null>(null);
   const [apagandoEmAndamento, setApagandoEmAndamento] = useState(false);
   const campoDeTexto = useRef<HTMLTextAreaElement>(null);
+  const [seletorAberto, setSeletorAberto] = useState(false);
+  const [extras, setExtras] = useState<DiscordChatExtras | null>(null);
+  const [carregandoExtras, setCarregandoExtras] = useState(false);
   const seletorDeArquivo = useRef<HTMLInputElement>(null);
   const [online, setOnline] = useState<DiscordChatOnline["pessoas"]>([]);
   const [linkDaChamada, setLinkDaChamada] = useState<string | null>(null);
@@ -148,6 +152,49 @@ export function ChatPage() {
       notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível carregar as mensagens anteriores.");
     } finally {
       setCarregandoAntigas(false);
+    }
+  }
+
+  // Abre o seletor; emojis e figurinhas do servidor só são buscados na primeira vez.
+  function alternarSeletor() {
+    const abrir = !seletorAberto;
+    setSeletorAberto(abrir);
+    if (abrir && !extras && !carregandoExtras) {
+      setCarregandoExtras(true);
+      api
+        .get<DiscordChatExtras>("/crm/discord/chat/extras")
+        .then(setExtras)
+        .catch(() => setExtras({ emojis: [], figurinhas: [] }))
+        .finally(() => setCarregandoExtras(false));
+    }
+  }
+
+  // Escreve o emoji onde está o cursor (ou no fim) sem mexer no resto do texto.
+  function inserirNoTexto(trecho: string) {
+    const campo = campoDeTexto.current;
+    const inicio = campo?.selectionStart ?? texto.length;
+    const fim = campo?.selectionEnd ?? texto.length;
+    const novo = (texto.slice(0, inicio) + trecho + texto.slice(fim)).slice(0, LIMITE_TEXTO);
+    setTexto(novo);
+    requestAnimationFrame(() => {
+      campo?.focus();
+      const posicao = Math.min(inicio + trecho.length, novo.length);
+      campo?.setSelectionRange(posicao, posicao);
+    });
+  }
+
+  async function enviarFigurinha(figurinhaId: string) {
+    if (!chave || enviando) return;
+    setSeletorAberto(false);
+    setEnviando(true);
+    try {
+      const nova = await api.post<DiscordChatMensagem>(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/figurinhas`, { figurinhaId });
+      colarNoFim.current = true;
+      setDados((atual) => ({ mensagens: [...(atual?.mensagens ?? []), nova], temMais: atual?.temMais ?? false, conteudoOculto: atual?.conteudoOculto ?? false }));
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível enviar a figurinha.");
+    } finally {
+      setEnviando(false);
     }
   }
 
@@ -388,8 +435,8 @@ export function ChatPage() {
 
             {dados?.conteudoOculto && (
               <p className="border-b border-[var(--border)] bg-[var(--warning)]/10 px-4 py-2 text-xs text-[var(--fg)]">
-                O Discord não está entregando o texto das mensagens. Um administrador precisa ligar <strong>Message Content Intent</strong> no portal do desenvolvedor do
-                Discord (aplicação → Bot → Privileged Gateway Intents).
+                O Discord não está entregando o texto das mensagens de algumas pessoas. Um administrador precisa ligar <strong>Message Content Intent</strong> no portal do
+                desenvolvedor do Discord (aplicação → Bot → Privileged Gateway Intents) e clicar em <strong>Save Changes</strong>.
               </p>
             )}
 
@@ -475,6 +522,20 @@ export function ChatPage() {
               <Button type="button" variant="ghost" onClick={() => seletorDeArquivo.current?.click()} aria-label="Anexar arquivo" title="Anexar imagem, PDF, planilha ou documento (até 10 MB)">
                 <Paperclip className="size-4" />
               </Button>
+              <div className="relative">
+                <Button type="button" variant="ghost" onClick={alternarSeletor} aria-label="Emojis e figurinhas" aria-expanded={seletorAberto} title="Emojis e figurinhas">
+                  <Smile className="size-4" />
+                </Button>
+                {seletorAberto && (
+                  <SeletorDeEmojis
+                    extras={extras}
+                    carregando={carregandoExtras}
+                    aoEscolherEmoji={inserirNoTexto}
+                    aoEscolherEmojiDoServidor={(marca) => inserirNoTexto(`${marca} `)}
+                    aoEscolherFigurinha={(id) => void enviarFigurinha(id)}
+                  />
+                )}
+              </div>
               <div className="relative flex-1">
               {mencaoAtiva && sugestoes.length > 0 && (
                 <ul role="listbox" aria-label="Marcar pessoa" className="absolute bottom-full left-0 z-10 mb-1 w-64 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg)] shadow-lg">
@@ -787,13 +848,33 @@ function ConteudoDaMensagem({ texto }: { texto: string }) {
  * O resto continua texto puro: nada de HTML, então nenhuma mensagem consegue injetar código na tela.
  */
 function comLinks(texto: string) {
+  // Emoji personalizado do servidor (<:nome:id> ou <a:nome:id>) vira a imagem dele; o resto segue pelas regras abaixo.
+  return texto.split(/(<a?:\w+:\d+>)/g).flatMap((pedaco, k) => {
+    const emoji = /^<(a?):(\w+):(\d+)>$/.exec(pedaco);
+    if (emoji) {
+      return [
+        <img
+          key={`e${k}`}
+          src={`https://cdn.discordapp.com/emojis/${emoji[3]}.${emoji[1] ? "gif" : "png"}?size=48`}
+          alt={`:${emoji[2]}:`}
+          title={`:${emoji[2]}:`}
+          loading="lazy"
+          className="mx-0.5 inline-block size-5 align-text-bottom"
+        />,
+      ];
+    }
+    return comLinksSemEmoji(pedaco, k);
+  });
+}
+
+function comLinksSemEmoji(texto: string, grupo: number) {
   return texto.split(/(https?:\/\/[^\s]+)/g).map((parte, i) =>
     /^https?:\/\//.test(parte) ? (
-      <a key={i} href={parte} target="_blank" rel="noopener noreferrer" className="text-[var(--brand)] underline">
+      <a key={`${grupo}-${i}`} href={parte} target="_blank" rel="noopener noreferrer" className="text-[var(--brand)] underline">
         {parte}
       </a>
     ) : (
-      <span key={i}>
+      <span key={`${grupo}-${i}`}>
         {parte.split(/(\*\*[^*\n]+\*\*)/g).map((trecho, j) =>
           /^\*\*[^*\n]+\*\*$/.test(trecho) ? <strong key={j}>{trecho.slice(2, -2)}</strong> : trecho
         )}

@@ -40,6 +40,16 @@ public record DiscordChatMensagemDto(string Id, string AutorNome, string? AutorF
 
 /// <param name="TemMais">Pode haver mensagens mais antigas (pedir de novo com <c>antes</c>).</param>
 /// <param name="ConteudoOculto">O Discord entregou as mensagens sem texto: falta ligar "Message Content Intent" no portal do desenvolvedor.</param>
+/// <summary>Emoji personalizado do servidor para o seletor do chat (no texto vai como <c>&lt;:nome:id&gt;</c>).</summary>
+public record DiscordChatEmojiDto(string Id, string Nome, bool Animado, string Url);
+
+public record DiscordChatFigurinhaDto(string Id, string Nome, string Url);
+
+/// <summary>O que o seletor do chat oferece além dos emojis comuns: emojis e figurinhas do servidor.</summary>
+public record DiscordChatExtrasDto(IReadOnlyList<DiscordChatEmojiDto> Emojis, IReadOnlyList<DiscordChatFigurinhaDto> Figurinhas);
+
+public record DiscordChatFigurinhaRequest(string FigurinhaId);
+
 public record DiscordChatMensagensDto(IReadOnlyList<DiscordChatMensagemDto> Mensagens, bool TemMais, bool ConteudoOculto);
 
 /// <param name="Mencoes">Pessoas escolhidas na lista de menção (o texto traz "@Nome" de cada uma); só entram as que vincularam o Discord.</param>

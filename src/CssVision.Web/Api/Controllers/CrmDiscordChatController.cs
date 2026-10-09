@@ -16,6 +16,16 @@ public class CrmDiscordChatController(IDiscordChatService chat, ICurrentUserServ
     public async Task<ActionResult<IReadOnlyList<DiscordChatCanalDto>>> Canais(CancellationToken ct) =>
         Ok(await chat.ListarCanaisAsync(currentUser.UserId, ct));
 
+    /// <summary>Emojis e figurinhas do servidor para o seletor do chat.</summary>
+    [HttpGet("extras")]
+    public async Task<ActionResult<DiscordChatExtrasDto>> Extras(CancellationToken ct) =>
+        Ok(await chat.ListarExtrasAsync(ct));
+
+    /// <summary>Envia uma figurinha do servidor para a conversa.</summary>
+    [HttpPost("canais/{chave}/figurinhas")]
+    public async Task<ActionResult<DiscordChatMensagemDto>> EnviarFigurinha(string chave, [FromBody] DiscordChatFigurinhaRequest request, CancellationToken ct) =>
+        Ok(await chat.EnviarFigurinhaAsync(currentUser.UserId, chave, request.FigurinhaId, ct));
+
     /// <summary>Mensagens não lidas de cada conversa (para o número do menu e as marcas na lista). Barato: pode ser chamado a cada poucos segundos.</summary>
     [HttpGet("nao-lidas")]
     public async Task<ActionResult<DiscordChatNaoLidasDto>> NaoLidas(CancellationToken ct) =>

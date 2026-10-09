@@ -1571,6 +1571,26 @@ export interface DiscordChatMensagem {
   editada?: boolean;
 }
 
+/** Emoji personalizado do servidor (no texto vai como <:nome:id>). */
+export interface DiscordChatEmoji {
+  id: string;
+  nome: string;
+  animado: boolean;
+  url: string;
+}
+
+export interface DiscordChatFigurinha {
+  id: string;
+  nome: string;
+  url: string;
+}
+
+/** O que o seletor do chat oferece além dos emojis comuns. */
+export interface DiscordChatExtras {
+  emojis: DiscordChatEmoji[];
+  figurinhas: DiscordChatFigurinha[];
+}
+
 export interface DiscordChatMensagens {
   mensagens: DiscordChatMensagem[];
   /** Pode haver mensagens mais antigas. */

@@ -182,6 +182,25 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
     /// <summary>Arquivos enviados ao chat (destino = thread ou canal).</summary>
     public List<(string CanalId, string Nome, string Texto, DiscordArquivo Arquivo)> ArquivosEnviados { get; } = [];
 
+    public List<DiscordEmoji> EmojisDoServidor { get; } = [];
+    public List<DiscordSticker> FigurinhasDoServidor { get; } = [];
+    public List<(string CanalId, string Nome, string ImagemUrl)> ImagensEnviadas { get; } = [];
+
+    public Task<IReadOnlyList<DiscordEmoji>> ListarEmojisAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<DiscordEmoji>>(EmojisDoServidor.ToList());
+
+    public Task<IReadOnlyList<DiscordSticker>> ListarStickersAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<DiscordSticker>>(FigurinhasDoServidor.ToList());
+
+    public Task<DiscordMensagem> EnviarImagemAsync(string canalId, string nome, string? fotoUrl, string imagemUrl, string descricao, CancellationToken ct, string? threadId = null)
+    {
+        if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para enviar a figurinha.");
+        var onde = threadId ?? canalId;
+        ImagensEnviadas.Add((onde, nome, imagemUrl));
+        var mensagem = new DiscordMensagem(Novo(), nome, fotoUrl, "", DateTimeOffset.UtcNow, [new DiscordAnexo(descricao, imagemUrl, true)], true);
+        if (!Mensagens.TryGetValue(onde, out var lista)) Mensagens[onde] = lista = [];
+        lista.Add(mensagem);
+        return Task.FromResult(mensagem);
+    }
+
     public Task<DiscordMensagem> EnviarArquivoAsync(string canalId, string nome, string? fotoUrl, string texto, DiscordArquivo arquivo, CancellationToken ct, string? threadId = null)
     {
         if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para enviar o arquivo.");
