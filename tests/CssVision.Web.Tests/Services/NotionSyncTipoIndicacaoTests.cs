@@ -64,6 +64,24 @@ public class NotionSyncTipoIndicacaoTests
     public void CardLeadComIndicacaoSim_ForaDeVendaConcluida_SegueLead() =>
         Assert.Equal("Lead", NotionSyncService.TipoIndicacaoDoCard(Pagina("LEAD", true, status: "EM ATENDIMENTO"), "AGV"));
 
+    [Theory]
+    [InlineData("Em atendimento (Indicação)", "Lead", false, "Em atendimento (Leads)")]
+    [InlineData("Em atendimento (Leads)", "Pessoal", true, "Em atendimento (Indicação)")]
+    [InlineData("Venda concluída (Indicação)", "Lead", false, "Venda concluída (Leads)")]
+    [InlineData("Venda concluída (Leads)", "Indicação Lead", true, "Venda concluída (Indicação)")]
+    [InlineData("Em atendimento (Leads)", "Lead", false, "Em atendimento (Leads)")]
+    [InlineData("Cotação", "Lead", false, "Cotação")]
+    public void ColunaSeguraAEtiqueta_MesmoSemMudancaDeEtiqueta(string colunaAtual, string tipo, bool manual, string esperada)
+    {
+        var etapas = new[] { "Em atendimento (Leads)", "Em atendimento (Indicação)", "Venda concluída (Leads)", "Venda concluída (Indicação)", "Cotação" }
+            .ToDictionary(n => n, _ => Guid.NewGuid());
+        var lead = new CrmLead { TipoIndicacao = tipo, CriadoManualmente = manual, EtapaId = etapas[colunaAtual] };
+
+        NotionSyncService.TrocarColunaLeadIndicacao(lead, etapas);
+
+        Assert.Equal(etapas[esperada], lead.EtapaId);
+    }
+
     [Fact]
     public void TipoIndicacao_AchaOCampoPeloNomeAproximado() =>
         Assert.Equal("Pessoal", NotionSyncService.TipoIndicacaoDoCard(Pagina("PESSOAL", false, nomePropTipo: "Tipo de indicação?"), "AGV"));
