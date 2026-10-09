@@ -393,7 +393,9 @@ public sealed class LeadService(
         lead.MetaFormId = request.MetaFormId;
         lead.MetaLeadId = request.MetaLeadId;
         lead.IndicadoPorLeadId = request.IndicadoPorLeadId;
+        var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
         lead.TipoIndicacao = request.TipoIndicacao;
+        var etapaAcertada = await AcertarColunaDaEtiquetaAsync(lead, eraIndicacao, ct);
         lead.Observacoes = request.Observacoes;
         lead.ConsentimentoContato = request.ConsentimentoContato;
         lead.ConsentimentoOrigem = request.ConsentimentoOrigem;
@@ -414,9 +416,38 @@ public sealed class LeadService(
         }
 
         await audit.RegistrarAsync("LeadAtualizado", nameof(CrmLead), lead.Id, null, ct);
+        if (etapaAcertada is { } novaEtapaId)
+        {
+            await audit.RegistrarAsync("LeadMudouEtapa", nameof(CrmLead), lead.Id, new { EtapaNova = novaEtapaId, Motivo = "etiqueta Lead/Indicação alterada na edição" }, ct);
+        }
+
         eventos?.PublicarQuadroAtualizado("crm");
 
         return await ObterPorIdAsync(lead.Id, ct);
+    }
+
+    /// <summary>
+    /// Editar o cadastro e trocar a etiqueta entre Lead e Indicação (o "Canal de Aquisição") precisa levar o card junto para a coluna irmã
+    /// ("Venda concluída (Leads)" ↔ "(Indicação)", e o mesmo para "Em atendimento"): sem isso o card ficava numa coluna que contradizia a própria
+    /// etiqueta — foi assim que uma venda de indicação ficou em "Venda concluída (Leads)". Só mexe quando a classificação mudou, o card está numa
+    /// coluna dividida e a coluna irmã existe; qualquer outra coluna (Cotação, Perdido...) não tem versão Leads/Indicação e fica onde está.
+    /// </summary>
+    /// <returns>A coluna nova, se o card foi movido.</returns>
+    private async Task<Guid?> AcertarColunaDaEtiquetaAsync(CrmLead lead, bool eraIndicacao, CancellationToken ct)
+    {
+        var ehIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
+        if (ehIndicacao == eraIndicacao || lead.EtapaId is not { } etapaId) return null;
+
+        var atual = await db.CrmLeadStages.AsNoTracking().Where(e => e.Id == etapaId).Select(e => e.Nome).FirstOrDefaultAsync(ct);
+        var (de, para) = ehIndicacao ? (" (Leads)", " (Indicação)") : (" (Indicação)", " (Leads)");
+        if (atual is null || !atual.EndsWith(de, StringComparison.Ordinal)) return null;
+
+        var nomeIrmao = atual[..^de.Length] + para;
+        var irma = await db.CrmLeadStages.AsNoTracking().Where(e => e.Ativa && e.Nome == nomeIrmao).Select(e => (Guid?)e.Id).FirstOrDefaultAsync(ct);
+        if (irma is null) return null;
+
+        lead.EtapaId = irma;
+        return irma;
     }
 
     public async Task<IReadOnlyList<Guid>> CriarVeiculosAdicionaisAsync(Guid id, LeadVeiculosAdicionaisRequest request, CancellationToken ct)
