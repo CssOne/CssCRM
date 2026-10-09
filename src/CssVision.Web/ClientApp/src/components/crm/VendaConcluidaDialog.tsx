@@ -451,6 +451,7 @@ export function VendaConcluidaDialog({
     setEnviandoArquivos(true);
 
     let idOportunidade = novoVeiculo ? null : oportunidadeResolvidaId;
+    let criadaAgora = false;
     let leadDaVenda: string | null = leadId ?? novoLeadCriadoId;
     let responsavelDaVenda = responsavelIdLead;
     let etapaGanho = pipelineGanhoEtapaId;
@@ -516,6 +517,7 @@ export function VendaConcluidaDialog({
           migracao: valores.migracao ?? false,
         });
         idOportunidade = nova.id;
+        criadaAgora = true;
         rowVersionAtual = nova.rowVersion;
       }
 
@@ -609,6 +611,10 @@ export function VendaConcluidaDialog({
     try {
       await api.post(`/crm/opportunities/${idOportunidade}/change-stage`, { novaEtapaId: etapaGanho, ...dadosFinais });
     } catch (e) {
+      if (e instanceof ApiRequestError && e.codigo === "venda_ja_concluida" && criadaAgora && idOportunidade) {
+        // O cliente já tem venda concluída: some com a proposta que este envio acabou de criar, para não ficar uma proposta aberta sobrando.
+        await api.del(`/crm/opportunities/${idOportunidade}`).catch(() => undefined);
+      }
       notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível concluir a venda.");
       setEnviandoArquivos(false);
       return;
