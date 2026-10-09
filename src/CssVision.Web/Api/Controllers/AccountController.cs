@@ -379,6 +379,7 @@ public class AccountController(
         if (somenteMarketing)
         {
             menu.Add(new MenuItemDto("marketing", "Tráfego pago", "megaphone", "/app/marketing"));
+            menu.Add(new MenuItemDto("discord", "Discord", "message-circle", "/app/discord"));
             menu.Add(new MenuItemDto("suporte", "Suporte", "life-buoy", "/app/suporte"));
             return new SessionDto(usuario.Id, usuario.Email!, usuario.NomeCompleto, usuario.FotoUrl, papeis.ToList(), "/app/marketing", menu);
         }
@@ -389,6 +390,7 @@ public class AccountController(
             menu.Add(new MenuItemDto("crm-management", "Gestão comercial", "users-round", "/app/crm/gestao"));
             menu.Add(new MenuItemDto("avisos-pagamento", "Avisos de pagamento", "wallet", "/app/crm/avisos-pagamento"));
             menu.Add(new MenuItemDto("crm-users", "Usuários", "user-cog", "/app/crm/usuarios"));
+            menu.Add(new MenuItemDto("discord", "Discord", "message-circle", "/app/discord"));
             menu.Add(new MenuItemDto("suporte", "Suporte", "life-buoy", "/app/suporte"));
             return new SessionDto(usuario.Id, usuario.Email!, usuario.NomeCompleto, usuario.FotoUrl, papeis.ToList(), "/app/crm/gestao", menu);
         }
@@ -423,6 +425,7 @@ public class AccountController(
             menu.Add(new MenuItemDto("admin-backups", "Backups", "database", "/app/admin/backups"));
         }
 
+        menu.Add(new MenuItemDto("discord", "Discord", "message-circle", "/app/discord"));
         menu.Add(new MenuItemDto("suporte", "Suporte", "life-buoy", "/app/suporte"));
 
         return new SessionDto(usuario.Id, usuario.Email!, usuario.NomeCompleto, usuario.FotoUrl, papeis.ToList(), areaInicial, menu);

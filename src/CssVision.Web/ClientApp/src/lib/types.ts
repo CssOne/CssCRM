@@ -205,6 +205,27 @@ export interface TvEvolucao {
   valorAcumulado: number;
 }
 
+/** Situação da integração com o Discord para o usuário logado. */
+export interface DiscordStatus {
+  /** O servidor tem as credenciais do Discord; sem isso a tela só avisa que não foi ativado. */
+  configurado: boolean;
+  vinculado: boolean;
+  discordNome?: string | null;
+  avisosAtivos: boolean;
+  /** A conta está no servidor da empresa (o bot a colocou lá ao vincular). */
+  noServidor: boolean;
+  vinculadoEm?: string | null;
+}
+
+export interface DiscordIniciar {
+  url: string;
+}
+
+export interface DiscordTeste {
+  enviado: boolean;
+  mensagem: string;
+}
+
 /** Aviso de pagamento em aberto (visão de quem envia). */
 export interface AvisoPagamento {
   id: string;
