@@ -7,6 +7,7 @@ import { ESTADOS_BRASIL } from "../../lib/estados";
 import { formatarData, hojeBrasilia } from "../../lib/format";
 import { Button, Checkbox, CpfInput, Input, Label, Modal, MoneyInput, Select, useToast } from "../ui";
 import { leadFormVazio, paraLeadCreateRequest } from "./LeadForm";
+import { CidadeInput } from "../CidadeInput";
 import { useAuth } from "../../context/AuthContext";
 
 export type DadosVendaConcluida = Omit<ChangeStageRequest, "novaEtapaId" | "motivoPerdaId">;
@@ -670,7 +671,16 @@ export function VendaConcluidaDialog({
                 <Label htmlFor="venda-novo-cidade" required>
                   Cidade
                 </Label>
-                <Input id="venda-novo-cidade" value={cidade} onChange={(e) => setCidade(e.target.value)} />
+                <CidadeInput
+                  id="venda-novo-cidade"
+                  value={cidade}
+                  estado={valores.estado ?? ""}
+                  onChange={setCidade}
+                  onEscolher={(nome, uf) => {
+                    setCidade(nome);
+                    set("estado", uf);
+                  }}
+                />
               </div>
               <div>
                 <Label htmlFor="venda-novo-seguro" required>

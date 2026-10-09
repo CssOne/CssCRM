@@ -1,6 +1,8 @@
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Info, Loader2, X, XCircle } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Info, Loader2, X, XCircle } from "lucide-react";
 import {
+  Children,
   createContext,
+  isValidElement,
   forwardRef,
   useCallback,
   useContext,
@@ -15,6 +17,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
+import { paraBusca } from "../lib/busca";
 
 // --- Botões ---
 
@@ -271,14 +274,191 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
 );
 Textarea.displayName = "Textarea";
 
-export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(
-  ({ className = "", children, ...props }, ref) => (
-    <select ref={ref} className={`${fieldBase} ${className}`} {...props}>
-      {children}
-    </select>
-  )
-);
-Select.displayName = "Select";
+type OpcaoDoSelect = { valor: string; rotulo: string; desabilitada: boolean };
+
+/** Lê as `<option>` (também dentro de fragmentos, listas e `<optgroup>`) dos filhos do Select. */
+function lerOpcoes(filhos: ReactNode): OpcaoDoSelect[] {
+  const opcoes: OpcaoDoSelect[] = [];
+  Children.forEach(filhos, (filho) => {
+    if (!isValidElement(filho)) return;
+    const props = filho.props as { value?: string | number; disabled?: boolean; children?: ReactNode };
+    if (filho.type === "option") {
+      const rotulo = Children.toArray(props.children).join("");
+      opcoes.push({ valor: String(props.value ?? rotulo), rotulo, desabilitada: !!props.disabled });
+    } else if (props.children !== undefined) {
+      opcoes.push(...lerOpcoes(props.children));
+    }
+  });
+  return opcoes;
+}
+
+/**
+ * Lista de escolha com pesquisa: abre uma lista com um campo para digitar e filtrar as opções (sem diferenciar acento nem maiúscula).
+ * Usa as mesmas `<option>` e o mesmo `onChange` do `<select>` nativo, então os formulários e filtros não mudam.
+ */
+export function Select({
+  className = "",
+  children,
+  value,
+  onChange,
+  disabled,
+  id,
+  name,
+  title,
+  ...resto
+}: SelectHTMLAttributes<HTMLSelectElement>) {
+  const [aberto, setAberto] = useState(false);
+  const [busca, setBusca] = useState("");
+  const [destaque, setDestaque] = useState(0);
+  const [posicao, setPosicao] = useState<{ left: number; width: number; top?: number; bottom?: number; maxHeight: number } | null>(null);
+  const botaoRef = useRef<HTMLButtonElement>(null);
+  const painelRef = useRef<HTMLDivElement>(null);
+  const buscaRef = useRef<HTMLInputElement>(null);
+  const listaId = useId();
+
+  const opcoes = lerOpcoes(children);
+  const atual = String(value ?? "");
+  const escolhida = opcoes.find((o) => o.valor === atual);
+  const termo = paraBusca(busca);
+  const visiveis = termo ? opcoes.filter((o) => paraBusca(o.rotulo).includes(termo)) : opcoes;
+
+  function abrir() {
+    const retangulo = botaoRef.current?.getBoundingClientRect();
+    if (!retangulo) return;
+    const abaixo = window.innerHeight - retangulo.bottom - 8;
+    const acima = retangulo.top - 8;
+    // Sem espaço embaixo (e mais espaço em cima): a lista abre para cima.
+    const paraCima = abaixo < 240 && acima > abaixo;
+    setPosicao({
+      left: retangulo.left,
+      width: Math.max(retangulo.width, 180),
+      ...(paraCima ? { bottom: window.innerHeight - retangulo.top + 4 } : { top: retangulo.bottom + 4 }),
+      maxHeight: Math.min(320, Math.max(160, paraCima ? acima : abaixo)),
+    });
+    setBusca("");
+    setDestaque(Math.max(0, opcoes.findIndex((o) => o.valor === atual)));
+    setAberto(true);
+  }
+
+  useEffect(() => {
+    if (!aberto) return;
+    buscaRef.current?.focus();
+    const fora = (e: MouseEvent) => {
+      const alvo = e.target as Node;
+      if (!painelRef.current?.contains(alvo) && !botaoRef.current?.contains(alvo)) setAberto(false);
+    };
+    // A lista é fixa na tela: rolar a página (fora da lista) ou redimensionar a janela fecha, para ela não ficar solta do campo.
+    const fechar = (e: Event) => {
+      if (e.target instanceof Node && painelRef.current?.contains(e.target)) return;
+      setAberto(false);
+    };
+    document.addEventListener("mousedown", fora);
+    window.addEventListener("scroll", fechar, true);
+    window.addEventListener("resize", fechar);
+    return () => {
+      document.removeEventListener("mousedown", fora);
+      window.removeEventListener("scroll", fechar, true);
+      window.removeEventListener("resize", fechar);
+    };
+  }, [aberto]);
+
+  function escolher(opcao: OpcaoDoSelect) {
+    if (opcao.desabilitada) return;
+    setAberto(false);
+    botaoRef.current?.focus();
+    if (opcao.valor === atual) return;
+    const alvo = { value: opcao.valor, name: name ?? "", id: id ?? "" };
+    onChange?.({ target: alvo, currentTarget: alvo } as unknown as ChangeEvent<HTMLSelectElement>);
+  }
+
+  function teclado(e: React.KeyboardEvent) {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      setAberto(false);
+      botaoRef.current?.focus();
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setDestaque((d) => Math.min(d + 1, visiveis.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setDestaque((d) => Math.max(d - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const opcao = visiveis[Math.min(destaque, visiveis.length - 1)];
+      if (opcao) escolher(opcao);
+    }
+  }
+
+  return (
+    <>
+      <button
+        ref={botaoRef}
+        type="button"
+        id={id}
+        title={title}
+        disabled={disabled}
+        aria-label={resto["aria-label"]}
+        aria-haspopup="listbox"
+        aria-expanded={aberto}
+        onClick={() => (aberto ? setAberto(false) : abrir())}
+        onKeyDown={(e) => {
+          if (!aberto && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+            e.preventDefault();
+            abrir();
+          }
+        }}
+        className={`${fieldBase} flex cursor-pointer items-center justify-between gap-2 text-left ${className}`}
+      >
+        <span className={`truncate ${escolhida && escolhida.valor !== "" ? "" : "text-[var(--fg-muted)]"}`}>{escolhida?.rotulo || " "}</span>
+        <ChevronDown className="size-4 shrink-0 text-[var(--fg-muted)]" aria-hidden />
+      </button>
+      {aberto && posicao && (
+        <div
+          ref={painelRef}
+          style={{ position: "fixed", left: posicao.left, width: posicao.width, top: posicao.top, bottom: posicao.bottom, maxHeight: posicao.maxHeight }}
+          className="z-[70] flex flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-lg"
+          onKeyDown={teclado}
+        >
+          <div className="border-b border-[var(--border)] p-1.5">
+            <input
+              ref={buscaRef}
+              value={busca}
+              onChange={(e) => {
+                setBusca(e.target.value);
+                setDestaque(0);
+              }}
+              placeholder="Pesquisar…"
+              aria-label="Pesquisar nas opções"
+              aria-controls={listaId}
+              autoComplete="off"
+              className="focus-ring h-8 w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+            />
+          </div>
+          <div id={listaId} role="listbox" className="overflow-y-auto p-1">
+            {visiveis.length === 0 && <p className="px-2 py-1.5 text-sm text-[var(--fg-muted)]">Nada encontrado</p>}
+            {visiveis.map((o, i) => (
+              <button
+                key={o.valor}
+                type="button"
+                role="option"
+                aria-selected={o.valor === atual}
+                disabled={o.desabilitada}
+                onClick={() => escolher(o)}
+                onMouseEnter={() => setDestaque(i)}
+                className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--fg)] disabled:cursor-not-allowed disabled:opacity-50 ${
+                  i === destaque ? "bg-[var(--surface-hover)]" : ""
+                }`}
+              >
+                <span className="truncate">{o.rotulo || " "}</span>
+                {o.valor === atual && <Check className="size-4 shrink-0 text-[var(--brand)]" aria-hidden />}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 export function Checkbox({ label, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: ReactNode }) {
   const id = useId();

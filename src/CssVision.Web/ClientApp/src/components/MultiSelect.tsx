@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
+import { paraBusca } from "../lib/busca";
 
 export interface OpcaoMultiSelect {
   valor: string;
@@ -24,10 +25,13 @@ export function MultiSelect({
   ariaLabel?: string;
 }) {
   const [aberto, setAberto] = useState(false);
+  const [busca, setBusca] = useState("");
   const raizRef = useRef<HTMLDivElement>(null);
+  const buscaRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!aberto) return;
+    buscaRef.current?.focus();
     const fecharFora = (e: MouseEvent) => {
       if (!raizRef.current?.contains(e.target as Node)) setAberto(false);
     };
@@ -50,6 +54,9 @@ export function MultiSelect({
         ? selecionadas[0].rotulo
         : `${selecionadas[0].rotulo} +${selecionadas.length - 1}`;
 
+  const termo = paraBusca(busca);
+  const visiveis = termo ? opcoes.filter((o) => paraBusca(o.rotulo).includes(termo)) : opcoes;
+
   function alternar(valor: string) {
     onChange(valores.includes(valor) ? valores.filter((v) => v !== valor) : [...valores, valor]);
   }
@@ -61,7 +68,10 @@ export function MultiSelect({
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={aberto}
-        onClick={() => setAberto((a) => !a)}
+        onClick={() => {
+          setBusca("");
+          setAberto((a) => !a);
+        }}
         className="focus-ring flex h-10 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-left text-sm text-[var(--fg)]"
         title={selecionadas.map((o) => o.rotulo).join(", ") || undefined}
       >
@@ -74,8 +84,18 @@ export function MultiSelect({
           aria-multiselectable
           className="absolute left-0 z-30 mt-1 max-h-72 min-w-full overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg"
         >
+          <input
+            ref={buscaRef}
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Pesquisar…"
+            aria-label="Pesquisar nas opções"
+            autoComplete="off"
+            className="focus-ring mb-1 h-8 w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+          />
           {opcoes.length === 0 && <p className="px-2 py-1.5 text-sm text-[var(--fg-muted)]">Nenhuma opção</p>}
-          {opcoes.map((o) => {
+          {opcoes.length > 0 && visiveis.length === 0 && <p className="px-2 py-1.5 text-sm text-[var(--fg-muted)]">Nada encontrado</p>}
+          {visiveis.map((o) => {
             const marcada = valores.includes(o.valor);
             return (
               <button
