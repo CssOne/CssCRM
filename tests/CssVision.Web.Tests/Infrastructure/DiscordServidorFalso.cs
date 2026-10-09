@@ -49,6 +49,15 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
         return Task.FromResult(id);
     }
 
+    public int ComandosRegistrados { get; private set; }
+
+    public Task RegistrarComandosAsync(CancellationToken ct)
+    {
+        if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para registrar os comandos.");
+        ComandosRegistrados++;
+        return Task.CompletedTask;
+    }
+
     public List<string> CanaisApagados { get; } = [];
 
     public Task ApagarCanalAsync(string canalId, CancellationToken ct)

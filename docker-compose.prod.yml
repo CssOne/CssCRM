@@ -43,6 +43,8 @@ services:
       Discord__ClientId: ${DISCORD_CLIENT_ID}
       Discord__ClientSecret: ${DISCORD_CLIENT_SECRET}
       Discord__GuildId: ${DISCORD_GUILD_ID}
+      # Chave pública da aplicação (comandos /vendas e /meta). Vazia = comandos desligados.
+      Discord__PublicKey: ${DISCORD_PUBLIC_KEY:-}
       Discord__UrlPublica: https://${CADDY_DOMAIN}
     expose:
       - "8080"

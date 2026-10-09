@@ -302,6 +302,19 @@ public sealed class DiscordGruposService(
             }
         }
 
+        // Comandos de barra (/vendas, /meta): só com a chave pública configurada; falha aqui não atrapalha o resto.
+        if (options.Value.ComandosAtivos)
+        {
+            try
+            {
+                await api.RegistrarComandosAsync(ct);
+            }
+            catch (DiscordApiException ex)
+            {
+                falhas.Add($"Comandos do Discord: {ex.Message}");
+            }
+        }
+
         try
         {
             boasVindas = await GarantirBoasVindasAsync(mapa, ct);

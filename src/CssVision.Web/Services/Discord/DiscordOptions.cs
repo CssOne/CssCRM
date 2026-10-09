@@ -23,6 +23,14 @@ public class DiscordOptions
     /// <summary>Endereço público do CRM (ex.: https://cssbrasil.duckdns.org): vira o link dos avisos e o endereço de retorno do OAuth2.</summary>
     public string UrlPublica { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Chave pública da aplicação (Portal do Desenvolvedor → General Information → Public Key, em hexadecimal). Com ela o CRM confere a assinatura de cada
+    /// comando (<c>/vendas</c>, <c>/meta</c>) que o Discord envia. Sem ela os comandos ficam desligados.
+    /// </summary>
+    public string PublicKey { get; set; } = string.Empty;
+
+    public bool ComandosAtivos => Configurado && PublicKey.Trim().Length == 64;
+
     public bool Configurado =>
         !string.IsNullOrWhiteSpace(BotToken) && !string.IsNullOrWhiteSpace(ClientId)
         && !string.IsNullOrWhiteSpace(ClientSecret) && !string.IsNullOrWhiteSpace(GuildId);
