@@ -115,6 +115,8 @@ public static class ServiceCollectionExtensions
         // Notificação push de lead novo (aparece no sistema mesmo com o CRM fechado).
         services.AddScoped<IPushService, PushService>();
         services.AddHostedService<PushNovosLeadsBackgroundService>();
+        // Etapa 1 da volta da MG134: desarquiva os leads uma vez, depois do app no ar (não bloqueia a subida).
+        services.AddHostedService<ReativarLeadsMg134BackgroundService>();
         services.AddScoped<IOpportunityService, OpportunityService>();
         services.AddScoped<IPipelineService, PipelineService>();
         services.AddScoped<IActivityService, ActivityService>();
