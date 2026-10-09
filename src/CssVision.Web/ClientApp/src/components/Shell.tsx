@@ -255,7 +255,7 @@ export function Shell({ children }: { children: ReactNode }) {
         {!emPortal && !soFinanceiro && <NotificacaoNovosLeads usuarioId={sessao.id} />}
         {!soFinanceiro && temPapel("Comercial") && <NotificacaoAvisosPagamento usuarioId={sessao.id} />}
         {!emPortal && !soFinanceiro && <PainelLead />}
-        {!emPortal && <ConviteNotificacoesPush />}
+        <ConviteNotificacoesPush />
       </div>
     </div>
   );

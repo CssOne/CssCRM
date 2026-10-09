@@ -84,36 +84,75 @@ export function ControleNotificacoesPush() {
   );
 }
 
-/**
- * Convite (uma vez por usuário e navegador) para ativar o aviso de lead novo fora do CRM.
- * Também reenvia a inscrição de quem já ativou (ver sincronizarPush).
- */
-export function ConviteNotificacoesPush() {
-  const { sessao, temPapel } = useAuth();
+/** Quem fechou o convite durante este login (some quando a pessoa sai: o convite volta no próximo login). */
+const dispensadosNesteLogin = new Set<string>();
+
+/** Cartão das Configurações: liga/desliga as notificações deste navegador. */
+export function CartaoNotificacoesPush() {
   const [estado, setEstado] = useEstadoPush();
   const { ativar, ativando } = useAtivar(setEstado);
-  const chave = `push-convite-dispensado:${sessao?.id}`;
-  const [dispensado, setDispensado] = useState(() => {
-    try {
-      return localStorage.getItem(chave) === "1";
-    } catch {
-      return true;
-    }
-  });
+  const { notificar } = useToast();
+
+  return (
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
+      <h2 className="flex items-center gap-2 text-base font-semibold text-[var(--fg)]">
+        <BellRing className="size-4 text-[var(--brand)]" /> Notificações
+      </h2>
+      <p className="mt-1 text-sm text-[var(--fg-muted)]">
+        Receba no computador os avisos do CRM (lead novo, pagamento em aberto, atividades) mesmo com o sistema fechado ou em outra aba. Vale para
+        este navegador. Se não estiverem ativadas, pedimos de novo a cada login.
+      </p>
+      <div className="mt-3">
+        {estado === null ? null : estado === "nao-suportado" ? (
+          <p className="text-sm text-[var(--fg-muted)]">Este navegador não suporta notificações.</p>
+        ) : estado === "bloqueado" ? (
+          <p className="flex items-start gap-1.5 text-sm text-[var(--fg-muted)]">
+            <Lock className="mt-0.5 size-4 shrink-0 text-[var(--warning)]" /> {TEXTO_BLOQUEADO}
+          </p>
+        ) : estado === "ativo" ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="flex items-center gap-1.5 text-sm font-medium text-[var(--success)]">
+              <CheckCircle2 className="size-4" /> Notificações ativadas neste navegador
+            </span>
+            <Button size="sm" variant="secondary" onClick={() => api.post("/crm/push/teste", {}).then(() => notificar("info", "Notificação de teste enviada."))}>
+              Enviar teste
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => desativarPush().then(() => setEstado("inativo"))}>
+              Desativar
+            </Button>
+          </div>
+        ) : (
+          <Button onClick={ativar} loading={ativando}>
+            Ativar notificações
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Convite para ativar as notificações: aparece a cada login enquanto este navegador não as tiver ativadas ("Agora não" só vale até a
+ * pessoa sair). Também reenvia a inscrição de quem já ativou (ver sincronizarPush). A ativação também fica em Configurações.
+ */
+export function ConviteNotificacoesPush() {
+  const { sessao } = useAuth();
+  const [estado, setEstado] = useEstadoPush();
+  const { ativar, ativando } = useAtivar(setEstado);
+  const [dispensado, setDispensado] = useState(() => !!sessao && dispensadosNesteLogin.has(sessao.id));
 
   useEffect(() => {
     sincronizarPush().catch(() => {});
   }, [sessao?.id]);
 
-  // Só para quem recebe leads (comercial) e ainda não ativou.
-  if (!sessao || dispensado || estado !== "inativo" || !temPapel("Comercial", "GestorComercial", "GestorMaster", "SupervisorComercial", "Admin")) return null;
+  // Ao sair (a casca da tela é desmontada), o "agora não" é esquecido.
+  useEffect(() => () => dispensadosNesteLogin.clear(), []);
+
+  // Só aparece quando ainda não está ativado (bloqueado pelo navegador não dá para pedir: ver Configurações).
+  if (!sessao || dispensado || estado !== "inativo") return null;
 
   function dispensar() {
-    try {
-      localStorage.setItem(chave, "1");
-    } catch {
-      /* sem armazenamento */
-    }
+    if (sessao) dispensadosNesteLogin.add(sessao.id);
     setDispensado(true);
   }
 
