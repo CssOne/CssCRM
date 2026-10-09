@@ -33,6 +33,12 @@ public interface IDiscordChatService
     /// <summary>Apaga uma mensagem da própria pessoa (só as publicadas pelo CRM).</summary>
     Task ApagarMensagemAsync(Guid usuarioId, string chave, string mensagemId, CancellationToken ct);
 
+    /// <summary>Abre um tópico (thread pública) no grupo e avisa o grupo, no nome da pessoa, com o link. Só em grupos: dentro de uma conversa 1:1 não há tópico.</summary>
+    Task<DiscordChatMensagemDto> CriarTopicoAsync(Guid usuarioId, string chave, string nome, CancellationToken ct);
+
+    /// <summary>Publica uma enquete na conversa. Votar é no Discord; o CRM mostra a pergunta e os votos.</summary>
+    Task<DiscordChatMensagemDto> CriarEnqueteAsync(Guid usuarioId, string chave, string pergunta, IReadOnlyList<string> respostas, int horas, bool variasEscolhas, CancellationToken ct);
+
     /// <summary>Emojis e figurinhas do servidor para o seletor do chat (guardados por alguns minutos). Sem Discord ativado, devolve listas vazias.</summary>
     Task<DiscordChatExtrasDto> ListarExtrasAsync(CancellationToken ct);
 
@@ -300,6 +306,75 @@ public sealed class DiscordChatService(
         }
 
         return destino;
+    }
+
+    public async Task<DiscordChatMensagemDto> CriarTopicoAsync(Guid usuarioId, string chave, string nome, CancellationToken ct)
+    {
+        nome = string.Join(' ', (nome ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (nome.Length == 0)
+        {
+            throw new CrmBusinessException("Dê um nome ao tópico.", "topico_sem_nome");
+        }
+
+        if (nome.Length > 100)
+        {
+            throw new CrmBusinessException("O nome do tópico pode ter no máximo 100 caracteres.", "topico_nome_longo");
+        }
+
+        var destino = await ObterDestinoPermitidoAsync(usuarioId, chave, ct);
+        if (destino.ThreadId is not null)
+        {
+            throw new CrmBusinessException("Tópicos só podem ser criados nos grupos, não dentro de uma conversa direta.", "topico_so_em_grupo");
+        }
+
+        var pessoa = await db.Users.AsNoTracking().Where(u => u.Id == usuarioId).Select(u => new { u.NomeCompleto, u.FotoUrl }).FirstAsync(ct);
+        var topicoId = await LerAsync(async () => await api.CriarTopicoAsync(destino.CanalDoWebhook, nome, ct));
+        // O aviso no canal leva a menção do tópico (<#id>): no Discord vira link; aqui a tela mostra o endereço dele.
+        var enviada = await LerAsync(async () => await api.EnviarMensagemAsync(
+            destino.CanalDoWebhook, pessoa.NomeCompleto, FotoAbsoluta(pessoa.FotoUrl), $"🧵 Abri o tópico **{nome}**: <#{topicoId}>", ct));
+        cache.Remove(ChaveDeCache(destino.LeituraId));
+        cache.Remove(ChaveDaUltima(destino.LeituraId));
+        await MarcarComoLidaAsync(usuarioId, chave, enviada.Id, ct);
+        return Converter(enviada);
+    }
+
+    public async Task<DiscordChatMensagemDto> CriarEnqueteAsync(Guid usuarioId, string chave, string pergunta, IReadOnlyList<string> respostas, int horas, bool variasEscolhas, CancellationToken ct)
+    {
+        pergunta = (pergunta ?? "").Trim();
+        if (pergunta.Length == 0)
+        {
+            throw new CrmBusinessException("Escreva a pergunta da enquete.", "enquete_sem_pergunta");
+        }
+
+        if (pergunta.Length > 300)
+        {
+            throw new CrmBusinessException("A pergunta pode ter no máximo 300 caracteres.", "enquete_pergunta_longa");
+        }
+
+        var opcoes = (respostas ?? []).Select(r => (r ?? "").Trim()).Where(r => r.Length > 0).ToList();
+        if (opcoes.Count < 2 || opcoes.Count > 10)
+        {
+            throw new CrmBusinessException("A enquete precisa de 2 a 10 respostas.", "enquete_respostas");
+        }
+
+        if (opcoes.Any(r => r.Length > 55))
+        {
+            throw new CrmBusinessException("Cada resposta pode ter no máximo 55 caracteres.", "enquete_resposta_longa");
+        }
+
+        if (horas is < 1 or > 768)
+        {
+            throw new CrmBusinessException("A duração da enquete deve ser de 1 hora a 32 dias.", "enquete_duracao");
+        }
+
+        var destino = await ObterDestinoPermitidoAsync(usuarioId, chave, ct);
+        var pessoa = await db.Users.AsNoTracking().Where(u => u.Id == usuarioId).Select(u => u.NomeCompleto).FirstAsync(ct);
+
+        var enviada = await LerAsync(async () => await api.EnviarEnqueteAsync(destino.ThreadId ?? destino.CanalDoWebhook, pessoa, pergunta, opcoes, horas, variasEscolhas, ct));
+        cache.Remove(ChaveDeCache(destino.LeituraId));
+        cache.Remove(ChaveDaUltima(destino.LeituraId));
+        await MarcarComoLidaAsync(usuarioId, chave, enviada.Id, ct);
+        return Converter(enviada);
     }
 
     private const string ChaveDosExtras = "discord:chat:extras";
@@ -770,5 +845,6 @@ public sealed class DiscordChatService(
     }
 
     private static DiscordChatMensagemDto Converter(DiscordMensagem m) =>
-        new(m.Id, m.AutorNome, m.AutorFotoUrl, m.Conteudo, m.CriadaEm, m.Anexos.Select(a => new DiscordChatAnexoDto(a.Nome, a.Url, a.Imagem)).ToList(), m.DoCrm, m.Editada);
+        new(m.Id, m.AutorNome, m.AutorFotoUrl, m.Conteudo, m.CriadaEm, m.Anexos.Select(a => new DiscordChatAnexoDto(a.Nome, a.Url, a.Imagem)).ToList(), m.DoCrm, m.Editada,
+            m.Enquete is null ? null : new DiscordChatEnqueteDto(m.Enquete.Pergunta, m.Enquete.Respostas.Select(r => new DiscordChatRespostaDto(r.Texto, r.Votos)).ToList(), m.Enquete.VariasEscolhas, m.Enquete.EncerraEm, m.Enquete.Encerrada));
 }

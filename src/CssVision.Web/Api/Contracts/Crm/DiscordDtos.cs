@@ -36,7 +36,16 @@ public record DiscordChatIniciarRequest(Guid UsuarioId);
 public record DiscordChatAnexoDto(string Nome, string Url, bool Imagem);
 
 /// <param name="DoCrm">Publicada pelo CRM (a tela alinha as mensagens do próprio usuário à direita pelo nome do autor).</param>
-public record DiscordChatMensagemDto(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordChatAnexoDto> Anexos, bool DoCrm, bool Editada = false);
+public record DiscordChatMensagemDto(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordChatAnexoDto> Anexos, bool DoCrm, bool Editada = false, DiscordChatEnqueteDto? Enquete = null);
+
+/// <summary>Enquete da mensagem, só para mostrar (votar é no Discord).</summary>
+public record DiscordChatEnqueteDto(string Pergunta, IReadOnlyList<DiscordChatRespostaDto> Respostas, bool VariasEscolhas, DateTimeOffset? EncerraEm, bool Encerrada);
+
+public record DiscordChatRespostaDto(string Texto, int Votos);
+
+public record DiscordChatTopicoRequest(string Nome);
+
+public record DiscordChatEnqueteRequest(string Pergunta, IReadOnlyList<string> Respostas, int Horas = 24, bool VariasEscolhas = false);
 
 /// <param name="TemMais">Pode haver mensagens mais antigas (pedir de novo com <c>antes</c>).</param>
 /// <param name="ConteudoOculto">O Discord entregou as mensagens sem texto: falta ligar "Message Content Intent" no portal do desenvolvedor.</param>

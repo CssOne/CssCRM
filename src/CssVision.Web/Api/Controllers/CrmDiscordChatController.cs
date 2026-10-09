@@ -16,6 +16,16 @@ public class CrmDiscordChatController(IDiscordChatService chat, ICurrentUserServ
     public async Task<ActionResult<IReadOnlyList<DiscordChatCanalDto>>> Canais(CancellationToken ct) =>
         Ok(await chat.ListarCanaisAsync(currentUser.UserId, ct));
 
+    /// <summary>Abre um tópico no grupo (e avisa o grupo com o link).</summary>
+    [HttpPost("canais/{chave}/topicos")]
+    public async Task<ActionResult<DiscordChatMensagemDto>> CriarTopico(string chave, [FromBody] DiscordChatTopicoRequest request, CancellationToken ct) =>
+        Ok(await chat.CriarTopicoAsync(currentUser.UserId, chave, request.Nome, ct));
+
+    /// <summary>Publica uma enquete na conversa.</summary>
+    [HttpPost("canais/{chave}/enquetes")]
+    public async Task<ActionResult<DiscordChatMensagemDto>> CriarEnquete(string chave, [FromBody] DiscordChatEnqueteRequest request, CancellationToken ct) =>
+        Ok(await chat.CriarEnqueteAsync(currentUser.UserId, chave, request.Pergunta, request.Respostas, request.Horas, request.VariasEscolhas, ct));
+
     /// <summary>Emojis e figurinhas do servidor para o seletor do chat.</summary>
     [HttpGet("extras")]
     public async Task<ActionResult<DiscordChatExtrasDto>> Extras(CancellationToken ct) =>

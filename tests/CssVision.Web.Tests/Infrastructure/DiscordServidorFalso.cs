@@ -182,6 +182,27 @@ public sealed class DiscordServidorFalso : IDiscordGuildApi
     /// <summary>Arquivos enviados ao chat (destino = thread ou canal).</summary>
     public List<(string CanalId, string Nome, string Texto, DiscordArquivo Arquivo)> ArquivosEnviados { get; } = [];
 
+    public List<(string CanalId, string Nome)> TopicosCriados { get; } = [];
+    public List<(string Onde, string Autor, string Pergunta, IReadOnlyList<string> Respostas, int Horas, bool Varias)> EnquetesEnviadas { get; } = [];
+
+    public Task<string> CriarTopicoAsync(string canalId, string nome, CancellationToken ct)
+    {
+        if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para criar o tópico.");
+        TopicosCriados.Add((canalId, nome));
+        return Task.FromResult($"topico-{TopicosCriados.Count}");
+    }
+
+    public Task<DiscordMensagem> EnviarEnqueteAsync(string canalOuThreadId, string autor, string pergunta, IReadOnlyList<string> respostas, int horas, bool variasEscolhas, CancellationToken ct)
+    {
+        if (SemPermissao) throw new DiscordApiException("O bot não tem permissão para criar a enquete.");
+        EnquetesEnviadas.Add((canalOuThreadId, autor, pergunta, respostas, horas, variasEscolhas));
+        var enquete = new DiscordEnquete(pergunta, respostas.Select(r => new DiscordRespostaDaEnquete(r, 0)).ToList(), variasEscolhas, DateTimeOffset.UtcNow.AddHours(horas), false);
+        var mensagem = new DiscordMensagem(Novo(), "CssBrasilCRM", null, $"{autor} criou uma enquete", DateTimeOffset.UtcNow, [], false, false, true, enquete);
+        if (!Mensagens.TryGetValue(canalOuThreadId, out var lista)) Mensagens[canalOuThreadId] = lista = [];
+        lista.Add(mensagem);
+        return Task.FromResult(mensagem);
+    }
+
     public List<DiscordEmoji> EmojisDoServidor { get; } = [];
     public List<DiscordSticker> FigurinhasDoServidor { get; } = [];
     public List<(string CanalId, string Nome, string ImagemUrl)> ImagensEnviadas { get; } = [];
