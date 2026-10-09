@@ -55,6 +55,23 @@ public interface IDiscordGuildApi
 
     Task AdicionarAThreadAsync(string threadId, string discordUserId, CancellationToken ct);
 
+    /// <summary>Cria um tópico (thread pública) no canal e devolve o id dele.</summary>
+    Task<string> CriarTopicoAsync(string canalId, string nome, CancellationToken ct);
+
+    /// <summary>
+    /// Publica uma enquete no canal (ou thread). Vai pelo bot, porque o Discord não aceita enquete por webhook; <paramref name="autor"/> aparece na legenda.
+    /// </summary>
+    Task<DiscordMensagem> EnviarEnqueteAsync(string canalOuThreadId, string autor, string pergunta, IReadOnlyList<string> respostas, int horas, bool variasEscolhas, CancellationToken ct);
+
+    /// <summary>Emojis personalizados do servidor.</summary>
+    Task<IReadOnlyList<DiscordEmoji>> ListarEmojisAsync(CancellationToken ct);
+
+    /// <summary>Figurinhas (stickers) do servidor.</summary>
+    Task<IReadOnlyList<DiscordSticker>> ListarStickersAsync(CancellationToken ct);
+
+    /// <summary>Publica só uma imagem (a figurinha), com o nome e a foto de quem enviou. O webhook não aceita figurinhas do servidor, por isso vai como imagem.</summary>
+    Task<DiscordMensagem> EnviarImagemAsync(string canalId, string nome, string? fotoUrl, string imagemUrl, string descricao, CancellationToken ct, string? threadId = null);
+
     /// <summary>Igual a <see cref="EnviarMensagemAsync"/>, com um arquivo anexado (o texto pode ser vazio).</summary>
     Task<DiscordMensagem> EnviarArquivoAsync(string canalId, string nome, string? fotoUrl, string texto, DiscordArquivo arquivo, CancellationToken ct, string? threadId = null);
 
@@ -84,7 +101,18 @@ public interface IDiscordGuildApi
 public record DiscordPermitido(string Id, bool Pessoa);
 
 /// <summary>Mensagem de um canal do Discord, já com menções resolvidas para nomes.</summary>
-public record DiscordMensagem(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordAnexo> Anexos, bool DoCrm, bool Editada = false);
+public record DiscordMensagem(string Id, string AutorNome, string? AutorFotoUrl, string Conteudo, DateTimeOffset CriadaEm, IReadOnlyList<DiscordAnexo> Anexos, bool DoCrm, bool Editada = false, bool AutorEhBot = false, DiscordEnquete? Enquete = null);
+
+/// <summary>Enquete (poll) de uma mensagem: a pergunta, as respostas com os votos até agora e se ainda aceita votos.</summary>
+public record DiscordEnquete(string Pergunta, IReadOnlyList<DiscordRespostaDaEnquete> Respostas, bool VariasEscolhas, DateTimeOffset? EncerraEm, bool Encerrada);
+
+public record DiscordRespostaDaEnquete(string Texto, int Votos);
+
+/// <summary>Emoji personalizado do servidor (<c>&lt;:nome:id&gt;</c> no texto) e a imagem dele.</summary>
+public record DiscordEmoji(string Id, string Nome, bool Animado, string Url);
+
+/// <summary>Figurinha (sticker) do servidor e a imagem dela. As do tipo Lottie (animação vetorial) não aparecem: o navegador não as mostra como imagem.</summary>
+public record DiscordSticker(string Id, string Nome, string? Descricao, string Url);
 
 public record DiscordAnexo(string Nome, string Url, bool Imagem);
 
@@ -112,7 +140,7 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
     private const string PermissoesDoGrupo = "117824";
 
     /// <summary>O bot (membro cujo id é o da aplicação) precisa ver, ler e gerenciar webhooks nos canais que criou: o canal nega a visão ao @everyone.</summary>
-    private const string PermissoesDoBot = "536939520"; // ver canal + enviar + ler histórico + gerenciar webhooks
+    private const string PermissoesDoBot = "563259728006144"; // ver canal + enviar + ler histórico + gerenciar webhooks + criar tópicos públicos + enviar em tópicos + criar enquetes
 
     /// <summary>No canal de conversas, quem tem o cargo vê o canal, lê o histórico e escreve nas threads (1024 + 65536 + 274877906944).</summary>
     private const string PermissoesNoCanalDeConversas = "274877973504";
@@ -252,6 +280,107 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
 
         if (resposta.StatusCode == HttpStatusCode.NotFound) webhooks.TryRemove(canalId, out _); // webhook apagado no Discord: recria na próxima
         await GarantirAsync(resposta, "enviar a mensagem", ct);
+        using var documento = await LerAsync(resposta, ct);
+        return LerMensagem(documento.RootElement);
+    }
+
+    public async Task<string> CriarTopicoAsync(string canalId, string nome, CancellationToken ct) =>
+        // type 11 = thread pública; arquiva sozinha após 7 dias sem uso (volta ao escrever).
+        await CriarAsync($"channels/{canalId}/threads", new { name = Cortar(nome, 100), type = 11, auto_archive_duration = 10080 }, "criar o tópico", ct);
+
+    public async Task<DiscordMensagem> EnviarEnqueteAsync(string canalOuThreadId, string autor, string pergunta, IReadOnlyList<string> respostas, int horas, bool variasEscolhas, CancellationToken ct)
+    {
+        var corpo = new
+        {
+            content = $"📊 **{Cortar(autor, 80)}** criou uma enquete",
+            poll = new
+            {
+                question = new { text = Cortar(pergunta, 300) },
+                answers = respostas.Select(r => new { poll_media = new { text = Cortar(r, 55) } }).ToArray(),
+                duration = horas,
+                allow_multiselect = variasEscolhas,
+            },
+            allowed_mentions = new { parse = Array.Empty<string>() },
+        };
+        using var resposta = await EnviarAsync(() =>
+        {
+            var requisicao = Bot(HttpMethod.Post, $"channels/{canalOuThreadId}/messages");
+            requisicao.Content = new StringContent(JsonSerializer.Serialize(corpo, Json), Encoding.UTF8, "application/json");
+            return requisicao;
+        }, ct);
+        await GarantirAsync(resposta, "criar a enquete", ct);
+        using var documento = await LerAsync(resposta, ct);
+        return LerMensagem(documento.RootElement);
+    }
+
+    public async Task<IReadOnlyList<DiscordEmoji>> ListarEmojisAsync(CancellationToken ct)
+    {
+        using var resposta = await EnviarAsync(() => Bot(HttpMethod.Get, $"guilds/{Opcoes.GuildId}/emojis"), ct);
+        await GarantirAsync(resposta, "listar os emojis", ct);
+        using var documento = await LerAsync(resposta, ct);
+        var emojis = new List<DiscordEmoji>();
+        foreach (var e in documento.RootElement.EnumerateArray())
+        {
+            var id = Texto(e, "id");
+            var nome = Texto(e, "name");
+            if (id is null || nome is null) continue;
+            if (e.TryGetProperty("available", out var disponivel) && disponivel.ValueKind == JsonValueKind.False) continue;
+            var animado = e.TryGetProperty("animated", out var an) && an.ValueKind == JsonValueKind.True;
+            emojis.Add(new DiscordEmoji(id, nome, animado, $"https://cdn.discordapp.com/emojis/{id}.{(animado ? "gif" : "png")}?size=64"));
+        }
+        return emojis.OrderBy(e => e.Nome, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    public async Task<IReadOnlyList<DiscordSticker>> ListarStickersAsync(CancellationToken ct)
+    {
+        using var resposta = await EnviarAsync(() => Bot(HttpMethod.Get, $"guilds/{Opcoes.GuildId}/stickers"), ct);
+        await GarantirAsync(resposta, "listar as figurinhas", ct);
+        using var documento = await LerAsync(resposta, ct);
+        var figurinhas = new List<DiscordSticker>();
+        foreach (var f in documento.RootElement.EnumerateArray())
+        {
+            var id = Texto(f, "id");
+            var nome = Texto(f, "name");
+            if (id is null || nome is null) continue;
+            var formato = f.TryGetProperty("format_type", out var ft) && ft.ValueKind == JsonValueKind.Number ? ft.GetInt32() : 1;
+            if (UrlDaFigurinha(id, formato) is not { } url) continue;
+            figurinhas.Add(new DiscordSticker(id, nome, Texto(f, "description"), url));
+        }
+        return figurinhas.OrderBy(f => f.Nome, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// <summary>Imagem da figurinha: PNG/APNG e GIF o navegador mostra; Lottie (3) não.</summary>
+    internal static string? UrlDaFigurinha(string id, int formato) => formato switch
+    {
+        1 or 2 => $"https://media.discordapp.net/stickers/{id}.png?size=160",
+        4 => $"https://media.discordapp.net/stickers/{id}.gif?size=160",
+        _ => null,
+    };
+
+    public async Task<DiscordMensagem> EnviarImagemAsync(string canalId, string nome, string? fotoUrl, string imagemUrl, string descricao, CancellationToken ct, string? threadId = null)
+    {
+        var (webhookId, webhookToken) = await ObterWebhookAsync(canalId, ct);
+        var corpo = new
+        {
+            username = Cortar(nome, 80),
+            avatar_url = string.IsNullOrWhiteSpace(fotoUrl) ? null : fotoUrl,
+            embeds = new[] { new { image = new { url = imagemUrl } } },
+            allowed_mentions = new { parse = Array.Empty<string>() },
+        };
+        var destino = $"webhooks/{webhookId}/{webhookToken}?wait=true" + (threadId is null ? "" : $"&thread_id={Uri.EscapeDataString(threadId)}");
+        using var resposta = await EnviarAsync(() => new HttpRequestMessage(HttpMethod.Post, destino)
+        {
+            Content = new StringContent(JsonSerializer.Serialize(corpo, Json), Encoding.UTF8, "application/json"),
+        }, ct);
+
+        // Thread que o webhook não alcança: o bot publica o endereço da imagem, que o Discord abre como imagem.
+        if (threadId is not null && !resposta.IsSuccessStatusCode && resposta.StatusCode != HttpStatusCode.NotFound)
+        {
+            return await EnviarComoBotAsync(threadId, nome, $"{descricao}\n{imagemUrl}", ct);
+        }
+
+        if (resposta.StatusCode == HttpStatusCode.NotFound) webhooks.TryRemove(canalId, out _);
+        await GarantirAsync(resposta, "enviar a figurinha", ct);
         using var documento = await LerAsync(resposta, ct);
         return LerMensagem(documento.RootElement);
     }
@@ -484,7 +613,6 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
                 conteudo = conteudo.Replace($"<@{uid}>", $"@{uNome}").Replace($"<@!{uid}>", $"@{uNome}");
             }
         }
-        conteudo = EmojiPersonalizado.Replace(conteudo, "$1");
 
         // Mensagem só com cartão (embed), como os avisos e a boas-vindas que o próprio CRM publica: o texto está no cartão, não em "content".
         if (conteudo.Length == 0 && m.TryGetProperty("embeds", out var cartoes) && cartoes.ValueKind == JsonValueKind.Array)
@@ -502,12 +630,27 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
             }
         }
 
+        // Figurinhas da mensagem aparecem como imagem (as animadas Lottie não têm imagem e ficam de fora).
+        if (m.TryGetProperty("sticker_items", out var figurinhas) && figurinhas.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var f in figurinhas.EnumerateArray())
+            {
+                var fid = Texto(f, "id");
+                var formato = f.TryGetProperty("format_type", out var ft) && ft.ValueKind == JsonValueKind.Number ? ft.GetInt32() : 1;
+                if (fid is not null && UrlDaFigurinha(fid, formato) is { } url) anexos.Add(new DiscordAnexo(Texto(f, "name") ?? "figurinha", url, true));
+            }
+        }
+
+        // Menção a canal/tópico (<#id>) vira o endereço dele no Discord, que a tela mostra como link.
+        conteudo = MencaoDeCanal.Replace(conteudo, $"https://discord.com/channels/{Opcoes.GuildId}/$1");
+
         // "DoCrm": mensagem publicada por um webhook do CRM (a tela alinha as suas à direita). Reconhece pelo dono do webhook (a aplicação do CRM),
         // que vale mesmo depois de reiniciar o servidor; o guardado em memória cobre respostas que não trazem o dono.
         var doCrm = Texto(m, "webhook_id") is { } wid
             && (Texto(m, "application_id") == Opcoes.ClientId || webhooks.Values.Any(w => w.Id == wid));
         var quando = DateTimeOffset.Parse(Texto(m, "timestamp")!, System.Globalization.CultureInfo.InvariantCulture);
-        return new DiscordMensagem(m.GetProperty("id").GetString()!, nome, avatar, conteudo, quando, anexos, doCrm, Texto(m, "edited_timestamp") is not null);
+        var autorEhBot = autor.TryGetProperty("bot", out var bot) && bot.ValueKind == JsonValueKind.True;
+        return new DiscordMensagem(m.GetProperty("id").GetString()!, nome, avatar, conteudo, quando, anexos, doCrm, Texto(m, "edited_timestamp") is not null, autorEhBot, LerEnquete(m));
     }
 
     /// <summary>Texto corrido de um cartão: título em negrito, descrição e cada campo como "**Nome:** valor".</summary>
@@ -527,7 +670,49 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
         return string.Join("\n", linhas);
     }
 
-    private static readonly System.Text.RegularExpressions.Regex EmojiPersonalizado = new(@"<a?(:\w+:)\d+>", System.Text.RegularExpressions.RegexOptions.Compiled);
+    private static readonly System.Text.RegularExpressions.Regex MencaoDeCanal = new(@"<#(\d+)>", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>Enquete da mensagem (<c>poll</c>): pergunta, respostas com a contagem de votos e se já encerrou. Nulo se a mensagem não tem enquete.</summary>
+    internal static DiscordEnquete? LerEnquete(JsonElement m)
+    {
+        if (!m.TryGetProperty("poll", out var poll) || poll.ValueKind != JsonValueKind.Object) return null;
+        var pergunta = poll.TryGetProperty("question", out var q) ? Texto(q, "text") : null;
+        if (string.IsNullOrWhiteSpace(pergunta)) return null;
+
+        var votos = new Dictionary<int, int>();
+        var encerrada = false;
+        if (poll.TryGetProperty("results", out var resultados) && resultados.ValueKind == JsonValueKind.Object)
+        {
+            encerrada = resultados.TryGetProperty("is_finalized", out var fin) && fin.ValueKind == JsonValueKind.True;
+            if (resultados.TryGetProperty("answer_counts", out var contagens) && contagens.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var c in contagens.EnumerateArray())
+                {
+                    if (c.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number && c.TryGetProperty("count", out var n) && n.ValueKind == JsonValueKind.Number)
+                    {
+                        votos[id.GetInt32()] = n.GetInt32();
+                    }
+                }
+            }
+        }
+
+        var respostas = new List<DiscordRespostaDaEnquete>();
+        if (poll.TryGetProperty("answers", out var lista) && lista.ValueKind == JsonValueKind.Array)
+        {
+            var posicao = 0;
+            foreach (var a in lista.EnumerateArray())
+            {
+                posicao++;
+                var idDaResposta = a.TryGetProperty("answer_id", out var aid) && aid.ValueKind == JsonValueKind.Number ? aid.GetInt32() : posicao;
+                var texto = a.TryGetProperty("poll_media", out var media) ? Texto(media, "text") : null;
+                respostas.Add(new DiscordRespostaDaEnquete(texto ?? "—", votos.GetValueOrDefault(idDaResposta)));
+            }
+        }
+
+        DateTimeOffset? expira = Texto(poll, "expiry") is { } e && DateTimeOffset.TryParse(e, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d) ? d : null;
+        if (expira is { } fim && fim <= DateTimeOffset.UtcNow) encerrada = true;
+        return new DiscordEnquete(pergunta, respostas, poll.TryGetProperty("allow_multiselect", out var multi) && multi.ValueKind == JsonValueKind.True, expira, encerrada);
+    }
 
     private async Task<string> CriarAsync(string caminho, object corpo, string acao, CancellationToken ct)
     {

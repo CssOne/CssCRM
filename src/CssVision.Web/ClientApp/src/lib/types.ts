@@ -1569,6 +1569,36 @@ export interface DiscordChatMensagem {
   /** Publicada pelo CRM (a tela alinha à direita as do próprio usuário). */
   doCrm: boolean;
   editada?: boolean;
+  /** Enquete da mensagem (só para mostrar; votar é no Discord). */
+  enquete?: DiscordChatEnquete | null;
+}
+
+export interface DiscordChatEnquete {
+  pergunta: string;
+  respostas: { texto: string; votos: number }[];
+  variasEscolhas: boolean;
+  encerraEm?: string | null;
+  encerrada: boolean;
+}
+
+/** Emoji personalizado do servidor (no texto vai como <:nome:id>). */
+export interface DiscordChatEmoji {
+  id: string;
+  nome: string;
+  animado: boolean;
+  url: string;
+}
+
+export interface DiscordChatFigurinha {
+  id: string;
+  nome: string;
+  url: string;
+}
+
+/** O que o seletor do chat oferece além dos emojis comuns. */
+export interface DiscordChatExtras {
+  emojis: DiscordChatEmoji[];
+  figurinhas: DiscordChatFigurinha[];
 }
 
 export interface DiscordChatMensagens {

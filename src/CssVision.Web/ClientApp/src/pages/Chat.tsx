@@ -1,4 +1,4 @@
-import { ChevronUp, CornerUpLeft, Hash, MessagesSquare, Paperclip, Pencil, Phone, Plus, Search, Send, Trash2, X } from "lucide-react";
+import { BarChart3, ChevronUp, CornerUpLeft, Hash, MessageSquarePlus, MessagesSquare, Paperclip, Pencil, Phone, Plus, Search, Send, Smile, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -6,7 +6,9 @@ import { api, ApiRequestError, isAbortError, uploadFile } from "../lib/api";
 import { desligarNotificacao, definirSom, ligarNotificacao, notificacaoLigada, notificacaoSuportada, somLigado } from "../lib/avisosDoChat";
 import { formatarDataHora } from "../lib/format";
 import { rotuloNaoLidas, useChatNaoLidas } from "../lib/useChatNaoLidas";
-import type { DiscordChatCanal, DiscordChatChamada, DiscordChatContato, DiscordChatMensagem, DiscordChatMensagens, DiscordChatOnline } from "../lib/types";
+import type { DiscordChatCanal, DiscordChatChamada, DiscordChatContato, DiscordChatExtras, DiscordChatMensagem, DiscordChatMensagens, DiscordChatOnline } from "../lib/types";
+import { SeletorDeEmojis } from "../components/chat/SeletorDeEmojis";
+import { NovaEnquete, NovoTopico } from "../components/chat/NovoTopicoEEnquete";
 import { Avatar, Badge, Button, Card, Checkbox, ConfirmDialog, EmptyState, ErrorState, Input, Modal, Skeleton, useToast } from "../components/ui";
 
 const LIMITE_TEXTO = 2000;
@@ -42,6 +44,12 @@ export function ChatPage() {
   const [apagando, setApagando] = useState<DiscordChatMensagem | null>(null);
   const [apagandoEmAndamento, setApagandoEmAndamento] = useState(false);
   const campoDeTexto = useRef<HTMLTextAreaElement>(null);
+  const [menuMaisAberto, setMenuMaisAberto] = useState(false);
+  const [topicoAberto, setTopicoAberto] = useState(false);
+  const [enqueteAberta, setEnqueteAberta] = useState(false);
+  const [seletorAberto, setSeletorAberto] = useState(false);
+  const [extras, setExtras] = useState<DiscordChatExtras | null>(null);
+  const [carregandoExtras, setCarregandoExtras] = useState(false);
   const seletorDeArquivo = useRef<HTMLInputElement>(null);
   const [online, setOnline] = useState<DiscordChatOnline["pessoas"]>([]);
   const [linkDaChamada, setLinkDaChamada] = useState<string | null>(null);
@@ -148,6 +156,55 @@ export function ChatPage() {
       notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível carregar as mensagens anteriores.");
     } finally {
       setCarregandoAntigas(false);
+    }
+  }
+
+  // Abre o seletor; emojis e figurinhas do servidor só são buscados na primeira vez.
+  function alternarSeletor() {
+    const abrir = !seletorAberto;
+    setSeletorAberto(abrir);
+    if (abrir && !extras && !carregandoExtras) {
+      setCarregandoExtras(true);
+      api
+        .get<DiscordChatExtras>("/crm/discord/chat/extras")
+        .then(setExtras)
+        .catch(() => setExtras({ emojis: [], figurinhas: [] }))
+        .finally(() => setCarregandoExtras(false));
+    }
+  }
+
+  // Escreve o emoji onde está o cursor (ou no fim) sem mexer no resto do texto.
+  function inserirNoTexto(trecho: string) {
+    const campo = campoDeTexto.current;
+    const inicio = campo?.selectionStart ?? texto.length;
+    const fim = campo?.selectionEnd ?? texto.length;
+    const novo = (texto.slice(0, inicio) + trecho + texto.slice(fim)).slice(0, LIMITE_TEXTO);
+    setTexto(novo);
+    requestAnimationFrame(() => {
+      campo?.focus();
+      const posicao = Math.min(inicio + trecho.length, novo.length);
+      campo?.setSelectionRange(posicao, posicao);
+    });
+  }
+
+  // Mensagem que o servidor devolveu (tópico, enquete): entra no fim da conversa sem esperar a próxima atualização.
+  function acrescentarMensagem(nova: DiscordChatMensagem) {
+    colarNoFim.current = true;
+    setDados((atual) => ({ mensagens: [...(atual?.mensagens ?? []), nova], temMais: atual?.temMais ?? false, conteudoOculto: atual?.conteudoOculto ?? false }));
+  }
+
+  async function enviarFigurinha(figurinhaId: string) {
+    if (!chave || enviando) return;
+    setSeletorAberto(false);
+    setEnviando(true);
+    try {
+      const nova = await api.post<DiscordChatMensagem>(`/crm/discord/chat/canais/${encodeURIComponent(chave)}/figurinhas`, { figurinhaId });
+      colarNoFim.current = true;
+      setDados((atual) => ({ mensagens: [...(atual?.mensagens ?? []), nova], temMais: atual?.temMais ?? false, conteudoOculto: atual?.conteudoOculto ?? false }));
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível enviar a figurinha.");
+    } finally {
+      setEnviando(false);
     }
   }
 
@@ -388,8 +445,8 @@ export function ChatPage() {
 
             {dados?.conteudoOculto && (
               <p className="border-b border-[var(--border)] bg-[var(--warning)]/10 px-4 py-2 text-xs text-[var(--fg)]">
-                O Discord não está entregando o texto das mensagens. Um administrador precisa ligar <strong>Message Content Intent</strong> no portal do desenvolvedor do
-                Discord (aplicação → Bot → Privileged Gateway Intents).
+                O Discord não está entregando o texto das mensagens de algumas pessoas. Um administrador precisa ligar <strong>Message Content Intent</strong> no portal do
+                desenvolvedor do Discord (aplicação → Bot → Privileged Gateway Intents) e clicar em <strong>Save Changes</strong>.
               </p>
             )}
 
@@ -472,9 +529,74 @@ export function ChatPage() {
                   else setArquivo(escolhido);
                 }}
               />
-              <Button type="button" variant="ghost" onClick={() => seletorDeArquivo.current?.click()} aria-label="Anexar arquivo" title="Anexar imagem, PDF, planilha ou documento (até 10 MB)">
-                <Paperclip className="size-4" />
-              </Button>
+              <div className="relative">
+                <Button type="button" variant="ghost" onClick={() => setMenuMaisAberto((v) => !v)} aria-label="Mais opções" aria-haspopup="menu" aria-expanded={menuMaisAberto} title="Enviar arquivo, criar tópico ou enquete">
+                  <Plus className="size-4" />
+                </Button>
+                {menuMaisAberto && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setMenuMaisAberto(false)} aria-hidden />
+                    <ul role="menu" aria-label="Mais opções" className="absolute bottom-full left-0 z-20 mb-2 w-52 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg)] py-1 shadow-xl">
+                      <li role="none">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMenuMaisAberto(false);
+                            seletorDeArquivo.current?.click();
+                          }}
+                          className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-[var(--surface-hover)]"
+                          title="Anexar imagem, PDF, planilha ou documento (até 10 MB)"
+                        >
+                          <Paperclip className="size-4 text-[var(--fg-muted)]" aria-hidden /> Enviar um arquivo
+                        </button>
+                      </li>
+                      <li role="none">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          disabled={chave?.startsWith("dm:") ?? false}
+                          onClick={() => {
+                            setMenuMaisAberto(false);
+                            setTopicoAberto(true);
+                          }}
+                          className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                          title={chave?.startsWith("dm:") ? "Tópicos só existem nos grupos" : "Abrir um tópico para conversar sobre um assunto"}
+                        >
+                          <MessageSquarePlus className="size-4 text-[var(--fg-muted)]" aria-hidden /> Criar tópico
+                        </button>
+                      </li>
+                      <li role="none">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setMenuMaisAberto(false);
+                            setEnqueteAberta(true);
+                          }}
+                          className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-[var(--surface-hover)]"
+                        >
+                          <BarChart3 className="size-4 text-[var(--fg-muted)]" aria-hidden /> Criar enquete
+                        </button>
+                      </li>
+                    </ul>
+                  </>
+                )}
+              </div>
+              <div className="relative">
+                <Button type="button" variant="ghost" onClick={alternarSeletor} aria-label="Emojis e figurinhas" aria-expanded={seletorAberto} title="Emojis e figurinhas">
+                  <Smile className="size-4" />
+                </Button>
+                {seletorAberto && (
+                  <SeletorDeEmojis
+                    extras={extras}
+                    carregando={carregandoExtras}
+                    aoEscolherEmoji={inserirNoTexto}
+                    aoEscolherEmojiDoServidor={(marca) => inserirNoTexto(`${marca} `)}
+                    aoEscolherFigurinha={(id) => void enviarFigurinha(id)}
+                  />
+                )}
+              </div>
               <div className="relative flex-1">
               {mencaoAtiva && sugestoes.length > 0 && (
                 <ul role="listbox" aria-label="Marcar pessoa" className="absolute bottom-full left-0 z-10 mb-1 w-64 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg)] shadow-lg">
@@ -529,6 +651,8 @@ export function ChatPage() {
       )}
 
       <NovaConversa aberta={novaConversa} aoFechar={() => setNovaConversa(false)} aoAbrir={aoAbrirConversa} />
+      {chave && <NovoTopico chave={chave} aberto={topicoAberto} aoFechar={() => setTopicoAberto(false)} aoCriado={acrescentarMensagem} />}
+      {chave && <NovaEnquete chave={chave} aberto={enqueteAberta} aoFechar={() => setEnqueteAberta(false)} aoCriada={acrescentarMensagem} />}
 
       <ConfirmDialog
         open={!!apagando}
@@ -725,6 +849,7 @@ function Balao({
             )
           ) : null
         )}
+        {mensagem.enquete && <EnqueteNaMensagem enquete={mensagem.enquete} />}
         {edicao === null && (
           <div className="mt-1 flex gap-1 opacity-60 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
             <button type="button" onClick={aoResponder} aria-label="Responder" title="Responder" className="rounded p-1 text-[var(--fg-muted)] hover:bg-[var(--bg)] hover:text-[var(--fg)]">
@@ -755,6 +880,39 @@ function trechoParaCitar(texto: string): string {
 }
 
 /** Texto da mensagem: linhas que começam com "> " viram citação; endereços viram links; o resto é texto puro. */
+/** Enquete do Discord: pergunta, cada resposta com os votos e uma barra de proporção. Votar é no Discord (o CRM só acompanha). */
+function EnqueteNaMensagem({ enquete }: { enquete: NonNullable<DiscordChatMensagem["enquete"]> }) {
+  const total = enquete.respostas.reduce((soma, r) => soma + r.votos, 0);
+  return (
+    <div className="mt-1 w-full max-w-sm space-y-2 rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3">
+      <p className="flex items-start gap-2 text-sm font-semibold text-[var(--fg)]">
+        <BarChart3 className="mt-0.5 size-4 shrink-0 text-[var(--brand)]" aria-hidden /> <span className="break-words">{enquete.pergunta}</span>
+      </p>
+      <ul className="space-y-1.5">
+        {enquete.respostas.map((r, i) => {
+          const pct = total > 0 ? Math.round((r.votos / total) * 100) : 0;
+          return (
+            <li key={i} className="text-xs text-[var(--fg)]">
+              <div className="flex justify-between gap-2">
+                <span className="break-words">{r.texto}</span>
+                <span className="shrink-0 text-[var(--fg-muted)]">{r.votos} · {pct}%</span>
+              </div>
+              <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-[var(--surface-hover)]">
+                <div className="h-full rounded-full bg-[var(--brand)]" style={{ width: `${pct}%` }} />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="text-[11px] text-[var(--fg-muted)]">
+        {total} {total === 1 ? "voto" : "votos"}
+        {enquete.variasEscolhas ? " · várias respostas" : ""}
+        {enquete.encerrada ? " · encerrada" : enquete.encerraEm ? ` · até ${formatarDataHora(enquete.encerraEm)}` : ""} · vote no Discord
+      </p>
+    </div>
+  );
+}
+
 function ConteudoDaMensagem({ texto }: { texto: string }) {
   const blocos: { citacao: boolean; linhas: string[] }[] = [];
   for (const linha of texto.split("\n")) {
@@ -787,13 +945,33 @@ function ConteudoDaMensagem({ texto }: { texto: string }) {
  * O resto continua texto puro: nada de HTML, então nenhuma mensagem consegue injetar código na tela.
  */
 function comLinks(texto: string) {
+  // Emoji personalizado do servidor (<:nome:id> ou <a:nome:id>) vira a imagem dele; o resto segue pelas regras abaixo.
+  return texto.split(/(<a?:\w+:\d+>)/g).flatMap((pedaco, k) => {
+    const emoji = /^<(a?):(\w+):(\d+)>$/.exec(pedaco);
+    if (emoji) {
+      return [
+        <img
+          key={`e${k}`}
+          src={`https://cdn.discordapp.com/emojis/${emoji[3]}.${emoji[1] ? "gif" : "png"}?size=48`}
+          alt={`:${emoji[2]}:`}
+          title={`:${emoji[2]}:`}
+          loading="lazy"
+          className="mx-0.5 inline-block size-5 align-text-bottom"
+        />,
+      ];
+    }
+    return comLinksSemEmoji(pedaco, k);
+  });
+}
+
+function comLinksSemEmoji(texto: string, grupo: number) {
   return texto.split(/(https?:\/\/[^\s]+)/g).map((parte, i) =>
     /^https?:\/\//.test(parte) ? (
-      <a key={i} href={parte} target="_blank" rel="noopener noreferrer" className="text-[var(--brand)] underline">
+      <a key={`${grupo}-${i}`} href={parte} target="_blank" rel="noopener noreferrer" className="text-[var(--brand)] underline">
         {parte}
       </a>
     ) : (
-      <span key={i}>
+      <span key={`${grupo}-${i}`}>
         {parte.split(/(\*\*[^*\n]+\*\*)/g).map((trecho, j) =>
           /^\*\*[^*\n]+\*\*$/.test(trecho) ? <strong key={j}>{trecho.slice(2, -2)}</strong> : trecho
         )}

@@ -37,7 +37,7 @@ public class DiscordGuildApiMensagensTests
     }
 
     [Fact]
-    public async Task ListarMensagens_DevolveDaMaisAntigaParaAMaisNova_ComMencoesEEmojisLegiveis()
+    public async Task ListarMensagens_DevolveDaMaisAntigaParaAMaisNova_ComMencoesLegiveis_EEmojisPersonalizadosPreservados()
     {
         // O Discord devolve da mais nova para a mais antiga.
         var (api, manipulador) = Montar(_ => Json(HttpStatusCode.OK, """
@@ -58,7 +58,8 @@ public class DiscordGuildApiMensagensTests
         Assert.Null(mensagens[0].AutorFotoUrl);
         Assert.Equal("Ana Melo", mensagens[1].AutorNome);
         Assert.Equal("https://cdn.discordapp.com/avatars/7/abc.png?size=64", mensagens[1].AutorFotoUrl);
-        Assert.Equal("oi @Bia :fogo: e :festa:", mensagens[1].Conteudo);
+        // Emoji personalizado segue como <:nome:id>: a tela troca pela imagem dele.
+        Assert.Equal("oi @Bia <:fogo:999> e <a:festa:555>", mensagens[1].Conteudo);
         Assert.Equal(["foto.png", "plano.pdf"], mensagens[1].Anexos.Select(a => a.Nome).ToList());
         Assert.True(mensagens[1].Anexos[0].Imagem);
         Assert.False(mensagens[1].Anexos[1].Imagem);
