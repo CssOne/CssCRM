@@ -248,6 +248,7 @@ public sealed class OpportunityService(
         }
 
         string? motivoDescricao = null;
+        CrmLeadStage? etapaDoLeadNaVenda = null;
         if (novaEtapa.Tipo == TipoEtapaPipeline.Perdido)
         {
             if (request.MotivoPerdaId is null)
@@ -272,6 +273,7 @@ public sealed class OpportunityService(
             ExigirDataDeVendaNaoFutura(request.DataEfetivaFechamento.Value);
             await GarantirUmaVendaConcluidaPorLeadAsync(opportunity.LeadId, opportunity.Id, ct);
             TravarLeadDuranteAVenda(opportunity.Lead);
+            etapaDoLeadNaVenda = await MoverLeadParaVendaConcluidaAsync(opportunity.Lead, request.Indicacao, ct);
 
             opportunity.ValorFinal = request.ValorFinal;
             opportunity.DataEfetivaFechamento = DataDaVendaAoMeioDia(request.DataEfetivaFechamento.Value);
@@ -349,6 +351,20 @@ public sealed class OpportunityService(
                 await db.SaveChangesAsync(ct);
             }
 
+            // Mesmo evento que o quadro de leads mandava ao mover o card para "Venda concluída" (agora o servidor move junto com a venda).
+            if (etapaDoLeadNaVenda is not null)
+            {
+                try
+                {
+                    var valor = opportunity.PagamentoAdesao is > 0 ? opportunity.PagamentoAdesao : opportunity.Lead.ValorAdesao is > 0 ? opportunity.Lead.ValorAdesao : null;
+                    await conversion.EnviarEventoEtapaAsync(opportunity.Lead, etapaDoLeadNaVenda.Id, etapaDoLeadNaVenda.Nome, ct, valor);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // o evento é um extra: a venda já está salva
+                }
+            }
+
             // Aviso no canal da regional (ligado pelo administrador). A venda já está salva: nada daqui pode desfazê-la nem fazê-la falhar.
             if (publicador is not null)
             {
@@ -367,6 +383,33 @@ public sealed class OpportunityService(
     }
 
     // --- auxiliares ---
+
+    private const string ColunaVendaConcluidaLeads = "Venda concluída (Leads)";
+    private const string ColunaVendaConcluidaIndicacao = "Venda concluída (Indicação)";
+
+    /// <summary>
+    /// Concluir a venda leva o card do lead para "Venda concluída (Leads)" ou "(Indicação)" na mesma operação, pela etiqueta do cliente — antes a tela
+    /// movia o card num segundo passo, e quando esse passo falhava (conflito de versão, queda de rede, outra aba) a venda ficava ganha com o card
+    /// parado em "Em atendimento"/"Cotação". Lead (tráfego) cuja venda teve indicação vai para a coluna das indicações com a etiqueta "Indicação Lead".
+    /// Devolve a coluna para onde o card foi (nulo se não mudou ou se o quadro não tem a coluna ativa).
+    /// </summary>
+    private async Task<CrmLeadStage?> MoverLeadParaVendaConcluidaAsync(CrmLead lead, bool? vendaComIndicacao, CancellationToken ct)
+    {
+        var vaiComoIndicacao = Services.Notion.NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao)
+            || (vendaComIndicacao == true && Services.Crm.TipoIndicacaoLead.EhLead(lead.TipoIndicacao));
+        var nomeDestino = vaiComoIndicacao ? ColunaVendaConcluidaIndicacao : ColunaVendaConcluidaLeads;
+        var destino = await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Ativa && s.Nome == nomeDestino, ct);
+        if (destino is null) return null;
+
+        if (vendaComIndicacao == true && Services.Crm.TipoIndicacaoLead.EhLead(lead.TipoIndicacao)) lead.TipoIndicacao = Services.Crm.TipoIndicacaoLead.IndicacaoLead;
+
+        if (lead.EtapaId == destino.Id) return null;
+        lead.EtapaId = destino.Id;
+        lead.MotivoPerdaId = null;
+        lead.MotivoPerdaObservacao = null;
+        lead.VeiculoNaoAtendido = null;
+        return destino;
+    }
 
     /// <summary>
     /// Um cliente (lead) tem no máximo UMA venda concluída: outro veículo dele é outro card ("Outro veículo"). Sem isto, uma venda
