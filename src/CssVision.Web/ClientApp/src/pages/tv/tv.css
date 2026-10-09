@@ -360,6 +360,11 @@
 .tvx .sale-row span { font-size: var(--fs-micro); color: var(--text-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tvx .sale-row > div:last-child { text-align: right; }
 .tvx .sale-row > div:last-child strong { color: var(--cyan); }
+.tvx .sale-row > div.sale-value-wrap, .tvx .bottom-grid-administrative .sale-row > div.sale-value-wrap { display: flex; align-items: center; justify-content: flex-end; gap: calc(var(--s) * .45); }
+.tvx .sale-value { display: grid; min-width: 0; text-align: right; }
+.tvx .sale-replay { flex: none; width: calc(var(--s) * 1.5); height: calc(var(--s) * 1.5); display: grid; place-items: center; padding: 0; border: 1px solid color-mix(in srgb, var(--cyan-vivid) 42%, var(--line)); border-radius: 50%; color: var(--text-mute); background: var(--chip); cursor: pointer; }
+.tvx .sale-replay:hover, .tvx .sale-replay:focus-visible { color: var(--cyan-vivid); border-color: var(--cyan-vivid); outline: none; transform: scale(1.08); }
+.tvx .sale-replay svg { width: 55%; height: 55%; }
 .tvx footer { border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; font-size: var(--fs-micro); color: var(--text-mute); letter-spacing: .05em; }
 /* --- Estados --- */
 .tvx .loading { min-height: 100vh; display: flex; align-items: center; justify-content: center; gap: calc(var(--s) * .8); }
