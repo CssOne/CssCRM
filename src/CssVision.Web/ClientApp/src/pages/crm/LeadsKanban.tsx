@@ -488,16 +488,15 @@ export function LeadsKanbanPage() {
   }
 
   /**
-   * Depois do formulário de venda: cria os cards dos outros veículos do cliente (antes de mover, pra
-   * eles entrarem na coluna onde o card estava) e move o card. "Lead" cuja venda teve indicação vai
-   * para "Venda concluída (Indicação)" — o servidor põe a etiqueta "Indicação Lead".
+   * Depois do formulário de venda. O servidor já leva o card para "Venda concluída (Leads)" ou "(Indicação)" na mesma operação que ganha a venda
+   * (e põe a etiqueta "Indicação Lead" quando um lead fechou como indicação): antes a tela movia o card num segundo passo, com a versão antiga do
+   * card, e quando esse passo falhava a venda ficava ganha com o card parado em "Em atendimento"/"Cotação". Aqui só atualiza o quadro e abre a venda
+   * de cada veículo a mais, se o cliente fechou mais de um (cada venda vira um card novo em "Venda concluída").
    */
-  async function concluirVenda(cartao: LeadKanbanCard, etapaId: string, resultado?: ResultadoVendaConcluida) {
-    const colunaIndicacao = colunasVendaConcluida[1]?.etapa.id;
-    const destino = resultado?.indicacao && classificarCartao(cartao) === "lead" && colunaIndicacao ? colunaIndicacao : etapaId;
-    await moverPara(cartao, destino);
-    // Cliente fechou mais de um veículo: abre a venda de cada um — cada venda vira um card novo em
-    // "Venda concluída" (depois de mover, pra o card novo herdar a etiqueta já atualizada).
+  function concluirVenda(cartao: LeadKanbanCard, _etapaId: string, resultado?: ResultadoVendaConcluida) {
+    setModalMobile(null);
+    notificar("success", "Venda concluída.");
+    carregar(undefined, true);
     if (resultado && resultado.veiculosAdicionais > 0) {
       setOutroVeiculo({ leadId: cartao.leadId, atual: 1, total: resultado.veiculosAdicionais });
     }
