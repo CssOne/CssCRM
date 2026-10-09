@@ -10,6 +10,12 @@ namespace CssVision.Web.Services.Crm;
 public interface ITvComercialService
 {
     Task<TvComercialDto> ObterAsync(int? mes, int? ano, CancellationToken ct);
+
+    /// <summary>
+    /// O mesmo ranking do painel da TV (todas as regionais, qualquer que seja o escopo de quem pede) — usado no Portal do consultor, que
+    /// espelha a TV.
+    /// </summary>
+    Task<TvRankingGeralDto> ObterRankingGeralAsync(int? mes, int? ano, CancellationToken ct);
 }
 
 /// <summary>
@@ -32,14 +38,35 @@ public sealed class TvComercialService(
 
     private sealed record PessoaTv(Guid Id, string NomeCompleto, string? FotoUrl, Guid? RegionalId, string? Regional);
 
-    public async Task<TvComercialDto> ObterAsync(int? mes, int? ano, CancellationToken ct)
+    public Task<TvComercialDto> ObterAsync(int? mes, int? ano, CancellationToken ct) => ObterInternoAsync(mes, ano, escopoCompleto: false, ct);
+
+    public async Task<TvRankingGeralDto> ObterRankingGeralAsync(int? mes, int? ano, CancellationToken ct)
+    {
+        var tv = await ObterInternoAsync(mes, ano, escopoCompleto: true, ct);
+        return new TvRankingGeralDto(tv.Periodo, tv.RankingConsultores);
+    }
+
+    private async Task<TvComercialDto> ObterInternoAsync(int? mes, int? ano, bool escopoCompleto, CancellationToken ct)
     {
         var hoje = HorarioBrasilia.Hoje;
         var primeiro = new DateOnly(ano ?? hoje.Year, mes ?? hoje.Month, 1);
         if (primeiro > HorarioBrasilia.PrimeiroDiaDoMes(hoje)) primeiro = HorarioBrasilia.PrimeiroDiaDoMes(hoje);
 
         // O painel da TV mostra todas as regionais, mesmo para o administrador que oculta alguma nas demais telas.
-        var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct, ignorarRegionaisOcultas: true);
+        var visiveis = escopoCompleto ? null : await equipe.ObterVendedoresVisiveisAsync(ct, ignorarRegionaisOcultas: true);
+        // A TV da regional MG134 mostra também os dados da MG132.
+        if (visiveis is not null && currentUser is not null)
+        {
+            var regionalDoUsuario = await db.Users.AsNoTracking().Where(u => u.Id == currentUser.UserId)
+                .Select(u => u.Regional != null ? u.Regional.Nome : null).FirstOrDefaultAsync(ct);
+            if (NomeDeRegional.Normalizar(regionalDoUsuario) == "MG134")
+            {
+                var daMg132 = await db.Users.AsNoTracking()
+                    .Where(u => u.Regional != null && u.Regional.Nome.Replace(" ", "").ToUpper() == "MG132")
+                    .Select(u => u.Id).ToListAsync(ct);
+                visiveis = visiveis.Union(daMg132).ToList();
+            }
+        }
         // O Notion tem cache próprio; a versão dele entra na chave para o painel refletir cada atualização.
         IReadOnlyList<TvNotionVenda> vendasNotion = notion is null ? [] : await notion.VendasAsync(primeiro, ct);
         var administrativo = notion is null ? null : await notion.AdministrativoAsync(primeiro, ct);
@@ -47,6 +74,13 @@ public sealed class TvComercialService(
             new { escopo = RespostaEmCache.Escopo(visiveis), primeiro, hoje, notion = notion?.Versao ?? 0 },
             () => CalcularAsync(primeiro, hoje, visiveis, vendasNotion, administrativo, ct));
     }
+
+    /// <summary>
+    /// Instante que coloca a venda no dia certo do painel: "Ativo em" é um dia gravado à meia-noite UTC (21h da véspera em Brasília), então
+    /// vira meio-dia do mesmo dia; com horário de verdade, vale como está. Sem ativação, vale a data da venda.
+    /// </summary>
+    internal static DateTimeOffset DataDaAtivacao(DateTimeOffset? ativoEm, DateTimeOffset? dataDaVenda) =>
+        ativoEm is { } a ? (a.UtcDateTime.TimeOfDay == TimeSpan.Zero ? a.AddHours(12) : a) : dataDaVenda!.Value;
 
     private async Task<TvComercialDto> CalcularAsync(
         DateOnly primeiro, DateOnly hoje, List<Guid>? visiveis, IReadOnlyList<TvNotionVenda> vendasNotion, TvAdministrativoDto? administrativo, CancellationToken ct)
@@ -58,9 +92,13 @@ public sealed class TvComercialService(
         var fimDeHoje = HorarioBrasilia.Inicio(hoje.AddDays(1));
         if (fimDeHoje < fimMes) fimMes = fimDeHoje;
 
+        // A venda conta no dia em que foi ATIVADA ("Ativo em"); sem essa data, vale a data da venda. A janela do banco é folgada (um dia
+        // para cada lado) e o corte exato é feito abaixo, porque "Ativo em" é um dia gravado à meia-noite UTC.
+        var folgaIni = inicioMes.AddDays(-1);
+        var folgaFim = fimMes.AddDays(1);
         var vendasQuery = db.CrmOpportunities.AsNoTracking()
             .Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho
-                && o.DataEfetivaFechamento >= inicioMes && o.DataEfetivaFechamento < fimMes);
+                && (o.AtivoEm ?? o.DataEfetivaFechamento) >= folgaIni && (o.AtivoEm ?? o.DataEfetivaFechamento) < folgaFim);
         var leadsQuery = db.CrmLeads.AsNoTracking().Where(l => !l.Arquivado && l.CriadoEm >= inicioMes && l.CriadoEm < fimMes);
         if (visiveis is not null)
         {
@@ -68,12 +106,18 @@ public sealed class TvComercialService(
             leadsQuery = leadsQuery.Where(l => l.ResponsavelId != null && visiveis.Contains(l.ResponsavelId.Value));
         }
 
-        var vendas = await vendasQuery
-            .Select(o => new VendaTv(
-                o.Id, o.ResponsavelId, o.DataEfetivaFechamento!.Value, o.PagamentoAdesao ?? 0m,
-                o.AtualizadoEm ?? o.CriadoEm, o.Lead.NomeOuRazaoSocial,
-                o.Veiculo != null ? o.Veiculo.Placa : null, o.TipoIndicacao ?? o.Lead.TipoIndicacao, false))
+        var vendasBrutas = await vendasQuery
+            .Select(o => new
+            {
+                o.Id, o.ResponsavelId, o.AtivoEm, o.DataEfetivaFechamento, Adesao = o.PagamentoAdesao ?? 0m,
+                Atualizada = o.AtualizadoEm ?? o.CriadoEm, Cliente = o.Lead.NomeOuRazaoSocial,
+                Placa = o.Veiculo != null ? o.Veiculo.Placa : null, Origem = o.TipoIndicacao ?? o.Lead.TipoIndicacao,
+            })
             .ToListAsync(ct);
+        var vendas = vendasBrutas
+            .Select(o => new VendaTv(o.Id, o.ResponsavelId, DataDaAtivacao(o.AtivoEm, o.DataEfetivaFechamento), o.Adesao, o.Atualizada, o.Cliente, o.Placa, o.Origem, false))
+            .Where(v => v.Data >= inicioMes && v.Data < fimMes)
+            .ToList();
 
         // ----- vendas que existem só no Notion (base MG134), sem repetir as que o CRM já tem -----
         var regionais = await db.CrmRegionais.AsNoTracking().Where(r => r.Ativa).Select(r => new { r.Id, r.Nome }).ToListAsync(ct);
@@ -89,7 +133,7 @@ public sealed class TvComercialService(
 
         var ids = vendas.Select(v => v.ResponsavelId).Concat(leadsPorConsultor.Keys).Distinct().ToList();
         var pessoas = await db.Users.AsNoTracking()
-            .Where(u => ids.Contains(u.Id) && !u.NomeCompleto.StartsWith(NotionPageExtensions.PrefixoNomeProvisorio))
+            .Where(u => ids.Contains(u.Id) && u.AtuaNasVendas && !u.NomeCompleto.StartsWith(NotionPageExtensions.PrefixoNomeProvisorio))
             .Select(u => new PessoaTv(u.Id, u.NomeCompleto, u.FotoUrl, u.RegionalId, u.Regional != null ? u.Regional.Nome : null))
             .ToDictionaryAsync(u => u.Id, ct);
         foreach (var (id, pessoa) in pessoasDoNotion) pessoas.TryAdd(id, pessoa);

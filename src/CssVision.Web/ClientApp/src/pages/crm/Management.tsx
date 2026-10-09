@@ -1,10 +1,10 @@
 import { usePaginacao } from "../../lib/usePaginacao";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, isAbortError } from "../../lib/api";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { GestaoComercialResumo, RedistribuicaoHistorico, VendedorResumo } from "../../lib/types";
-import { Badge, Card, ErrorState, Skeleton, useToast, Pagination } from "../../components/ui";
+import { Badge, Card, ErrorState, Input, Select, Skeleton, useToast, Pagination } from "../../components/ui";
 import { OPCOES_O_QUE } from "../../lib/opcoesLead";
 import { useAtualizarAoVivo } from "../../lib/useAoVivo";
 
@@ -274,6 +274,98 @@ function formatarDuracao(horas: number) {
   return `${(horas / 24).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} dias`;
 }
 
+/** Dia da semana (0 = domingo) hoje em Brasília. */
+function diaDaSemanaBrasilia(): number {
+  const nome = new Intl.DateTimeFormat("en-US", { weekday: "short", timeZone: "America/Sao_Paulo" }).format(new Date());
+  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(nome);
+}
+
+/** Quantos leads de tráfego pago cada consultor marcado para receber já pegou hoje e quantos ainda faltam (até o limite diário). */
+function LeadsDoDiaCard({ vendedores }: { vendedores: VendedorResumo[] }) {
+  const hoje = diaDaSemanaBrasilia();
+  const linhas = vendedores
+    .filter((v) => v.ativo !== false && v.recebeLeads)
+    .map((v) => {
+      const pegou = v.leadsRecebidosHoje ?? 0;
+      const limite = v.limiteDiarioLeads ?? null;
+      return {
+        v,
+        pegou,
+        limite,
+        faltam: limite === null ? null : Math.max(limite - pegou, 0),
+        foraDoDia: !!v.diasSemanaLeads && v.diasSemanaLeads.length > 0 && !v.diasSemanaLeads.includes(hoje),
+      };
+    })
+    .sort((a, b) => (a.foraDoDia === b.foraDoDia ? a.pegou - b.pegou || a.v.nome.localeCompare(b.v.nome) : a.foraDoDia ? 1 : -1));
+  const totalPegou = linhas.reduce((n, l) => n + l.pegou, 0);
+  const totalFaltam = linhas.reduce((n, l) => n + (l.foraDoDia ? 0 : (l.faltam ?? 0)), 0);
+  const semLimite = linhas.filter((l) => l.limite === null && !l.foraDoDia).length;
+  const semLeadHoje = linhas.filter((l) => l.pegou === 0 && !l.foraDoDia).length;
+  const pagina = usePaginacao(linhas, 12);
+
+  return (
+    <Card className="p-4">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-[var(--fg)]">Leads de hoje por vendedor</h2>
+          <p className="text-xs text-[var(--fg-muted)]">Só quem está marcado para receber leads. Conta os leads de tráfego pago atribuídos hoje.</p>
+        </div>
+        <div className="flex flex-wrap gap-4 text-center">
+          <div>
+            <p className="text-xl font-semibold text-[var(--brand)]">{totalPegou}</p>
+            <p className="text-[11px] text-[var(--fg-muted)]">pegos hoje</p>
+          </div>
+          <div title="Soma do que falta até o limite diário de quem tem limite">
+            <p className="text-xl font-semibold text-[var(--fg)]">{totalFaltam}</p>
+            <p className="text-[11px] text-[var(--fg-muted)]">faltam (com limite)</p>
+          </div>
+          <div title="Ainda não receberam nenhum lead hoje">
+            <p className="text-xl font-semibold text-[var(--fg)]">{semLeadHoje}</p>
+            <p className="text-[11px] text-[var(--fg-muted)]">sem lead hoje</p>
+          </div>
+          {semLimite > 0 && (
+            <div title="Sem limite diário: recebem enquanto houver lead, na ordem do rodízio">
+              <p className="text-xl font-semibold text-[var(--fg)]">{semLimite}</p>
+              <p className="text-[11px] text-[var(--fg-muted)]">sem limite diário</p>
+            </div>
+          )}
+        </div>
+      </div>
+      {linhas.length === 0 ? (
+        <p className="text-sm text-[var(--fg-muted)]">Ninguém está marcado para receber leads.</p>
+      ) : (
+        <>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {pagina.itensDaPagina.map(({ v, pegou, limite, faltam, foraDoDia }) => (
+              <div
+                key={v.id}
+                className={`flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-hover)]/60 px-3 py-2 text-sm ${foraDoDia ? "opacity-60" : ""}`}
+              >
+                <span className="truncate font-medium text-[var(--fg)]" title={v.nome}>
+                  {v.nome}
+                </span>
+                <span className="shrink-0 text-right text-xs text-[var(--fg-muted)]">
+                  <strong className="text-[var(--fg)]">{pegou}</strong> pegou
+                  {foraDoDia ? (
+                    <span className="block">não recebe hoje</span>
+                  ) : faltam === null ? (
+                    <span className="block">sem limite diário</span>
+                  ) : (
+                    <span className="block">
+                      {faltam === 0 ? "limite atingido" : `faltam ${faltam}`} (de {limite})
+                    </span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+          <Pagination pagina={pagina.pagina} totalPaginas={pagina.totalPaginas} onChange={pagina.setPagina} />
+        </>
+      )}
+    </Card>
+  );
+}
+
 export function ManagementPage() {
   const [resumo, setResumo] = useState<GestaoComercialResumo | null>(null);
   const [vendedores, setVendedores] = useState<VendedorResumo[] | null>(null);
@@ -308,10 +400,46 @@ export function ManagementPage() {
   // Tempo real: ranking, carteira e métricas se atualizam sozinhos (vendas, leads) e quando o mês vira.
   useAtualizarAoVivo(() => setRecarregar((n) => n + 1));
 
+  // Filtros da Gestão comercial: nome, regional, situação da conta e "recebe leads". A busca por nome vale também para o ranking e
+  // para o tempo até o 1º contato; regional/situação/recebe leads filtram a carteira.
+  const [buscaNome, setBuscaNome] = useState("");
+  const [filtroRegional, setFiltroRegional] = useState("");
+  const [filtroSituacao, setFiltroSituacao] = useState<"" | "ativos" | "inativos">("");
+  const [filtroRecebe, setFiltroRecebe] = useState<"" | "sim" | "nao">("");
+  const termo = buscaNome.trim().toLowerCase();
+  const casaNome = (nome: string) => !termo || nome.toLowerCase().includes(termo);
+  const regionaisDisponiveis = useMemo(
+    () => [...new Set((vendedores ?? []).map((v) => v.regionalNome).filter((r): r is string => !!r))].sort(),
+    [vendedores]
+  );
+  const vendedoresFiltrados = useMemo(
+    () =>
+      (vendedores ?? []).filter(
+        (v) =>
+          casaNome(v.nome) &&
+          (!filtroRegional || v.regionalNome === filtroRegional) &&
+          (filtroSituacao === "" || (filtroSituacao === "ativos") === (v.ativo !== false)) &&
+          (filtroRecebe === "" || (filtroRecebe === "sim") === !!v.recebeLeads)
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [vendedores, termo, filtroRegional, filtroSituacao, filtroRecebe]
+  );
+  const rankingFiltrado = useMemo(
+    () => (resumo?.ranking ?? []).filter((r) => casaNome(r.vendedorNome)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [resumo, termo]
+  );
+  const contatoFiltrado = useMemo(
+    () => (resumo?.primeiroContatoPorVendedor ?? []).filter((r) => casaNome(r.vendedorNome)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [resumo, termo]
+  );
+  const temFiltro = !!(termo || filtroRegional || filtroSituacao || filtroRecebe);
+
   // Paginação das listas (hooks antes dos retornos de carregando/erro).
-  const paginaContato = usePaginacao(resumo?.primeiroContatoPorVendedor, 8);
-  const paginaCarteira = usePaginacao(vendedores, 9);
-  const paginaRanking = usePaginacao(resumo?.ranking, 10);
+  const paginaContato = usePaginacao(contatoFiltrado, 8);
+  const paginaCarteira = usePaginacao(vendedoresFiltrados, 9);
+  const paginaRanking = usePaginacao(rankingFiltrado, 10);
   const paginaParadas = usePaginacao(resumo?.oportunidadesSemMovimentacao, 8);
   const paginaHistorico = usePaginacao(historico, 10);
 
@@ -338,6 +466,51 @@ export function ManagementPage() {
         </p>
       </div>
 
+      <LeadsDoDiaCard vendedores={vendedores} />
+
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+        <div className="w-56">
+          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Consultor</label>
+          <Input placeholder="Buscar pelo nome" value={buscaNome} onChange={(e) => setBuscaNome(e.target.value)} />
+        </div>
+        <div className="w-44">
+          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Regional</label>
+          <Select value={filtroRegional} onChange={(e) => setFiltroRegional(e.target.value)}>
+            <option value="">Todas</option>
+            {regionaisDisponiveis.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div className="w-40">
+          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Situação</label>
+          <Select value={filtroSituacao} onChange={(e) => setFiltroSituacao(e.target.value as typeof filtroSituacao)}>
+            <option value="">Todos</option>
+            <option value="ativos">Ativos</option>
+            <option value="inativos">Inativos</option>
+          </Select>
+        </div>
+        <div className="w-40">
+          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Recebe leads</label>
+          <Select value={filtroRecebe} onChange={(e) => setFiltroRecebe(e.target.value as typeof filtroRecebe)}>
+            <option value="">Todos</option>
+            <option value="sim">Recebe</option>
+            <option value="nao">Não recebe</option>
+          </Select>
+        </div>
+        {temFiltro && (
+          <button
+            type="button"
+            className="focus-ring cursor-pointer pb-2 text-sm font-medium text-[var(--brand)] hover:underline"
+            onClick={() => { setBuscaNome(""); setFiltroRegional(""); setFiltroSituacao(""); setFiltroRecebe(""); }}
+          >
+            Limpar filtros
+          </button>
+        )}
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="p-4">
           <h2 className="mb-2 text-sm font-semibold text-[var(--fg)]">Tempo médio até 1º contato</h2>
@@ -352,7 +525,7 @@ export function ManagementPage() {
               <p className="text-xs text-[var(--fg-muted)]">
                 média de {resumo.leadsComPrimeiroContato} lead(s) deste mês, da chegada até o consultor mover de etapa ou concluir uma atividade
               </p>
-              {(resumo.primeiroContatoPorVendedor?.length ?? 0) > 0 && (
+              {contatoFiltrado.length > 0 && (
                 <ul className="mt-3 space-y-1.5 border-t border-[var(--border)] pt-3">
                   {paginaContato.itensDaPagina.map((v) => (
                     <li key={v.vendedorId} className="flex items-center justify-between gap-2 text-xs">
@@ -408,7 +581,7 @@ export function ManagementPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="overflow-x-auto p-4">
           <h2 className="mb-3 text-sm font-semibold text-[var(--fg)]">Ranking comercial</h2>
-          {resumo.ranking.length === 0 ? (
+          {rankingFiltrado.length === 0 ? (
             <p className="text-sm text-[var(--fg-muted)]">Sem vendas no período.</p>
           ) : (
             <table className="w-full text-sm">

@@ -22,7 +22,9 @@ public record UserSummaryDto(
     int? LimiteDiarioLeads = null,
     /// <summary>Regionais ocultas para este administrador (ele não vê os dados delas).</summary>
     IReadOnlyList<Guid>? RegionaisOcultasIds = null,
-    IReadOnlyList<string>? RegionaisOcultasNomes = null);
+    IReadOnlyList<string>? RegionaisOcultasNomes = null,
+    /// <summary>Administrador que pega leads/atua nas vendas; falso = só administra a plataforma.</summary>
+    bool AtuaNasVendas = true);
 
 public record UserFilterRequest : PagedRequest
 {
@@ -45,7 +47,8 @@ public record UserCreateRequest(
     int? LimiteMensalLeads,
     IReadOnlyList<string>? RecebeSomenteOQue = null,
     int? LimiteDiarioLeads = null,
-    IReadOnlyList<Guid>? RegionaisOcultasIds = null);
+    IReadOnlyList<Guid>? RegionaisOcultasIds = null,
+    bool? AtuaNasVendas = null);
 
 public record UserUpdateRequest(
     string NomeCompleto,
@@ -60,7 +63,8 @@ public record UserUpdateRequest(
     int? LimiteDiarioLeads = null,
     /// <summary>Regionais a ocultar deste administrador; só vale com <see cref="AlterarRegionaisOcultas"/> e vindo de um administrador sem regionais ocultas.</summary>
     IReadOnlyList<Guid>? RegionaisOcultasIds = null,
-    bool AlterarRegionaisOcultas = false);
+    bool AlterarRegionaisOcultas = false,
+    bool? AtuaNasVendas = null);
 
 /// <summary>Ativar/inativar a conta de um consultor (tela de Usuários, também para o Financeiro).</summary>
 public record UserAtivoRequest(bool Ativo);

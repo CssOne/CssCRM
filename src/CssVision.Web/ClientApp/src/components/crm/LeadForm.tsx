@@ -4,7 +4,7 @@ import { Button, DocumentoInput, FieldError, Input, Label, Select, Textarea } fr
 import { LeadPicker } from "./LeadPicker";
 import { useAuth } from "../../context/AuthContext";
 import { ESTADOS_BRASIL } from "../../lib/estados";
-import { OPCOES_ORIGEM, OPCOES_TIPO_INDICACAO } from "../../lib/opcoesLead";
+import { OPCOES_ORIGEM, OPCOES_TIPO_INDICACAO, TIPO_INDICACAO_LEAD } from "../../lib/opcoesLead";
 import { TagSelect } from "./TagSelect";
 
 export interface LeadFormValues {
@@ -118,16 +118,23 @@ export function LeadForm({
   onSubmit,
   onCancel,
   idPrefix = "lead",
+  ehIndicacao = true,
 }: {
   valoresIniciais?: LeadFormValues;
   salvando: boolean;
   onSubmit: (valores: LeadFormValues) => void;
   onCancel: () => void;
   idPrefix?: string;
+  /**
+   * Indicação (cadastro manual, "Novo cliente", ou tipo diferente de "Lead"): o Canal de Aquisição pode ser escolhido, sem a opção "Lead".
+   * Lead (tráfego pago, Notion): o canal é sempre "Lead", então o campo nem aparece na edição. Padrão: indicação, que é o que se cadastra à mão.
+   */
+  ehIndicacao?: boolean;
 }) {
   const [valores, setValores] = useState<LeadFormValues>(valoresIniciais ?? leadFormVazio);
   const [erros, setErros] = useState<Record<string, string>>({});
   const { temPapel } = useAuth();
+  const ehConsultor = temPapel("Comercial") && !temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
   const podeVerMarketing = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
   // Origem do lead é só para administradores (o servidor também não a envia nem a altera para os demais).
   const podeVerOrigem = temPapel("Admin", "GestorMaster", "SupervisorComercial");
@@ -140,7 +147,11 @@ export function LeadForm({
     const novosErros: Record<string, string> = {};
     if (!valores.nomeOuRazaoSocial.trim()) novosErros.nome = "Informe o nome ou razão social.";
     if (valores.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(valores.email)) novosErros.email = "E-mail inválido.";
-    if (valores.estado && valores.estado.length !== 2) novosErros.estado = "Use a sigla do estado (ex: SP).";
+    if (valores.telefone.replace(/\D/g, "").length < 8) novosErros.telefone = "Informe o telefone do cliente.";
+    if (!valores.cidade.trim()) novosErros.cidade = "Informe a cidade.";
+    if (valores.estado.length !== 2) novosErros.estado = "Selecione o estado.";
+    if (!valores.placa.trim()) novosErros.placa = "Informe a placa do veículo.";
+    if (ehIndicacao && !valores.tipoIndicacao) novosErros.tipoIndicacao = "Selecione o canal de aquisição.";
     setErros(novosErros);
     return Object.keys(novosErros).length === 0;
   }
@@ -184,8 +195,11 @@ export function LeadForm({
         </div>
 
         <div>
-          <Label htmlFor={`${idPrefix}-tel`}>Telefone</Label>
-          <Input id={`${idPrefix}-tel`} value={valores.telefone} onChange={(e) => set("telefone", e.target.value)} />
+          <Label htmlFor={`${idPrefix}-tel`} required>
+            Telefone
+          </Label>
+          <Input id={`${idPrefix}-tel`} value={valores.telefone} onChange={(e) => set("telefone", e.target.value)} required />
+          <FieldError>{erros.telefone}</FieldError>
         </div>
 
         <div>
@@ -200,12 +214,17 @@ export function LeadForm({
         </div>
 
         <div>
-          <Label htmlFor={`${idPrefix}-cidade`}>Cidade</Label>
-          <Input id={`${idPrefix}-cidade`} value={valores.cidade} onChange={(e) => set("cidade", e.target.value)} />
+          <Label htmlFor={`${idPrefix}-cidade`} required>
+            Cidade
+          </Label>
+          <Input id={`${idPrefix}-cidade`} value={valores.cidade} onChange={(e) => set("cidade", e.target.value)} required />
+          <FieldError>{erros.cidade}</FieldError>
         </div>
 
         <div>
-          <Label htmlFor={`${idPrefix}-estado`}>Estado</Label>
+          <Label htmlFor={`${idPrefix}-estado`} required>
+            Estado
+          </Label>
           <Select id={`${idPrefix}-estado`} value={valores.estado} onChange={(e) => set("estado", e.target.value)}>
             <option value="">Selecione...</option>
             {ESTADOS_BRASIL.map((uf) => (
@@ -219,7 +238,18 @@ export function LeadForm({
 
         <div>
           <Label htmlFor={`${idPrefix}-regional`}>Regional</Label>
-          <Input id={`${idPrefix}-regional`} value={valores.regional} onChange={(e) => set("regional", e.target.value)} />
+          {ehConsultor ? (
+            // Consultor: a regional é sempre a dele (o servidor preenche pelo cadastro do consultor responsável).
+            <Input id={`${idPrefix}-regional`} value={valores.regional} placeholder="Definida pelo consultor responsável" disabled readOnly />
+          ) : (
+            <Input
+              id={`${idPrefix}-regional`}
+              value={valores.regional}
+              placeholder="Vem do consultor responsável"
+              title="Obrigatória: é a regional do consultor responsável; só vale a digitada se ele não tiver regional."
+              onChange={(e) => set("regional", e.target.value)}
+            />
+          )}
         </div>
 
         {podeVerOrigem && (
@@ -243,13 +273,17 @@ export function LeadForm({
         )}
 
         <div>
-          <Label htmlFor={`${idPrefix}-placa`}>Placa do veículo</Label>
+          <Label htmlFor={`${idPrefix}-placa`} required>
+            Placa do veículo
+          </Label>
           <Input
             id={`${idPrefix}-placa`}
             maxLength={10}
             value={valores.placa}
             onChange={(e) => set("placa", e.target.value.toUpperCase())}
+            required
           />
+          <FieldError>{erros.placa}</FieldError>
         </div>
 
         <div>
@@ -286,16 +320,6 @@ export function LeadForm({
             Preenchido quando o veículo não é atendido (coluna "Não fazemos") — aparece no cartão do quadro.
           </p>
         </div>
-
-        <div className="sm:col-span-2">
-          <Label htmlFor={`${idPrefix}-tags`}>Tags (separadas por vírgula)</Label>
-          <Input id={`${idPrefix}-tags`} value={valores.tags} onChange={(e) => set("tags", e.target.value)} />
-        </div>
-
-        <div className="sm:col-span-2">
-          <Label htmlFor={`${idPrefix}-obs`}>Observações</Label>
-          <Textarea id={`${idPrefix}-obs`} value={valores.observacoes} onChange={(e) => set("observacoes", e.target.value)} />
-        </div>
       </div>
 
       <div className="border-t border-[var(--border)] pt-4">
@@ -304,7 +328,10 @@ export function LeadForm({
           <div className="sm:col-span-2">
             <Label>Indicado por</Label>
             {!valores.indicadoPorLeadId ? (
-              <LeadPicker onSelecionar={(lead: LeadListItem) => { set("indicadoPorLeadId", lead.id); set("indicadoPorLeadNome", lead.nomeOuRazaoSocial); }} />
+              <LeadPicker onSelecionar={(lead: LeadListItem) => {
+                // Quem indica já define o canal: "Indicação Lead" (dá para trocar depois, se for outro tipo).
+                setValores((v) => ({ ...v, indicadoPorLeadId: lead.id, indicadoPorLeadNome: lead.nomeOuRazaoSocial, tipoIndicacao: TIPO_INDICACAO_LEAD }));
+              }} />
             ) : (
               <div className="flex items-center justify-between rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm">
                 <span className="text-[var(--fg)]">{valores.indicadoPorLeadNome}</span>
@@ -318,17 +345,22 @@ export function LeadForm({
               </div>
             )}
           </div>
-          <div>
-            <Label htmlFor={`${idPrefix}-tipo-indicacao`}>Canal de Aquisição</Label>
-            <Select id={`${idPrefix}-tipo-indicacao`} value={valores.tipoIndicacao} onChange={(e) => set("tipoIndicacao", e.target.value)}>
-              <option value="">Selecione...</option>
-              {OPCOES_TIPO_INDICACAO.map((tipo) => (
-                <option key={tipo} value={tipo}>
-                  {tipo}
-                </option>
-              ))}
-            </Select>
-          </div>
+          {ehIndicacao && (
+            <div>
+              <Label htmlFor={`${idPrefix}-tipo-indicacao`} required>
+                Canal de Aquisição
+              </Label>
+              <Select id={`${idPrefix}-tipo-indicacao`} value={valores.tipoIndicacao} onChange={(e) => set("tipoIndicacao", e.target.value)}>
+                <option value="">Selecione...</option>
+                {OPCOES_TIPO_INDICACAO.filter((tipo) => tipo !== "Lead").map((tipo) => (
+                  <option key={tipo} value={tipo}>
+                    {tipo}
+                  </option>
+                ))}
+              </Select>
+              <FieldError>{erros.tipoIndicacao}</FieldError>
+            </div>
+          )}
         </div>
       </div>
 
@@ -371,6 +403,11 @@ export function LeadForm({
           </div>
         </div>
       )}
+
+      <div>
+        <Label htmlFor={`${idPrefix}-obs`}>Observações</Label>
+        <Textarea id={`${idPrefix}-obs`} value={valores.observacoes} onChange={(e) => set("observacoes", e.target.value)} />
+      </div>
 
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={salvando}>

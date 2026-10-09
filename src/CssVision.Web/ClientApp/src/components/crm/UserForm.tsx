@@ -31,6 +31,8 @@ export interface UserFormValues {
   regionaisOcultas: string[];
   /** A lista foi mexida (só então ela é enviada na edição). */
   ocultasAlteradas: boolean;
+  /** Administrador que pega leads / atua nas vendas (falso = só administra a plataforma). */
+  atuaNasVendas: boolean;
   ativo: boolean;
 }
 
@@ -52,6 +54,7 @@ function valoresVazios(papelFixo?: string): UserFormValues {
     recebeSomenteOQue: [],
     regionaisOcultas: [],
     ocultasAlteradas: false,
+    atuaNasVendas: true,
     ativo: true,
   };
 }
@@ -71,6 +74,7 @@ export function paraFormValues(usuario: UserSummary): UserFormValues {
     recebeSomenteOQue: usuario.recebeSomenteOQue ?? [],
     regionaisOcultas: usuario.regionaisOcultasIds ?? [],
     ocultasAlteradas: false,
+    atuaNasVendas: usuario.atuaNasVendas ?? true,
     ativo: usuario.ativo,
   };
 }
@@ -89,6 +93,7 @@ export function paraCriarRequest(v: UserFormValues): UserCreateRequest {
     limiteDiarioLeads: v.limiteDiarioLeads ? Number(v.limiteDiarioLeads) : null,
     recebeSomenteOQue: v.papel === "Comercial" ? v.recebeSomenteOQue : null,
     regionaisOcultasIds: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.regionaisOcultas : null,
+    atuaNasVendas: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.atuaNasVendas : null,
   };
 }
 
@@ -106,6 +111,7 @@ export function paraAtualizarRequest(v: UserFormValues): UserUpdateRequest {
     recebeSomenteOQue: v.papel === "Comercial" ? v.recebeSomenteOQue : null,
     regionaisOcultasIds: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.regionaisOcultas : null,
     alterarRegionaisOcultas: v.ocultasAlteradas,
+    atuaNasVendas: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.atuaNasVendas : null,
   };
 }
 
@@ -260,6 +266,20 @@ export function UserForm({
               ))}
             </Select>
             <FieldError>{erros.regional}</FieldError>
+          </div>
+        )}
+
+        {podeGerenciarTudo && PAPEIS_COM_VISAO_TOTAL.includes(valores.papel) && (
+          <div className="sm:col-span-2">
+            <Checkbox
+              label="Pega leads / atua nas vendas"
+              checked={valores.atuaNasVendas}
+              onChange={(e) => set("atuaNasVendas", e.target.checked)}
+            />
+            <p className="mt-1 text-xs text-[var(--fg-muted)]">
+              Desmarcado, este administrador só administra a plataforma: não pega leads do tráfego pago e o nome dele não aparece na Gestão
+              comercial, no quadro de leads, nas listas de consultores nem nos rankings (inclusive o da TV).
+            </p>
           </div>
         )}
 

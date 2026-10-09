@@ -369,7 +369,8 @@ function UsuariosTab({
         message={
           <>
             Tem certeza que deseja excluir <strong className="text-[var(--fg)]">{usuarioExcluindo?.nomeCompleto}</strong>? Essa ação
-            não pode ser desfeita. Se o usuário tiver leads, oportunidades ou metas vinculados, desative a conta em vez de excluir.
+            não pode ser desfeita. As vendas, os leads e as atividades dele continuam no sistema, com o nome dele; só a conta (login) é
+            removida.
           </>
         }
         confirmLabel="Excluir"

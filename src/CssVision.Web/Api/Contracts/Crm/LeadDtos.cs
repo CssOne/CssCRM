@@ -237,6 +237,11 @@ public record LeadCreateRequest(
     /// <summary>Modelo do veículo que não atendemos (coluna "Não fazemos"); vazio limpa, nulo não mexe.</summary>
     string? VeiculoNaoAtendido = null);
 
+/// <summary>Lead na lixeira do quadro de leads.</summary>
+public record LeadLixeiraDto(
+    Guid Id, string NomeOuRazaoSocial, string? Placa, string? Telefone, string? ResponsavelNome, string? Etapa, string? TipoIndicacao,
+    DateTimeOffset? ExcluidoEm, string? ExcluidoPor);
+
 public record LeadUpdateRequest(
     string NomeOuRazaoSocial,
     TipoPessoa TipoPessoa,
