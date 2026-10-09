@@ -18,7 +18,20 @@ public class CrmDiscordGruposController(IDiscordGruposService grupos, IDiscordAv
     /// <summary>Cria um canal de texto extra no Discord, visível só para quem está no grupo escolhido.</summary>
     [HttpPost("canais")]
     public async Task<ActionResult<DiscordCanalDto>> CriarCanal(DiscordCriarCanalRequest request, CancellationToken ct) =>
-        Ok(await grupos.CriarCanalAsync(request.Nome, request.AcessoChave, request.Topico, ct));
+        Ok(await grupos.CriarCanalAsync(request.Nome, request.AcessoChave, request.Topico, ct, request.Voz));
+
+    /// <summary>Apaga um canal extra (irreversível): só com o nome do canal digitado de confirmação.</summary>
+    [HttpDelete("canais/{chave}")]
+    public async Task<IActionResult> ApagarCanal(string chave, [FromQuery] string confirmarNome, CancellationToken ct)
+    {
+        await grupos.ApagarCanalAsync(chave, confirmarNome, ct);
+        return NoContent();
+    }
+
+    /// <summary>Esconde (ou mostra de novo) um canal extra no chat, sem mexer no Discord.</summary>
+    [HttpPut("canais/{chave}/arquivado")]
+    public async Task<ActionResult<DiscordCanalDto>> ArquivarCanal(string chave, [FromBody] DiscordArquivarCanalRequest request, CancellationToken ct) =>
+        Ok(await grupos.ArquivarCanalAsync(chave, request.Arquivar, ct));
 
     /// <summary>Renomeia o canal no Discord e no CRM.</summary>
     [HttpPut("canais/{chave}")]

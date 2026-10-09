@@ -1,4 +1,4 @@
-import { Check, Pencil, Plus, X } from "lucide-react";
+import { Archive, ArchiveRestore, Check, Pencil, Plus, Trash2, Volume2, X } from "lucide-react";
 import { useState } from "react";
 import { api, ApiRequestError } from "../../lib/api";
 import type { DiscordCanal } from "../../lib/types";
@@ -13,6 +13,35 @@ export function GestaoDeCanais({ canais, aoMudar }: { canais: DiscordCanal[]; ao
   const [editando, setEditando] = useState<{ chave: string; nome: string } | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [criando, setCriando] = useState(false);
+  const [apagando, setApagando] = useState<DiscordCanal | null>(null);
+  const [confirmacao, setConfirmacao] = useState("");
+  const [apagandoEmAndamento, setApagandoEmAndamento] = useState(false);
+
+  async function arquivar(c: DiscordCanal) {
+    try {
+      await api.put(`/crm/discord/grupos/canais/${encodeURIComponent(c.chave)}/arquivado`, { arquivar: c.ativo });
+      aoMudar();
+      notificar("success", c.ativo ? "Canal arquivado: some do chat do CRM, mas continua no Discord." : "Canal de volta ao chat.");
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível arquivar o canal.");
+    }
+  }
+
+  async function apagar() {
+    if (!apagando || apagandoEmAndamento) return;
+    setApagandoEmAndamento(true);
+    try {
+      await api.del(`/crm/discord/grupos/canais/${encodeURIComponent(apagando.chave)}?confirmarNome=${encodeURIComponent(confirmacao.trim())}`);
+      notificar("success", "Canal apagado no Discord e no CRM.");
+      setApagando(null);
+      setConfirmacao("");
+      aoMudar();
+    } catch (e) {
+      notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível apagar o canal.");
+    } finally {
+      setApagandoEmAndamento(false);
+    }
+  }
 
   async function renomear() {
     if (!editando || !editando.nome.trim() || salvando) return;
@@ -63,16 +92,44 @@ export function GestaoDeCanais({ canais, aoMudar }: { canais: DiscordCanal[]; ao
               <>
                 <span className="font-medium text-[var(--fg)]">{c.nome}</span>
                 {!c.ativo && <Badge variant="neutral">inativo</Badge>}
+                {c.voz && <Volume2 className="size-4 text-[var(--fg-muted)]" aria-label="canal de voz" />}
                 {c.extra && <Badge variant="info">extra · vê: {nomeDoGrupo(c.acessoChave)}</Badge>}
-                <button
-                  type="button"
-                  onClick={() => setEditando({ chave: c.chave, nome: c.nome })}
-                  className="ml-auto rounded p-1 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
-                  aria-label={`Renomear ${c.nome}`}
-                  title="Renomear"
-                >
-                  <Pencil className="size-4" />
-                </button>
+                <span className="ml-auto flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditando({ chave: c.chave, nome: c.nome })}
+                    className="rounded p-1 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+                    aria-label={`Renomear ${c.nome}`}
+                    title="Renomear"
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                  {c.extra && !c.voz && (
+                    <button
+                      type="button"
+                      onClick={() => void arquivar(c)}
+                      className="rounded p-1 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+                      aria-label={c.ativo ? `Arquivar ${c.nome}` : `Desarquivar ${c.nome}`}
+                      title={c.ativo ? "Arquivar (some do chat do CRM; continua no Discord)" : "Mostrar de novo no chat"}
+                    >
+                      {c.ativo ? <Archive className="size-4" /> : <ArchiveRestore className="size-4" />}
+                    </button>
+                  )}
+                  {c.extra && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setApagando(c);
+                        setConfirmacao("");
+                      }}
+                      className="rounded p-1 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--danger)]"
+                      aria-label={`Apagar ${c.nome}`}
+                      title="Apagar (irreversível)"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  )}
+                </span>
               </>
             )}
           </li>
@@ -81,6 +138,33 @@ export function GestaoDeCanais({ canais, aoMudar }: { canais: DiscordCanal[]; ao
       <Button variant="secondary" size="sm" onClick={() => setCriando(true)}>
         <Plus className="size-4" /> Criar canal
       </Button>
+      <Modal
+        open={!!apagando}
+        onClose={() => setApagando(null)}
+        title="Apagar canal"
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setApagando(null)} disabled={apagandoEmAndamento}>
+              Cancelar
+            </Button>
+            <Button variant="danger" onClick={() => void apagar()} loading={apagandoEmAndamento} disabled={confirmacao.trim().toLowerCase() !== apagando?.nome.toLowerCase()}>
+              Apagar para sempre
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-2">
+          <p className="text-sm text-[var(--fg)]">
+            Isto apaga o canal <strong>{apagando?.nome}</strong> no Discord, com todas as mensagens. <strong>Não dá para desfazer.</strong>
+          </p>
+          <label htmlFor="apagar-confirmacao" className="text-sm font-medium text-[var(--fg)]">
+            Digite o nome do canal para confirmar
+          </label>
+          <Input id="apagar-confirmacao" value={confirmacao} onChange={(e) => setConfirmacao(e.target.value)} autoFocus placeholder={apagando?.nome} />
+          <p className="text-xs text-[var(--fg-muted)]">Se só quiser tirar o canal do chat do CRM, use Arquivar.</p>
+        </div>
+      </Modal>
       <NovoCanal aberto={criando} canais={canais} aoFechar={() => setCriando(false)} aoCriado={aoMudar} />
     </div>
   );
@@ -92,6 +176,7 @@ function NovoCanal({ aberto, canais, aoFechar, aoCriado }: { aberto: boolean; ca
   const [nome, setNome] = useState("");
   const [topico, setTopico] = useState("");
   const [acesso, setAcesso] = useState("");
+  const [voz, setVoz] = useState(false);
   const [criando, setCriando] = useState(false);
   const acessoEscolhido = acesso || grupos[0]?.chave || "";
 
@@ -99,10 +184,11 @@ function NovoCanal({ aberto, canais, aoFechar, aoCriado }: { aberto: boolean; ca
     if (!nome.trim() || !acessoEscolhido || criando) return;
     setCriando(true);
     try {
-      await api.post("/crm/discord/grupos/canais", { nome: nome.trim(), acessoChave: acessoEscolhido, topico: topico.trim() || null });
+      await api.post("/crm/discord/grupos/canais", { nome: nome.trim(), acessoChave: acessoEscolhido, topico: voz ? null : topico.trim() || null, voz });
       setNome("");
       setTopico("");
       setAcesso("");
+      setVoz(false);
       aoCriado();
       aoFechar();
       notificar("success", "Canal criado no Discord. Ele já aparece no chat de quem está no grupo.");
@@ -131,18 +217,28 @@ function NovoCanal({ aberto, canais, aoFechar, aoCriado }: { aberto: boolean; ca
       }
     >
       <div className="space-y-3">
+        <div className="flex gap-4 text-sm text-[var(--fg)]" role="radiogroup" aria-label="Tipo de canal">
+          <label className="flex cursor-pointer items-center gap-1.5">
+            <input type="radio" name="tipo-canal" checked={!voz} onChange={() => setVoz(false)} /> Texto (aparece no chat)
+          </label>
+          <label className="flex cursor-pointer items-center gap-1.5">
+            <input type="radio" name="tipo-canal" checked={voz} onChange={() => setVoz(true)} /> Voz (só no Discord)
+          </label>
+        </div>
         <div className="space-y-1">
           <label htmlFor="canal-nome" className="text-sm font-medium text-[var(--fg)]">
             Nome do canal
           </label>
           <Input id="canal-nome" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={60} autoFocus placeholder="Ex.: Avisos da gestão" />
         </div>
-        <div className="space-y-1">
-          <label htmlFor="canal-topico" className="text-sm font-medium text-[var(--fg)]">
-            Tópico (opcional)
-          </label>
-          <Input id="canal-topico" value={topico} onChange={(e) => setTopico(e.target.value)} maxLength={1024} placeholder="Para que serve o canal" />
-        </div>
+        {!voz && (
+          <div className="space-y-1">
+            <label htmlFor="canal-topico" className="text-sm font-medium text-[var(--fg)]">
+              Tópico (opcional)
+            </label>
+            <Input id="canal-topico" value={topico} onChange={(e) => setTopico(e.target.value)} maxLength={1024} placeholder="Para que serve o canal" />
+          </div>
+        )}
         <div className="space-y-1">
           <label htmlFor="canal-acesso" className="text-sm font-medium text-[var(--fg)]">
             Quem vê o canal

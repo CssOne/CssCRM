@@ -18,9 +18,11 @@ public record DiscordAvisosRequest(bool Ativos);
 public record DiscordTesteDto(bool Enviado, string Mensagem);
 
 /// <summary>Grupo do CRM que existe como canal no Discord.</summary>
-public record DiscordCanalDto(string Chave, string Nome, bool Ativo, bool Extra = false, string? AcessoChave = null);
+public record DiscordCanalDto(string Chave, string Nome, bool Ativo, bool Extra = false, string? AcessoChave = null, bool Voz = false);
 
-public record DiscordCriarCanalRequest(string Nome, string AcessoChave, string? Topico = null);
+public record DiscordCriarCanalRequest(string Nome, string AcessoChave, string? Topico = null, bool Voz = false);
+
+public record DiscordArquivarCanalRequest(bool Arquivar);
 
 public record DiscordRenomearCanalRequest(string Nome);
 

@@ -235,6 +235,8 @@ export interface DiscordCanal {
   extra?: boolean;
   /** Só nos extras: a chave do grupo que vê o canal. */
   acessoChave?: string | null;
+  /** Canal de voz extra (só existe no Discord; não aparece no chat de texto). */
+  voz?: boolean;
 }
 
 /** O que a sincronização dos grupos do Discord fez e o que não conseguiu fazer. */

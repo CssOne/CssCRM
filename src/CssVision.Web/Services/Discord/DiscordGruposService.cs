@@ -18,7 +18,16 @@ public interface IDiscordGruposService
     /// <summary>
     /// Cria um canal de texto extra no Discord (na categoria do CRM), visível só para quem está no grupo <paramref name="acessoChave"/>. Aparece no chat de quem tem acesso.
     /// </summary>
-    Task<DiscordCanalDto> CriarCanalAsync(string nome, string acessoChave, string? topico, CancellationToken ct);
+    Task<DiscordCanalDto> CriarCanalAsync(string nome, string acessoChave, string? topico, CancellationToken ct, bool voz = false);
+
+    /// <summary>
+    /// Apaga um canal extra no Discord e no CRM. Irreversível: só vale se <paramref name="confirmarNome"/> for o nome do canal. Canais de grupos
+    /// (regionais, grupos, geral, gestão) e o das conversas diretas nunca são apagados por aqui.
+    /// </summary>
+    Task ApagarCanalAsync(string chave, string confirmarNome, CancellationToken ct);
+
+    /// <summary>Esconde (ou volta a mostrar) um canal extra no chat do CRM, sem mexer no Discord. Só canais extras.</summary>
+    Task<DiscordCanalDto> ArquivarCanalAsync(string chave, bool arquivar, CancellationToken ct);
 
     /// <summary>Renomeia o canal no Discord e no CRM (e o canal de voz do grupo, se houver). O nome no CRM vale mesmo depois de novas sincronizações.</summary>
     Task<DiscordCanalDto> RenomearCanalAsync(string chave, string nome, CancellationToken ct);
@@ -53,6 +62,11 @@ public sealed class DiscordGruposService(
     /// <summary>Prefixo da chave dos canais extras, criados por um administrador (não correspondem a regional nem grupo do CRM).</summary>
     public const string PrefixoExtra = "extra:";
 
+    /// <summary>Prefixo da chave dos canais de voz extras (só existem no Discord; não aparecem no chat de texto).</summary>
+    public const string PrefixoExtraVoz = "extra-voz:";
+
+    internal static bool EhExtra(string chave) => chave.StartsWith(PrefixoExtra, StringComparison.Ordinal) || chave.StartsWith(PrefixoExtraVoz, StringComparison.Ordinal);
+
     private sealed record Desejado(string Chave, string Nome, string NomeCanal, string NomeCargo, string Topico, DiscordAparenciaCargo Aparencia);
 
     /// <summary>
@@ -77,10 +91,10 @@ public sealed class DiscordGruposService(
     public async Task<IReadOnlyList<DiscordCanalDto>> ListarCanaisAsync(CancellationToken ct) =>
         (await db.CrmDiscordCanais.AsNoTracking().Where(c => c.Chave != ChaveConversas).ToListAsync(ct))
             .OrderBy(c => c.Chave == ChaveGeral ? 0 : c.Chave == ChaveGestao ? 1 : 2).ThenBy(c => c.Nome)
-            .Select(c => new DiscordCanalDto(c.Chave, c.NomeExibido, c.Ativo, c.Chave.StartsWith(PrefixoExtra, StringComparison.Ordinal), c.AcessoChave))
+            .Select(c => new DiscordCanalDto(c.Chave, c.NomeExibido, c.Ativo, EhExtra(c.Chave), c.AcessoChave, c.Chave.StartsWith(PrefixoExtraVoz, StringComparison.Ordinal)))
             .ToList();
 
-    public async Task<DiscordCanalDto> CriarCanalAsync(string nome, string acessoChave, string? topico, CancellationToken ct)
+    public async Task<DiscordCanalDto> CriarCanalAsync(string nome, string acessoChave, string? topico, CancellationToken ct, bool voz = false)
     {
         ExigirConfigurado();
         nome = NomeDeCanalValido(nome);
@@ -91,7 +105,7 @@ public sealed class DiscordGruposService(
         }
 
         var canais = await db.CrmDiscordCanais.ToListAsync(ct);
-        var acesso = canais.FirstOrDefault(c => c.Chave == acessoChave && c.Ativo && c.Chave != ChaveConversas && !c.Chave.StartsWith(PrefixoExtra, StringComparison.Ordinal))
+        var acesso = canais.FirstOrDefault(c => c.Chave == acessoChave && c.Ativo && c.Chave != ChaveConversas && !EhExtra(c.Chave))
             ?? throw new CrmBusinessException("Escolha o grupo que vai ver o canal. Sincronize os grupos antes, se ele ainda não existir no Discord.", "canal_acesso_invalido");
         if (canais.Any(c => c.Ativo && string.Equals(c.NomeExibido, nome, StringComparison.OrdinalIgnoreCase)))
         {
@@ -102,7 +116,9 @@ public sealed class DiscordGruposService(
         try
         {
             var categoriaId = await GarantirCategoriaAsync(ct);
-            canalId = await api.CriarCanalDeTextoAsync(Slug(nome), categoriaId, acesso.DiscordCargoId, topico ?? $"Canal {nome}.", ct);
+            canalId = voz
+                ? await api.CriarCanalDeVozAsync(nome, categoriaId, [new DiscordPermitido(acesso.DiscordCargoId, Pessoa: false)], ct)
+                : await api.CriarCanalDeTextoAsync(Slug(nome), categoriaId, acesso.DiscordCargoId, topico ?? $"Canal {nome}.", ct);
         }
         catch (DiscordApiException ex)
         {
@@ -111,12 +127,12 @@ public sealed class DiscordGruposService(
 
         var novo = new CrmDiscordCanal
         {
-            Chave = $"{PrefixoExtra}{Guid.NewGuid():N}", Nome = nome, DiscordCanalId = canalId, DiscordCargoId = acesso.DiscordCargoId,
+            Chave = $"{(voz ? PrefixoExtraVoz : PrefixoExtra)}{Guid.NewGuid():N}", Nome = nome, DiscordCanalId = canalId, DiscordCargoId = acesso.DiscordCargoId,
             AcessoChave = acesso.Chave, Ativo = true,
         };
         db.CrmDiscordCanais.Add(novo);
         await db.SaveChangesAsync(ct);
-        return new DiscordCanalDto(novo.Chave, novo.NomeExibido, novo.Ativo, true, novo.AcessoChave);
+        return new DiscordCanalDto(novo.Chave, novo.NomeExibido, novo.Ativo, true, novo.AcessoChave, voz);
     }
 
     public async Task<DiscordCanalDto> RenomearCanalAsync(string chave, string nome, CancellationToken ct)
@@ -132,7 +148,7 @@ public sealed class DiscordGruposService(
 
         try
         {
-            await api.RenomearCanalAsync(canal.DiscordCanalId, Slug(nome), null, ct);
+            await api.RenomearCanalAsync(canal.DiscordCanalId, canal.Chave.StartsWith(PrefixoExtraVoz, StringComparison.Ordinal) ? nome : Slug(nome), null, ct);
             // O canal de voz do grupo acompanha o nome; se o Discord recusar, o canal de texto já foi renomeado e o resto continua.
             if (canal.DiscordVozId is { Length: > 0 })
             {
@@ -146,9 +162,52 @@ public sealed class DiscordGruposService(
         }
 
         canal.NomePersonalizado = nome;
-        if (canal.Chave.StartsWith(PrefixoExtra, StringComparison.Ordinal)) canal.Nome = nome;
+        if (EhExtra(canal.Chave)) canal.Nome = nome;
         await db.SaveChangesAsync(ct);
-        return new DiscordCanalDto(canal.Chave, canal.NomeExibido, canal.Ativo, canal.Chave.StartsWith(PrefixoExtra, StringComparison.Ordinal), canal.AcessoChave);
+        return new DiscordCanalDto(canal.Chave, canal.NomeExibido, canal.Ativo, EhExtra(canal.Chave), canal.AcessoChave, canal.Chave.StartsWith(PrefixoExtraVoz, StringComparison.Ordinal));
+    }
+
+    public async Task ApagarCanalAsync(string chave, string confirmarNome, CancellationToken ct)
+    {
+        ExigirConfigurado();
+        var canal = await db.CrmDiscordCanais.FirstOrDefaultAsync(c => c.Chave == chave, ct);
+        if (canal is null || !EhExtra(canal.Chave))
+        {
+            throw new CrmBusinessException("Só canais extras podem ser apagados por aqui. Os canais dos grupos acompanham o CRM.", "canal_nao_apagavel");
+        }
+
+        if (!string.Equals((confirmarNome ?? "").Trim(), canal.NomeExibido, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new CrmBusinessException("Digite o nome do canal exatamente para confirmar que quer apagá-lo.", "canal_confirmacao");
+        }
+
+        try
+        {
+            await api.ApagarCanalAsync(canal.DiscordCanalId, ct);
+        }
+        catch (DiscordApiException ex)
+        {
+            throw new CrmBusinessException(ex.Message, "discord_indisponivel");
+        }
+
+        // As reações e as marcas de "lido" do canal apagado não servem mais.
+        db.CrmDiscordReacoes.RemoveRange(db.CrmDiscordReacoes.Where(r => r.LeituraId == canal.DiscordCanalId));
+        db.CrmDiscordLeituras.RemoveRange(db.CrmDiscordLeituras.Where(l => l.Chave == canal.Chave));
+        db.CrmDiscordCanais.Remove(canal);
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<DiscordCanalDto> ArquivarCanalAsync(string chave, bool arquivar, CancellationToken ct)
+    {
+        var canal = await db.CrmDiscordCanais.FirstOrDefaultAsync(c => c.Chave == chave, ct);
+        if (canal is null || !EhExtra(canal.Chave))
+        {
+            throw new CrmBusinessException("Só canais extras podem ser arquivados.", "canal_nao_arquivavel");
+        }
+
+        canal.Ativo = !arquivar;
+        await db.SaveChangesAsync(ct);
+        return new DiscordCanalDto(canal.Chave, canal.NomeExibido, canal.Ativo, true, canal.AcessoChave, canal.Chave.StartsWith(PrefixoExtraVoz, StringComparison.Ordinal));
     }
 
     private void ExigirConfigurado()
@@ -262,7 +321,7 @@ public sealed class DiscordGruposService(
         }
 
         // Regional ou grupo que não existe mais no CRM: o canal fica no Discord, mas ninguém novo entra.
-        foreach (var obsoleto in mapa.Values.Where(m => m.Chave != ChaveConversas && !m.Chave.StartsWith(PrefixoExtra, StringComparison.Ordinal) && desejados.All(d => d.Chave != m.Chave))) obsoleto.Ativo = false;
+        foreach (var obsoleto in mapa.Values.Where(m => m.Chave != ChaveConversas && !EhExtra(m.Chave) && desejados.All(d => d.Chave != m.Chave))) obsoleto.Ativo = false;
         await db.SaveChangesAsync(ct);
 
         var (atualizados, foraDoServidor, apelidos) = await SincronizarMembrosAsync(mapa, falhas, ct);

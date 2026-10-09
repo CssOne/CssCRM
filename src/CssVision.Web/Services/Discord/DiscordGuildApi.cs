@@ -55,6 +55,9 @@ public interface IDiscordGuildApi
 
     Task AdicionarAThreadAsync(string threadId, string discordUserId, CancellationToken ct);
 
+    /// <summary>Apaga um canal do servidor (irreversível). Canal que já não existe conta como apagado. Exige "Gerenciar canais".</summary>
+    Task ApagarCanalAsync(string canalId, CancellationToken ct);
+
     /// <summary>Troca o nome (e, se informado, o tópico) de um canal do servidor. Exige "Gerenciar canais". O Discord limita a 2 trocas de nome a cada 10 minutos por canal.</summary>
     Task RenomearCanalAsync(string canalId, string nome, string? topico, CancellationToken ct);
 
@@ -313,6 +316,13 @@ public sealed class DiscordGuildApi(HttpClient http, IOptions<DiscordOptions> op
         await GarantirAsync(resposta, "enviar a mensagem", ct);
         using var documento = await LerAsync(resposta, ct);
         return LerMensagem(documento.RootElement);
+    }
+
+    public async Task ApagarCanalAsync(string canalId, CancellationToken ct)
+    {
+        using var resposta = await EnviarAsync(() => Bot(HttpMethod.Delete, $"channels/{Uri.EscapeDataString(canalId)}"), ct);
+        if (resposta.StatusCode == HttpStatusCode.NotFound) return; // já foi apagado no Discord
+        await GarantirAsync(resposta, "apagar o canal", ct);
     }
 
     public async Task RenomearCanalAsync(string canalId, string nome, string? topico, CancellationToken ct)
