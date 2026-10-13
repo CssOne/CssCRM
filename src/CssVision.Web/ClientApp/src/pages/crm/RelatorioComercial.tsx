@@ -114,8 +114,6 @@ export function RelatorioComercialPage() {
   const { temPapel } = useAuth();
   // Gestão vê todos os consultores e regionais; o consultor vê só os próprios resultados (o servidor também restringe).
   const podeGerir = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
-  // A origem do lead é informação da gestão (o servidor também não a envia ao consultor).
-  const podeVerOrigem = podeGerir;
   const base = baseOptions(tema === "dark");
   const atalhos = useMemo(atalhosPeriodo, []);
 
@@ -499,8 +497,9 @@ export function RelatorioComercialPage() {
         <BarrasHorizontaisChart categorias={dados.porEtapa.map((e) => e.etapa)} series={[{ nome: "Leads", valores: dados.porEtapa.map((e) => e.leads) }]} />
       </Secao>
 
+      {/* Origem dos leads e Produto: só para a gestão. O consultor vê os próprios números nos totais, gráficos de período, etapa, estado e FIPE. */}
+      {podeGerir && (
       <div className="grid gap-4 lg:grid-cols-2">
-        {podeVerOrigem && (
         <Secao titulo="Origem dos leads" descricao="Tag de campanha do lead (Lookalike, UGC, Pmax…) ou a origem de cadastro.">
           <DonutChart itens={dados.porOrigem.slice(0, 8).map((o) => ({ nome: o.origem, valor: o.leads }))} altura={260} />
           <Tabela
@@ -509,7 +508,6 @@ export function RelatorioComercialPage() {
           />
           <Pagination pagina={paginaOrigens.pagina} totalPaginas={paginaOrigens.totalPaginas} onChange={paginaOrigens.setPagina} />
         </Secao>
-        )}
         <Secao titulo="Produto (O que?)">
           <Tabela
             colunas={["Produto", "Leads", "Vendas", "Adesão"]}
@@ -518,6 +516,7 @@ export function RelatorioComercialPage() {
           <Pagination pagina={paginaProdutos.pagina} totalPaginas={paginaProdutos.totalPaginas} onChange={paginaProdutos.setPagina} />
         </Secao>
       </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Secao titulo="Vendas por estado" descricao="Estado informado na venda (ou no lead).">
@@ -531,6 +530,7 @@ export function RelatorioComercialPage() {
         </Secao>
       </div>
 
+      {podeGerir && (
       <Secao titulo="Desempenho por vendedor" descricao="Leads que o vendedor recebeu e vendas que fechou no período.">
         <Tabela
           colunas={["Vendedor", "Leads", "Vendas", "Conversão", "Adesão", "Mensalidade"]}
@@ -540,8 +540,9 @@ export function RelatorioComercialPage() {
         />
         <Pagination pagina={paginaVendedores.pagina} totalPaginas={paginaVendedores.totalPaginas} onChange={paginaVendedores.setPagina} />
       </Secao>
+      )}
 
-      {dados.marketingNotion.length > 0 && (
+      {podeGerir && dados.marketingNotion.length > 0 && (
         <Secao
           titulo="Investimento e retorno (controle de marketing do Notion)"
           descricao="Gasto em mídia, leads e faturamento lançados no Notion — o CRM não tem o valor investido em anúncios. Custo por lead = gastos ÷ leads; ROAS = faturamento ÷ gastos."

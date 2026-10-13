@@ -35,7 +35,7 @@ public class RelatorioComercialParaConsultorTests
     private static readonly DateOnly Ate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1));
 
     [Fact]
-    public async Task Consultor_VeSoOsProprios_ENaoRecebeAOrigemDosLeads()
+    public async Task Consultor_VeSoOsProprios_ENaoRecebeOrigemProdutoNemDesempenhoPorVendedor()
     {
         using var factory = new TestDbContextFactory();
         var (db, ana, _, _) = await PrepararAsync(factory);
@@ -45,7 +45,12 @@ public class RelatorioComercialParaConsultorTests
         var resultado = await rel.ObterAsync(De, Ate, null, null, new RelatorioFiltroExtra(), CancellationToken.None);
 
         Assert.Equal((2, 150m), (resultado.Totais.Vendas, resultado.Totais.Adesao));
+        Assert.NotEmpty(resultado.PorMes); // os próprios números por período continuam
+        // O que é da gestão não vai para o consultor.
         Assert.Empty(resultado.PorOrigem);
+        Assert.Empty(resultado.PorProduto);
+        Assert.Empty(resultado.PorVendedor);
+        Assert.Empty(resultado.MarketingNotion);
     }
 
     [Fact]
@@ -74,5 +79,6 @@ public class RelatorioComercialParaConsultorTests
 
         Assert.Equal((3, 550m), (resultado.Totais.Vendas, resultado.Totais.Adesao));
         Assert.NotEmpty(resultado.PorOrigem);
+        Assert.NotEmpty(resultado.PorVendedor);
     }
 }

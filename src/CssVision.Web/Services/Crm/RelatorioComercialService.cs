@@ -77,9 +77,12 @@ public sealed class RelatorioComercialService(
             new { escopo = RespostaEmCache.Escopo(visiveis), inicio, fim, consultorId, etapas, extras = new { filtroExtra.ChegadaInicio, filtroExtra.ChegadaFim, filtroExtra.VendaInicio, filtroExtra.VendaFim, filtroExtra.Indicacao, tipos, filtroExtra.RegionalId } },
             () => CalcularAsync(inicio, fim, visiveis, consultorId, etapas, filtroExtra, tipos, ct));
 
-        // A origem do lead é informação da gestão (o consultor que agora abre o relatório não a recebe, como no quadro de leads): quem não gere o comercial
-        // recebe a seção "por origem" vazia. Aplicado depois do cache, porque a resposta guardada é a mesma para usuários com o mesmo escopo e permissões diferentes.
-        return currentUser.PodeGerirComercial ? relatorio : relatorio with { PorOrigem = [] };
+        // O consultor que abre o relatório vê só os próprios números (totais, período, etapa, estado, FIPE). Não recebe o que é da gestão: a origem dos leads
+        // (como no quadro de leads), o produto, o desempenho por vendedor e o controle de marketing do Notion (gasto em anúncios e faturamento da empresa, que
+        // não é filtrado por consultor). Aplicado depois do cache, porque a resposta guardada é a mesma para usuários com o mesmo escopo e permissões diferentes.
+        return currentUser.PodeGerirComercial
+            ? relatorio
+            : relatorio with { PorOrigem = [], PorProduto = [], PorVendedor = [], MarketingNotion = [] };
     }
 
     private sealed record LeadLinha(DateTimeOffset Chegada, string? Origem, string? Estado, string? Produto, Guid? ResponsavelId, string? Responsavel, bool Perdido,
