@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace CssVision.Web.Extensions;
 
@@ -22,10 +23,30 @@ public static class ServiceCollectionExtensions
         services.AddMemoryCache();
 
         services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("Default"),
+            options.UseNpgsql(ConexaoComPoolLimitado(configuration.GetConnectionString("Default")),
                 npgsql => npgsql.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)));
 
         return services;
+    }
+
+    /// <summary>
+    /// Máximo de conexões do app com o banco quando a string de conexão não define "Maximum Pool Size". O padrão do Npgsql é 100, mas o RDS
+    /// db.t4g.small aceita 81 no total (max_connections): em pico (várias abas recarregando o quadro) o app esgotava o banco e dava
+    /// "53300: remaining connection slots are reserved". Com o limite, o excesso espera na fila do app em vez de derrubar o banco.
+    /// </summary>
+    public const int MaximoConexoesComOBanco = 40;
+
+    public static string? ConexaoComPoolLimitado(string? conexao)
+    {
+        if (string.IsNullOrWhiteSpace(conexao)) return conexao;
+        var builder = new NpgsqlConnectionStringBuilder(conexao);
+        // Só aplica o padrão se a string de conexão não definiu o tamanho do pool.
+        if (!conexao.Contains("Maximum Pool Size", StringComparison.OrdinalIgnoreCase)
+            && !conexao.Contains("MaxPoolSize", StringComparison.OrdinalIgnoreCase))
+        {
+            builder.MaxPoolSize = MaximoConexoesComOBanco;
+        }
+        return builder.ConnectionString;
     }
 
     public static IServiceCollection AddCrmIdentity(this IServiceCollection services)

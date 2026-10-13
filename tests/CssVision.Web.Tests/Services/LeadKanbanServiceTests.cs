@@ -80,6 +80,39 @@ public class LeadKanbanServiceTests
     }
 
     [Fact]
+    public async Task ObterBoardAsync_CartaoTrazAsTagsDoLead_ESeloDaOportunidadeMaisRecente()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
+        var etapaPipeline = await factory.CriarEtapaAsync(db, "Ganho", 1, TipoEtapaPipeline.Ganho);
+
+        var comTags = new CrmLead { NomeOuRazaoSocial = "Com tags", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
+        var semNada = new CrmLead { NomeOuRazaoSocial = "Sem nada", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
+        var duasOportunidades = new CrmLead { NomeOuRazaoSocial = "Duas oportunidades", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
+        var quente = new CrmTag { Nome = "Quente" };
+        var vip = new CrmTag { Nome = "VIP" };
+        db.CrmLeads.AddRange(comTags, semNada, duasOportunidades);
+        db.CrmTags.AddRange(quente, vip);
+        db.CrmLeadTags.AddRange(new CrmLeadTag { LeadId = comTags.Id, TagId = quente.Id }, new CrmLeadTag { LeadId = comTags.Id, TagId = vip.Id });
+        db.CrmOpportunities.AddRange(
+            new CrmOpportunity { LeadId = duasOportunidades.Id, Titulo = "Antiga", ResponsavelId = vendedor.Id, EtapaId = etapaPipeline.Id, Migracao = false, CriadoEm = DateTimeOffset.UtcNow.AddDays(-30) },
+            new CrmOpportunity { LeadId = duasOportunidades.Id, Titulo = "Recente", ResponsavelId = vendedor.Id, EtapaId = etapaPipeline.Id, Migracao = true, CriadoEm = DateTimeOffset.UtcNow.AddDays(-1) });
+        await db.SaveChangesAsync();
+
+        var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
+        var service = new LeadKanbanService(db, new EquipeComercialService(db, currentUser.Object));
+
+        var cartoes = (await service.ObterBoardAsync(new LeadKanbanFilterRequest(), CancellationToken.None))
+            .Colunas.SelectMany(c => c.Cartoes).ToDictionary(c => c.NomeOuRazaoSocial);
+
+        Assert.Equal(["Quente", "VIP"], cartoes["Com tags"].Tags.OrderBy(t => t).ToArray());
+        Assert.Empty(cartoes["Sem nada"].Tags);
+        Assert.False(cartoes["Sem nada"].Migracao);
+        Assert.True(cartoes["Duas oportunidades"].Migracao); // vale a oportunidade mais recente
+    }
+
+    [Fact]
     public async Task ObterBoardAsync_CartaoTrazOOQue_ParaQualquerUsuario()
     {
         using var factory = new TestDbContextFactory();
