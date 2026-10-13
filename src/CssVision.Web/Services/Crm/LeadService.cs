@@ -507,7 +507,11 @@ public sealed class LeadService(
             throw new CrmNotFoundException("Etapa de lead", etapaInformada);
         }
         // Para a coluna Leads/Indicação, o card novo é cadastro manual de quem registra (não herda a etiqueta do outro).
-        var referenciaDeEtapa = deOutroConsultor ? new CrmLead { CriadoManualmente = true } : original;
+        // Venda já concluída de um Lead SEM sinal de anúncio: o card novo nasce como Indicação (a venda dele não é de tráfego pago).
+        var novoVaiComoIndicacao = !deOutroConsultor && request.VendaConcluida
+            && !NotionEtapaLead.EhIndicacao(original.CriadoManualmente, original.TipoIndicacao)
+            && !await ClassificacaoDoCard.DeTrafegoPagoAsync(db, original, ct);
+        var referenciaDeEtapa = deOutroConsultor || novoVaiComoIndicacao ? new CrmLead { CriadoManualmente = true } : original;
         var etapaId = request.VendaConcluida
             ? await EtapaVendaConcluidaAsync(referenciaDeEtapa, ct)
             : request.EtapaId ?? (deOutroConsultor ? await ObterEtapaInicialIdAsync(ct) : await EtapaDoVeiculoAdicionalAsync(original, ct));
@@ -555,9 +559,9 @@ public sealed class LeadService(
                 Regional = principal.Regional,
                 Origem = principal.Origem,
                 ProdutoInteresse = original.ProdutoInteresse,
-                TipoIndicacao = original.TipoIndicacao,
+                TipoIndicacao = novoVaiComoIndicacao ? "Indicação" : original.TipoIndicacao,
                 IndicadoPorLeadId = principal.IndicadoPorLeadId,
-                CriadoManualmente = original.CriadoManualmente,
+                CriadoManualmente = novoVaiComoIndicacao || original.CriadoManualmente,
                 ResponsavelId = original.ResponsavelId,
                 ResponsavelAtribuidoEm = DateTimeOffset.UtcNow,
                 ConsentimentoContato = principal.ConsentimentoContato,
@@ -641,26 +645,36 @@ public sealed class LeadService(
 
     /// <summary>
     /// "Em atendimento" e "Venda concluída" têm duas colunas cada, "(Leads)" e "(Indicação)", e cada cartão só entra na do seu tipo (a etiqueta Lead/Indicação do
-    /// cartão, <see cref="NotionEtapaLead.EhIndicacao"/>): "(Leads)" só aceita Lead, "Em atendimento (Indicação)" só aceita Indicação. O quadro já barrava no navegador;
-    /// o servidor não conferia nada. Exceção deliberada: um Lead cuja venda foi por indicação vai para "Venda concluída (Indicação)" e ganha a etiqueta "Indicação Lead".
+    /// cartão, <see cref="NotionEtapaLead.EhIndicacao"/>). "(Indicação)" só aceita cartão de Indicação — inclusive "Venda concluída (Indicação)", sem exceção para
+    /// Lead. "(Leads)" só aceita Lead, e "Venda concluída (Leads)" só aceita Lead de tráfego pago (<see cref="OrigemLead.DeTrafegoPago"/>): o Lead sem sinal de
+    /// anúncio vira Indicação ao concluir a venda (formulário de venda), nunca entra nessa coluna.
     /// </summary>
-    private static void ExigirColunaDoTipoDoCard(CrmLead lead, CrmLeadStage destino)
+    private async Task ExigirColunaDoTipoDoCardAsync(CrmLead lead, CrmLeadStage destino, CancellationToken ct)
     {
         var colunaDuplicada = destino.Nome.StartsWith(EtapaLeadEmAtendimento, StringComparison.OrdinalIgnoreCase)
             || destino.Nome.StartsWith(EtapaLeadVendaConcluida, StringComparison.OrdinalIgnoreCase);
         if (!colunaDuplicada) return;
 
         var ehIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
-        if (destino.Nome.EndsWith("(Leads)", StringComparison.OrdinalIgnoreCase) && ehIndicacao)
+        var ehColunaDeLeads = destino.Nome.EndsWith("(Leads)", StringComparison.OrdinalIgnoreCase);
+        var ehColunaDeIndicacao = destino.Nome.EndsWith("(Indicação)", StringComparison.OrdinalIgnoreCase);
+
+        if (ehColunaDeLeads && ehIndicacao)
         {
             throw new CrmBusinessException(
                 $"A coluna \"{destino.Nome}\" aceita só cartões com a etiqueta \"Lead\". Este cartão é de Indicação: use a coluna \"(Indicação)\".", "coluna_so_para_lead");
         }
-        if (destino.Nome.StartsWith(EtapaLeadEmAtendimento, StringComparison.OrdinalIgnoreCase)
-            && destino.Nome.EndsWith("(Indicação)", StringComparison.OrdinalIgnoreCase) && !ehIndicacao)
+        if (ehColunaDeIndicacao && !ehIndicacao)
         {
             throw new CrmBusinessException(
                 $"A coluna \"{destino.Nome}\" aceita só cartões com a etiqueta \"Indicação\". Este cartão é de Lead: use a coluna \"(Leads)\".", "coluna_so_para_indicacao");
+        }
+        if (ehColunaDeLeads && destino.Nome.StartsWith(EtapaLeadVendaConcluida, StringComparison.OrdinalIgnoreCase)
+            && !await ClassificacaoDoCard.DeTrafegoPagoAsync(db, lead, ct))
+        {
+            throw new CrmBusinessException(
+                $"A coluna \"{destino.Nome}\" aceita só vendas de cartões de tráfego pago. Este cartão não tem sinal de anúncio: a venda dele é concluída pelo formulário de venda e vai para \"Venda concluída (Indicação)\".",
+                "venda_leads_so_trafego_pago");
         }
     }
 
@@ -697,15 +711,8 @@ public sealed class LeadService(
             novaEtapa = await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Id == request.NovaEtapaId, ct)
                 ?? throw new CrmNotFoundException("Etapa de lead", request.NovaEtapaId.Value);
             await ExigirColunaDeVendaSeTemVendaAsync(lead.Id, novaEtapa, ct);
-            ExigirColunaDoTipoDoCard(lead, novaEtapa);
+            await ExigirColunaDoTipoDoCardAsync(lead, novaEtapa, ct);
             lead.EtapaId = novaEtapa.Id;
-
-            // Lead (tráfego) que fechou como indicação: vai pra coluna das indicações com a
-            // etiqueta própria "Indicação Lead", sem perder que começou como lead.
-            if (novaEtapa.Nome == EtapaLeadVendaConcluidaIndicacao && TipoIndicacaoLead.EhLead(lead.TipoIndicacao))
-            {
-                lead.TipoIndicacao = TipoIndicacaoLead.IndicacaoLead;
-            }
 
             if (novaEtapa.Nome == EtapaLeadCotacao)
             {

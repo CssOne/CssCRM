@@ -150,7 +150,7 @@ public sealed class OpportunityService(
             await GarantirUmaVendaConcluidaPorLeadAsync(lead.Id, null, ct);
             // Venda já criada como ganha: o card do lead vai junto para "Venda concluída", como em MudarEtapaAsync.
             TravarLeadDuranteAVenda(lead);
-            await MoverLeadParaVendaConcluidaAsync(lead, null, ct);
+            await MoverLeadParaVendaConcluidaAsync(lead, ct);
         }
 
         var opportunity = new CrmOpportunity
@@ -333,7 +333,7 @@ public sealed class OpportunityService(
             ExigirValorDaAdesaoComComprovante(opportunity, request.PagamentoAdesao);
             await GarantirUmaVendaConcluidaPorLeadAsync(opportunity.LeadId, opportunity.Id, ct);
             TravarLeadDuranteAVenda(opportunity.Lead);
-            etapaDoLeadNaVenda = await MoverLeadParaVendaConcluidaAsync(opportunity.Lead, request.Indicacao, ct);
+            etapaDoLeadNaVenda = await MoverLeadParaVendaConcluidaAsync(opportunity.Lead, ct);
 
             opportunity.ValorFinal = request.ValorFinal;
             opportunity.DataEfetivaFechamento = DataDaVendaAoMeioDia(request.DataEfetivaFechamento.Value);
@@ -456,20 +456,26 @@ public sealed class OpportunityService(
     private const string ColunaVendaConcluidaIndicacao = "Venda concluída (Indicação)";
 
     /// <summary>
-    /// Concluir a venda leva o card do lead para "Venda concluída (Leads)" ou "(Indicação)" na mesma operação, pela etiqueta do cliente — antes a tela
-    /// movia o card num segundo passo, e quando esse passo falhava (conflito de versão, queda de rede, outra aba) a venda ficava ganha com o card
-    /// parado em "Em atendimento"/"Cotação". Lead (tráfego) cuja venda teve indicação vai para a coluna das indicações com a etiqueta "Indicação Lead".
+    /// Concluir a venda leva o card do lead para "Venda concluída (Leads)" ou "(Indicação)" na mesma operação — antes a tela movia o card num segundo passo, e
+    /// quando esse passo falhava (conflito de versão, queda de rede, outra aba) a venda ficava ganha com o card parado em "Em atendimento"/"Cotação".
+    /// A coluna segue o tipo do cartão: "Indicação" → "Venda concluída (Indicação)"; "Lead" de tráfego pago (<see cref="OrigemLead.DeTrafegoPago"/>) →
+    /// "Venda concluída (Leads)"; "Lead" SEM sinal de anúncio → vira Indicação (a etiqueta passa a "Indicação") e vai para "Venda concluída (Indicação)".
     /// Devolve a coluna para onde o card foi (nulo se não mudou ou se o quadro não tem a coluna ativa).
     /// </summary>
-    private async Task<CrmLeadStage?> MoverLeadParaVendaConcluidaAsync(CrmLead lead, bool? vendaComIndicacao, CancellationToken ct)
+    private async Task<CrmLeadStage?> MoverLeadParaVendaConcluidaAsync(CrmLead lead, CancellationToken ct)
     {
-        var vaiComoIndicacao = Services.Notion.NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao)
-            || (vendaComIndicacao == true && Services.Crm.TipoIndicacaoLead.EhLead(lead.TipoIndicacao));
-        var nomeDestino = vaiComoIndicacao ? ColunaVendaConcluidaIndicacao : ColunaVendaConcluidaLeads;
+        var ehIndicacao = Services.Notion.NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
+        if (!ehIndicacao && !await ClassificacaoDoCard.DeTrafegoPagoAsync(db, lead, ct))
+        {
+            // Lead sem nenhum sinal de anúncio: não é venda de tráfego pago, então é tratada como Indicação.
+            lead.TipoIndicacao = "Indicação";
+            lead.CriadoManualmente = true;
+            ehIndicacao = true;
+        }
+
+        var nomeDestino = ehIndicacao ? ColunaVendaConcluidaIndicacao : ColunaVendaConcluidaLeads;
         var destino = await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Ativa && s.Nome == nomeDestino, ct);
         if (destino is null) return null;
-
-        if (vendaComIndicacao == true && Services.Crm.TipoIndicacaoLead.EhLead(lead.TipoIndicacao)) lead.TipoIndicacao = Services.Crm.TipoIndicacaoLead.IndicacaoLead;
 
         if (lead.EtapaId == destino.Id) return null;
         lead.EtapaId = destino.Id;

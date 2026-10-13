@@ -26,7 +26,7 @@ public class LeadComVendaNaoVoltaParaAtendimentoTests
         var vendaConcluida = await factory.ObterOuCriarEtapaLeadAsync(db, "Venda concluída (Leads)", 3);
         var ganho = await factory.CriarEtapaAsync(db, "Ganho", 2, TipoEtapaPipeline.Ganho);
 
-        var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id, TipoIndicacao = "Lead", CriadoManualmente = false, EtapaId = vendaConcluida.Id, ValorAdesao = 150m };
+        var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id, TipoIndicacao = "Lead", CriadoManualmente = false, MetaLeadId = Guid.NewGuid().ToString("N"), EtapaId = vendaConcluida.Id, ValorAdesao = 150m };
         db.CrmLeads.Add(lead);
         await db.SaveChangesAsync();
         var venda = new CrmOpportunity
@@ -73,12 +73,12 @@ public class LeadComVendaNaoVoltaParaAtendimentoTests
     {
         using var factory = new TestDbContextFactory();
         var c = await PrepararAsync(factory);
-        var indicacao = await factory.ObterOuCriarEtapaLeadAsync(c.Db, "Venda concluída (Indicação)", 4);
+        var outraVenda = await factory.ObterOuCriarEtapaLeadAsync(c.Db, "Venda concluída (Leads)", 3);
 
-        await Servico(c.Db, c.Usuario).MudarEtapaAsync(c.Lead.Id, new ChangeLeadStageRequest(indicacao.Id, c.Lead.RowVersion), CancellationToken.None);
+        await Servico(c.Db, c.Usuario).MudarEtapaAsync(c.Lead.Id, new ChangeLeadStageRequest(outraVenda.Id, c.Lead.RowVersion), CancellationToken.None);
 
         c.Db.ChangeTracker.Clear();
-        Assert.Equal(indicacao.Id, (await c.Db.CrmLeads.SingleAsync()).EtapaId);
+        Assert.Equal(outraVenda.Id, (await c.Db.CrmLeads.SingleAsync()).EtapaId);
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public class LeadComVendaNaoVoltaParaAtendimentoTests
         var db = factory.CreateContext();
         var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor");
         var atendimento = await factory.ObterOuCriarEtapaLeadAsync(db, "Em atendimento (Leads)", 1);
-        var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id, TipoIndicacao = "Lead", CriadoManualmente = false };
+        var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id, TipoIndicacao = "Lead", CriadoManualmente = false, MetaLeadId = Guid.NewGuid().ToString("N") };
         db.CrmLeads.Add(lead);
         await db.SaveChangesAsync();
 

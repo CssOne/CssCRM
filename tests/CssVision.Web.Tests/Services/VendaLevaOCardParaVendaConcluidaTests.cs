@@ -61,12 +61,13 @@ public class VendaLevaOCardParaVendaConcluidaTests
         return new Cenario { Servico = servico, Db = db, Aberta = aberta, Ganho = ganho, VendedorId = vendedor.Id, EmAtendimento = emAtendimento, VendaLeads = leads!, VendaIndicacao = indicacao!, Conversao = conversao };
     }
 
-    private static async Task<CrmLead> LeadAsync(Cenario c, string? tipo, bool manual, Guid? etapaId = null, decimal? valorAdesao = null)
+    /// <param name="comSinalDeAnuncio">Lead de tráfego pago (ID do lead no Meta). Sem ele, o Lead é tratado como Indicação ao concluir a venda.</param>
+    private static async Task<CrmLead> LeadAsync(Cenario c, string? tipo, bool manual, Guid? etapaId = null, decimal? valorAdesao = null, bool comSinalDeAnuncio = true)
     {
         var lead = new CrmLead
         {
             NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = c.VendedorId, EtapaId = etapaId ?? c.EmAtendimento.Id,
-            TipoIndicacao = tipo, CriadoManualmente = manual, ValorAdesao = valorAdesao,
+            TipoIndicacao = tipo, CriadoManualmente = manual, ValorAdesao = valorAdesao, MetaLeadId = comSinalDeAnuncio && tipo == "Lead" ? Guid.NewGuid().ToString("N") : null,
         };
         c.Db.CrmLeads.Add(lead);
         await c.Db.SaveChangesAsync();
@@ -115,7 +116,7 @@ public class VendaLevaOCardParaVendaConcluidaTests
     }
 
     [Fact]
-    public async Task LeadQueFechouComoIndicacao_VaiParaAColunaDasIndicacoes_ComAEtiquetaIndicacaoLead()
+    public async Task LeadDeTrafegoPago_QueFechouComIndicacao_ContinuaEmVendaConcluidaLeads()
     {
         using var factory = new TestDbContextFactory();
         var c = await MontarAsync(factory);
@@ -124,8 +125,48 @@ public class VendaLevaOCardParaVendaConcluidaTests
         await ConcluirAsync(c, lead, indicacao: true);
 
         var salvo = await RecarregarAsync(c, lead.Id);
+        Assert.Equal(c.VendaLeads.Id, salvo.EtapaId); // "Venda concluída (Indicação)" só aceita cartão de Indicação: sem exceção para Lead
+        Assert.Equal("Lead", salvo.TipoIndicacao);
+    }
+
+    [Fact]
+    public async Task LeadSemSinalDeAnuncio_ViraIndicacao_EVaiParaVendaConcluidaIndicacao()
+    {
+        using var factory = new TestDbContextFactory();
+        var c = await MontarAsync(factory);
+        var lead = await LeadAsync(c, "Lead", manual: false, comSinalDeAnuncio: false);
+
+        await ConcluirAsync(c, lead);
+
+        var salvo = await RecarregarAsync(c, lead.Id);
         Assert.Equal(c.VendaIndicacao.Id, salvo.EtapaId);
-        Assert.Equal("Indicação Lead", salvo.TipoIndicacao);
+        Assert.Equal("Indicação", salvo.TipoIndicacao);
+        Assert.True(salvo.CriadoManualmente);
+    }
+
+    [Theory]
+    [InlineData("Campanha")]
+    [InlineData("Gclid")]
+    [InlineData("UtmSource")]
+    [InlineData("TagDeAnuncioNotion")]
+    public async Task LeadDoNotionComSinalDeAnuncio_ContaComoTrafegoPago(string sinal)
+    {
+        using var factory = new TestDbContextFactory();
+        var c = await MontarAsync(factory);
+        var lead = await LeadAsync(c, "Lead", manual: false, comSinalDeAnuncio: false);
+        lead.ConsentimentoOrigem = OrigemLead.MarcadorSincronizacaoNotion;
+        switch (sinal)
+        {
+            case "Campanha": lead.Campanha = "Lookalike"; break;
+            case "Gclid": lead.Gclid = "abc"; break;
+            case "UtmSource": lead.UtmSource = "facebook"; break;
+            default: lead.TagDeAnuncioNotion = true; break;
+        }
+        await c.Db.SaveChangesAsync();
+
+        await ConcluirAsync(c, lead);
+
+        Assert.Equal(c.VendaLeads.Id, (await RecarregarAsync(c, lead.Id)).EtapaId);
     }
 
     [Fact]

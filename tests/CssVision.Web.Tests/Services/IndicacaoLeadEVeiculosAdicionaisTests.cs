@@ -45,17 +45,17 @@ public class IndicacaoLeadEVeiculosAdicionaisTests
     }
 
     [Fact]
-    public async Task LeadMovidoParaVendaConcluidaIndicacao_GanhaEtiquetaIndicacaoLead()
+    public async Task LeadNaoVaiParaVendaConcluidaIndicacao_NemGanhaEtiquetaIndicacaoLead()
     {
         using var factory = new TestDbContextFactory();
         var (db, usuario, lead) = await PrepararAsync(factory);
         var vendaIndicacao = await factory.ObterOuCriarEtapaLeadAsync(db, "Venda concluída (Indicação)", 5);
 
-        var detalhe = await LeadService(db, usuario).MudarEtapaAsync(lead.Id,
-            new ChangeLeadStageRequest(vendaIndicacao.Id, lead.RowVersion), CancellationToken.None);
+        // "Venda concluída (Indicação)" só aceita cartão de Indicação: a antiga exceção do "Indicação Lead" deixou de existir.
+        var erro = await Assert.ThrowsAsync<CssVision.Web.Api.Contracts.Common.CrmBusinessException>(() => LeadService(db, usuario).MudarEtapaAsync(lead.Id,
+            new ChangeLeadStageRequest(vendaIndicacao.Id, lead.RowVersion), CancellationToken.None));
 
-        Assert.Equal(vendaIndicacao.Id, detalhe.EtapaId);
-        Assert.Equal("Indicação Lead", detalhe.TipoIndicacao);
+        Assert.Equal("coluna_so_para_indicacao", erro.Codigo);
     }
 
     [Theory]
@@ -220,5 +220,27 @@ public class IndicacaoLeadEVeiculosAdicionaisTests
             LeadService(db, usuario).CriarVeiculosAdicionaisAsync(lead.Id, new LeadVeiculosAdicionaisRequest(null, quantidade), CancellationToken.None));
 
         Assert.Equal("quantidade_invalida", erro.Codigo);
+    }
+
+    [Fact]
+    public async Task OutroVeiculo_ComVendaConcluida_DeLeadSemSinalDeAnuncio_CardNasceComoIndicacao()
+    {
+        using var factory = new TestDbContextFactory();
+        var db0 = factory.CreateContext();
+        var emAtendimento = await factory.ObterOuCriarEtapaLeadAsync(db0, "Em atendimento (Leads)", 1);
+        await factory.ObterOuCriarEtapaLeadAsync(db0, "Venda concluída (Leads)", 5);
+        var vendaIndicacao = await factory.ObterOuCriarEtapaLeadAsync(db0, "Venda concluída (Indicação)", 6);
+        var (db, usuario, lead) = await PrepararAsync(factory, "Lead", emAtendimento);
+        lead.MetaLeadId = null; // sem ID do Meta, GCLID, campanha, UTM nem tag de anúncio: a venda dele não é de tráfego pago
+        await db.SaveChangesAsync();
+
+        var ids = await LeadService(db, usuario).CriarVeiculosAdicionaisAsync(
+            lead.Id, new LeadVeiculosAdicionaisRequest(null, 1, VendaConcluida: true), CancellationToken.None);
+
+        db.ChangeTracker.Clear();
+        var novo = await db.CrmLeads.AsNoTracking().SingleAsync(l => l.Id == ids[0]);
+        Assert.Equal(vendaIndicacao.Id, novo.EtapaId);
+        Assert.Equal("Indicação", novo.TipoIndicacao);
+        Assert.True(novo.CriadoManualmente);
     }
 }

@@ -109,7 +109,6 @@ export function VendaConcluidaDialog({
   pipelineGanhoEtapaId,
   oportunidadeEditar = null,
   modo = "venda",
-  indicacaoLead = false,
   permitirVeiculosAdicionais = false,
   novoVeiculo = false,
   novoCliente = null,
@@ -133,7 +132,6 @@ export function VendaConcluidaDialog({
   /** "oportunidade": cria uma oportunidade com este mesmo formulário (só o nome do cliente é obrigatório). */
   modo?: "venda" | "oportunidade";
   /** Card "Lead" solto em "Venda concluída (Indicação)": a venda já vem marcada como indicação "Indicação Lead". */
-  indicacaoLead?: boolean;
   /** Mostra a opção "o cliente fechou mais de um veículo" (quadro de leads). */
   permitirVeiculosAdicionais?: boolean;
   /**
@@ -192,11 +190,6 @@ export function VendaConcluidaDialog({
   const [cidade, setCidade] = useState("");
   const [temSeguro, setTemSeguro] = useState("");
   const [utilidadeVeiculo, setUtilidadeVeiculo] = useState("");
-
-  /** Venda de card "Lead" em "Venda concluída (Indicação)": já marcada como indicação "Indicação Lead". */
-  function comIndicacaoLead(v: DadosVendaConcluida): DadosVendaConcluida {
-    return indicacaoLead ? { ...v, indicacao: true, tipoIndicacao: TIPO_INDICACAO_LEAD } : v;
-  }
 
   useEffect(() => {
     if (!open || (!leadId && !novoCliente)) return;
@@ -286,8 +279,7 @@ export function VendaConcluidaDialog({
         }
         // Dados do cadastro do cliente e o valor da adesão informado na Cotação. Card de outro
         // veículo do mesmo cliente não guarda CPF: vem do card original.
-        setValores((v) =>
-          comIndicacaoLead({
+        setValores((v) => ({
             ...v,
             cpf: lead.documento ?? lead.veiculoAdicionalDeDocumento ?? "",
             estado: lead.estado ?? "",
@@ -297,8 +289,7 @@ export function VendaConcluidaDialog({
             // Outro veículo: a adesão e a placa são do veículo novo, não do card do cliente.
             pagamentoAdesao: novoVeiculo ? v.pagamentoAdesao : v.pagamentoAdesao ?? lead.valorAdesao ?? null,
             veiculo: { ...v.veiculo, placa: novoVeiculo ? "" : lead.placa ?? "" },
-          })
-        );
+        }));
         setResponsavelIdLead(lead.responsavelId ?? null);
         if (!ehVenda || novoVeiculo) return;
 
@@ -309,7 +300,7 @@ export function VendaConcluidaDialog({
         api
           .get<Opportunity>(`/crm/opportunities/${idExistente}`, controller.signal)
           .then((o) => {
-            setValores((v) => comIndicacaoLead(mesclarOportunidade(v, o)));
+            setValores((v) => mesclarOportunidade(v, o));
             setTemRastreador((o.veiculo?.rastreador ?? null) != null);
             setTemVistoria((o.veiculo?.valorVistoria ?? null) != null);
             if (o.veiculo?.chassi && !o.veiculo?.placa) setCarroZero(true);
@@ -323,7 +314,7 @@ export function VendaConcluidaDialog({
         setResponsavelIdLead(sessao?.id ?? null);
         if (clienteInicial) {
           setNomeCliente(clienteInicial.nome);
-          setValores((v) => comIndicacaoLead({ ...v, cpf: clienteInicial.documento }));
+          setValores((v) => ({ ...v, cpf: clienteInicial.documento }));
         }
       });
     return () => controller.abort();

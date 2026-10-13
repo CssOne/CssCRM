@@ -46,6 +46,9 @@ public sealed class NotionSyncService(
         ("31763799-99a8-81b2-b83b-000bfca82506", "MG132", "CSS Growth Sales", "CSS Growth Sales"),
     ];
 
+    /// <summary>Ids das bases do Notion que a sincronização lê (usado pela carga única da tag de anúncio).</summary>
+    internal static IReadOnlyList<string> IdsDasBasesSincronizadas => DataSources.Select(d => d.DataSourceId).ToList();
+
     /// <summary>A partir desta data (Data de chegada do card no Notion), a sincronização periódica
     /// passa a importar/atualizar leads — cards mais antigos deixam de entrar no CRM mesmo que
     /// alguém ainda os edite no Notion.</summary>
@@ -872,6 +875,8 @@ public sealed class NotionSyncService(
         lead.Cidade = Cortar(cidade, 120) ?? lead.Cidade;
         lead.Estado = estado ?? lead.Estado;
         lead.Campanha = Cortar(page.Select("Campanha", "CAMPANHA"), 120) ?? lead.Campanha;
+        // Tag de anúncio do card ("Facebook ADS"/"Google ads"): sinal de tráfego pago para os cards sem ID do Meta/GCLID (ver OrigemLead.DeTrafegoPago).
+        lead.TagDeAnuncioNotion = OrigemLead.EhTagDeAnuncio(page.Select("Tags"));
         // Leads do Notion (migrados ou sincronizados): a Origem acompanha a tag de campanha do card.
         if (lead.ConsentimentoOrigem is OrigemLead.MarcadorMigracaoNotion or OrigemLead.MarcadorSincronizacaoNotion
             && OrigemLead.TagDaCampanha(lead.Campanha) is { } tagCampanha)

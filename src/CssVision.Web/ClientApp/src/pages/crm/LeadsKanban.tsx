@@ -5,7 +5,6 @@ import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api
 import {
   TipoEtapaPipeline,
   type LeadCreateRequest,
-  type LeadDetail,
   type LeadDuplicateWarning,
   type LeadKanbanBoard,
   type LeadKanbanCard,
@@ -218,7 +217,7 @@ export function LeadsKanbanPage() {
   /** Formulários de venda dos outros veículos do cliente, um por vez (ver concluirVenda). */
   const [outroVeiculo, setOutroVeiculo] = useState<{ leadId: string; atual: number; total: number; cliente?: { nome: string; documento: string } } | null>(null);
   const ultimoCadastroTentado = useRef<{ documento: string }>({ documento: "" });
-  const [pendenciaVenda, setPendenciaVenda] = useState<{ cartao: LeadKanbanCard; etapaId: string; indicacaoLead?: boolean } | null>(null);
+  const [pendenciaVenda, setPendenciaVenda] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
   const [pendenciaPerda, setPendenciaPerda] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
   const [pendenciaNaoFazemos, setPendenciaNaoFazemos] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
   const [pendenciaCotacao, setPendenciaCotacao] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
@@ -502,24 +501,6 @@ export function LeadsKanbanPage() {
     }
   }
 
-  /**
-   * Venda de "Outro veículo" marcada como indicação: o card novo nasce em "Venda concluída (Leads)"
-   * (herda a etiqueta do cliente) e precisa ir para a coluna das indicações, como acontece no card
-   * principal — o servidor põe a etiqueta "Indicação Lead".
-   */
-  async function moverVeiculoNovoParaIndicacao(resultado?: ResultadoVendaConcluida) {
-    const colunaIndicacao = colunasVendaConcluida[1]?.etapa.id;
-    if (!resultado?.indicacao || !resultado.novoLeadId || !colunaIndicacao) return;
-    try {
-      const lead = await api.get<LeadDetail>(`/crm/leads/${resultado.novoLeadId}`);
-      if (lead.tipoIndicacao?.trim().toLowerCase() !== "lead") return;
-      await api.post(`/crm/leads/${lead.id}/stage`, { novaEtapaId: colunaIndicacao, rowVersion: lead.rowVersion });
-      carregar(undefined, true);
-    } catch {
-      notificar("error", "A venda foi registrada, mas não foi possível mover o card para \"Venda concluída (Indicação)\". Mova-o manualmente.");
-    }
-  }
-
   async function excluirLead() {
     if (!leadExcluindo) return;
     const leadId = leadExcluindo.leadId;
@@ -557,17 +538,6 @@ export function LeadsKanbanPage() {
       const classificacao = classificarCartao(cartao);
       if (indiceColuna === 0 && classificacao === "indicacao") {
         notificar("error", `Esta coluna "${etapa!.nome}" aceita só cartões com a etiqueta "Lead".`);
-        return;
-      }
-      // Exceção: "Lead" pode ir para "Venda concluída (Indicação)" — é uma venda por indicação de
-      // um lead e ganha a etiqueta "Indicação Lead" (o formulário da venda já vem com a indicação marcada).
-      if (indiceColuna === 1 && classificacao === "lead" && grupoColunasDuplicadas === colunasVendaConcluida) {
-        if (!etapaGanhoPipelineId) {
-          notificar("error", "Não foi possível carregar as etapas do pipeline. Recarregue a página e tente novamente.");
-          return;
-        }
-        setModalMobile(null);
-        setPendenciaVenda({ cartao, etapaId: etapaId!, indicacaoLead: true });
         return;
       }
       if (indiceColuna === 1 && classificacao === "lead") {
@@ -1046,7 +1016,6 @@ export function LeadsKanbanPage() {
         pipelineGanhoEtapaId={etapaGanhoPipelineId ?? undefined}
         etapaNome={colunasExibidas?.find((c) => c.etapa.id === pendenciaVenda?.etapaId)?.etapa.nome ?? ETAPA_VENDA_CONCLUIDA}
         valorEstimado={0}
-        indicacaoLead={pendenciaVenda?.indicacaoLead}
         permitirVeiculosAdicionais
         onCancel={() => setPendenciaVenda(null)}
         onConcluido={(resultado) => {
@@ -1087,9 +1056,8 @@ export function LeadsKanbanPage() {
           setOutroVeiculo(null);
           carregar(undefined, true);
         }}
-        onConcluido={(resultado) => {
+        onConcluido={() => {
           notificar("success", "Venda do outro veículo registrada — card novo em \"Venda concluída\".");
-          void moverVeiculoNovoParaIndicacao(resultado);
           setOutroVeiculo((atual) => (atual && atual.atual < atual.total ? { ...atual, atual: atual.atual + 1 } : null));
           carregar(undefined, true);
         }}

@@ -99,17 +99,53 @@ public class ColunaDoTipoDoCardTests
     }
 
     [Fact]
-    public async Task CartaoDeLead_PodeIrParaVendaConcluidaIndicacao_ViraIndicacaoLead()
+    public async Task CartaoDeLead_NaoVaiParaVendaConcluidaIndicacao()
     {
         using var factory = new TestDbContextFactory();
         var c = await PrepararAsync(factory);
         var lead = await NovoLeadAsync(c, "Lead");
 
-        await Mover(c, lead, c.VendaIndic);
+        var erro = await Assert.ThrowsAsync<CrmBusinessException>(() => Mover(c, lead, c.VendaIndic));
+
+        Assert.Equal("coluna_so_para_indicacao", erro.Codigo);
+    }
+
+    [Fact]
+    public async Task LeadSemSinalDeAnuncio_NaoEntraEmVendaConcluidaLeads()
+    {
+        using var factory = new TestDbContextFactory();
+        var c = await PrepararAsync(factory);
+        var lead = await NovoLeadAsync(c, "Lead"); // sem ID do Meta, GCLID, campanha, UTM nem tag de anúncio
+
+        var erro = await Assert.ThrowsAsync<CrmBusinessException>(() => Mover(c, lead, c.VendaLeads));
+
+        Assert.Equal("venda_leads_so_trafego_pago", erro.Codigo);
+    }
+
+    [Fact]
+    public async Task LeadDeTrafegoPago_EntraEmVendaConcluidaLeads()
+    {
+        using var factory = new TestDbContextFactory();
+        var c = await PrepararAsync(factory);
+        var lead = await NovoLeadAsync(c, "Lead");
+        lead.MetaLeadId = "meta-123";
+        await c.Db.SaveChangesAsync();
+
+        await Mover(c, lead, c.VendaLeads);
 
         c.Db.ChangeTracker.Clear();
-        var atual = await c.Db.CrmLeads.SingleAsync();
-        Assert.Equal(c.VendaIndic.Id, atual.EtapaId);
-        Assert.Equal(TipoIndicacaoLead.IndicacaoLead, atual.TipoIndicacao);
+        Assert.Equal(c.VendaLeads.Id, (await c.Db.CrmLeads.SingleAsync()).EtapaId);
+    }
+
+    [Fact]
+    public async Task CartaoDeIndicacao_NaoEntraEmVendaConcluidaLeads()
+    {
+        using var factory = new TestDbContextFactory();
+        var c = await PrepararAsync(factory);
+        var lead = await NovoLeadAsync(c, "Indicação");
+
+        var erro = await Assert.ThrowsAsync<CrmBusinessException>(() => Mover(c, lead, c.VendaLeads));
+
+        Assert.Equal("coluna_so_para_lead", erro.Codigo);
     }
 }
