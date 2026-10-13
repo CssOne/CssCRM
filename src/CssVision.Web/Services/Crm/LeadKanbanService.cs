@@ -243,8 +243,8 @@ public sealed class LeadKanbanService(
         var tipos = Valores(filtro.TipoIndicacao).Select(t => t!.ToLower()).ToList();
         if (tipos.Count > 0) query = query.Where(l => l.TipoIndicacao != null && tipos.Contains(l.TipoIndicacao.ToLower()));
 
-        // "Fonte" (Notion x tráfego pago) revela a origem do lead: só quem vê a Origem (visão total) filtra por ela.
-        var fontes = podeVerOrigem ? Valores(filtro.Fonte) : [];
+        // "Fonte" (Notion x tráfego pago): todos os usuários filtram por ela. O que continua restrito é a Origem em si (campo do cartão e filtro "Origem").
+        var fontes = Valores(filtro.Fonte);
         if (fontes.Count > 0)
         {
             var notion = fontes.Contains("Notion");
