@@ -1297,6 +1297,15 @@ export interface RedistribuicaoHistorico {
   alteradoEm: string;
 }
 
+/** Quem desativou/reativou um consultor da distribuição de leads. Evento: "desativou" | "ativou" | "conta_inativada" | "conta_reativada". */
+export interface RecebeLeadsHistorico {
+  consultorId: string;
+  consultorNome: string;
+  evento: string;
+  alteradoPorNome?: string | null;
+  ocorridoEm: string;
+}
+
 export interface PrimeiroContatoVendedor {
   vendedorId: string;
   vendedorNome: string;
