@@ -106,7 +106,7 @@ export default function App() {
       <Route
         path="/app/crm/relatorio-comercial"
         element={
-          <RotaProtegida papeis={PAPEIS_GESTAO}>
+          <RotaProtegida>
             <RelatorioComercialPage />
           </RotaProtegida>
         }

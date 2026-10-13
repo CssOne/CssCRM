@@ -92,4 +92,10 @@ public class CrmManagementController(IManagementService managementService, ILead
     [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<ActionResult<IReadOnlyList<RedistribuicaoHistoricoDto>>> ObterHistorico(CancellationToken ct) =>
         Ok(await managementService.ObterHistoricoRedistribuicoesAsync(ct));
+
+    /// <summary>Quem desativou/reativou cada consultor da distribuição de leads.</summary>
+    [HttpGet("recebe-leads-historico")]
+    [Authorize(Policy = PolicyNames.GestaoFinanceira)]
+    public async Task<ActionResult<IReadOnlyList<RecebeLeadsHistoricoDto>>> ObterHistoricoRecebeLeads(CancellationToken ct) =>
+        Ok(await managementService.ObterHistoricoRecebeLeadsAsync(ct));
 }

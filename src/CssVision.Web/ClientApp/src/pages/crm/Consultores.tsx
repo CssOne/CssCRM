@@ -1,6 +1,7 @@
 import { usePaginacao } from "../../lib/usePaginacao";
 import { Handshake, Mail, Phone, Search, ShoppingCart, Target, Wallet } from "lucide-react";
 import { useAtualizarAoVivo, mesAtualIso as mesAtualDoRelogio } from "../../lib/useAoVivo";
+import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
 import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarMoeda, formatarPercentual, formatarTelefone } from "../../lib/format";
@@ -29,7 +30,8 @@ function Avatar({ nome }: { nome: string }) {
 export function ConsultoresPage() {
   const [mesReferencia, setMesReferencia] = useState(mesAtualIso());
   const mesAtualRef = useRef(mesAtualIso());
-  const [busca, setBusca] = useState("");
+  // A busca fica guardada no navegador (por usuário). O mês de referência não: a tela abre sempre no mês atual.
+  const [busca, setBusca] = useEstadoSalvo("consultores:busca", "");
   const [consultores, setConsultores] = useState<ConsultorDesempenho[] | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);

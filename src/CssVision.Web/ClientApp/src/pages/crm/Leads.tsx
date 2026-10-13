@@ -16,6 +16,7 @@ import {
 } from "../../lib/types";
 import { MultiSelect } from "../../components/MultiSelect";
 import { useAuth } from "../../context/AuthContext";
+import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
 import {
   Badge,
   Button,
@@ -39,17 +40,18 @@ export function LeadsPage() {
   const podeVerOrigem = temPapel("Admin", "GestorMaster", "SupervisorComercial");
   const { notificar } = useToast();
 
-  const [busca, setBusca] = useState("");
+  // Os filtros ficam guardados no navegador (por usuário) e só saem em "Limpar filtros".
+  const [busca, setBusca] = useEstadoSalvo("leads:busca", "");
   // Filtros de múltipla escolha: nada marcado = todos.
-  const [etapaIds, setEtapaIds] = useState<string[]>([]);
-  const [origens, setOrigens] = useState<string[]>([]);
-  const [consultorIds, setConsultorIds] = useState<string[]>([]);
-  const [regionais, setRegionais] = useState<string[]>([]);
-  const [grupoIds, setGrupoIds] = useState<string[]>([]);
-  const [chegadaDe, setChegadaDe] = useState("");
-  const [chegadaAte, setChegadaAte] = useState("");
-  const [vendaDe, setVendaDe] = useState("");
-  const [vendaAte, setVendaAte] = useState("");
+  const [etapaIds, setEtapaIds] = useEstadoSalvo<string[]>("leads:etapas", []);
+  const [origens, setOrigens] = useEstadoSalvo<string[]>("leads:origens", []);
+  const [consultorIds, setConsultorIds] = useEstadoSalvo<string[]>("leads:consultores", []);
+  const [regionais, setRegionais] = useEstadoSalvo<string[]>("leads:regionais", []);
+  const [grupoIds, setGrupoIds] = useEstadoSalvo<string[]>("leads:grupos", []);
+  const [chegadaDe, setChegadaDe] = useEstadoSalvo("leads:chegada-de", "");
+  const [chegadaAte, setChegadaAte] = useEstadoSalvo("leads:chegada-ate", "");
+  const [vendaDe, setVendaDe] = useEstadoSalvo("leads:venda-de", "");
+  const [vendaAte, setVendaAte] = useEstadoSalvo("leads:venda-ate", "");
   const [pagina, setPagina] = useState(1);
   const [etapas, setEtapas] = useState<LeadStage[]>([]);
   const [listaOrigens, setListaOrigens] = useState<string[]>([]);

@@ -8,7 +8,8 @@ namespace CssVision.Web.Api.Controllers;
 
 [ApiController]
 [Route("api/crm/relatorio-comercial")]
-[Authorize(Policy = PolicyNames.GestaoComercial)]
+// Toda a área comercial usa o relatório; o serviço restringe os dados ao escopo de cada usuário (o consultor só vê os próprios resultados).
+[Authorize(Policy = PolicyNames.AreaComercial)]
 public class CrmRelatorioComercialController(IRelatorioComercialService relatorio) : ControllerBase
 {
     [HttpGet]

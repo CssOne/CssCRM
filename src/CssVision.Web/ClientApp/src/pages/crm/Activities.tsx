@@ -14,6 +14,7 @@ import {
   type VendedorResumo,
 } from "../../lib/types";
 import { useAuth } from "../../context/AuthContext";
+import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
 import { Badge, Button, ConfirmDialog, EmptyState, ErrorState, Modal, Pagination, Select, Skeleton, Tabs, Textarea, useToast } from "../../components/ui";
 import { ActivityForm, isoParaDatetimeLocal, tipoLabel, type ActivityFormValues } from "../../components/crm/ActivityForm";
 import { LeadPicker } from "../../components/crm/LeadPicker";
@@ -41,9 +42,10 @@ export function ActivitiesPage() {
   const { temPapel } = useAuth();
   const podeGerir = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
 
-  const [visao, setVisao] = useState<VisaoAtividade>(VisaoAtividade.Minhas);
-  const [tipo, setTipo] = useState("");
-  const [responsavelId, setResponsavelId] = useState("");
+  // Os filtros ficam guardados no navegador (por usuário) e só saem em "Limpar filtros".
+  const [visao, setVisao] = useEstadoSalvo<VisaoAtividade>("atividades:visao", VisaoAtividade.Minhas);
+  const [tipo, setTipo] = useEstadoSalvo("atividades:tipo", "");
+  const [responsavelId, setResponsavelId] = useEstadoSalvo("atividades:responsavel", "");
   const [leadFiltro, setLeadFiltro] = useState<LeadListItem | null>(null);
   const [vendedores, setVendedores] = useState<VendedorResumo[]>([]);
   const [modalLead, setModalLead] = useState(false);

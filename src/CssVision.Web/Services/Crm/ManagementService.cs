@@ -17,7 +17,8 @@ public sealed class ManagementService(
     IEquipeComercialService equipe,
     UserManager<ApplicationUser> userManager,
     IMemoryCache? cache = null,
-    ICrmEventHub? eventos = null) : IManagementService
+    ICrmEventHub? eventos = null,
+    IAuditSink? audit = null) : IManagementService
 {
     /// <summary>Oportunidades abertas sem troca de etapa há mais de N dias entram no alerta de estagnação.</summary>
     private const int DiasSemMovimentacaoAlerta = 10;
@@ -297,9 +298,76 @@ public sealed class ManagementService(
         var vendedor = await db.Users.FirstOrDefaultAsync(u => u.Id == vendedorId, ct)
             ?? throw new CrmNotFoundException("Vendedor", vendedorId);
 
+        var mudou = vendedor.RecebeLeads != request.RecebeLeads;
         vendedor.RecebeLeads = request.RecebeLeads;
         await db.SaveChangesAsync(ct);
+        // Fica registrado quem tirou (ou devolveu) o consultor da distribuição — o histórico aparece na Gestão comercial.
+        if (mudou && audit is not null)
+        {
+            await audit.RegistrarAsync(AcaoRecebeLeadsAlterado, nameof(ApplicationUser), vendedor.Id, new { vendedor.NomeCompleto, request.RecebeLeads }, ct);
+        }
         eventos?.PublicarQuadroAtualizado("gestao");
+    }
+
+    /// <summary>Ação gravada na auditoria quando alguém liga/desliga o "Recebe leads" de um consultor.</summary>
+    public const string AcaoRecebeLeadsAlterado = "RecebeLeadsAlterado";
+
+    /// <summary>
+    /// Quem desativou (e reativou) cada consultor da distribuição de leads. Junta o que passou a ser registrado no interruptor "Recebe leads" com o que o
+    /// sistema já auditava da conta do usuário (inativar/reativar também tira o consultor da distribuição), então traz informação de antes desta mudança.
+    /// Só os consultores que quem consulta enxerga.
+    /// </summary>
+    public async Task<IReadOnlyList<RecebeLeadsHistoricoDto>> ObterHistoricoRecebeLeadsAsync(CancellationToken ct)
+    {
+        ExigirGestaoOuFinanceiro();
+
+        var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
+        string[] acoes = [AcaoRecebeLeadsAlterado, "UsuarioInativado", "UsuarioAtivado"];
+        var registros = await db.CrmAuditLogs.AsNoTracking()
+            .Where(a => a.EntidadeTipo == nameof(ApplicationUser) && a.EntidadeId != null && acoes.Contains(a.Acao))
+            .OrderByDescending(a => a.OcorridoEm)
+            .Take(1000)
+            .Select(a => new { ConsultorId = a.EntidadeId!.Value, a.Acao, a.DetalhesJson, a.OcorridoEm, QuemNome = a.Usuario.NomeCompleto })
+            .ToListAsync(ct);
+        if (visiveis is not null) registros = registros.Where(r => visiveis.Contains(r.ConsultorId)).ToList();
+        registros = registros.Take(200).ToList();
+
+        var ids = registros.Select(r => r.ConsultorId).Distinct().ToList();
+        var nomes = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.NomeCompleto, ct);
+
+        var historico = new List<RecebeLeadsHistoricoDto>();
+        foreach (var r in registros)
+        {
+            var evento = r.Acao switch
+            {
+                "UsuarioInativado" => "conta_inativada",
+                "UsuarioAtivado" => "conta_reativada",
+                _ => LerRecebeLeads(r.DetalhesJson) is { } recebe ? (recebe ? "ativou" : "desativou") : null,
+            };
+            if (evento is null) continue;
+            historico.Add(new RecebeLeadsHistoricoDto(r.ConsultorId, nomes.GetValueOrDefault(r.ConsultorId) ?? "(usuário removido)", evento, r.QuemNome, r.OcorridoEm));
+        }
+        return historico;
+    }
+
+    private static bool? LerRecebeLeads(string? detalhesJson)
+    {
+        if (string.IsNullOrWhiteSpace(detalhesJson)) return null;
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(detalhesJson);
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                if (string.Equals(prop.Name, "RecebeLeads", StringComparison.OrdinalIgnoreCase) && prop.Value.ValueKind is System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False)
+                {
+                    return prop.Value.GetBoolean();
+                }
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+        }
+        return null;
     }
 
     // --- auxiliares ---
