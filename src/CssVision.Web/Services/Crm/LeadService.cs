@@ -36,6 +36,9 @@ public sealed class LeadService(
     /// </summary>
     private const string EtapaLeadVendaConcluida = "Venda concluída";
 
+    /// <summary>Prefixo das colunas "Em atendimento (Leads)"/"Em atendimento (Indicação)".</summary>
+    private const string EtapaLeadEmAtendimento = "Em atendimento";
+
     /// <summary>Etapa "Cotação" do quadro de leads — só entra com o valor da adesão preenchido.</summary>
     private const string EtapaLeadCotacao = "Cotação";
 
@@ -637,6 +640,31 @@ public sealed class LeadService(
     }
 
     /// <summary>
+    /// "Em atendimento" e "Venda concluída" têm duas colunas cada, "(Leads)" e "(Indicação)", e cada cartão só entra na do seu tipo (a etiqueta Lead/Indicação do
+    /// cartão, <see cref="NotionEtapaLead.EhIndicacao"/>): "(Leads)" só aceita Lead, "Em atendimento (Indicação)" só aceita Indicação. O quadro já barrava no navegador;
+    /// o servidor não conferia nada. Exceção deliberada: um Lead cuja venda foi por indicação vai para "Venda concluída (Indicação)" e ganha a etiqueta "Indicação Lead".
+    /// </summary>
+    private static void ExigirColunaDoTipoDoCard(CrmLead lead, CrmLeadStage destino)
+    {
+        var colunaDuplicada = destino.Nome.StartsWith(EtapaLeadEmAtendimento, StringComparison.OrdinalIgnoreCase)
+            || destino.Nome.StartsWith(EtapaLeadVendaConcluida, StringComparison.OrdinalIgnoreCase);
+        if (!colunaDuplicada) return;
+
+        var ehIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
+        if (destino.Nome.EndsWith("(Leads)", StringComparison.OrdinalIgnoreCase) && ehIndicacao)
+        {
+            throw new CrmBusinessException(
+                $"A coluna \"{destino.Nome}\" aceita só cartões com a etiqueta \"Lead\". Este cartão é de Indicação: use a coluna \"(Indicação)\".", "coluna_so_para_lead");
+        }
+        if (destino.Nome.StartsWith(EtapaLeadEmAtendimento, StringComparison.OrdinalIgnoreCase)
+            && destino.Nome.EndsWith("(Indicação)", StringComparison.OrdinalIgnoreCase) && !ehIndicacao)
+        {
+            throw new CrmBusinessException(
+                $"A coluna \"{destino.Nome}\" aceita só cartões com a etiqueta \"Indicação\". Este cartão é de Lead: use a coluna \"(Leads)\".", "coluna_so_para_indicacao");
+        }
+    }
+
+    /// <summary>
     /// Lead com venda concluída (não arquivada) não volta para "Sem etapa", "Cotação" nem "Em atendimento": o card fora de "Venda concluída" faz a venda
     /// aparecer como atendimento em aberto (aconteceu: cards de venda parados em "Em atendimento"). "Perdido" e "Não fazemos" continuam possíveis, como na
     /// sincronização com o Notion (<c>GarantirColunaDeVendaAsync</c>). Para desfazer uma venda lançada por engano, exclua a venda antes de mover o card.
@@ -669,6 +697,7 @@ public sealed class LeadService(
             novaEtapa = await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Id == request.NovaEtapaId, ct)
                 ?? throw new CrmNotFoundException("Etapa de lead", request.NovaEtapaId.Value);
             await ExigirColunaDeVendaSeTemVendaAsync(lead.Id, novaEtapa, ct);
+            ExigirColunaDoTipoDoCard(lead, novaEtapa);
             lead.EtapaId = novaEtapa.Id;
 
             // Lead (tráfego) que fechou como indicação: vai pra coluna das indicações com a

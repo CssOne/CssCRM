@@ -26,7 +26,7 @@ public class LeadComVendaNaoVoltaParaAtendimentoTests
         var vendaConcluida = await factory.ObterOuCriarEtapaLeadAsync(db, "Venda concluída (Leads)", 3);
         var ganho = await factory.CriarEtapaAsync(db, "Ganho", 2, TipoEtapaPipeline.Ganho);
 
-        var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id, EtapaId = vendaConcluida.Id, ValorAdesao = 150m };
+        var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id, TipoIndicacao = "Lead", CriadoManualmente = false, EtapaId = vendaConcluida.Id, ValorAdesao = 150m };
         db.CrmLeads.Add(lead);
         await db.SaveChangesAsync();
         var venda = new CrmOpportunity
@@ -88,7 +88,7 @@ public class LeadComVendaNaoVoltaParaAtendimentoTests
         var db = factory.CreateContext();
         var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor");
         var atendimento = await factory.ObterOuCriarEtapaLeadAsync(db, "Em atendimento (Leads)", 1);
-        var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id };
+        var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id, TipoIndicacao = "Lead", CriadoManualmente = false };
         db.CrmLeads.Add(lead);
         await db.SaveChangesAsync();
 

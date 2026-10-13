@@ -58,7 +58,8 @@ public class CotacaoAdesaoTests
     {
         using var factory = new TestDbContextFactory();
         var (db, usuario, lead, _) = await PrepararAsync(factory);
-        var emAtendimento = await factory.ObterOuCriarEtapaLeadAsync(db, "Em atendimento (Leads)", 1);
+        // O lead padrão (criado manualmente, sem tipo) é de Indicação: a coluna "(Indicação)" é a dele.
+        var emAtendimento = await factory.ObterOuCriarEtapaLeadAsync(db, "Em atendimento (Indicação)", 1);
 
         var detalhe = await LeadService(db, usuario).MudarEtapaAsync(lead.Id,
             new ChangeLeadStageRequest(emAtendimento.Id, lead.RowVersion), CancellationToken.None);
