@@ -179,6 +179,11 @@ export function VendaConcluidaDialog({
   const [carroZero, setCarroZero] = useState(false);
   /** Card do veículo novo já criado (se algo falhar depois, confirmar de novo não cria outro). */
   const [novoLeadCriadoId, setNovoLeadCriadoId] = useState<string | null>(null);
+  /**
+   * Oportunidade que este formulário já criou no servidor mas ainda não virou venda (o envio falhou depois de criá-la). Reaproveitada na próxima
+   * tentativa, em vez de criar outra: antes cada tentativa que falhava deixava uma oportunidade aberta sobrando (5 na mesma cliente).
+   */
+  const rascunhoVendaRef = useRef<{ id: string; leadId: string } | null>(null);
   const ehVenda = modo === "venda";
   const ehNovoCliente = !!novoCliente;
   const [telefone, setTelefone] = useState("");
@@ -206,6 +211,7 @@ export function VendaConcluidaDialog({
     setVeiculosAdicionais(1);
     setCarroZero(!!oportunidadeEditar?.veiculo?.chassi && !oportunidadeEditar?.veiculo?.placa);
     setNovoLeadCriadoId(null);
+    rascunhoVendaRef.current = null;
 
     if (novoCliente && !leadId) {
       // Cliente novo: nada para carregar — o formulário começa em branco (canal de indicação, que é o da coluna).
@@ -446,6 +452,14 @@ export function VendaConcluidaDialog({
     onConcluido?.();
   }
 
+  /** Cancelar/fechar: a oportunidade que o envio criou e não concluiu não pode ficar aberta no servidor. */
+  async function cancelar() {
+    const rascunho = rascunhoVendaRef.current;
+    rascunhoVendaRef.current = null;
+    if (rascunho) await api.del(`/crm/opportunities/${rascunho.id}`).catch(() => undefined);
+    onCancel();
+  }
+
   async function confirmar() {
     if (!ehVenda) return criarOportunidade();
     if (!leadId && !novoCliente) return;
@@ -506,6 +520,18 @@ export function VendaConcluidaDialog({
           etapaGanho = pipeline.colunas.find((c) => c.etapa.tipo === TipoEtapaPipeline.Ganho)?.etapa.id;
         }
       }
+      if (!idOportunidade && rascunhoVendaRef.current && rascunhoVendaRef.current.leadId === leadDaVenda) {
+        // Tentativa anterior criou a oportunidade e falhou depois: continua nela (e pega o RowVersion atual).
+        try {
+          const existente = await api.get<Opportunity>(`/crm/opportunities/${rascunhoVendaRef.current.id}`);
+          idOportunidade = existente.id;
+          criadaAgora = true;
+          rowVersionAtual = existente.rowVersion;
+        } catch {
+          // O rascunho já não existe (apagado por outra aba/pessoa): segue e cria uma oportunidade nova.
+          rascunhoVendaRef.current = null;
+        }
+      }
       if (!idOportunidade) {
         if (!responsavelDaVenda) {
           notificar("error", "Este lead não tem um responsável definido. Atribua um consultor antes de concluir a venda.");
@@ -523,6 +549,7 @@ export function VendaConcluidaDialog({
         idOportunidade = nova.id;
         criadaAgora = true;
         rowVersionAtual = nova.rowVersion;
+        if (leadDaVenda) rascunhoVendaRef.current = { id: nova.id, leadId: leadDaVenda };
       }
 
       if (termoArquivo) {
@@ -618,11 +645,13 @@ export function VendaConcluidaDialog({
       if (e instanceof ApiRequestError && e.codigo === "venda_ja_concluida" && criadaAgora && idOportunidade) {
         // O cliente já tem venda concluída: some com a proposta que este envio acabou de criar, para não ficar uma proposta aberta sobrando.
         await api.del(`/crm/opportunities/${idOportunidade}`).catch(() => undefined);
+        rascunhoVendaRef.current = null;
       }
       notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível concluir a venda.");
       setEnviandoArquivos(false);
       return;
     }
+    rascunhoVendaRef.current = null;
     setEnviandoArquivos(false);
     onConcluido?.({
       indicacao: !!valores.indicacao,
@@ -632,7 +661,7 @@ export function VendaConcluidaDialog({
   }
 
   return (
-    <Modal open={open} onClose={onCancel} title={
+    <Modal open={open} onClose={cancelar} title={
         !ehVenda
           ? "Nova oportunidade"
           : oportunidadeEditar
@@ -1024,7 +1053,7 @@ export function VendaConcluidaDialog({
         </div>
 
         <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
-          <Button variant="secondary" onClick={onCancel} disabled={enviandoArquivos || enviando}>
+          <Button variant="secondary" onClick={cancelar} disabled={enviandoArquivos || enviando}>
             Cancelar
           </Button>
           <Button loading={enviandoArquivos || enviando} disabled={!podeConfirmar} onClick={confirmar}>
