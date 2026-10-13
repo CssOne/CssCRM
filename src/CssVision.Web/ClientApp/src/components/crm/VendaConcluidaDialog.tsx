@@ -386,6 +386,7 @@ export function VendaConcluidaDialog({
     !!valores.cpf &&
     !!valores.estado &&
     (valores.porcentagem ?? -1) >= 0 &&
+    (valores.porcentagem ?? 0) <= 100 &&
     (valores.mensalidade ?? -1) >= 0 &&
     (valores.mensalidadeComCupom ?? -1) >= 0 &&
     (valores.pagamentoAdesao ?? -1) >= 0 &&
@@ -867,7 +868,7 @@ export function VendaConcluidaDialog({
               <Label htmlFor="venda-veiculo-descricao" required={ehVenda}>
                 Veículo (marca/modelo)
               </Label>
-              <Input id="venda-veiculo-descricao" value={valores.veiculo?.descricao ?? ""} onChange={(e) => setVeiculo("descricao", e.target.value)} />
+              <Input id="venda-veiculo-descricao" maxLength={200} value={valores.veiculo?.descricao ?? ""} onChange={(e) => setVeiculo("descricao", e.target.value)} />
             </div>
             {!ehNovoCliente && (
               <div className="sm:col-span-2">
@@ -891,7 +892,7 @@ export function VendaConcluidaDialog({
                 <Label htmlFor="venda-veiculo-placa" required={ehVenda}>
                   Placa
                 </Label>
-                <Input id="venda-veiculo-placa" value={valores.veiculo?.placa ?? ""} onChange={(e) => setVeiculo("placa", e.target.value.toUpperCase())} />
+                <Input id="venda-veiculo-placa" maxLength={10} placeholder="Só a placa" value={valores.veiculo?.placa ?? ""} onChange={(e) => setVeiculo("placa", e.target.value.toUpperCase())} />
               </div>
             )}
             <div>

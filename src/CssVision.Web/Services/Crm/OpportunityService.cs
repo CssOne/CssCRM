@@ -75,8 +75,53 @@ public sealed class OpportunityService(
         return ParaDto(o, DateOnly.FromDateTime(DateTime.UtcNow));
     }
 
+    private const decimal LimiteDinheiro = 999_999_999_999.99m; // numeric(14,2)
+
+    /// <summary>
+    /// Confere, antes de gravar, o que as colunas do banco não aguentam: texto maior que a coluna (placa 10, chassi 30, descrição 200, CPF 14, UF 2, canal 80)
+    /// e número fora do limite (valores numeric(14,2), porcentagem de 0 a 100). Sem isto o banco recusava ("value too long"/"numeric overflow") e o consultor
+    /// via só "Erro inesperado (500)" ao concluir a venda, mesmo com tudo preenchido (ex.: placa digitada com o modelo junto).
+    /// </summary>
+    internal static void ExigirCamposDaVendaDentroDoLimite(
+        string? cpf, string? estado, string? tipoIndicacao, VeiculoUpsertRequest? veiculo, decimal? porcentagem,
+        params (string Nome, decimal? Valor)[] valores)
+    {
+        static void Texto(string nome, string? texto, int maximo, string dica)
+        {
+            if (texto is { } t && t.Trim().Length > maximo)
+            {
+                throw new CrmBusinessException($"{nome} deve ter no máximo {maximo} caracteres (foram digitados {t.Trim().Length}). {dica}", "campo_muito_longo");
+            }
+        }
+
+        Texto("A placa", veiculo?.Placa, 10, "Digite só a placa do veículo, sem o modelo ou outras informações.");
+        Texto("O chassi", veiculo?.Chassi, 30, "Confira o número do chassi.");
+        Texto("A descrição do veículo", veiculo?.Descricao, 200, "Use só marca e modelo.");
+        Texto("O CPF/CNPJ", cpf, 14, "Digite só os números.");
+        Texto("O estado", estado, 2, "Use a sigla do estado (UF).");
+        Texto("O canal de aquisição", tipoIndicacao, 80, "Escolha uma das opções da lista.");
+
+        if (porcentagem is { } p && (p < 0 || p > 100))
+        {
+            throw new CrmBusinessException("O cupom de desconto (porcentagem) deve ficar entre 0 e 100.", "porcentagem_invalida");
+        }
+
+        foreach (var (nome, valor) in valores)
+        {
+            if (valor is { } v && Math.Abs(v) > LimiteDinheiro)
+            {
+                throw new CrmBusinessException($"O valor de \"{nome}\" é grande demais. Confira se foi digitado corretamente.", "valor_invalido");
+            }
+        }
+    }
+
     public async Task<OpportunityDto> CriarAsync(OpportunityCreateRequest request, CancellationToken ct)
     {
+        ExigirCamposDaVendaDentroDoLimite(request.Cpf, request.Estado, request.TipoIndicacao, request.Veiculo, request.Porcentagem,
+            ("Valor estimado", request.ValorEstimado), ("Mensalidade", request.Mensalidade), ("Mensalidade com desconto", request.MensalidadeComDesconto),
+            ("Mensalidade com cupom", request.MensalidadeComCupom), ("Pagamento de adesão", request.PagamentoAdesao),
+            ("Valor da indicação", request.ValorIndicacao), ("Total", request.Total));
+
         var lead = await db.CrmLeads.FirstOrDefaultAsync(l => l.Id == request.LeadId, ct)
             ?? throw new CrmNotFoundException("Lead", request.LeadId);
 
@@ -161,6 +206,11 @@ public sealed class OpportunityService(
 
     public async Task<OpportunityDto> AtualizarAsync(Guid id, OpportunityUpdateRequest request, CancellationToken ct)
     {
+        ExigirCamposDaVendaDentroDoLimite(request.Cpf, request.Estado, request.TipoIndicacao, request.Veiculo, request.Porcentagem,
+            ("Valor estimado", request.ValorEstimado), ("Mensalidade", request.Mensalidade), ("Mensalidade com desconto", request.MensalidadeComDesconto),
+            ("Mensalidade com cupom", request.MensalidadeComCupom), ("Pagamento de adesão", request.PagamentoAdesao),
+            ("Valor da indicação", request.ValorIndicacao), ("Total", request.Total));
+
         var opportunity = await CarregarComEscopoAsync(id, ct);
         db.Entry(opportunity).Property(o => o.RowVersion).OriginalValue = request.RowVersion;
 
@@ -270,6 +320,10 @@ public sealed class OpportunityService(
         }
         else if (novaEtapa.Tipo == TipoEtapaPipeline.Ganho)
         {
+            ExigirCamposDaVendaDentroDoLimite(request.Cpf, request.Estado, request.TipoIndicacao, request.Veiculo, request.Porcentagem,
+                ("Valor final", request.ValorFinal), ("Mensalidade", request.Mensalidade), ("Mensalidade com desconto", request.MensalidadeComDesconto),
+                ("Mensalidade com cupom", request.MensalidadeComCupom), ("Pagamento de adesão", request.PagamentoAdesao),
+                ("Valor da indicação", request.ValorIndicacao), ("Total", request.Total));
             if (request.ValorFinal is null || request.DataEfetivaFechamento is null)
             {
                 throw new CrmBusinessException("Informe o valor final e a data de fechamento ao marcar como 'Ganho'.", "fechamento_incompleto");
@@ -350,7 +404,15 @@ public sealed class OpportunityService(
         // uma falha aqui nunca deve desfazer nem bloquear o registro da venda no CRM.
         if (novaEtapa.Tipo == TipoEtapaPipeline.Ganho)
         {
-            var enviado = await conversion.EnviarConversaoVendaAsync(opportunity.Lead, opportunity, ct);
+            var enviado = false;
+            try
+            {
+                enviado = await conversion.EnviarConversaoVendaAsync(opportunity.Lead, opportunity, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // A venda já está salva: montar/enviar o evento para o Facebook nunca pode devolver erro ao consultor (o envio em si já trata as próprias falhas).
+            }
             if (enviado)
             {
                 opportunity.ConversaoOfflineEnviadaEm = DateTimeOffset.UtcNow;
