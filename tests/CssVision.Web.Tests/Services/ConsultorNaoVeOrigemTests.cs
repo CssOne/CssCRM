@@ -60,7 +60,7 @@ public class ConsultorNaoVeOrigemTests
     }
 
     [Fact]
-    public async Task Consultor_NaoDefineOrigemNemMarketingAoCadastrar_ENaoFiltraOQuadroPorFonte()
+    public async Task Consultor_NaoDefineOrigemNemMarketingAoCadastrar_MasFiltraOQuadroPorFonte()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
@@ -83,9 +83,13 @@ public class ConsultorNaoVeOrigemTests
         Assert.Null(salvo.UtmSource);
         Assert.Null(salvo.MetaLeadId);
 
-        // "Fonte" (Notion x tráfego pago) revela a origem: para o consultor o filtro é ignorado e o card continua na lista.
+        // "Fonte" (Notion x tráfego pago) vale para todos: o consultor filtra por ela (este lead nasceu no CRM, não no Notion) — mas não recebe a Origem do cartão.
         var quadro = new LeadKanbanService(db, new EquipeComercialService(db, u.Object), currentUser: u.Object);
-        var comFiltro = await quadro.ObterBoardAsync(new LeadKanbanFilterRequest { Fonte = ["Notion"] }, CancellationToken.None);
-        Assert.Single(comFiltro.Colunas.SelectMany(c => c.Cartoes));
+        var semFiltro = await quadro.ObterBoardAsync(new LeadKanbanFilterRequest(), CancellationToken.None);
+        var cartao = Assert.Single(semFiltro.Colunas.SelectMany(c => c.Cartoes));
+        Assert.Null(cartao.Origem);
+
+        var soNotion = await quadro.ObterBoardAsync(new LeadKanbanFilterRequest { Fonte = ["Notion"] }, CancellationToken.None);
+        Assert.Empty(soNotion.Colunas.SelectMany(c => c.Cartoes));
     }
 }
