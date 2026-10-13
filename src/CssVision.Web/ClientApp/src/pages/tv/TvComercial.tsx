@@ -4,10 +4,10 @@ import Chart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
 import { api, isAbortError } from "../../lib/api";
 import { useAtualizarAoVivo } from "../../lib/useAoVivo";
-import type { TvAdministrativoIndicador, TvAdministrativoRegistro, TvComercial, TvConversao, TvRanking, TvRegional, TvVenda } from "../../lib/types";
+import type { TvAdministrativoIndicador, TvAdministrativoRegistro, TvComercial, TvConversao, TvOperador, TvRanking, TvRegional, TvVenda, TvVendaMes } from "../../lib/types";
 import { TvDetalhes, type Detalhe } from "./TvDetalhes";
 import { dataBr, diaBrasilia, Foto, horaBr, moeda, moedaExata } from "./tvComum";
-import { chaveDaCelebracao, detectarMetasBatidas, detectarMetasRegionaisBatidas, detectarRegistrosNovos, detectarSubidasNoRanking, horaDoRanking, type Celebracao } from "./tvEventos";
+import { chaveDaCelebracao, detectarMetasBatidas, detectarMetasRegionaisBatidas, detectarNovoMelhorOperador, detectarRegistrosNovos, detectarSubidasNoRanking, horaDoRanking, type Celebracao } from "./tvEventos";
 import "./tv.css";
 
 type ModoRanking = "vendas" | "adesao" | "conversao";
@@ -190,23 +190,30 @@ function PainelAdministrativo({ indicadores, aoAbrir }: { indicadores?: TvAdmini
   );
 }
 
-function PainelRegionais({ itens, compacto = false, aoAbrir }: { itens: TvRegional[]; compacto?: boolean; aoAbrir: (d: Detalhe) => void }) {
+const notaBr = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const NOTA_MAXIMA = 4; // a pesquisa de satisfação vai de 1 (Ruim) a 4 (Ótimo)
+
+function PainelOperadores({ itens, mostrar = 2 }: { itens?: TvOperador[] | null; mostrar?: number }) {
   return (
-    <div className={`panel regions${compacto ? " regions-compact" : ""}`}>
-      <div className="panel-title compact-title"><div><span className="eyebrow">PERFORMANCE</span><h1>Ranking regional</h1></div></div>
+    <div className="panel regions regions-compact">
+      <div className="panel-title compact-title">
+        <div><span className="eyebrow">SATISFAÇÃO DO OPERADOR</span><h1>Melhor operador</h1></div>
+        <span className={`administrative-hint${itens ? "" : " error"}`}>{itens ? "Nota média do mês" : "CSS One indisponível"}</span>
+      </div>
       <div className="region-list">
-        {itens.slice(0, compacto ? 2 : 4).map((x) => (
-          <button type="button" className="region-row" key={x.regionalId} onClick={() => aoAbrir({ tipo: "regional", id: x.regionalId })} aria-label={`Regional ${x.nome}. Abrir detalhes`}>
+        {(itens ?? []).slice(0, mostrar).map((x) => (
+          <div className="region-row" key={x.operador} aria-label={`${x.posicao}º ${x.operador}, nota média ${notaBr.format(x.notaMedia)}`}>
             <b>{x.posicao}</b>
             <div>
-              <strong>{x.nome}</strong>
-              <span>{x.quantidadeMeta ? `${x.quantidadeVendas} / ${x.quantidadeMeta} vendas` : `${x.quantidadeVendas} vendas`} · {moeda.format(x.valorTotal)}</span>
-              <i><em style={{ width: `${Math.min(x.percentualMeta ?? x.percentualParticipacao, 100)}%` }} /></i>
+              <strong>{x.operador}</strong>
+              <span>{x.qtdComNota} {x.qtdComNota === 1 ? "avaliação" : "avaliações"} no mês</span>
+              <i><em style={{ width: `${Math.min((x.notaMedia * 100) / NOTA_MAXIMA, 100)}%` }} /></i>
             </div>
-            <strong>{x.percentualMeta == null ? `${x.percentualParticipacao.toFixed(0)}%` : `${x.percentualMeta.toFixed(1)}%`}</strong>
-          </button>
+            <strong>{notaBr.format(x.notaMedia)}</strong>
+          </div>
         ))}
-        {!itens.length && <div className="empty">Sem regionais no período</div>}
+        {itens && !itens.length && <div className="empty">Nenhuma avaliação neste mês</div>}
+        {!itens && <div className="empty">Sem dados de satisfação no momento</div>}
       </div>
     </div>
   );
@@ -278,7 +285,7 @@ function Comemoracao({ venda, posicao, vendasNoMes, aoFechar }: { venda: TvVenda
 }
 
 /** Meta batida, meta regional, subida no ranking e ranking da hora: usam o visual "milestone" do painel (raios, fogos, confete e cartão dourado). */
-function ComemoracaoEvento({ item, aoFechar }: { item: Exclude<Celebracao, { tipo: "venda" } | { tipo: "admin" }>; aoFechar: () => void }) {
+function ComemoracaoEvento({ item, aoFechar }: { item: Exclude<Celebracao, { tipo: "venda" } | { tipo: "admin" } | { tipo: "operador" }>; aoFechar: () => void }) {
   useEffect(() => { const id = window.setTimeout(aoFechar, item.tipo === "hora" ? 30_000 : 25_000); return () => window.clearTimeout(id); }, [aoFechar, item.tipo]);
   // Rede de segurança para TVs lentas (mesma da comemoração de venda).
   const raiz = useRef<HTMLDivElement>(null);
@@ -436,6 +443,93 @@ function RankingDaHora({ item }: { item: Extract<Celebracao, { tipo: "hora" }> }
   );
 }
 
+/** Adesões acima deste valor entram no destaque do cabeçalho. */
+const ADESAO_MINIMA_DESTAQUE = 350;
+const MAXIMO_NO_DESTAQUE = 10;
+const TROCA_DO_DESTAQUE_MS = 6_000;
+
+/** Cabeçalho: as adesões mais altas do mês (acima de R$ 350), uma por vez em formato de cartão, trocando sozinhas. */
+function AdesoesAltas({ vendas }: { vendas?: TvVendaMes[] | null }) {
+  const lista = useMemo(
+    () => (vendas ?? []).filter((v) => v.valor > ADESAO_MINIMA_DESTAQUE).sort((a, b) => b.valor - a.valor).slice(0, MAXIMO_NO_DESTAQUE),
+    [vendas],
+  );
+  const [indice, setIndice] = useState(0);
+  useEffect(() => {
+    if (lista.length < 2) return;
+    const id = window.setInterval(() => setIndice((n) => n + 1), TROCA_DO_DESTAQUE_MS);
+    return () => window.clearInterval(id);
+  }, [lista.length]);
+  if (!lista.length) return <div className="top-adhesion" />;
+  const posicao = indice % lista.length;
+  const v = lista[posicao];
+  return (
+    <div className="top-adhesion">
+      <div className="top-adhesion-card" key={v.vendaId} role="status" aria-label={`Adesão de ${moedaExata.format(v.valor)} de ${v.consultor}`}>
+        <Foto nome={v.consultor} url={v.fotoUrl} />
+        <div className="top-adhesion-person"><span>ADESÃO EM DESTAQUE · {posicao + 1}/{lista.length}</span><strong>{v.consultor}</strong><small>{v.regional}</small></div>
+        <div className="top-adhesion-value"><strong>{moedaExata.format(v.valor)}</strong><small>{dataBr.format(new Date(v.dataVenda))}</small></div>
+      </div>
+    </div>
+  );
+}
+
+/** Novo melhor operador (nota média de satisfação): a troca de líder no ranking, com o visual da "subida no ranking". */
+function ComemoracaoOperador({ item, aoFechar }: { item: Extract<Celebracao, { tipo: "operador" }>; aoFechar: () => void }) {
+  useEffect(() => { const id = window.setTimeout(aoFechar, 30_000); return () => window.clearTimeout(id); }, [aoFechar]);
+  const raiz = useRef<HTMLDivElement>(null);
+  useEffect(() => { const id = window.setTimeout(() => raiz.current?.classList.add("celebration-settled"), 6_000); return () => window.clearTimeout(id); }, []);
+  const { novo, anterior, posicaoAnterior, posicaoDoAnterior } = item;
+  const de = posicaoAnterior ?? Math.max(2, posicaoDoAnterior ?? 2);
+  const aval = (n: number) => `${n} ${n === 1 ? "avaliação" : "avaliações"}`;
+  return (
+    <div className="celebration milestone-celebration rank-up-celebration" role="status" ref={raiz}>
+      <div className="milestone-rays" aria-hidden="true" />
+      <div className="milestone-fireworks" aria-hidden="true">{Array.from({ length: 8 }, (_, i) => <i key={i} />)}</div>
+      <div className="confetti-rain milestone-confetti" aria-hidden="true">
+        {Array.from({ length: 40 }, (_, i) => <i key={i} style={{ left: `${(i * 29 + 3) % 100}%`, animationDelay: `-${(i * 0.37) % 5}s` }} />)}
+      </div>
+      <div className="milestone-stars" aria-hidden="true">{Array.from({ length: 12 }, (_, i) => <span key={i}>★</span>)}</div>
+      <div className="celebration-card milestone-card rank-up-card">
+        <button type="button" className="milestone-close" onClick={aoFechar} aria-label="Fechar animação"><X /></button>
+        <div className="rank-up-heading">
+          <div className="rank-up-icon" aria-hidden="true"><ArrowUp /></div>
+          <div>
+            <span className="milestone-kicker">NOVO MELHOR OPERADOR</span>
+            <h2>{novo.operador}</h2>
+            <p>Nota média {notaBr.format(novo.notaMedia)} · {aval(novo.qtdComNota)} no mês</p>
+          </div>
+        </div>
+        <div className="rank-up-zoom-scene">
+          <div className="rank-up-live"><span><i />AO VIVO</span><span>SATISFAÇÃO DO OPERADOR</span></div>
+          <div className="rank-up-ladder">
+            <div className="rank-up-guide rank-up-guide-target"><b>1º</b><span>MELHOR OPERADOR</span></div>
+            <div className="rank-up-guide rank-up-guide-origin"><b>{de}º</b><span>POSIÇÃO ANTERIOR</span></div>
+            <div className="rank-up-path" aria-hidden="true"><ArrowUp /></div>
+            <div className="rank-up-ranking-row rank-up-overtaken-row">
+              <b>{posicaoDoAnterior ?? "—"}{posicaoDoAnterior ? "º" : ""}</b>
+              <Foto nome={anterior.operador} url={null} />
+              <div><strong>{anterior.operador}</strong><small>Nota {notaBr.format(anterior.notaMedia)}</small></div>
+              <div className="rank-up-row-indicator" aria-hidden="true"><ArrowUp className="rotate" /></div>
+            </div>
+            <div className="rank-up-ranking-row rank-up-climber-row">
+              <div className="rank-up-position-swap"><span>{de}º</span><em>1º</em></div>
+              <Foto nome={novo.operador} url={null} />
+              <div><strong>{novo.operador}</strong><small>Nota {notaBr.format(novo.notaMedia)}</small></div>
+              <div className="rank-up-row-indicator" aria-hidden="true"><ArrowUp /></div>
+            </div>
+          </div>
+        </div>
+        <div className="rank-up-result">
+          <span><ArrowUp />ASSUMIU A LIDERANÇA</span>
+          <strong>{de}º → 1º</strong>
+        </div>
+        <div className="milestone-banner">★ MELHOR ATENDIMENTO DO MÊS!</div>
+      </div>
+    </div>
+  );
+}
+
 /** Reintegração realizada / evento finalizado: um registro novo na base operacional do Notion (visual "administrative" do painel). */
 const ETAPAS_ADMIN: Record<string, { titulo: string; icone: typeof RefreshCw; passos: [string, string, string]; mensagem: string }> = {
   reintegration: { titulo: "REINTEGRAÇÃO REALIZADA", icone: RefreshCw, passos: ["SOLICITADA", "EM ANÁLISE", "REINTEGRADA"], mensagem: "✓ MAIS UM VEÍCULO REINTEGRADO!" },
@@ -554,10 +648,13 @@ export function TvComercialPage() {
         });
         // Depois da venda, o que ela provocou: meta batida, meta regional e subida no ranking (comparando com a leitura anterior).
         if (antes) {
+          const melhorOperador = detectarNovoMelhorOperador(antes, novo);
           const candidatos: Array<Exclude<Celebracao, { tipo: "venda" } | { tipo: "hora" }>> = [
             ...detectarMetasBatidas(antes, novo).map((consultor) => ({ tipo: "meta" as const, consultor })),
             ...detectarMetasRegionaisBatidas(antes, novo).map((regional) => ({ tipo: "meta-regional" as const, regional })),
             ...detectarSubidasNoRanking(antes, novo).slice(0, 2).map((s) => ({ tipo: "posicao" as const, ...s })),
+            // O melhor operador (nota média de satisfação) mudou.
+            ...(melhorOperador ? [melhorOperador] : []),
             // Reintegração realizada / evento finalizado preenchidos no Notion desde a leitura anterior.
             ...detectarRegistrosNovos(antes, novo).slice(-4).map(({ indicador, registro }) => ({ tipo: "admin" as const, indicador, registro })),
           ];
@@ -679,6 +776,7 @@ export function TvComercialPage() {
             <div><strong>CSS BRASIL</strong><span>PAINEL COMERCIAL</span></div>
           </div>
           <div className="live"><Radio size={18} /><span>AO VIVO</span></div>
+          <AdesoesAltas vendas={dados.vendasDoMes} />
           <div className="header-right">
             <a className="goals-button" href="/app/crm/goals" target="_blank" rel="noopener"><SlidersHorizontal /><span>Editar metas</span></a>
             <div className={`status ${erro ? "offline" : "online"}`}>{erro ? <WifiOff size={20} /> : <Wifi size={20} />}{erro ? "Reconectando" : "Conectado"}</div>
@@ -726,7 +824,7 @@ export function TvComercialPage() {
             <div className="bottom-grid bottom-grid-administrative">
               <div className="operational-stack">
                 <PainelAdministrativo indicadores={dados.administrativo?.indicadores} aoAbrir={abrirDetalhe} />
-                <PainelRegionais itens={dados.rankingRegionais} compacto aoAbrir={abrirDetalhe} />
+                <PainelOperadores itens={dados.rankingOperadores} />
               </div>
               <PainelUltimas itens={dados.ultimasVendas} agora={agora} aoAbrir={abrirDetalhe} aoRepetir={repetirAnimacao} />
             </div>
@@ -742,8 +840,9 @@ export function TvComercialPage() {
             aoAbrir={abrirDetalhe} aoVoltar={pilha.length > 1 ? voltarDetalhe : undefined} aoFechar={fecharDetalhe} aoRepetir={repetirAnimacao} />
         )}
         {ativa?.tipo === "venda" && <Comemoracao key={idDaFila(ativa)} venda={ativa.venda} posicao={ativa.posicao} vendasNoMes={ativa.vendasNoMes} aoFechar={fecharAtiva} />}
+        {ativa?.tipo === "operador" && <ComemoracaoOperador key={idDaFila(ativa)} item={ativa} aoFechar={fecharAtiva} />}
         {ativa?.tipo === "admin" && <ComemoracaoAdmin key={idDaFila(ativa)} indicador={ativa.indicador} registro={ativa.registro} aoFechar={fecharAtiva} />}
-        {ativa && ativa.tipo !== "venda" && ativa.tipo !== "admin" && <ComemoracaoEvento key={idDaFila(ativa)} item={ativa} aoFechar={fecharAtiva} />}
+        {ativa && ativa.tipo !== "venda" && ativa.tipo !== "admin" && ativa.tipo !== "operador" && <ComemoracaoEvento key={idDaFila(ativa)} item={ativa} aoFechar={fecharAtiva} />}
       </main>
     </div>
   );

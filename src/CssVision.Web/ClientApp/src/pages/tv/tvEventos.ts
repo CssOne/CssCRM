@@ -1,4 +1,4 @@
-import type { TvAdministrativoIndicador, TvAdministrativoRegistro, TvComercial, TvRanking, TvRegional, TvVenda } from "../../lib/types";
+import type { TvAdministrativoIndicador, TvAdministrativoRegistro, TvComercial, TvOperador, TvRanking, TvRegional, TvVenda } from "../../lib/types";
 
 /**
  * Eventos que o painel da TV comemora, descobertos comparando duas leituras seguidas do painel (a tela consulta o CRM a cada 15 s).
@@ -10,7 +10,8 @@ export type Celebracao =
   | { tipo: "meta-regional"; regional: TvRegional }
   | { tipo: "posicao"; consultor: TvRanking; de: number; para: number; ultrapassou: string[]; ultrapassado: TvRanking | null }
   | { tipo: "hora"; hora: number; ranking: TvRanking[]; regionais: TvRegional[] }
-  | { tipo: "admin"; indicador: TvAdministrativoIndicador; registro: TvAdministrativoRegistro };
+  | { tipo: "admin"; indicador: TvAdministrativoIndicador; registro: TvAdministrativoRegistro }
+  | { tipo: "operador"; novo: TvOperador; anterior: TvOperador; posicaoAnterior: number | null; posicaoDoAnterior: number | null };
 
 /** Chave para não repetir a mesma comemoração enquanto a tela está aberta. */
 export function chaveDaCelebracao(c: Exclude<Celebracao, { tipo: "venda" }>, mes: { mes: number; ano: number }): string {
@@ -21,6 +22,7 @@ export function chaveDaCelebracao(c: Exclude<Celebracao, { tipo: "venda" }>, mes
     case "posicao": return `posicao:${periodo}:${c.consultor.consultorId}:${c.para}:${c.consultor.quantidadeVendas}`;
     case "hora": return `hora:${new Date().toISOString().slice(0, 10)}:${c.hora}`;
     case "admin": return `admin:${c.indicador.id}:${chaveDoRegistro(c.registro)}`;
+    case "operador": return `operador:${periodo}:${c.anterior.operador}:${c.novo.operador}:${c.novo.notaMedia}`;
   }
 }
 
@@ -97,6 +99,30 @@ export function detectarRegistrosNovos(anterior: TvComercial, atual: TvComercial
   }
   return novos;
 }
+
+/**
+ * O melhor operador (1º do ranking de nota média) mudou entre as duas leituras. Só compara quando as duas leituras têm o ranking (o CSS One pode estar
+ * fora do ar numa delas) e o mês é o mesmo; sem líder antes, não há "mudança".
+ */
+export function detectarNovoMelhorOperador(anterior: TvComercial, atual: TvComercial): Extract<Celebracao, { tipo: "operador" }> | null {
+  if (!mesmoPeriodo(anterior, atual)) return null;
+  const antes = anterior.rankingOperadores ?? [];
+  const agora = atual.rankingOperadores ?? [];
+  if (antes.length === 0 || agora.length === 0) return null;
+  const liderAntes = antes[0];
+  const liderAgora = agora[0];
+  if (nomeDoOperador(liderAntes) === nomeDoOperador(liderAgora)) return null;
+  return {
+    tipo: "operador",
+    novo: liderAgora,
+    anterior: liderAntes,
+    // De onde o novo líder veio (nulo = não estava no ranking) e onde o antigo líder ficou (nulo = saiu do ranking).
+    posicaoAnterior: antes.find((o) => nomeDoOperador(o) === nomeDoOperador(liderAgora))?.posicao ?? null,
+    posicaoDoAnterior: agora.find((o) => nomeDoOperador(o) === nomeDoOperador(liderAntes))?.posicao ?? null,
+  };
+}
+
+const nomeDoOperador = (o: TvOperador) => o.operador.trim().toLowerCase();
 
 function mesmoPeriodo(a: TvComercial, b: TvComercial) {
   return a.periodo.mes === b.periodo.mes && a.periodo.ano === b.periodo.ano;
