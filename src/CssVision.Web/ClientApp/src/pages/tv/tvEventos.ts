@@ -1,4 +1,4 @@
-import type { TvComercial, TvRanking, TvRegional, TvVenda } from "../../lib/types";
+import type { TvAdministrativoIndicador, TvAdministrativoRegistro, TvComercial, TvRanking, TvRegional, TvVenda } from "../../lib/types";
 
 /**
  * Eventos que o painel da TV comemora, descobertos comparando duas leituras seguidas do painel (a tela consulta o CRM a cada 15 s).
@@ -9,7 +9,8 @@ export type Celebracao =
   | { tipo: "meta"; consultor: TvRanking }
   | { tipo: "meta-regional"; regional: TvRegional }
   | { tipo: "posicao"; consultor: TvRanking; de: number; para: number; ultrapassou: string[]; ultrapassado: TvRanking | null }
-  | { tipo: "hora"; hora: number; ranking: TvRanking[]; regionais: TvRegional[] };
+  | { tipo: "hora"; hora: number; ranking: TvRanking[]; regionais: TvRegional[] }
+  | { tipo: "admin"; indicador: TvAdministrativoIndicador; registro: TvAdministrativoRegistro };
 
 /** Chave para não repetir a mesma comemoração enquanto a tela está aberta. */
 export function chaveDaCelebracao(c: Exclude<Celebracao, { tipo: "venda" }>, mes: { mes: number; ano: number }): string {
@@ -19,6 +20,7 @@ export function chaveDaCelebracao(c: Exclude<Celebracao, { tipo: "venda" }>, mes
     case "meta-regional": return `meta-regional:${periodo}:${c.regional.regionalId}`;
     case "posicao": return `posicao:${periodo}:${c.consultor.consultorId}:${c.para}:${c.consultor.quantidadeVendas}`;
     case "hora": return `hora:${new Date().toISOString().slice(0, 10)}:${c.hora}`;
+    case "admin": return `admin:${c.indicador.id}:${chaveDoRegistro(c.registro)}`;
   }
 }
 
@@ -69,6 +71,31 @@ export function detectarSubidasNoRanking(anterior: TvComercial, atual: TvComerci
     subidas.push({ consultor: r, de: a.posicao, para: r.posicao, ultrapassou, ultrapassado });
   }
   return subidas.sort((x, y) => x.para - y.para);
+}
+
+/** Indicadores do painel que têm animação própria quando entra um registro novo (reintegração realizada e evento finalizado). */
+export const INDICADORES_COM_ANIMACAO = ["reintegration", "claim"];
+
+/** Identifica o registro entre duas leituras: o id do card no Notion (ou, sem ele, pessoa + cliente + placa). */
+export function chaveDoRegistro(r: TvAdministrativoRegistro): string {
+  return r.id ?? `${r.pessoa}|${r.cliente ?? ""}|${r.placa ?? ""}`;
+}
+
+/** Registros de reintegração e de evento finalizado que apareceram entre as duas leituras (do mais antigo para o mais novo). */
+export function detectarRegistrosNovos(anterior: TvComercial, atual: TvComercial): Array<{ indicador: TvAdministrativoIndicador; registro: TvAdministrativoRegistro }> {
+  if (!mesmoPeriodo(anterior, atual)) return [];
+  // Sem a leitura do Notion (nula) em qualquer das duas, não dá para comparar: não comemora.
+  if (!anterior.administrativo || !atual.administrativo) return [];
+  const novos: Array<{ indicador: TvAdministrativoIndicador; registro: TvAdministrativoRegistro }> = [];
+  for (const indicador of atual.administrativo.indicadores) {
+    if (!INDICADORES_COM_ANIMACAO.includes(indicador.id)) continue;
+    const antes = anterior.administrativo.indicadores.find((i) => i.id === indicador.id);
+    if (!antes) continue; // indicador que não existia antes: nada a comparar
+    const jaExistiam = new Set((antes.registros ?? []).map(chaveDoRegistro));
+    const registros = [...(indicador.registros ?? [])].reverse(); // a lista vem do mais recente; comemora do mais antigo ao mais novo
+    for (const registro of registros) if (!jaExistiam.has(chaveDoRegistro(registro))) novos.push({ indicador, registro });
+  }
+  return novos;
 }
 
 function mesmoPeriodo(a: TvComercial, b: TvComercial) {

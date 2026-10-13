@@ -1,13 +1,13 @@
-import { ArrowUp, RotateCcw, ChevronLeft, ChevronRight, CheckCircle2, CircleDollarSign, Activity, Pause, Play, Radio, RefreshCw, Satellite, ShoppingBag, SlidersHorizontal, Target, TrendingUp, ArrowUpRight, Wifi, WifiOff, X } from "lucide-react";
+import { ArrowUp, Check, RotateCcw, ChevronLeft, ChevronRight, CheckCircle2, CircleDollarSign, Activity, Pause, Play, Radio, RefreshCw, Satellite, ShoppingBag, SlidersHorizontal, Target, TrendingUp, ArrowUpRight, Wifi, WifiOff, X } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Chart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
 import { api, isAbortError } from "../../lib/api";
 import { useAtualizarAoVivo } from "../../lib/useAoVivo";
-import type { TvAdministrativoIndicador, TvComercial, TvConversao, TvRanking, TvRegional, TvVenda } from "../../lib/types";
+import type { TvAdministrativoIndicador, TvAdministrativoRegistro, TvComercial, TvConversao, TvRanking, TvRegional, TvVenda } from "../../lib/types";
 import { TvDetalhes, type Detalhe } from "./TvDetalhes";
 import { dataBr, diaBrasilia, Foto, horaBr, moeda, moedaExata } from "./tvComum";
-import { chaveDaCelebracao, detectarMetasBatidas, detectarMetasRegionaisBatidas, detectarSubidasNoRanking, horaDoRanking, type Celebracao } from "./tvEventos";
+import { chaveDaCelebracao, detectarMetasBatidas, detectarMetasRegionaisBatidas, detectarRegistrosNovos, detectarSubidasNoRanking, horaDoRanking, type Celebracao } from "./tvEventos";
 import "./tv.css";
 
 type ModoRanking = "vendas" | "adesao" | "conversao";
@@ -278,7 +278,7 @@ function Comemoracao({ venda, posicao, vendasNoMes, aoFechar }: { venda: TvVenda
 }
 
 /** Meta batida, meta regional, subida no ranking e ranking da hora: usam o visual "milestone" do painel (raios, fogos, confete e cartão dourado). */
-function ComemoracaoEvento({ item, aoFechar }: { item: Exclude<Celebracao, { tipo: "venda" }>; aoFechar: () => void }) {
+function ComemoracaoEvento({ item, aoFechar }: { item: Exclude<Celebracao, { tipo: "venda" } | { tipo: "admin" }>; aoFechar: () => void }) {
   useEffect(() => { const id = window.setTimeout(aoFechar, item.tipo === "hora" ? 30_000 : 25_000); return () => window.clearTimeout(id); }, [aoFechar, item.tipo]);
   // Rede de segurança para TVs lentas (mesma da comemoração de venda).
   const raiz = useRef<HTMLDivElement>(null);
@@ -436,6 +436,56 @@ function RankingDaHora({ item }: { item: Extract<Celebracao, { tipo: "hora" }> }
   );
 }
 
+/** Reintegração realizada / evento finalizado: um registro novo na base operacional do Notion (visual "administrative" do painel). */
+const ETAPAS_ADMIN: Record<string, { titulo: string; icone: typeof RefreshCw; passos: [string, string, string]; mensagem: string }> = {
+  reintegration: { titulo: "REINTEGRAÇÃO REALIZADA", icone: RefreshCw, passos: ["SOLICITADA", "EM ANÁLISE", "REINTEGRADA"], mensagem: "✓ MAIS UM VEÍCULO REINTEGRADO!" },
+  claim: { titulo: "EVENTO FINALIZADO", icone: CheckCircle2, passos: ["ABERTO", "EM ANÁLISE", "FINALIZADO"], mensagem: "✓ MAIS UM EVENTO RESOLVIDO!" },
+};
+
+function ComemoracaoAdmin({ indicador, registro, aoFechar }: { indicador: TvAdministrativoIndicador; registro: TvAdministrativoRegistro; aoFechar: () => void }) {
+  useEffect(() => { const id = window.setTimeout(aoFechar, 30_000); return () => window.clearTimeout(id); }, [aoFechar]);
+  const raiz = useRef<HTMLDivElement>(null);
+  useEffect(() => { const id = window.setTimeout(() => raiz.current?.classList.add("celebration-settled"), 6_000); return () => window.clearTimeout(id); }, []);
+  const def = ETAPAS_ADMIN[indicador.id] ?? ETAPAS_ADMIN.claim;
+  const Icone = def.icone;
+  const dia = new Date(registro.data);
+  return (
+    <div className={`celebration administrative-celebration administrative-celebration-${indicador.id}`} role="status" ref={raiz}>
+      <div className="administrative-backdrop-pulse" aria-hidden="true"><i /><i /><i /></div>
+      <div className="confetti-rain administrative-confetti" aria-hidden="true">
+        {Array.from({ length: 28 }, (_, i) => <i key={i} style={{ left: `${(i * 37 + 5) % 100}%`, animationDelay: `-${(i * 0.43) % 5}s` }} />)}
+      </div>
+      <div className="administrative-celebration-card">
+        <button type="button" className="administrative-celebration-close" onClick={aoFechar} aria-label="Fechar animação"><X /></button>
+        <div className="administrative-celebration-stage" aria-hidden="true">
+          <div className="administrative-signal-rings"><i /><i /><i /></div>
+          <div className="administrative-celebration-icon"><Icone /></div>
+        </div>
+        <span className="eyebrow">{def.titulo}</span>
+        <h2>{indicador.id === "reintegration" ? "Reintegração concluída" : "Evento finalizado"}</h2>
+        <div className="administrative-celebration-flow" aria-hidden="true">
+          {def.passos.map((p) => <div key={p}><i><Check size={14} /></i><span>{p}</span></div>)}
+        </div>
+        <div className="administrative-celebration-person">
+          <Foto nome={registro.pessoa} url={registro.fotoUrl} grande />
+          <div>
+            <span>RESPONSÁVEL</span>
+            <strong>{registro.pessoa}</strong>
+            <small>{registro.cliente || "Cliente não informado"}{registro.placa ? ` · ${registro.placa}` : ""}</small>
+          </div>
+        </div>
+        <div className="administrative-celebration-details">
+          {registro.tipoEvento && indicador.id === "claim"
+            ? <div className="administrative-event-type"><span>TIPO DE EVENTO</span><strong>{registro.tipoEvento}</strong></div>
+            : <div><span>DATA</span><strong>{Number.isNaN(dia.getTime()) ? "—" : dataBr.format(dia)}</strong></div>}
+          <div><span>{indicador.rotulo.toUpperCase()} NO MÊS</span><strong>{indicador.total} · {indicador.hoje} hoje</strong></div>
+        </div>
+        <div className="administrative-celebration-message">{def.mensagem}</div>
+      </div>
+    </div>
+  );
+}
+
 const idDaFila = (c: Celebracao) => (c.tipo === "venda" ? `venda:${c.venda.vendaId}` : chaveDaCelebracao(c, { mes: 0, ano: 0 }));
 
 /**
@@ -508,6 +558,8 @@ export function TvComercialPage() {
             ...detectarMetasBatidas(antes, novo).map((consultor) => ({ tipo: "meta" as const, consultor })),
             ...detectarMetasRegionaisBatidas(antes, novo).map((regional) => ({ tipo: "meta-regional" as const, regional })),
             ...detectarSubidasNoRanking(antes, novo).slice(0, 2).map((s) => ({ tipo: "posicao" as const, ...s })),
+            // Reintegração realizada / evento finalizado preenchidos no Notion desde a leitura anterior.
+            ...detectarRegistrosNovos(antes, novo).slice(-4).map(({ indicador, registro }) => ({ tipo: "admin" as const, indicador, registro })),
           ];
           for (const c of candidatos) {
             const chave = chaveDaCelebracao(c, novo.periodo);
@@ -690,7 +742,8 @@ export function TvComercialPage() {
             aoAbrir={abrirDetalhe} aoVoltar={pilha.length > 1 ? voltarDetalhe : undefined} aoFechar={fecharDetalhe} aoRepetir={repetirAnimacao} />
         )}
         {ativa?.tipo === "venda" && <Comemoracao key={idDaFila(ativa)} venda={ativa.venda} posicao={ativa.posicao} vendasNoMes={ativa.vendasNoMes} aoFechar={fecharAtiva} />}
-        {ativa && ativa.tipo !== "venda" && <ComemoracaoEvento key={idDaFila(ativa)} item={ativa} aoFechar={fecharAtiva} />}
+        {ativa?.tipo === "admin" && <ComemoracaoAdmin key={idDaFila(ativa)} indicador={ativa.indicador} registro={ativa.registro} aoFechar={fecharAtiva} />}
+        {ativa && ativa.tipo !== "venda" && ativa.tipo !== "admin" && <ComemoracaoEvento key={idDaFila(ativa)} item={ativa} aoFechar={fecharAtiva} />}
       </main>
     </div>
   );

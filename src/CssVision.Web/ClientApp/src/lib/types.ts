@@ -317,6 +317,8 @@ export interface TvAdministrativoRegistro {
   data: string;
   /** O registro foi criado hoje. */
   hoje?: boolean;
+  /** Id do card no Notion (identifica o registro entre uma leitura e outra). */
+  id?: string | null;
 }
 
 export interface TvAdministrativoIndicador {

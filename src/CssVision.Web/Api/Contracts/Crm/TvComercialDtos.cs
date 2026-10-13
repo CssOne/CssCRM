@@ -50,7 +50,8 @@ public record TvComercialDto(
     /// <summary>Todas as vendas do mês exibido (as do CRM e as só do Notion), da mais recente para a mais antiga.</summary>
     IReadOnlyList<TvVendaMesDto>? VendasDoMes = null);
 
-public record TvAdministrativoRegistroDto(string Pessoa, string? FotoUrl, string? Cliente, string? Placa, string? TipoEvento, string Data, bool Hoje = false);
+/// <summary>Um registro da base operacional. <c>Id</c> é o id do card no Notion: a tela o usa para saber quais registros são novos (e animar a reintegração/evento).</summary>
+public record TvAdministrativoRegistroDto(string Pessoa, string? FotoUrl, string? Cliente, string? Placa, string? TipoEvento, string Data, bool Hoje = false, string? Id = null);
 
 public record TvAdministrativoIndicadorDto(
     string Id, string Rotulo, string Acao, int Total, int Hoje, TvAdministrativoRegistroDto? Ultimo,
