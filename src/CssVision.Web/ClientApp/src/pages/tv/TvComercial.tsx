@@ -4,7 +4,7 @@ import Chart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
 import { api, isAbortError } from "../../lib/api";
 import { useAtualizarAoVivo } from "../../lib/useAoVivo";
-import type { TvAdministrativoIndicador, TvAdministrativoRegistro, TvComercial, TvConversao, TvOperador, TvRanking, TvRegional, TvVenda } from "../../lib/types";
+import type { TvAdministrativoIndicador, TvAdministrativoRegistro, TvComercial, TvConversao, TvOperador, TvRanking, TvRegional, TvVenda, TvVendaMes } from "../../lib/types";
 import { TvDetalhes, type Detalhe } from "./TvDetalhes";
 import { dataBr, diaBrasilia, Foto, horaBr, moeda, moedaExata } from "./tvComum";
 import { chaveDaCelebracao, detectarMetasBatidas, detectarMetasRegionaisBatidas, detectarNovoMelhorOperador, detectarRegistrosNovos, detectarSubidasNoRanking, horaDoRanking, type Celebracao } from "./tvEventos";
@@ -443,6 +443,37 @@ function RankingDaHora({ item }: { item: Extract<Celebracao, { tipo: "hora" }> }
   );
 }
 
+/** Adesões acima deste valor entram no destaque do cabeçalho. */
+const ADESAO_MINIMA_DESTAQUE = 350;
+const MAXIMO_NO_DESTAQUE = 10;
+const TROCA_DO_DESTAQUE_MS = 6_000;
+
+/** Cabeçalho: as adesões mais altas do mês (acima de R$ 350), uma por vez em formato de cartão, trocando sozinhas. */
+function AdesoesAltas({ vendas }: { vendas?: TvVendaMes[] | null }) {
+  const lista = useMemo(
+    () => (vendas ?? []).filter((v) => v.valor > ADESAO_MINIMA_DESTAQUE).sort((a, b) => b.valor - a.valor).slice(0, MAXIMO_NO_DESTAQUE),
+    [vendas],
+  );
+  const [indice, setIndice] = useState(0);
+  useEffect(() => {
+    if (lista.length < 2) return;
+    const id = window.setInterval(() => setIndice((n) => n + 1), TROCA_DO_DESTAQUE_MS);
+    return () => window.clearInterval(id);
+  }, [lista.length]);
+  if (!lista.length) return <div className="top-adhesion" />;
+  const posicao = indice % lista.length;
+  const v = lista[posicao];
+  return (
+    <div className="top-adhesion">
+      <div className="top-adhesion-card" key={v.vendaId} role="status" aria-label={`Adesão de ${moedaExata.format(v.valor)} de ${v.consultor}`}>
+        <Foto nome={v.consultor} url={v.fotoUrl} />
+        <div className="top-adhesion-person"><span>ADESÃO EM DESTAQUE · {posicao + 1}/{lista.length}</span><strong>{v.consultor}</strong><small>{v.regional}</small></div>
+        <div className="top-adhesion-value"><strong>{moedaExata.format(v.valor)}</strong><small>{dataBr.format(new Date(v.dataVenda))}</small></div>
+      </div>
+    </div>
+  );
+}
+
 /** Novo melhor operador (nota média de satisfação): a troca de líder no ranking, com o visual da "subida no ranking". */
 function ComemoracaoOperador({ item, aoFechar }: { item: Extract<Celebracao, { tipo: "operador" }>; aoFechar: () => void }) {
   useEffect(() => { const id = window.setTimeout(aoFechar, 30_000); return () => window.clearTimeout(id); }, [aoFechar]);
@@ -745,6 +776,7 @@ export function TvComercialPage() {
             <div><strong>CSS BRASIL</strong><span>PAINEL COMERCIAL</span></div>
           </div>
           <div className="live"><Radio size={18} /><span>AO VIVO</span></div>
+          <AdesoesAltas vendas={dados.vendasDoMes} />
           <div className="header-right">
             <a className="goals-button" href="/app/crm/goals" target="_blank" rel="noopener"><SlidersHorizontal /><span>Editar metas</span></a>
             <div className={`status ${erro ? "offline" : "online"}`}>{erro ? <WifiOff size={20} /> : <Wifi size={20} />}{erro ? "Reconectando" : "Conectado"}</div>
