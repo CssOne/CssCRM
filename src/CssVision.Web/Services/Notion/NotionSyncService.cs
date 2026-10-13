@@ -358,6 +358,7 @@ public sealed class NotionSyncService(
                 var antes = (lead.TipoIndicacao, lead.CriadoManualmente, lead.EtapaId);
                 var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
                 lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, TipoIndicacaoDoCard(page, page.Select("O que")));
+                AplicarRegraDeVendaDeTrafegoPago(lead, page, true); // este caminho só percorre cards de venda concluída
                 lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
                 TrocarColunaLeadIndicacao(lead, etapasPorNome);
                 if (antes != (lead.TipoIndicacao, lead.CriadoManualmente, lead.EtapaId)) leadsAtualizados++;
@@ -579,6 +580,8 @@ public sealed class NotionSyncService(
         {
             var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
             lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, TipoIndicacaoDoCard(page, page.Select("O que")));
+            AplicarRegraDeVendaDeTrafegoPago(lead, page,
+                string.Equals(page.Select("Status"), "VENDA CONCLUIDA", StringComparison.OrdinalIgnoreCase) || await TemVendaGanhaAsync(lead, ct));
             lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
             // Sempre alinha a coluna "(Leads)/(Indicação)" com a etiqueta (não só quando a etiqueta mudou): lead que ficou com a coluna trocada se acerta.
             if (etapasPorNome is not null && TrocarColunaLeadIndicacao(lead, etapasPorNome))
@@ -627,6 +630,31 @@ public sealed class NotionSyncService(
     /// <summary>O card veio de anúncio: tem o ID do lead da Meta ou o GCLID do Google.</summary>
     private static bool TemSinalDeAnuncio(JsonElement page) =>
         !string.IsNullOrWhiteSpace(page.Text("[META] Lead ID")) || !string.IsNullOrWhiteSpace(page.Text("GCLID"));
+
+    /// <summary>
+    /// O card do Notion tem sinal de anúncio (tráfego pago): ID do lead no Meta, GCLID, UTM source, campanha ou a tag "Facebook ADS"/"Google ads".
+    /// Mesma definição de <see cref="OrigemLead.DeTrafegoPago"/>, lida direto do card.
+    /// </summary>
+    internal static bool SinalDeAnuncioNoCard(JsonElement page) =>
+        TemSinalDeAnuncio(page)
+        || !string.IsNullOrWhiteSpace(page.Text("UTM SOURCE"))
+        || !string.IsNullOrWhiteSpace(page.Select("Campanha", "CAMPANHA"))
+        || OrigemLead.EhTagDeAnuncio(page.Select("Tags"));
+
+    /// <summary>
+    /// "Venda concluída (Leads)" só aceita venda de card de tráfego pago: um Lead SEM sinal de anúncio vira Indicação quando a venda dele é concluída (no CRM, pelo
+    /// formulário de venda, ou aqui, pelo status do card). Sem esta regra no sync, ele regravaria a etiqueta "Lead" do card do Notion e devolveria o card para
+    /// "Venda concluída (Leads)" na próxima edição. Só mexe em quem tem venda e está como Lead.
+    /// </summary>
+    internal static void AplicarRegraDeVendaDeTrafegoPago(CrmLead lead, JsonElement page, bool temVenda)
+    {
+        if (!temVenda || !TipoIndicacaoLead.EhLead(lead.TipoIndicacao)) return;
+        if (OrigemLead.DeTrafegoPago(lead) || SinalDeAnuncioNoCard(page)) return;
+        lead.TipoIndicacao = "Indicação";
+    }
+
+    private Task<bool> TemVendaGanhaAsync(CrmLead lead, CancellationToken ct) =>
+        db.CrmOpportunities.AnyAsync(o => o.LeadId == lead.Id && !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho, ct);
 
     /// <summary>"Indicação?" = SIM no card.</summary>
     private static bool IndicacaoMarcada(JsonElement page) =>
@@ -886,6 +914,7 @@ public sealed class NotionSyncService(
         lead.ProdutoInteresse = Cortar(oQue, 120) ?? lead.ProdutoInteresse;
         var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
         lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, tipoIndicacao);
+        AplicarRegraDeVendaDeTrafegoPago(lead, page, isVendaConcluida || (!criadoAgora && await TemVendaGanhaAsync(lead, ct)));
         lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
         if (!criadoAgora && TrocarColunaLeadIndicacao(lead, etapasPorNome))
         {
