@@ -142,27 +142,37 @@ public sealed class LeadKanbanService(
                 l.ResponsavelId,
                 ResponsavelNome = l.Responsavel != null ? l.Responsavel.NomeCompleto : null,
                 ResponsavelFotoUrl = l.Responsavel != null ? l.Responsavel.FotoUrl : null,
-                Tags = l.LeadTags.Select(lt => lt.Tag.Nome).ToList(),
                 l.CriadoEm, l.UltimoContatoEm, l.Arquivado, l.RowVersion, l.ProdutoInteresse, l.ValorAdesao,
                 VeiculoAdicional = l.VeiculoAdicionalDeLeadId != null,
                 MotivoPerda = l.MotivoPerda != null ? l.MotivoPerda.Descricao : null,
                 l.MotivoPerdaObservacao,
                 l.VeiculoNaoAtendido,
-                // A oportunidade mais recente é a fonte dos selos Migração/Indicação — normalmente é a
-                // que fechou a venda (o lead só chega na coluna "Venda concluída" depois disso).
-                Oportunidade = l.Oportunidades
-                    .OrderByDescending(o => o.CriadoEm)
-                    .Select(o => new { o.Migracao, o.Indicacao, Placa = o.Veiculo != null ? o.Veiculo.Placa : null })
-                    .FirstOrDefault(),
             })
             .ToListAsync(ct);
+
+        // Tags e oportunidade mais recente só dos leads desta página, em consultas próprias. Como subconsulta dentro da página, o Postgres
+        // numerava (ROW_NUMBER) TODAS as oportunidades da base a cada pedido de coluna — e o quadro faz vários pedidos por recarga.
+        var ids = linhas.Select(l => l.Id).ToList();
+        var tagsPorLead = (await db.CrmLeadTags.AsNoTracking()
+                .Where(lt => ids.Contains(lt.LeadId))
+                .Select(lt => new { lt.LeadId, lt.Tag.Nome })
+                .ToListAsync(ct))
+            .ToLookup(t => t.LeadId, t => t.Nome);
+        // A oportunidade mais recente é a fonte dos selos Migração/Indicação — normalmente é a
+        // que fechou a venda (o lead só chega na coluna "Venda concluída" depois disso).
+        var oportunidadePorLead = (await db.CrmOpportunities.AsNoTracking()
+                .Where(o => ids.Contains(o.LeadId))
+                .Select(o => new { o.LeadId, o.CriadoEm, o.Migracao, o.Indicacao, Placa = o.Veiculo != null ? o.Veiculo.Placa : null })
+                .ToListAsync(ct))
+            .GroupBy(o => o.LeadId)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(o => o.CriadoEm).First());
 
         return linhas.Select(l => new LeadKanbanCardDto(
             l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Telefone2, l.Email, l.Estado, podeVerOrigem ? l.Origem : null, PodeVerCampanha ? l.Campanha : null,
             // Placa do lead; se ainda não tiver, a do veículo da oportunidade mais recente.
-            l.Placa ?? l.Oportunidade?.Placa, l.TemSeguro, l.UtilidadeVeiculo, l.TipoIndicacao,
-            l.Oportunidade?.Migracao ?? false, l.Oportunidade?.Indicacao, l.CriadoManualmente,
-            l.ResponsavelId, l.ResponsavelNome, l.Tags,
+            l.Placa ?? oportunidadePorLead.GetValueOrDefault(l.Id)?.Placa, l.TemSeguro, l.UtilidadeVeiculo, l.TipoIndicacao,
+            oportunidadePorLead.GetValueOrDefault(l.Id)?.Migracao ?? false, oportunidadePorLead.GetValueOrDefault(l.Id)?.Indicacao, l.CriadoManualmente,
+            l.ResponsavelId, l.ResponsavelNome, tagsPorLead[l.Id].ToList(),
             // "Sem contato" reflete se o lead tem ALGUM telefone cadastrado — some sozinho assim que
             // um telefone é preenchido.
             l.CriadoEm, l.UltimoContatoEm, string.IsNullOrWhiteSpace(l.Telefone) && string.IsNullOrWhiteSpace(l.Telefone2),
