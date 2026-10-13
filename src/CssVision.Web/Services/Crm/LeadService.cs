@@ -636,6 +636,28 @@ public sealed class LeadService(
         eventos?.PublicarQuadroAtualizado("crm");
     }
 
+    /// <summary>
+    /// Lead com venda concluída (não arquivada) não volta para "Sem etapa", "Cotação" nem "Em atendimento": o card fora de "Venda concluída" faz a venda
+    /// aparecer como atendimento em aberto (aconteceu: cards de venda parados em "Em atendimento"). "Perdido" e "Não fazemos" continuam possíveis, como na
+    /// sincronização com o Notion (<c>GarantirColunaDeVendaAsync</c>). Para desfazer uma venda lançada por engano, exclua a venda antes de mover o card.
+    /// </summary>
+    private async Task ExigirColunaDeVendaSeTemVendaAsync(Guid leadId, CrmLeadStage? destino, CancellationToken ct)
+    {
+        var destinoPermitido = destino is not null
+            && (destino.Nome.StartsWith(EtapaLeadVendaConcluida, StringComparison.OrdinalIgnoreCase)
+                || destino.Nome == EtapaLeadPerdido || destino.Nome == EtapaLeadNaoFazemos);
+        if (destinoPermitido) return;
+
+        var temVenda = await db.CrmOpportunities.AnyAsync(
+            o => o.LeadId == leadId && !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho, ct);
+        if (temVenda)
+        {
+            throw new CrmBusinessException(
+                "Este cliente tem uma venda concluída, então o card não pode voltar para uma coluna de atendimento. Se a venda foi lançada por engano, exclua a venda antes de mover o card.",
+                "lead_com_venda_concluida");
+        }
+    }
+
     public async Task<LeadDetailDto> MudarEtapaAsync(Guid id, ChangeLeadStageRequest request, CancellationToken ct)
     {
         var lead = await CarregarComEscopoAsync(id, ct);
@@ -646,6 +668,7 @@ public sealed class LeadService(
         {
             novaEtapa = await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Id == request.NovaEtapaId, ct)
                 ?? throw new CrmNotFoundException("Etapa de lead", request.NovaEtapaId.Value);
+            await ExigirColunaDeVendaSeTemVendaAsync(lead.Id, novaEtapa, ct);
             lead.EtapaId = novaEtapa.Id;
 
             // Lead (tráfego) que fechou como indicação: vai pra coluna das indicações com a
@@ -698,6 +721,7 @@ public sealed class LeadService(
         }
         else
         {
+            await ExigirColunaDeVendaSeTemVendaAsync(lead.Id, null, ct);
             lead.EtapaId = null;
             lead.MotivoPerdaId = null;
             lead.MotivoPerdaObservacao = null;
