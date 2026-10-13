@@ -317,6 +317,8 @@ export interface TvAdministrativoRegistro {
   data: string;
   /** O registro foi criado hoje. */
   hoje?: boolean;
+  /** Id do card no Notion (identifica o registro entre uma leitura e outra). */
+  id?: string | null;
 }
 
 export interface TvAdministrativoIndicador {
@@ -328,6 +330,14 @@ export interface TvAdministrativoIndicador {
   ultimo?: TvAdministrativoRegistro | null;
   /** Todos os registros do mês (detalhe por pessoa). */
   registros?: TvAdministrativoRegistro[] | null;
+}
+
+/** Ranking de operadores pela nota média de "Satisfação do operador" (vem do CSS One). */
+export interface TvOperador {
+  posicao: number;
+  operador: string;
+  notaMedia: number;
+  qtdComNota: number;
 }
 
 export interface TvComercial {
@@ -346,6 +356,8 @@ export interface TvComercial {
   vendasSoNoNotion?: number;
   /** Todas as vendas do mês exibido, com o consultor (detalhes ao clicar nos cards). */
   vendasDoMes?: TvVendaMes[] | null;
+  /** Nulo quando o CSS One não respondeu (a tela mostra "indisponível"). */
+  rankingOperadores?: TvOperador[] | null;
 }
 
 export interface TvVendaMes {

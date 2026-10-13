@@ -5,6 +5,7 @@ using CssVision.Web.Domain.Identity;
 using CssVision.Web.Services.Crm;
 using CssVision.Web.Services.Email;
 using CssVision.Web.Services.Marketing;
+using CssVision.Web.Services.CssOne;
 using CssVision.Web.Services.Notion;
 using CssVision.Web.Services.Storage;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -210,6 +211,16 @@ public static class ServiceCollectionExtensions
         services.Configure<MetaCapiOptions>(configuration.GetSection(MetaCapiOptions.SectionName));
         services.AddHttpClient<IMetaConversionService, MetaConversionService>();
 
+        return services;
+    }
+
+    /// <summary>
+    /// Nota dos operadores (CSS One) no painel da TV: sem "CssOne:BaseUrl"/"CssOne:ApiKey" a integração fica desligada e o painel mostra "indisponível".
+    /// </summary>
+    public static IServiceCollection AddCssOne(this IServiceCollection services, IConfiguration configuration)
+    {
+        services.Configure<CssOneOptions>(configuration.GetSection("CssOne"));
+        services.AddHttpClient<ICssOneFonte, CssOneFonte>(c => c.Timeout = TimeSpan.FromSeconds(6));
         return services;
     }
 
