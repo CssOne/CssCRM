@@ -51,10 +51,8 @@ public sealed class RelatorioComercialService(
     public async Task<RelatorioComercialDto> ObterAsync(
         DateOnly? dataInicio, DateOnly? dataFim, Guid? consultorId, IReadOnlyCollection<Guid>? etapaIds, RelatorioFiltroExtra? extras, CancellationToken ct)
     {
-        if (!currentUser.PodeGerirComercial)
-        {
-            throw new CrmForbiddenException("Apenas gestores comerciais podem acessar o relatório comercial.");
-        }
+        // Aberto a todos da área comercial: cada usuário só enxerga o que o escopo dele permite (EquipeComercialService.ObterVendedoresVisiveisAsync —
+        // o consultor, só os próprios resultados), e a origem dos leads só vai para quem tem visão total.
 
         var hoje = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(-3));
         var inicio = dataInicio ?? InicioPadrao;
@@ -75,9 +73,16 @@ public sealed class RelatorioComercialService(
         // Tipos de indicação sem maiúsculas/minúsculas (o dado veio de épocas com grafias diferentes), ordenados para a chave do cache.
         var tipos = (extras?.TiposIndicacao ?? []).Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim().ToLower()).Distinct().Order().ToList();
         var filtroExtra = new RelatorioFiltroExtra(extras?.ChegadaInicio, extras?.ChegadaFim, extras?.VendaInicio, extras?.VendaFim, extras?.Indicacao, tipos, extras?.RegionalId);
-        return await RespostaEmCache.ObterAsync(cache, eventos, "relatorio-comercial",
+        var relatorio = await RespostaEmCache.ObterAsync(cache, eventos, "relatorio-comercial",
             new { escopo = RespostaEmCache.Escopo(visiveis), inicio, fim, consultorId, etapas, extras = new { filtroExtra.ChegadaInicio, filtroExtra.ChegadaFim, filtroExtra.VendaInicio, filtroExtra.VendaFim, filtroExtra.Indicacao, tipos, filtroExtra.RegionalId } },
             () => CalcularAsync(inicio, fim, visiveis, consultorId, etapas, filtroExtra, tipos, ct));
+
+        // O consultor que abre o relatório vê só os próprios números (totais, período, etapa, estado, FIPE). Não recebe o que é da gestão: a origem dos leads
+        // (como no quadro de leads), o produto, o desempenho por vendedor e o controle de marketing do Notion (gasto em anúncios e faturamento da empresa, que
+        // não é filtrado por consultor). Aplicado depois do cache, porque a resposta guardada é a mesma para usuários com o mesmo escopo e permissões diferentes.
+        return currentUser.PodeGerirComercial
+            ? relatorio
+            : relatorio with { PorOrigem = [], PorProduto = [], PorVendedor = [], MarketingNotion = [] };
     }
 
     private sealed record LeadLinha(DateTimeOffset Chegada, string? Origem, string? Estado, string? Produto, Guid? ResponsavelId, string? Responsavel, bool Perdido,

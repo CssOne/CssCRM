@@ -163,9 +163,11 @@ public class JanelaRecebimentoELRelatorioTests
         Assert.Equal(0, vazio.Totais.Leads);
         Assert.Equal(0, vazio.Totais.Vendas);
 
-        // Sem permissão de gestão: negado.
-        var semPermissao = TestDbContextFactory.MockCurrentUser(ana.Id, visaoTotal: false, podeGerir: false).Object;
-        var negado = new RelatorioComercialService(db, semPermissao, new EquipeComercialService(db, semPermissao));
-        await Assert.ThrowsAsync<CrmForbiddenException>(() => negado.ObterAsync(null, null, null, null, CancellationToken.None));
+        // Sem permissão de gestão: abre o relatório (é aberto a todos da área comercial), mas só com os próprios resultados e sem a origem dos leads.
+        var consultor = TestDbContextFactory.MockCurrentUser(ana.Id, visaoTotal: false, podeGerir: false).Object;
+        var doConsultor = new RelatorioComercialService(db, consultor, new EquipeComercialService(db, consultor));
+        var rc = await doConsultor.ObterAsync(null, null, null, null, CancellationToken.None);
+        Assert.Equal(r.Totais.Vendas, rc.Totais.Vendas); // a Ana é a dona de tudo neste cenário
+        Assert.Empty(rc.PorOrigem);
     }
 }

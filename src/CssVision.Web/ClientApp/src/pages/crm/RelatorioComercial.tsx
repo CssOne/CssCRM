@@ -6,6 +6,8 @@ import { formatarMoeda, formatarPercentual } from "../../lib/format";
 import { usePaginacao } from "../../lib/usePaginacao";
 import type { LeadStage, Regional, RelatorioComercial, VendedorResumo } from "../../lib/types";
 import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
+import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
 import { Button, Card, ErrorState, Input, Pagination, Select, Skeleton } from "../../components/ui";
 import { OPCOES_FILTRO_TIPO_INDICACAO } from "../../lib/opcoesLead";
 import { MultiSelect } from "../../components/MultiSelect";
@@ -93,75 +95,136 @@ function Tabela({ colunas, linhas }: { colunas: string[]; linhas: (string | numb
   );
 }
 
+interface Filtros {
+  inicio: string;
+  fim: string;
+  consultorId: string;
+  regionalId: string;
+  etapaIds: string[];
+  chegadaInicio: string;
+  chegadaFim: string;
+  vendaInicio: string;
+  vendaFim: string;
+  indicacao: "" | "sim" | "nao";
+  tiposIndicacao: string[];
+}
+
 export function RelatorioComercialPage() {
   const { tema } = useTheme();
+  const { temPapel } = useAuth();
+  // Gestão vê todos os consultores e regionais; o consultor vê só os próprios resultados (o servidor também restringe).
+  const podeGerir = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
   const base = baseOptions(tema === "dark");
   const atalhos = useMemo(atalhosPeriodo, []);
-  // Abre em "Este mês": do dia 1 até hoje.
-  const [inicio, setInicio] = useState(() => atalhos[0].inicio);
-  const [fim, setFim] = useState(() => dataIso(new Date()));
+
+  // Cada filtro fica guardado no navegador (por usuário) e só sai com "Limpar filtros". Abre em "Este mês" na primeira vez.
+  const [inicio, setInicio] = useEstadoSalvo("relatorio-comercial:inicio", atalhos[0].inicio);
+  const [fim, setFim] = useEstadoSalvo("relatorio-comercial:fim", dataIso(new Date()));
+  const [consultorId, setConsultorId] = useEstadoSalvo("relatorio-comercial:consultor", "");
+  const [regionalId, setRegionalId] = useEstadoSalvo("relatorio-comercial:regional", "");
+  const [etapaIds, setEtapaIds] = useEstadoSalvo<string[]>("relatorio-comercial:etapas", []);
+  // Filtros extras (como no Notion). Datas vazias usam o período principal acima.
+  const [chegadaInicio, setChegadaInicio] = useEstadoSalvo("relatorio-comercial:chegada-inicio", "");
+  const [chegadaFim, setChegadaFim] = useEstadoSalvo("relatorio-comercial:chegada-fim", "");
+  const [vendaInicio, setVendaInicio] = useEstadoSalvo("relatorio-comercial:venda-inicio", "");
+  const [vendaFim, setVendaFim] = useEstadoSalvo("relatorio-comercial:venda-fim", "");
+  const [indicacao, setIndicacao] = useEstadoSalvo<"" | "sim" | "nao">("relatorio-comercial:indicacao", "");
+  const [tiposIndicacao, setTiposIndicacao] = useEstadoSalvo<string[]>("relatorio-comercial:tipos-indicacao", []);
+
+  const filtrosDaTela = (): Filtros => ({
+    inicio, fim,
+    // Consultor/regional só valem para a gestão (um valor que sobrou guardado de antes não pode filtrar a tela de quem não gere).
+    consultorId: podeGerir ? consultorId : "",
+    regionalId: podeGerir ? regionalId : "",
+    etapaIds, chegadaInicio, chegadaFim, vendaInicio, vendaFim, indicacao, tiposIndicacao,
+  });
+  // O que está de fato aplicado no relatório. Mudar um filtro na tela NÃO atualiza o relatório: só o botão "Pesquisar" (ou Enter).
+  // Ao abrir, já vem aplicado o que ficou guardado.
+  const [aplicado, setAplicado] = useState<Filtros>(filtrosDaTela);
+  const [avisoFiltro, setAvisoFiltro] = useState<string | null>(null);
+  const pendente = JSON.stringify(filtrosDaTela()) !== JSON.stringify(aplicado);
+
+  const pesquisar = (extra?: Partial<Filtros>) => {
+    const novos = { ...filtrosDaTela(), ...extra };
+    if (!novos.inicio || !novos.fim || novos.fim < novos.inicio) {
+      setAvisoFiltro("A data inicial não pode ser maior que a final.");
+      return;
+    }
+    setAvisoFiltro(null);
+    setAplicado(novos);
+  };
+
+  const limparFiltros = () => {
+    const padrao: Filtros = {
+      inicio: atalhos[0].inicio, fim: dataIso(new Date()), consultorId: "", regionalId: "", etapaIds: [],
+      chegadaInicio: "", chegadaFim: "", vendaInicio: "", vendaFim: "", indicacao: "", tiposIndicacao: [],
+    };
+    setInicio(padrao.inicio); setFim(padrao.fim); setConsultorId(""); setRegionalId(""); setEtapaIds([]);
+    setChegadaInicio(""); setChegadaFim(""); setVendaInicio(""); setVendaFim(""); setIndicacao(""); setTiposIndicacao([]);
+    setAvisoFiltro(null);
+    setAplicado(padrao);
+  };
+
+  const temFiltro = !!(
+    consultorId || regionalId || etapaIds.length || chegadaInicio || chegadaFim || vendaInicio || vendaFim || indicacao || tiposIndicacao.length
+    || inicio !== atalhos[0].inicio || fim !== dataIso(new Date())
+  );
+
   const [dados, setDados] = useState<RelatorioComercial | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [recarregar, setRecarregar] = useState(0);
-  const [consultorId, setConsultorId] = useState("");
-  const [etapaIds, setEtapaIds] = useState<string[]>([]);
-  // Filtros extras (como no Notion). Datas vazias usam o período principal acima.
-  const [chegadaInicio, setChegadaInicio] = useState("");
-  const [chegadaFim, setChegadaFim] = useState("");
-  const [vendaInicio, setVendaInicio] = useState("");
-  const [vendaFim, setVendaFim] = useState("");
-  const [indicacao, setIndicacao] = useState<"" | "sim" | "nao">("");
-  const [tiposIndicacao, setTiposIndicacao] = useState<string[]>([]);
-  const temFiltroExtra = !!(chegadaInicio || chegadaFim || vendaInicio || vendaFim || indicacao || tiposIndicacao.length);
-  const limparExtras = () => {
-    setChegadaInicio(""); setChegadaFim(""); setVendaInicio(""); setVendaFim(""); setIndicacao(""); setTiposIndicacao([]);
-  };
   const [consultores, setConsultores] = useState<VendedorResumo[]>([]);
   // Abas por regional: "Todas" + uma por regional (mesmo com uma só cadastrada).
   const [regionais, setRegionais] = useState<Regional[]>([]);
-  const [regionalId, setRegionalId] = useState("");
   const [etapas, setEtapas] = useState<LeadStage[]>([]);
 
   useEffect(() => {
-    api.get<VendedorResumo[]>("/crm/management/vendedores?incluirInativos=true").then(setConsultores).catch(() => setConsultores([]));
-    api.get<Regional[]>("/crm/settings/regionals").then(setRegionais).catch(() => setRegionais([]));
+    if (podeGerir) {
+      api.get<VendedorResumo[]>("/crm/management/vendedores?incluirInativos=true").then(setConsultores).catch(() => setConsultores([]));
+      api.get<Regional[]>("/crm/settings/regionals").then(setRegionais).catch(() => setRegionais([]));
+    }
     api.get<LeadStage[]>("/crm/settings/lead-stages").then(setEtapas).catch(() => setEtapas([]));
-  }, []);
+  }, [podeGerir]);
 
   useEffect(() => {
-    if (!inicio || !fim || fim < inicio) return;
+    const f = aplicado;
+    if (!f.inicio || !f.fim || f.fim < f.inicio) {
+      // Filtro guardado inválido (ex.: datas trocadas): não fica carregando para sempre.
+      setCarregando(false);
+      return;
+    }
     const controller = new AbortController();
     setCarregando(true);
     setErro(null);
-    const filtros = new URLSearchParams({ dataInicio: inicio, dataFim: fim });
-    if (consultorId) filtros.set("consultorId", consultorId);
-    if (regionalId) filtros.set("regionalId", regionalId);
+    const filtros = new URLSearchParams({ dataInicio: f.inicio, dataFim: f.fim });
+    if (f.consultorId) filtros.set("consultorId", f.consultorId);
+    if (f.regionalId) filtros.set("regionalId", f.regionalId);
     // "Sem etapa" (id nulo) vai como Guid vazio.
-    etapaIds.forEach((id) => filtros.append("etapaId", id));
-    if (chegadaInicio) filtros.set("chegadaInicio", chegadaInicio);
-    if (chegadaFim) filtros.set("chegadaFim", chegadaFim);
-    if (vendaInicio) filtros.set("vendaInicio", vendaInicio);
-    if (vendaFim) filtros.set("vendaFim", vendaFim);
-    if (indicacao) filtros.set("indicacao", indicacao === "sim" ? "true" : "false");
-    tiposIndicacao.forEach((t) => filtros.append("tipoIndicacao", t));
+    f.etapaIds.forEach((id) => filtros.append("etapaId", id));
+    if (f.chegadaInicio) filtros.set("chegadaInicio", f.chegadaInicio);
+    if (f.chegadaFim) filtros.set("chegadaFim", f.chegadaFim);
+    if (f.vendaInicio) filtros.set("vendaInicio", f.vendaInicio);
+    if (f.vendaFim) filtros.set("vendaFim", f.vendaFim);
+    if (f.indicacao) filtros.set("indicacao", f.indicacao === "sim" ? "true" : "false");
+    f.tiposIndicacao.forEach((t) => filtros.append("tipoIndicacao", t));
     api
       .get<RelatorioComercial>(`/crm/relatorio-comercial?${filtros.toString()}`, controller.signal)
       .then(setDados)
       .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar o relatório."); })
       .finally(() => { if (!controller.signal.aborted) setCarregando(false); });
     return () => controller.abort();
-  }, [inicio, fim, consultorId, regionalId, etapaIds, chegadaInicio, chegadaFim, vendaInicio, vendaFim, indicacao, tiposIndicacao, recarregar]);
+  }, [aplicado, recarregar]);
 
   // Tempo real (vendas, leads, sincronização); na virada do dia, o período que terminava "hoje" passa a
   // terminar no dia novo — quem escolheu um período passado continua nele.
   useCrmEventos(() => setRecarregar((n) => n + 1), 500);
   useMudancaDeDia((hoje, anterior) => {
     // "Este mês" aberto na virada do mês: o período passa para o mês novo (início e fim juntos).
-    if (fim === anterior && inicio.slice(0, 7) === anterior.slice(0, 7) && inicio.endsWith("-01") && hoje.slice(0, 7) !== anterior.slice(0, 7)) {
-      setInicio(`${hoje.slice(0, 7)}-01`);
-    }
+    const virouMes = (i: string, f: string) => f === anterior && i.slice(0, 7) === anterior.slice(0, 7) && i.endsWith("-01") && hoje.slice(0, 7) !== anterior.slice(0, 7);
+    if (virouMes(inicio, fim)) setInicio(`${hoje.slice(0, 7)}-01`);
     setFim((atual) => (atual === anterior ? hoje : atual));
+    setAplicado((a) => ({ ...a, inicio: virouMes(a.inicio, a.fim) ? `${hoje.slice(0, 7)}-01` : a.inicio, fim: a.fim === anterior ? hoje : a.fim }));
     setRecarregar((n) => n + 1);
   });
 
@@ -170,13 +233,16 @@ export function RelatorioComercialPage() {
   const paginaProdutos = usePaginacao(dados?.porProduto, 8);
 
   const filtro = (
-    <div className="flex w-full flex-wrap items-end gap-2">
+    <form
+      onSubmit={(e) => { e.preventDefault(); pesquisar(); }}
+      className="flex w-full flex-wrap items-end gap-2"
+    >
       <div className="flex flex-wrap gap-1.5">
         {atalhos.map((a) => (
           <button
             key={a.rotulo}
             type="button"
-            onClick={() => { setInicio(a.inicio); setFim(a.fim); }}
+            onClick={() => { setInicio(a.inicio); setFim(a.fim); pesquisar({ inicio: a.inicio, fim: a.fim }); }}
             className={`focus-ring cursor-pointer rounded-full border px-3 py-1 text-xs font-medium ${
               inicio === a.inicio && fim === a.fim ? "border-[var(--brand)] bg-[var(--brand)] text-white" : "border-[var(--border)] text-[var(--fg-muted)] hover:text-[var(--fg)]"
             }`}
@@ -193,6 +259,7 @@ export function RelatorioComercialPage() {
         Até
         <Input type="date" className="mt-0.5 h-8 w-36" value={fim} min={inicio} onChange={(e) => setFim(e.target.value)} />
       </label>
+      {podeGerir && (
       <label className="text-xs text-[var(--fg-muted)]">
         Consultor
         <Select className="mt-0.5 h-8 w-52" value={consultorId} onChange={(e) => setConsultorId(e.target.value)} aria-label="Consultor">
@@ -205,6 +272,7 @@ export function RelatorioComercialPage() {
           ))}
         </Select>
       </label>
+      )}
       <div className="w-52 text-xs text-[var(--fg-muted)]">
         Etapas
         <div className="mt-0.5">
@@ -260,10 +328,13 @@ export function RelatorioComercialPage() {
           <Input type="date" className="mt-0.5 h-8 w-36" value={vendaFim} min={vendaInicio || undefined} onChange={(e) => setVendaFim(e.target.value)} />
         </label>
       </div>
-      {temFiltroExtra && (
-        <Button size="sm" variant="ghost" onClick={limparExtras}>Redefinir filtros</Button>
-      )}
-    </div>
+      <div className="flex items-center gap-2">
+        <Button type="submit" size="sm">Pesquisar</Button>
+        <Button type="button" size="sm" variant="ghost" onClick={limparFiltros} disabled={!temFiltro && !pendente}>Limpar filtros</Button>
+      </div>
+      {pendente && !avisoFiltro && <p className="w-full text-xs text-[var(--fg-muted)]">Você mudou filtros: clique em <strong>Pesquisar</strong> para aplicá-los.</p>}
+      {avisoFiltro && <p role="alert" className="w-full text-xs text-[var(--danger)]">{avisoFiltro}</p>}
+    </form>
   );
 
   const cabecalho = (
@@ -272,9 +343,11 @@ export function RelatorioComercialPage() {
         <h1 className="text-xl font-semibold text-[var(--fg)]">Relatório comercial</h1>
         <p className="text-sm text-[var(--fg-muted)]">
           Vendas, leads, origem e retorno — os relatórios do Notion, calculados com os dados do CRM. Vendas pela data de ativação; leads pela data de chegada.
+          {!podeGerir && " Aqui você vê só os seus resultados."}
         </p>
       </div>
       {filtro}
+      {podeGerir && (
       <div role="tablist" aria-label="Regional" className="flex w-full flex-wrap gap-1.5 border-b border-[var(--border)] pb-2">
         {[{ id: "", nome: "Todas as regionais" }, ...regionais.filter((r) => r.ativa)].map((r) => (
           <button
@@ -282,7 +355,7 @@ export function RelatorioComercialPage() {
             type="button"
             role="tab"
             aria-selected={regionalId === r.id}
-            onClick={() => { setRegionalId(r.id); setConsultorId(""); }}
+            onClick={() => { setRegionalId(r.id); setConsultorId(""); pesquisar({ regionalId: r.id, consultorId: "" }); }}
             className={`focus-ring cursor-pointer rounded-lg px-3 py-1.5 text-sm font-medium ${
               regionalId === r.id ? "bg-[var(--brand)] text-white" : "text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
             }`}
@@ -291,6 +364,7 @@ export function RelatorioComercialPage() {
           </button>
         ))}
       </div>
+      )}
     </div>
   );
 
@@ -423,6 +497,8 @@ export function RelatorioComercialPage() {
         <BarrasHorizontaisChart categorias={dados.porEtapa.map((e) => e.etapa)} series={[{ nome: "Leads", valores: dados.porEtapa.map((e) => e.leads) }]} />
       </Secao>
 
+      {/* Origem dos leads e Produto: só para a gestão. O consultor vê os próprios números nos totais, gráficos de período, etapa, estado e FIPE. */}
+      {podeGerir && (
       <div className="grid gap-4 lg:grid-cols-2">
         <Secao titulo="Origem dos leads" descricao="Tag de campanha do lead (Lookalike, UGC, Pmax…) ou a origem de cadastro.">
           <DonutChart itens={dados.porOrigem.slice(0, 8).map((o) => ({ nome: o.origem, valor: o.leads }))} altura={260} />
@@ -440,6 +516,7 @@ export function RelatorioComercialPage() {
           <Pagination pagina={paginaProdutos.pagina} totalPaginas={paginaProdutos.totalPaginas} onChange={paginaProdutos.setPagina} />
         </Secao>
       </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Secao titulo="Vendas por estado" descricao="Estado informado na venda (ou no lead).">
@@ -453,6 +530,7 @@ export function RelatorioComercialPage() {
         </Secao>
       </div>
 
+      {podeGerir && (
       <Secao titulo="Desempenho por vendedor" descricao="Leads que o vendedor recebeu e vendas que fechou no período.">
         <Tabela
           colunas={["Vendedor", "Leads", "Vendas", "Conversão", "Adesão", "Mensalidade"]}
@@ -462,8 +540,9 @@ export function RelatorioComercialPage() {
         />
         <Pagination pagina={paginaVendedores.pagina} totalPaginas={paginaVendedores.totalPaginas} onChange={paginaVendedores.setPagina} />
       </Secao>
+      )}
 
-      {dados.marketingNotion.length > 0 && (
+      {podeGerir && dados.marketingNotion.length > 0 && (
         <Secao
           titulo="Investimento e retorno (controle de marketing do Notion)"
           descricao="Gasto em mídia, leads e faturamento lançados no Notion — o CRM não tem o valor investido em anúncios. Custo por lead = gastos ÷ leads; ROAS = faturamento ÷ gastos."

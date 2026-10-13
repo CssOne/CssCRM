@@ -7,6 +7,7 @@ import type { GestaoComercialResumo, RedistribuicaoHistorico, VendedorResumo } f
 import { Badge, Card, ErrorState, Input, Select, Skeleton, useToast, Pagination } from "../../components/ui";
 import { OPCOES_O_QUE } from "../../lib/opcoesLead";
 import { useAtualizarAoVivo } from "../../lib/useAoVivo";
+import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
 
 function LimiteInput({
   vendedor,
@@ -402,10 +403,11 @@ export function ManagementPage() {
 
   // Filtros da Gestão comercial: nome, regional, situação da conta e "recebe leads". A busca por nome vale também para o ranking e
   // para o tempo até o 1º contato; regional/situação/recebe leads filtram a carteira.
-  const [buscaNome, setBuscaNome] = useState("");
-  const [filtroRegional, setFiltroRegional] = useState("");
-  const [filtroSituacao, setFiltroSituacao] = useState<"" | "ativos" | "inativos">("");
-  const [filtroRecebe, setFiltroRecebe] = useState<"" | "sim" | "nao">("");
+  // Os filtros ficam guardados no navegador (por usuário) e só saem em "Limpar filtros".
+  const [buscaNome, setBuscaNome] = useEstadoSalvo("gestao:busca-nome", "");
+  const [filtroRegional, setFiltroRegional] = useEstadoSalvo("gestao:regional", "");
+  const [filtroSituacao, setFiltroSituacao] = useEstadoSalvo<"" | "ativos" | "inativos">("gestao:situacao", "");
+  const [filtroRecebe, setFiltroRecebe] = useEstadoSalvo<"" | "sim" | "nao">("gestao:recebe", "");
   const termo = buscaNome.trim().toLowerCase();
   const casaNome = (nome: string) => !termo || nome.toLowerCase().includes(termo);
   const regionaisDisponiveis = useMemo(
