@@ -50,6 +50,43 @@ public class DashboardServiceTests
     }
 
     [Fact]
+    public async Task ObterAsync_VendaComValorFinalZerado_ContaOTotalOuAAdesaoPaga()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
+        var ganho = await factory.CriarEtapaAsync(db, "Ganho", 2, TipoEtapaPipeline.Ganho);
+        var etapaLead = await factory.ObterOuCriarEtapaLeadAsync(db);
+
+        var leads = Enumerable.Range(1, 3)
+            .Select(i => new CrmLead { EtapaId = etapaLead.Id, NomeOuRazaoSocial = $"Cliente {i}", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id })
+            .ToList();
+        db.CrmLeads.AddRange(leads);
+        await db.SaveChangesAsync();
+
+        var agora = DateTimeOffset.UtcNow;
+        db.CrmOpportunities.AddRange(
+            // Venda concluída pelo quadro: ValorFinal 0,00, adesão paga de 344,98 (Total = adesão - desconto).
+            new CrmOpportunity { LeadId = leads[0].Id, Titulo = "Op1", ResponsavelId = vendedor.Id, EtapaId = ganho.Id, ValorFinal = 0m, PagamentoAdesao = 344.98m, Total = 344.98m, DataEfetivaFechamento = agora },
+            // Sem Total: vale a adesão paga.
+            new CrmOpportunity { LeadId = leads[1].Id, Titulo = "Op2", ResponsavelId = vendedor.Id, EtapaId = ganho.Id, ValorFinal = 0m, PagamentoAdesao = 100m, DataEfetivaFechamento = agora },
+            // ValorFinal preenchido continua mandando.
+            new CrmOpportunity { LeadId = leads[2].Id, Titulo = "Op3", ResponsavelId = vendedor.Id, EtapaId = ganho.Id, ValorFinal = 1000m, PagamentoAdesao = 200m, Total = 200m, DataEfetivaFechamento = agora });
+        await db.SaveChangesAsync();
+
+        var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
+        var equipe = new EquipeComercialService(db, currentUser.Object);
+        var service = new DashboardService(db, equipe, new ActivityService(db, currentUser.Object, equipe, new NoOpAuditSink()), currentUser.Object);
+
+        var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
+        var resultado = await service.ObterAsync(new DashboardFilterRequest(new DateOnly(hoje.Year, hoje.Month, 1), hoje, null), CancellationToken.None);
+
+        Assert.Equal(3, resultado.Indicadores.VendasGanhasQuantidade);
+        Assert.Equal(344.98m + 100m + 1000m, resultado.Indicadores.VendasGanhasValor);
+        Assert.Equal(644.98m, resultado.Indicadores.VendasGanhasAdesaoValor);
+    }
+
+    [Fact]
     public async Task ObterAsync_UsaAMetaGeralDaRegionalDoUsuario_NoLugarDasIndividuais_NaMetaDoMes()
     {
         using var factory = new TestDbContextFactory();

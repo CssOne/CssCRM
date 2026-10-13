@@ -32,7 +32,7 @@ public static class ContagensPorVendedor
 
     /// <summary>
     /// Ganhas e perdidas por responsável. <paramref name="fechadas"/> já vem filtrada pelo período de
-    /// fechamento; valor ganho = ValorFinal (ou ValorEstimado), adesão = PagamentoAdesao.
+    /// fechamento; valor ganho = ValorFinal, ou Total/adesão quando ele é 0 (ou ValorEstimado), adesão = PagamentoAdesao.
     /// </summary>
     public static async Task<Dictionary<Guid, Fechadas>> FechadasAsync(IQueryable<CrmOpportunity> fechadas, CancellationToken ct)
     {
@@ -44,7 +44,7 @@ public static class ContagensPorVendedor
                 g.Key.ResponsavelId,
                 g.Key.Tipo,
                 Quantidade = g.Count(),
-                Valor = g.Sum(o => (decimal?)(o.ValorFinal ?? o.ValorEstimado)) ?? 0m,
+                Valor = g.Sum(o => (decimal?)(o.ValorFinal > 0 ? o.ValorFinal.Value : o.Total > 0 ? o.Total.Value : o.PagamentoAdesao > 0 ? o.PagamentoAdesao.Value : o.ValorEstimado)) ?? 0m,
                 Adesao = g.Sum(o => o.PagamentoAdesao) ?? 0m,
             })
             .ToListAsync(ct);
