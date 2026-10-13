@@ -1,6 +1,7 @@
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
+using CssVision.Web.Services.CssOne;
 using CssVision.Web.Services.Notion;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -29,7 +30,8 @@ public sealed class TvComercialService(
     ICurrentUserService? currentUser = null,
     ITvNotionFonte? notion = null,
     IMemoryCache? cache = null,
-    ICrmEventHub? eventos = null) : ITvComercialService
+    ICrmEventHub? eventos = null,
+    ICssOneFonte? cssOne = null) : ITvComercialService
 {
     private const string SemRegional = "Sem regional";
 
@@ -70,9 +72,28 @@ public sealed class TvComercialService(
         // O Notion tem cache próprio; a versão dele entra na chave para o painel refletir cada atualização.
         IReadOnlyList<TvNotionVenda> vendasNotion = notion is null ? [] : await notion.VendasAsync(primeiro, ct);
         var administrativo = notion is null ? null : await notion.AdministrativoAsync(primeiro, ct);
+        // Nota média dos operadores no CSS One (cache e tolerância a falha próprios); o resultado entra na chave para o painel refletir cada mudança.
+        var operadores = cssOne is null ? null : await cssOne.RankingDeOperadoresAsync(primeiro.Month, primeiro.Year, ct);
+        var assinaturaOperadores = operadores is null ? "" : string.Join(';', operadores.Select(o => $"{o.Operador}:{o.NotaMedia}:{o.QtdComNota}"));
+        // Rastreadores instalados no mês, pelo Controle de Rastreador do CSS One: vira o total do cartão "Rastreadores" do Acompanhamento operacional.
+        var instalados = cssOne is null ? null : await cssOne.RastreadoresInstaladosAsync(primeiro.Month, primeiro.Year, ct);
+        administrativo = ComRastreadoresInstalados(administrativo, instalados);
         return await RespostaEmCache.ObterAsync(cache, eventos, "tv-comercial",
-            new { escopo = RespostaEmCache.Escopo(visiveis), primeiro, hoje, notion = notion?.Versao ?? 0 },
-            () => CalcularAsync(primeiro, hoje, visiveis, vendasNotion, administrativo, ct));
+            new { escopo = RespostaEmCache.Escopo(visiveis), primeiro, hoje, notion = notion?.Versao ?? 0, operadores = assinaturaOperadores, instalados },
+            () => CalcularAsync(primeiro, hoje, visiveis, vendasNotion, administrativo, operadores, ct));
+    }
+
+    /// <summary>
+    /// Troca o total do cartão "Rastreadores" pelo número de instalados do CSS One (os demais dados do cartão continuam os do Notion). Sem o número
+    /// do CSS One, ou sem o indicador do Notion, devolve o administrativo como veio.
+    /// </summary>
+    internal static TvAdministrativoDto? ComRastreadoresInstalados(TvAdministrativoDto? administrativo, int? instalados)
+    {
+        if (administrativo is null || instalados is not { } total) return administrativo;
+        return administrativo with
+        {
+            Indicadores = administrativo.Indicadores.Select(i => i.Id == "tracker" ? i with { Total = total, Rotulo = "Rastreadores instalados" } : i).ToList(),
+        };
     }
 
     /// <summary>
@@ -83,7 +104,8 @@ public sealed class TvComercialService(
         ativoEm is { } a ? (a.UtcDateTime.TimeOfDay == TimeSpan.Zero ? a.AddHours(12) : a) : dataDaVenda!.Value;
 
     private async Task<TvComercialDto> CalcularAsync(
-        DateOnly primeiro, DateOnly hoje, List<Guid>? visiveis, IReadOnlyList<TvNotionVenda> vendasNotion, TvAdministrativoDto? administrativo, CancellationToken ct)
+        DateOnly primeiro, DateOnly hoje, List<Guid>? visiveis, IReadOnlyList<TvNotionVenda> vendasNotion, TvAdministrativoDto? administrativo,
+        IReadOnlyList<TvOperadorDto>? operadores, CancellationToken ct)
     {
         var inicioMes = HorarioBrasilia.Inicio(primeiro);
         // Só vendas do mês exibido e que já aconteceram: no mês corrente o limite é o fim de hoje. Venda com data futura (data digitada
@@ -230,7 +252,7 @@ public sealed class TvComercialService(
             }).ToList();
 
         return new TvComercialDto(new TvPeriodoDto(primeiro.Month, primeiro.Year), resumo, rankingVendas, rankingAdesao, rankingConversao,
-            rankingRegionais, evolucao, ultimas, DateTimeOffset.UtcNow, administrativo, vendas.Count(v => v.SoNoNotion), vendasDoMes);
+            rankingRegionais, evolucao, ultimas, DateTimeOffset.UtcNow, administrativo, vendas.Count(v => v.SoNoNotion), vendasDoMes, operadores);
     }
 
     /// <summary>

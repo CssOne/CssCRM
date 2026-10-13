@@ -332,6 +332,14 @@ export interface TvAdministrativoIndicador {
   registros?: TvAdministrativoRegistro[] | null;
 }
 
+/** Ranking de operadores pela nota média de "Satisfação do operador" (vem do CSS One). */
+export interface TvOperador {
+  posicao: number;
+  operador: string;
+  notaMedia: number;
+  qtdComNota: number;
+}
+
 export interface TvComercial {
   periodo: { mes: number; ano: number };
   resumo: { vendasHoje: number; vendasNoMes: number; valorHoje: number; valorNoMes: number; percentualMetaGeral?: number | null };
@@ -348,6 +356,8 @@ export interface TvComercial {
   vendasSoNoNotion?: number;
   /** Todas as vendas do mês exibido, com o consultor (detalhes ao clicar nos cards). */
   vendasDoMes?: TvVendaMes[] | null;
+  /** Nulo quando o CSS One não respondeu (a tela mostra "indisponível"). */
+  rankingOperadores?: TvOperador[] | null;
 }
 
 export interface TvVendaMes {

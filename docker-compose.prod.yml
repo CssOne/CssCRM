@@ -27,6 +27,9 @@ services:
       MetaCapi__PixelId: ${META_PIXEL_ID}
       MetaCapi__AccessToken: ${META_CAPI_ACCESS_TOKEN}
       NotionSync__Token: ${NOTION_TOKEN}
+      # Nota média dos operadores no painel da TV (consulta o CSS One). Vazio = painel mostra "indisponível". A chave é a mesma "Crm:ApiKey" do CSS One.
+      CssOne__BaseUrl: ${CSSONE_URL:-}
+      CssOne__ApiKey: ${CSSONE_API_KEY:-}
       # Rodízio de leads por regional: leads sem regional não vão para consultores da MG134 (ver DistribuicaoOptions).
       Distribuicao__RegionaisExclusivas__0: MG134
       # Pixels extras da Meta (CAPI). Vale a primeira entrada que bater, na ordem dos números; o pixel padrão é
