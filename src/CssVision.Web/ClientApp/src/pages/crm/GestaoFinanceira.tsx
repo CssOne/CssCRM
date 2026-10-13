@@ -5,7 +5,7 @@ import { useAtualizarAoVivo } from "../../lib/useAoVivo";
 import type { VendedorResumo } from "../../lib/types";
 
 interface AvisosEmAberto { consultorId: string; abertos: number }
-import { Badge, Card, EmptyState, ErrorState, Input, Pagination, Skeleton, useToast } from "../../components/ui";
+import { Badge, Card, ConfirmDialog, EmptyState, ErrorState, Input, Pagination, Skeleton, useToast } from "../../components/ui";
 import { usePaginacao } from "../../lib/usePaginacao";
 
 function Chave({ vendedor, onSalvo }: { vendedor: VendedorResumo; onSalvo: () => void }) {
@@ -13,8 +13,15 @@ function Chave({ vendedor, onSalvo }: { vendedor: VendedorResumo; onSalvo: () =>
   const [ligado, setLigado] = useState(vendedor.recebeLeads !== false);
   const [salvando, setSalvando] = useState(false);
 
-  async function alternar() {
-    const novo = !ligado;
+  // Desativar pede confirmação (afeta a distribuição de leads daquele consultor); voltar a receber não.
+  const [confirmando, setConfirmando] = useState(false);
+
+  function alternar() {
+    if (ligado) setConfirmando(true);
+    else void salvar(true);
+  }
+
+  async function salvar(novo: boolean) {
     setLigado(novo);
     setSalvando(true);
     try {
@@ -30,6 +37,7 @@ function Chave({ vendedor, onSalvo }: { vendedor: VendedorResumo; onSalvo: () =>
   }
 
   return (
+    <>
     <button
       type="button"
       role="switch"
@@ -44,6 +52,23 @@ function Chave({ vendedor, onSalvo }: { vendedor: VendedorResumo; onSalvo: () =>
       </span>
       <span className={ligado ? "text-[var(--success)]" : "text-[var(--fg-muted)]"}>{ligado ? "Recebe leads" : "Não recebe leads"}</span>
     </button>
+
+      <ConfirmDialog
+        open={confirmando}
+        title="Parar de receber leads?"
+        danger
+        confirmLabel="Sim, desativar"
+        loading={salvando}
+        message={
+          <>
+            Você quer mesmo desativar o recebimento de leads de <strong>{vendedor.nome}</strong>? Ele(a) deixa de receber novos leads da distribuição
+            automática até alguém ativar de novo. Os leads que já estão com {vendedor.nome} continuam com ele(a). Fica registrado que foi você quem desativou.
+          </>
+        }
+        onConfirm={() => { setConfirmando(false); void salvar(false); }}
+        onCancel={() => setConfirmando(false)}
+      />
+    </>
   );
 }
 

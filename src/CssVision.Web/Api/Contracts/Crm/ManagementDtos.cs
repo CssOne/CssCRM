@@ -108,6 +108,17 @@ public record RedistribuicaoHistoricoDto(
     string? Motivo,
     DateTimeOffset AlteradoEm);
 
+/// <summary>
+/// Quem tirou (ou devolveu) cada consultor da distribuição de leads. <c>Evento</c>: "desativou" / "ativou" (o interruptor "Recebe leads") e
+/// "conta_inativada" / "conta_reativada" (a conta do usuário, que também tira o consultor da distribuição).
+/// </summary>
+public record RecebeLeadsHistoricoDto(
+    Guid ConsultorId,
+    string ConsultorNome,
+    string Evento,
+    string? AlteradoPorNome,
+    DateTimeOffset OcorridoEm);
+
 public record GestaoComercialResumoDto(
     double TempoMedioPrimeiroContatoHoras,
     IReadOnlyList<TempoMedioEtapaDto> TempoMedioPorEtapa,

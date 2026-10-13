@@ -3,8 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, isAbortError } from "../../lib/api";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
-import type { GestaoComercialResumo, RedistribuicaoHistorico, VendedorResumo } from "../../lib/types";
-import { Badge, Card, ErrorState, Input, Select, Skeleton, useToast, Pagination } from "../../components/ui";
+import type { GestaoComercialResumo, RecebeLeadsHistorico, RedistribuicaoHistorico, VendedorResumo } from "../../lib/types";
+import { Badge, Card, ConfirmDialog, ErrorState, Input, Select, Skeleton, useToast, Pagination } from "../../components/ui";
 import { OPCOES_O_QUE } from "../../lib/opcoesLead";
 import { useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
@@ -221,13 +221,27 @@ function TiposLeadSelect({ vendedor, onSalvo }: { vendedor: VendedorResumo; onSa
   );
 }
 
+const ROTULO_EVENTO_RECEBE_LEADS: Record<string, string> = {
+  desativou: "Desativou o recebimento de leads",
+  ativou: "Voltou a receber leads",
+  conta_inativada: "Conta inativada (fora da distribuição)",
+  conta_reativada: "Conta reativada",
+};
+
 function RecebeLeadsSwitch({ vendedor, onSalvo }: { vendedor: VendedorResumo; onSalvo: () => void }) {
   const { notificar } = useToast();
   const [ligado, setLigado] = useState(vendedor.recebeLeads !== false);
   const [salvando, setSalvando] = useState(false);
 
-  async function alternar() {
-    const novo = !ligado;
+  // Desativar pede confirmação (afeta a distribuição de leads daquele consultor); voltar a receber não.
+  const [confirmando, setConfirmando] = useState(false);
+
+  function alternar() {
+    if (ligado) setConfirmando(true);
+    else void salvar(true);
+  }
+
+  async function salvar(novo: boolean) {
     setLigado(novo);
     setSalvando(true);
     try {
@@ -243,6 +257,7 @@ function RecebeLeadsSwitch({ vendedor, onSalvo }: { vendedor: VendedorResumo; on
   }
 
   return (
+    <>
     <button
       type="button"
       role="switch"
@@ -261,6 +276,23 @@ function RecebeLeadsSwitch({ vendedor, onSalvo }: { vendedor: VendedorResumo; on
       </span>
       <span className={ligado ? "text-[var(--success)]" : "text-[var(--fg-muted)]"}>{ligado ? "Recebe leads" : "Não recebe leads"}</span>
     </button>
+
+      <ConfirmDialog
+        open={confirmando}
+        title="Parar de receber leads?"
+        danger
+        confirmLabel="Sim, desativar"
+        loading={salvando}
+        message={
+          <>
+            Você quer mesmo desativar o recebimento de leads de <strong>{vendedor.nome}</strong>? Ele(a) deixa de receber novos leads da distribuição
+            automática até alguém ativar de novo. Os leads que já estão com {vendedor.nome} continuam com ele(a). Fica registrado que foi você quem desativou.
+          </>
+        }
+        onConfirm={() => { setConfirmando(false); void salvar(false); }}
+        onCancel={() => setConfirmando(false)}
+      />
+    </>
   );
 }
 
@@ -371,6 +403,7 @@ export function ManagementPage() {
   const [resumo, setResumo] = useState<GestaoComercialResumo | null>(null);
   const [vendedores, setVendedores] = useState<VendedorResumo[] | null>(null);
   const [historico, setHistorico] = useState<RedistribuicaoHistorico[] | null>(null);
+  const [historicoRecebeLeads, setHistoricoRecebeLeads] = useState<RecebeLeadsHistorico[] | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [recarregar, setRecarregar] = useState(0);
@@ -382,11 +415,14 @@ export function ManagementPage() {
       api.get<GestaoComercialResumo>("/crm/management/summary", signal),
       api.get<VendedorResumo[]>("/crm/management/vendedores", signal),
       api.get<RedistribuicaoHistorico[]>("/crm/management/redistribuicoes", signal),
+      // Histórico de quem desativou o recebimento de leads: se falhar, o resto da tela continua funcionando.
+      api.get<RecebeLeadsHistorico[]>("/crm/management/recebe-leads-historico", signal).catch((e) => { if (isAbortError(e)) throw e; return [] as RecebeLeadsHistorico[]; }),
     ])
-      .then(([r, v, h]) => {
+      .then(([r, v, h, rl]) => {
         setResumo(r);
         setVendedores(v);
         setHistorico(h);
+        setHistoricoRecebeLeads(rl);
       })
       .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar a gestão comercial."); })
       .finally(() => { if (!signal?.aborted) setCarregando(false); });
@@ -444,6 +480,7 @@ export function ManagementPage() {
   const paginaRanking = usePaginacao(rankingFiltrado, 10);
   const paginaParadas = usePaginacao(resumo?.oportunidadesSemMovimentacao, 8);
   const paginaHistorico = usePaginacao(historico, 10);
+  const paginaRecebeLeads = usePaginacao(historicoRecebeLeads, 10);
 
   if (carregando && !resumo) {
     return (
@@ -686,6 +723,43 @@ export function ManagementPage() {
           </table>
         )}
         <Pagination pagina={paginaHistorico.pagina} totalPaginas={paginaHistorico.totalPaginas} onChange={paginaHistorico.setPagina} />
+      </Card>
+
+      <Card className="overflow-x-auto p-4">
+        <h2 className="text-sm font-semibold text-[var(--fg)]">Histórico de recebimento de leads</h2>
+        <p className="mb-3 text-xs text-[var(--fg-muted)]">
+          Quem desativou (ou reativou) cada consultor da distribuição de leads. Inclui as contas inativadas e reativadas que o sistema já registrava; as trocas do
+          interruptor "Recebe leads" passam a ser registradas a partir de agora.
+        </p>
+        {(historicoRecebeLeads ?? []).length === 0 ? (
+          <p className="text-sm text-[var(--fg-muted)]">Nenhuma alteração registrada.</p>
+        ) : (
+          <table className="w-full min-w-[560px] text-sm">
+            <thead>
+              <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--fg-muted)]">
+                <th className="pb-2 font-medium">Consultor</th>
+                <th className="pb-2 font-medium">O que aconteceu</th>
+                <th className="pb-2 font-medium">Quem fez</th>
+                <th className="pb-2 font-medium">Quando</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginaRecebeLeads.itensDaPagina.map((h, i) => (
+                <tr key={`${h.consultorId}-${h.ocorridoEm}-${i}`} className="border-b border-[var(--border)] last:border-0">
+                  <td className="py-2 text-[var(--fg)]">{h.consultorNome}</td>
+                  <td className="py-2">
+                    <Badge variant={h.evento === "desativou" || h.evento === "conta_inativada" ? "warning" : "success"}>
+                      {ROTULO_EVENTO_RECEBE_LEADS[h.evento] ?? h.evento}
+                    </Badge>
+                  </td>
+                  <td className="py-2 text-[var(--fg-muted)]">{h.alteradoPorNome ?? "—"}</td>
+                  <td className="py-2 text-[var(--fg-muted)]">{formatarDataHora(h.ocorridoEm)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <Pagination pagina={paginaRecebeLeads.pagina} totalPaginas={paginaRecebeLeads.totalPaginas} onChange={paginaRecebeLeads.setPagina} />
       </Card>
     </div>
   );

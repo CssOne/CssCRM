@@ -14,4 +14,5 @@ public interface IManagementService
     Task AtualizarTiposLeadAsync(Guid vendedorId, AtualizarTiposLeadRequest request, CancellationToken ct);
     Task AtualizarRecebeLeadsAsync(Guid vendedorId, AtualizarRecebeLeadsRequest request, CancellationToken ct);
     Task<IReadOnlyList<RedistribuicaoHistoricoDto>> ObterHistoricoRedistribuicoesAsync(CancellationToken ct);
+    Task<IReadOnlyList<RecebeLeadsHistoricoDto>> ObterHistoricoRecebeLeadsAsync(CancellationToken ct);
 }
