@@ -90,7 +90,7 @@ public sealed class DashboardService(
 
         var qtdGanhas = await ganhas.CountAsync(ct);
         var qtdPerdidas = await perdidas.CountAsync(ct);
-        var valorGanho = await ganhas.SumAsync(o => (decimal?)(o.ValorFinal ?? o.ValorEstimado), ct) ?? 0m;
+        var valorGanho = await ganhas.SumAsync(o => (decimal?)(o.ValorFinal > 0 ? o.ValorFinal.Value : o.Total > 0 ? o.Total.Value : o.PagamentoAdesao > 0 ? o.PagamentoAdesao.Value : o.ValorEstimado), ct) ?? 0m;
         var valorAdesao = await ganhas.SumAsync(o => (decimal?)o.PagamentoAdesao, ct) ?? 0m;
         var taxaConversao = ContagensPorVendedor.TaxaConversaoLeads(qtdGanhas, novosLeads);
         var ticketMedio = qtdGanhas == 0 ? 0m : Math.Round(valorGanho / qtdGanhas, 2);
@@ -251,7 +251,7 @@ public sealed class DashboardService(
 
         var fechamentos = await oportunidadesQuery
             .Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho && o.DataEfetivaFechamento >= inicioJanelaUtc)
-            .Select(o => new { o.DataEfetivaFechamento, Valor = o.ValorFinal ?? o.ValorEstimado, o.PagamentoAdesao })
+            .Select(o => new { o.DataEfetivaFechamento, Valor = o.ValorFinal > 0 ? o.ValorFinal.Value : o.Total > 0 ? o.Total.Value : o.PagamentoAdesao > 0 ? o.PagamentoAdesao.Value : o.ValorEstimado, o.PagamentoAdesao })
             .ToListAsync(ct);
 
         var resultado = new List<EvolucaoVendasDto>();
@@ -375,7 +375,7 @@ public sealed class DashboardService(
             .ToListAsync(ct);
         var vendas = await oportunidadesQuery
             .Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho && o.DataEfetivaFechamento >= inicioUtc)
-            .Select(o => new { Data = o.DataEfetivaFechamento!.Value, Valor = o.ValorFinal ?? o.ValorEstimado, Adesao = o.PagamentoAdesao })
+            .Select(o => new { Data = o.DataEfetivaFechamento!.Value, Valor = o.ValorFinal > 0 ? o.ValorFinal.Value : o.Total > 0 ? o.Total.Value : o.PagamentoAdesao > 0 ? o.PagamentoAdesao.Value : o.ValorEstimado, Adesao = o.PagamentoAdesao })
             .ToListAsync(ct);
 
         var leadsPorMes = leads.ToLookup(l => HorarioBrasilia.PrimeiroDiaDoMes(HorarioBrasilia.Dia(l.CriadoEm)));

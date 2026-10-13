@@ -184,6 +184,8 @@ public sealed class OpportunityService(
             ExigirDataDeVendaNaoFutura(dataDaVenda);
         }
 
+        ExigirValorDaAdesaoComComprovante(opportunity, request.PagamentoAdesao);
+
         opportunity.Titulo = request.Titulo.Trim();
         opportunity.ResponsavelId = request.ResponsavelId;
         opportunity.ProdutoOuServico = request.ProdutoOuServico;
@@ -274,6 +276,7 @@ public sealed class OpportunityService(
             }
 
             ExigirDataDeVendaNaoFutura(request.DataEfetivaFechamento.Value);
+            ExigirValorDaAdesaoComComprovante(opportunity, request.PagamentoAdesao);
             await GarantirUmaVendaConcluidaPorLeadAsync(opportunity.LeadId, opportunity.Id, ct);
             TravarLeadDuranteAVenda(opportunity.Lead);
             etapaDoLeadNaVenda = await MoverLeadParaVendaConcluidaAsync(opportunity.Lead, request.Indicacao, ct);
@@ -611,6 +614,21 @@ public sealed class OpportunityService(
         o.ComprovanteVistoriaArquivoUrl,
         o.ConversaoOfflineEnviadaEm,
         o.DataPagamentoAdesaoPrevista);
+
+    /// <summary>
+    /// Comprovante de pagamento da adesão anexado exige o valor pago: sem ele a venda fica de fora da meta e do card de adesão
+    /// (foi o que deixou vendas pagas com adesão em branco). O comprovante é enviado antes do salvamento da venda, por isso a trava
+    /// fica aqui, quando o valor chega — e não no envio do arquivo. Adesão ainda a pagar não tem comprovante: usa a data prevista.
+    /// </summary>
+    private static void ExigirValorDaAdesaoComComprovante(CrmOpportunity opportunity, decimal? pagamentoAdesao)
+    {
+        if (opportunity.PagamentoAdesaoArquivoUrl is not null && pagamentoAdesao is not > 0)
+        {
+            throw new CrmBusinessException(
+                "Informe o valor da adesão paga: há um comprovante de pagamento anexado.",
+                "adesao_valor_obrigatorio");
+        }
+    }
 
     public async Task<OpportunityDto> AnexarArquivoAsync(Guid id, string tipo, IFormFile arquivo, CancellationToken ct)
     {
