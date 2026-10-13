@@ -354,6 +354,8 @@ export function VendaConcluidaDialog({
   // Adesão paga depois: com a data do pagamento marcada, o comprovante deixa de ser obrigatório.
   const pagamentoAgendado = !!valores.dataPagamentoAdesaoPrevista;
   const temComprovantePagamento = !!pagamentoArquivo || !!oportunidadeEditar?.pagamentoAdesaoArquivoUrl;
+  // Com comprovante anexado a adesão foi paga: o valor pago é obrigatório (senão a venda fica fora da meta e do card de adesão).
+  const adesaoSemValorComComprovante = ehVenda && temComprovantePagamento && !((valores.pagamentoAdesao ?? 0) > 0);
 
   // Datas "AAAA-MM-DD" comparam certo como texto. O servidor também recusa (data_venda_futura).
   const dataDaVendaFutura = ehVenda && !!valores.dataEfetivaFechamento && valores.dataEfetivaFechamento > hojeBrasilia();
@@ -381,6 +383,7 @@ export function VendaConcluidaDialog({
     (valores.mensalidade ?? -1) >= 0 &&
     (valores.mensalidadeComCupom ?? -1) >= 0 &&
     (valores.pagamentoAdesao ?? -1) >= 0 &&
+    !adesaoSemValorComComprovante &&
     (valores.total ?? -1) >= 0 &&
     indicacaoPreenchida &&
     !!valores.veiculo?.descricao &&
@@ -970,6 +973,9 @@ export function VendaConcluidaDialog({
                 Pagamento de adesão (R$)
               </Label>
               <MoneyInput id="venda-adesao" value={valores.pagamentoAdesao} onChange={(v) => set("pagamentoAdesao", v)} />
+              {adesaoSemValorComComprovante && (
+                <p className="mt-1 text-xs text-[var(--danger)]">Há comprovante de pagamento anexado: informe o valor da adesão paga.</p>
+              )}
             </div>
             <div>
               <Label htmlFor="venda-total" required={ehVenda}>
