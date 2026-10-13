@@ -137,6 +137,12 @@ public class CrmLead : CrmArchivableEntity
     public DateTimeOffset? ConsentimentoDataEm { get; set; }
     public string? ConsentimentoOrigem { get; set; }
 
+    /// <summary>
+    /// O card do Notion tem a tag de anúncio ("Facebook ADS" ou "Google ads"). Sinal de tráfego pago para os cards que não trazem ID do Meta nem GCLID
+    /// (ver <see cref="Services.Crm.OrigemLead.DeTrafegoPago"/>). Gravado pela sincronização e pela carga única que preenche os cards antigos.
+    /// </summary>
+    public bool TagDeAnuncioNotion { get; set; }
+
     /// <summary>Data/hora do último contato efetivo (atividade concluída) — usado para "leads parados".</summary>
     public DateTimeOffset? UltimoContatoEm { get; set; }
 

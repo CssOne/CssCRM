@@ -46,6 +46,9 @@ public sealed class NotionSyncService(
         ("31763799-99a8-81b2-b83b-000bfca82506", "MG132", "CSS Growth Sales", "CSS Growth Sales"),
     ];
 
+    /// <summary>Ids das bases do Notion que a sincronização lê (usado pela carga única da tag de anúncio).</summary>
+    internal static IReadOnlyList<string> IdsDasBasesSincronizadas => DataSources.Select(d => d.DataSourceId).ToList();
+
     /// <summary>A partir desta data (Data de chegada do card no Notion), a sincronização periódica
     /// passa a importar/atualizar leads — cards mais antigos deixam de entrar no CRM mesmo que
     /// alguém ainda os edite no Notion.</summary>
@@ -621,9 +624,15 @@ public sealed class NotionSyncService(
             ? TipoIndicacaoLead.IndicacaoLead
             : tipo;
 
-    /// <summary>O card veio de anúncio: tem o ID do lead da Meta ou o GCLID do Google.</summary>
+    /// <summary>
+    /// O card veio de anúncio (tráfego pago): tem o ID do lead da Meta, o GCLID do Google, UTM source, campanha, ou a tag "Facebook ADS"/"Google ads". Tráfego pago
+    /// nunca cai na coluna de Indicação por falta de um tipo preenchido: sem tipo/indicação explícitos, o card com qualquer um desses sinais é Lead.
+    /// </summary>
     private static bool TemSinalDeAnuncio(JsonElement page) =>
-        !string.IsNullOrWhiteSpace(page.Text("[META] Lead ID")) || !string.IsNullOrWhiteSpace(page.Text("GCLID"));
+        !string.IsNullOrWhiteSpace(page.Text("[META] Lead ID")) || !string.IsNullOrWhiteSpace(page.Text("GCLID"))
+        || !string.IsNullOrWhiteSpace(page.Text("UTM SOURCE"))
+        || !string.IsNullOrWhiteSpace(page.Select("Campanha", "CAMPANHA"))
+        || OrigemLead.EhTagDeAnuncio(page.Select("Tags"));
 
     /// <summary>"Indicação?" = SIM no card.</summary>
     private static bool IndicacaoMarcada(JsonElement page) =>
@@ -872,6 +881,8 @@ public sealed class NotionSyncService(
         lead.Cidade = Cortar(cidade, 120) ?? lead.Cidade;
         lead.Estado = estado ?? lead.Estado;
         lead.Campanha = Cortar(page.Select("Campanha", "CAMPANHA"), 120) ?? lead.Campanha;
+        // Tag de anúncio do card ("Facebook ADS"/"Google ads"): sinal de tráfego pago para os cards sem ID do Meta/GCLID (ver OrigemLead.DeTrafegoPago).
+        lead.TagDeAnuncioNotion = OrigemLead.EhTagDeAnuncio(page.Select("Tags"));
         // Leads do Notion (migrados ou sincronizados): a Origem acompanha a tag de campanha do card.
         if (lead.ConsentimentoOrigem is OrigemLead.MarcadorMigracaoNotion or OrigemLead.MarcadorSincronizacaoNotion
             && OrigemLead.TagDaCampanha(lead.Campanha) is { } tagCampanha)

@@ -899,6 +899,9 @@ namespace CssVision.Web.Data.Migrations
                         .HasColumnType("xid")
                         .HasColumnName("xmin");
 
+                    b.Property<bool>("TagDeAnuncioNotion")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Telefone")
                         .HasColumnType("text");
 

@@ -36,6 +36,22 @@ public static class OrigemLead
         l.MetaLeadId != null || l.Gclid != null || l.ConsentimentoOrigem == MarcadorFormularioSite
         || ((l.ConsentimentoOrigem == MarcadorMigracaoNotion || l.ConsentimentoOrigem == MarcadorSincronizacaoNotion) && l.Campanha != null);
 
+    /// <summary>"Facebook ADS" / "Google ads": as tags de anúncio do campo "Tags" do card do Notion.</summary>
+    public static bool EhTagDeAnuncio(string? tag) =>
+        tag is not null && (string.Equals(tag.Trim(), "Facebook ADS", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(tag.Trim(), "Google ads", StringComparison.OrdinalIgnoreCase));
+
+    private static readonly Func<Domain.Crm.CrmLead, bool> _deTrafegoPago = l =>
+        l.MetaLeadId != null || l.Gclid != null || l.UtmSource != null || l.TagDeAnuncioNotion
+        || l.ConsentimentoOrigem == MarcadorFormularioSite
+        || ((l.ConsentimentoOrigem == MarcadorMigracaoNotion || l.ConsentimentoOrigem == MarcadorSincronizacaoNotion) && l.Campanha != null);
+
+    /// <summary>
+    /// O lead tem algum sinal de tráfego pago: veio direto do anúncio ou do formulário do site, ou é um card do Notion com ID do lead no Meta, GCLID, UTM source,
+    /// campanha ou tag Facebook/Google (<see cref="Domain.Crm.CrmLead.TagDeAnuncioNotion"/>).
+    /// </summary>
+    public static bool DeTrafegoPago(Domain.Crm.CrmLead lead) => _deTrafegoPago(lead);
+
     public const string OrigemMigracaoNotion = "Migração Notion";
     public const string OrigemSincronizacaoNotion = "Sincronização Notion";
 
