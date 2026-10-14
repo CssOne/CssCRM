@@ -56,6 +56,22 @@ public static class OrigemLead
                 ? l.CriadoEm
                 : (l.ResponsavelAtribuidoEm ?? l.CriadoEm)) >= inicio;
 
+    /// <summary>
+    /// "Data de chegada" do lead no Relatório comercial, dentro de [<paramref name="inicio"/>, <paramref name="fim"/>): para o lead do sistema vindo do tráfego pago
+    /// (<see cref="VeioDoTrafegoPago"/>) vale o momento em que ele passou para o responsável atual (<c>ResponsavelAtribuidoEm</c>), como na Gestão comercial e no
+    /// rodízio; para os demais (indicação, cadastro manual, cards do Notion) continua a data de criação/chegada. O mesmo critério está em <c>RelatorioComercialService</c>
+    /// (projeção da data usada nos gráficos por mês e semana).
+    /// </summary>
+    public static System.Linq.Expressions.Expression<Func<Domain.Crm.CrmLead, bool>> ChegouNoPeriodo(DateTimeOffset inicio, DateTimeOffset fim) =>
+        l => (l.ConsentimentoOrigem != MarcadorMigracaoNotion && l.ConsentimentoOrigem != MarcadorSincronizacaoNotion
+                && (l.MetaLeadId != null || l.ConsentimentoOrigem == MarcadorFormularioSite)
+                ? (l.ResponsavelAtribuidoEm ?? l.CriadoEm)
+                : l.CriadoEm) >= inicio
+            && (l.ConsentimentoOrigem != MarcadorMigracaoNotion && l.ConsentimentoOrigem != MarcadorSincronizacaoNotion
+                && (l.MetaLeadId != null || l.ConsentimentoOrigem == MarcadorFormularioSite)
+                ? (l.ResponsavelAtribuidoEm ?? l.CriadoEm)
+                : l.CriadoEm) < fim;
+
     public const string OrigemMigracaoNotion = "Migração Notion";
     public const string OrigemSincronizacaoNotion = "Sincronização Notion";
 
