@@ -242,6 +242,7 @@ public static class ServiceCollectionExtensions
         {
             services.AddHostedService<NotionSyncBackgroundService>();
             services.AddHostedService<PreencherTagDeAnuncioBackgroundService>();
+            services.AddHostedService<CorrigirIndicacaoDoNotionBackgroundService>();
         }
 
         return services;

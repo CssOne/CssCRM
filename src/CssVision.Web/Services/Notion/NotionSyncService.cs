@@ -332,6 +332,60 @@ public sealed class NotionSyncService(
     }
 
     /// <summary>
+    /// Carga única: os cards "VENDA CONCLUIDA" com "Indicação?" = INDICAÇÃO que no CRM ainda são "Lead" (a sincronização só reconhecia "SIM") passam a "Indicação Lead",
+    /// vão para "Venda concluída (Indicação)" e marcam a indicação na venda. Só mexe em lead do Notion cujo tipo ainda é "Lead" (ou vazio): o que já é Pessoal,
+    /// Parceria etc., ou foi alterado no CRM, fica como está.
+    /// </summary>
+    /// <returns>Resumo por base: cards de indicação lidos, leads e vendas ajustados.</returns>
+    public async Task<string> CorrigirIndicacaoMarcadaComoIndicacaoAsync(string token, CancellationToken ct)
+    {
+        var notion = new NotionClient(token);
+        var etapasPorNome = await db.CrmLeadStages.Where(s => s.Ativa).ToDictionaryAsync(s => s.Nome.Trim(), s => s.Id, ct);
+        var resumos = new List<string>();
+        foreach (var (dataSourceId, _, _, baseNome) in DataSources)
+        {
+            int lidos = 0, leads = 0, vendasAtualizadas = 0, erros = 0;
+            await foreach (var page in PaginasDeVendaAsync(notion, dataSourceId, ct))
+            {
+                if (!IndicacaoMarcada(page)) continue;
+                lidos++;
+                var pageId = page.PageId();
+                try
+                {
+                    var lead = await db.CrmLeads.FirstOrDefaultAsync(l => l.NotionPageId == pageId && !l.Arquivado, ct);
+                    if (lead is null || lead.ConsentimentoOrigem is not (OrigemLead.MarcadorMigracaoNotion or OrigemLead.MarcadorSincronizacaoNotion)) continue;
+                    if (!string.IsNullOrWhiteSpace(lead.TipoIndicacao) && !EhTipoLead(lead.TipoIndicacao)) continue;
+
+                    var antes = (lead.TipoIndicacao, lead.CriadoManualmente, lead.EtapaId);
+                    lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, TipoIndicacaoDoCard(page, page.Select("O que")));
+                    lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
+                    TrocarColunaLeadIndicacao(lead, etapasPorNome);
+                    if (antes != (lead.TipoIndicacao, lead.CriadoManualmente, lead.EtapaId)) leads++;
+
+                    foreach (var venda in await db.CrmOpportunities.Where(o => o.LeadId == lead.Id && !o.Arquivado && o.NotionPageId == pageId).ToListAsync(ct))
+                    {
+                        AplicarIndicacaoNaOportunidade(venda, page);
+                        if (db.Entry(venda).State == EntityState.Modified) vendasAtualizadas++;
+                    }
+                    await db.SaveChangesAsync(ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    erros++;
+                    logger.LogWarning(ex, "Erro corrigindo a indicação da página {PageId} ({Base})", pageId, baseNome);
+                }
+                finally
+                {
+                    db.ChangeTracker.Clear();
+                }
+            }
+            resumos.Add($"{baseNome}: {lidos} vendas com Indicação? marcada, {leads} leads e {vendasAtualizadas} vendas ajustados, {erros} erros");
+        }
+        if (resumos.Count > 0) eventos?.PublicarQuadroAtualizado("notion");
+        return string.Join(" | ", resumos);
+    }
+
+    /// <summary>
     /// Grava a "Data de chegada" de cada card (created_time) no lead ligado a ele. Só atualiza a
     /// data — em lote, direto no banco —, então é rápida mesmo relendo a base inteira.
     /// </summary>
@@ -634,9 +688,14 @@ public sealed class NotionSyncService(
         || !string.IsNullOrWhiteSpace(page.Select("Campanha", "CAMPANHA"))
         || OrigemLead.EhTagDeAnuncio(page.Select("Tags"));
 
-    /// <summary>"Indicação?" = SIM no card.</summary>
+    /// <summary>
+    /// "Indicação?" marcado no card: as bases do Notion têm duas opções para "sim" — "SIM" e "INDICAÇÃO" (a MG134 e a CSS Growth Sales usam muito a segunda).
+    /// Antes só "SIM" valia, e o card "Lead" que fechou como indicação com "INDICAÇÃO" ficava como venda de lead.
+    /// </summary>
     private static bool IndicacaoMarcada(JsonElement page) =>
-        string.Equals(page.SelectPorNomeAproximado("Indicação?"), "SIM", StringComparison.OrdinalIgnoreCase);
+        page.SelectPorNomeAproximado("Indicação?") is { } valor
+        && (string.Equals(valor, "SIM", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(RemoverAcentos(valor.Trim()), "INDICACAO", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>"PESSOAL" → "Pessoal", "AÇÃO EXTERNA" → "Ação Externa", "CSS" → "CSS" (mesma grafia das opções do CRM).</summary>
     public static string NormalizarTipoIndicacao(string tipo)

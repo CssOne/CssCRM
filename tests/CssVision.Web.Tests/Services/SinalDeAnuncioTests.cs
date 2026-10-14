@@ -11,7 +11,7 @@ namespace CssVision.Web.Tests.Services;
 /// <summary>Sinal de anúncio (tráfego pago): tag Facebook/Google, UTM, campanha, ID do Meta ou GCLID deixam o card como Lead — a menos que o tipo/indicação estejam preenchidos.</summary>
 public class SinalDeAnuncioTests
 {
-    private static JsonElement Card(string? tag = null, string? utm = null, string? campanha = null, string? tipo = null, bool indicacaoSim = false)
+    private static JsonElement Card(string? tag = null, string? utm = null, string? campanha = null, string? tipo = null, bool indicacaoSim = false, string? indicacaoValor = null)
     {
         var props = new Dictionary<string, object>
         {
@@ -20,7 +20,7 @@ public class SinalDeAnuncioTests
             ["Tags"] = new { type = "select", select = tag is null ? null : new { name = tag } },
             ["UTM SOURCE"] = new { type = "rich_text", rich_text = utm is null ? Array.Empty<object>() : new object[] { new { plain_text = utm } } },
             ["CAMPANHA"] = new { type = "select", select = campanha is null ? null : new { name = campanha } },
-            ["Indicação?"] = new { type = "select", select = indicacaoSim ? new { name = "SIM" } : null },
+            ["Indicação?"] = new { type = "select", select = indicacaoValor is not null ? new { name = indicacaoValor } : indicacaoSim ? new { name = "SIM" } : null },
             ["Tpo de Indicação? "] = new { type = "select", select = tipo is null ? null : new { name = tipo } },
         };
         return JsonDocument.Parse(JsonSerializer.Serialize(new { id = Guid.NewGuid().ToString(), properties = props })).RootElement.Clone();
@@ -58,6 +58,13 @@ public class SinalDeAnuncioTests
     [InlineData(null, true, "Indicação")]
     public void TipoOuIndicacaoPreenchidos_VencemOSinalDeAnuncio(string? tipo, bool indicacaoSim, string esperado) =>
         Assert.Equal(esperado, NotionSyncService.TipoIndicacaoDoCard(Card(tag: "Facebook ADS", tipo: tipo, indicacaoSim: indicacaoSim), "AGV"));
+
+    [Theory]
+    [InlineData("SIM")]
+    [InlineData("INDICAÇÃO")]
+    [InlineData("Indicação")]
+    public void LeadQueFechouComoIndicacao_ValeComSimOuIndicacao(string valor) =>
+        Assert.Equal("Indicação Lead", NotionSyncService.TipoIndicacaoDoCard(Card(tipo: "LEAD", indicacaoValor: valor), "AGV"));
 
     [Fact]
     public void LeadSemNenhumSinal_NaoEhDeTrafegoPago() =>
