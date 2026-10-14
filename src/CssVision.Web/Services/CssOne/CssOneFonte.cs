@@ -25,7 +25,16 @@ public interface ICssOneFonte
 
     /// <summary>Rastreadores instalados no mês (card "Instalados" do Controle de Rastreador). Nulo quando o CSS One não está configurado ou não respondeu.</summary>
     Task<int?> RastreadoresInstaladosAsync(int mes, int ano, CancellationToken ct);
+
+    /// <summary>Reintegrações (Controle de Cobrança) e eventos finalizados (Registros de Sinistros) do mês. Nulo quando o CSS One não está configurado ou não respondeu.</summary>
+    Task<CssOneAdministrativo?> AdministrativoAsync(int mes, int ano, CancellationToken ct);
 }
+
+/// <summary>Um registro de reintegração ou de evento finalizado do CSS One. <c>Id</c> identifica o registro entre uma consulta e outra.</summary>
+public sealed record CssOneRegistro(string Id, string Pessoa, string? Cliente, string? Placa, string? TipoEvento, DateTimeOffset Data);
+
+/// <summary>Do mais recente para o mais antigo.</summary>
+public sealed record CssOneAdministrativo(IReadOnlyList<CssOneRegistro> Reintegracoes, IReadOnlyList<CssOneRegistro> EventosFinalizados);
 
 public sealed class CssOneFonte(HttpClient http, IOptions<CssOneOptions> opcoes, IMemoryCache cache, ILogger<CssOneFonte> logger) : ICssOneFonte
 {
@@ -48,6 +57,12 @@ public sealed class CssOneFonte(HttpClient http, IOptions<CssOneOptions> opcoes,
     public Task<int?> RastreadoresInstaladosAsync(int mes, int ano, CancellationToken ct) =>
         ObterAsync($"instalados:{ano}-{mes}", $"rastreadores-instalados?mes={mes}&ano={ano}",
             (InstaladosDoCssOne? r) => r is null ? (int?)null : r.Instalados, ct);
+
+    public Task<CssOneAdministrativo?> AdministrativoAsync(int mes, int ano, CancellationToken ct) =>
+        ObterAsync($"administrativo:{ano}-{mes}", $"administrativo?mes={mes}&ano={ano}",
+            (CssOneAdministrativoResposta? r) => r is null ? null : new CssOneAdministrativo(r.Reintegracoes ?? [], r.EventosFinalizados ?? []), ct);
+
+    private sealed record CssOneAdministrativoResposta(IReadOnlyList<CssOneRegistro>? Reintegracoes, IReadOnlyList<CssOneRegistro>? EventosFinalizados);
 
     private async Task<TSaida?> ObterAsync<TResposta, TSaida>(string nome, string rota, Func<TResposta?, TSaida?> mapear, CancellationToken ct)
     {
