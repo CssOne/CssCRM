@@ -1,3 +1,4 @@
+using CssVision.Web.Authorization;
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
@@ -220,7 +221,17 @@ public sealed class TvComercialService(
 
         // ----- conversão -----
         var vendasPorConsultor = vendas.Where(v => idsVendasDeTrafego.Contains(v.Id)).GroupBy(v => v.ResponsavelId).ToDictionary(g => g.Key, g => g.Count());
-        var rankingConversao = leadsPorConsultor.Where(l => l.Value > 0 && pessoas.ContainsKey(l.Key))
+        // Só consultores ativos: inativos, gestores e administradores não entram no ranking de conversão (mesmo com leads no mês).
+        var idsDeLeads = leadsPorConsultor.Keys.ToList();
+        var ativosComLeads = (await db.Users.AsNoTracking().Where(u => idsDeLeads.Contains(u.Id) && u.Ativo).Select(u => u.Id).ToListAsync(ct)).ToHashSet();
+        var perfisComLeads = (await db.UserRoles.AsNoTracking().Where(ur => idsDeLeads.Contains(ur.UserId))
+                .Join(db.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => new { ur.UserId, Perfil = r.Name })
+                .ToListAsync(ct))
+            .GroupBy(x => x.UserId).ToDictionary(g => g.Key, g => g.Select(x => x.Perfil).ToHashSet());
+        bool ConsultorAtivo(Guid id) =>
+            ativosComLeads.Contains(id) && perfisComLeads.TryGetValue(id, out var perfis) && perfis.Contains(Roles.Comercial)
+            && !perfis.Overlaps([Roles.Admin, Roles.GestorMaster, Roles.GestorComercial, Roles.SupervisorComercial]);
+        var rankingConversao = leadsPorConsultor.Where(l => l.Value > 0 && pessoas.ContainsKey(l.Key) && ConsultorAtivo(l.Key))
             .Select(l => new
             {
                 Id = l.Key, Leads = l.Value, Vendas = vendasPorConsultor.GetValueOrDefault(l.Key),

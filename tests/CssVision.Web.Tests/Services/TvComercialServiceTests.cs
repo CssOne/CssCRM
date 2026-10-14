@@ -1,4 +1,5 @@
 using CssVision.Web.Api.Contracts.Crm;
+using CssVision.Web.Authorization;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
 using CssVision.Web.Services.Crm;
@@ -24,6 +25,8 @@ public class TvComercialServiceTests
         var admin = await factory.CriarUsuarioAsync(db, "Admin");
         var ana = await factory.CriarUsuarioAsync(db, "Ana");
         var bruna = await factory.CriarUsuarioAsync(db, "Bruna");
+        await factory.AtribuirPapelAsync(db, ana, Roles.Comercial);
+        await factory.AtribuirPapelAsync(db, bruna, Roles.Comercial);
         var regional = new CrmRegional { Nome = "MG132" };
         db.CrmRegionais.Add(regional);
         await db.SaveChangesAsync();
@@ -146,6 +149,7 @@ public class TvComercialServiceTests
         await using var db = factory.CreateContext();
         var admin = await factory.CriarUsuarioAsync(db, "Admin");
         var ana = await factory.CriarUsuarioAsync(db, "Ana");
+        await factory.AtribuirPapelAsync(db, ana, Roles.Comercial);
         var regional = new CrmRegional { Nome = "MG132" };
         db.CrmRegionais.Add(regional);
         await db.SaveChangesAsync();
@@ -187,5 +191,32 @@ public class TvComercialServiceTests
         Assert.Equal(3, conv.LeadsAtendidos);        // Pegou1, Pegou2 e o criado antes mas atribuído agora
         Assert.Equal(1, conv.VendasFechadas);        // só a venda de lead de tráfego
         Assert.Equal(33.3m, conv.TaxaConversao);     // 1 ÷ 3
+    }
+    [Fact]
+    public async Task Conversao_NaoListaInativosGestoresNemAdministradores()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var admin = await factory.CriarUsuarioAsync(db, "Admin");
+        var ana = await factory.CriarUsuarioAsync(db, "Ana");
+        var inativa = await factory.CriarUsuarioAsync(db, "Inativa");
+        var gestora = await factory.CriarUsuarioAsync(db, "Gestora");
+        var adm2 = await factory.CriarUsuarioAsync(db, "Adm2");
+        await factory.AtribuirPapelAsync(db, ana, Roles.Comercial);
+        await factory.AtribuirPapelAsync(db, inativa, Roles.Comercial);
+        await factory.AtribuirPapelAsync(db, gestora, Roles.GestorComercial);
+        await factory.AtribuirPapelAsync(db, adm2, Roles.Admin);
+        inativa.Ativo = false;
+        await db.SaveChangesAsync();
+
+        db.CrmLeads.AddRange(new[] { ana, inativa, gestora, adm2 }.Select(u => new CrmLead
+        {
+            NomeOuRazaoSocial = "L-" + u.NomeCompleto, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = u.Id, MetaLeadId = "meta-" + u.NomeCompleto,
+        }));
+        await db.SaveChangesAsync();
+
+        var r = await Servico(db, admin.Id).ObterAsync(null, null, CancellationToken.None);
+
+        Assert.Equal(["Ana"], r.RankingConversao.Select(c => c.Nome));
     }
 }
