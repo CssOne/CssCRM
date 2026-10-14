@@ -87,6 +87,24 @@ public class SinalDeAnuncioTests
     }
 
     [Fact]
+    public async Task ConsultaDoBanco_UsaAMesmaRegra_ComTagEUtm()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var notion = OrigemLead.MarcadorSincronizacaoNotion;
+        db.CrmLeads.AddRange(
+            new CrmLead { NomeOuRazaoSocial = "tag", TipoPessoa = TipoPessoa.Fisica, ConsentimentoOrigem = notion, TagDeAnuncioNotion = true },
+            new CrmLead { NomeOuRazaoSocial = "utm", TipoPessoa = TipoPessoa.Fisica, ConsentimentoOrigem = notion, UtmSource = "facebook" },
+            new CrmLead { NomeOuRazaoSocial = "meta", TipoPessoa = TipoPessoa.Fisica, ConsentimentoOrigem = notion, MetaLeadId = "1" },
+            new CrmLead { NomeOuRazaoSocial = "nada", TipoPessoa = TipoPessoa.Fisica, ConsentimentoOrigem = notion });
+        await db.SaveChangesAsync();
+
+        var nomes = await db.CrmLeads.AsNoTracking().Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Select(l => l.NomeOuRazaoSocial).OrderBy(n => n).ToListAsync();
+
+        Assert.Equal(["meta", "tag", "utm"], nomes);
+    }
+
+    [Fact]
     public void CampanhaSoContaParaCardsDoNotion() =>
         Assert.False(OrigemLead.DeTrafegoPago(new CrmLead { ConsentimentoOrigem = "Cadastro manual", Campanha = "Lookalike" }));
 
