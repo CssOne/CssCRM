@@ -440,7 +440,13 @@ export function RelatorioComercialPage() {
 
       <div className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-3 ${carregando ? "opacity-60" : ""}`}>
         <Kpi rotulo="Leads recebidos" valor={inteiro(t.leads)} detalhe={`${inteiro(t.leadsPerdidos)} perdidos`} />
-        <Kpi rotulo="Vendas concluídas" valor={inteiro(t.vendas)} detalhe={`conversão de ${formatarPercentual(t.taxaConversao)} sobre os leads`} />
+        <Kpi
+          rotulo="Vendas concluídas"
+          valor={inteiro(t.vendas)}
+          detalhe={`conversão de ${formatarPercentual(t.taxaConversao)} sobre os leads · ${inteiro(t.vendasTrafegoPago ?? 0)} tráfego pago · ${inteiro(t.vendasIndicacaoCard ?? 0)} indicação${
+            (t.vendasSemOrigemIdentificada ?? 0) > 0 ? ` · ${inteiro(t.vendasSemOrigemIdentificada ?? 0)} sem origem de anúncio identificada` : ""
+          }`}
+        />
         <Kpi rotulo="Adesão" valor={formatarMoeda(t.adesao)} detalhe={t.vendas > 0 ? `média de ${formatarMoeda(t.adesao / t.vendas)} por venda` : undefined} />
         <Kpi rotulo="Mensalidade" valor={formatarMoeda(t.mensalidade)} detalhe={`ticket médio de ${formatarMoeda(t.ticketMensalidade)}`} />
         <Kpi rotulo="Rastreador" valor={formatarMoeda(t.rastreador)} />

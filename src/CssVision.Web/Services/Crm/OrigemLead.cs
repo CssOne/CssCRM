@@ -36,6 +36,8 @@ public static class OrigemLead
     public static readonly System.Linq.Expressions.Expression<Func<Domain.Crm.CrmLead, bool>> DeTrafegoPagoInclusiveNotion = l =>
         l.MetaLeadId != null || l.Gclid != null || l.UtmSource != null || l.TagDeAnuncioNotion
         || l.ConsentimentoOrigem == MarcadorFormularioSite
+        // Origem com a tag de uma campanha (UGC, Lookalike, Pesquisa...) mesmo sem o campo Campanha: o lead é de anúncio.
+        || (l.Origem != null && TagsDeCampanha.Contains(l.Origem))
         || ((l.ConsentimentoOrigem == MarcadorMigracaoNotion || l.ConsentimentoOrigem == MarcadorSincronizacaoNotion) && l.Campanha != null);
 
     /// <summary>
@@ -98,6 +100,9 @@ public static class OrigemLead
 
     public const string OrigemMigracaoNotion = "Migração Notion";
     public const string OrigemSincronizacaoNotion = "Sincronização Notion";
+
+    /// <summary>As mesmas tags de <see cref="Tags"/>, em vetor, para a consulta no banco.</summary>
+    private static readonly string[] TagsDeCampanha = ["Lookalike", "UGC VENDA", "UGC CAMINHÃO", "Pesquisa", "Pmax", "Demand Gen", "UGC", "INFLUENCERS", "Lead convertido", "Caixa de pergunta"];
 
     public static readonly IReadOnlyList<string> Tags =
     [

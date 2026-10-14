@@ -10,7 +10,7 @@ namespace CssVision.Web.Tests.Services;
 public class DashboardOrigemDasVendasTests
 {
     [Fact]
-    public async Task ContaAsVendasDoPeriodoPorOrigem_TrafegoPagoIndicacaoEOutras()
+    public async Task ContaAsVendasDoPeriodoPorOrigem_TrafegoPagoIndicacaoESemOrigem()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
@@ -49,7 +49,7 @@ public class DashboardOrigemDasVendasTests
         var porOrigem = painel.OrigemVendas.ToDictionary(o => o.Origem, o => o.Quantidade);
         Assert.Equal(2, porOrigem["Tráfego pago"]);
         Assert.Equal(2, porOrigem["Indicação"]);       // a de indicação e o anúncio que fechou como "Indicação Lead"
-        Assert.Equal(1, porOrigem["Outras origens"]);
+        Assert.Equal(1, porOrigem["Sem origem identificada"]);
         Assert.Equal(painel.Indicadores.VendasGanhasQuantidade, porOrigem.Values.Sum()); // fecha com o card de vendas
     }
 }

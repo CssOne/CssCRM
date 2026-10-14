@@ -207,6 +207,8 @@ public sealed class RelatorioComercialService(
         {
             LeadsTrafegoPago = leadsTrafego, VendasTrafegoPago = vendasTrafego, TaxaConversaoTrafegoPago = Taxa(vendasTrafego, leadsTrafego),
             LeadsIndicacaoCard = leadsIndicacao, VendasIndicacaoCard = vendasIndicacaoCard, TaxaConversaoIndicacaoCard = Taxa(vendasIndicacaoCard, leadsIndicacao),
+            LeadsSemOrigemIdentificada = leads.Count - leadsTrafego - leadsIndicacao,
+            VendasSemOrigemIdentificada = vendas.Count - vendasTrafego - vendasIndicacaoCard,
         };
 
         return new RelatorioComercialDto(
