@@ -282,11 +282,15 @@ public sealed class DashboardService(
             leadsQuery = leadsQuery.Where(l => visiveis.Contains(l.ResponsavelId ?? Guid.Empty));
             oportunidades = oportunidades.Where(o => visiveis.Contains(o.ResponsavelId));
         }
-        // Leads e conversão do período: leads que chegaram para o vendedor no período e vendas fechadas nele.
-        var leads = await ContagensPorVendedor.ContarLeadsAsync(leadsQuery.Where(l => l.CriadoEm >= inicioUtc && l.CriadoEm <= fimUtc), ct);
+        // Leads e conversão do período, como no painel da TV: leads = tráfego pago (inclusive cards do Notion com sinal de anúncio) que o vendedor pegou no
+        // período — passaram para ele por rodízio ou troca de responsável (OrigemLead.ComPosseNoPeriodo); conversão = vendas desses leads de tráfego ÷ esses leads.
+        var leads = await ContagensPorVendedor.ContarLeadsAsync(
+            leadsQuery.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Where(OrigemLead.ComPosseNoPeriodo(inicioUtc, fimUtc.AddTicks(1))), ct);
         var abertas = await ContagensPorVendedor.AbertasAsync(oportunidades, ct);
-        var fechadas = await ContagensPorVendedor.FechadasAsync(
-            oportunidades.Where(o => o.DataEfetivaFechamento >= inicioUtc && o.DataEfetivaFechamento <= fimUtc), ct);
+        var fechadasNoPeriodo = oportunidades.Where(o => o.DataEfetivaFechamento >= inicioUtc && o.DataEfetivaFechamento <= fimUtc);
+        var fechadas = await ContagensPorVendedor.FechadasAsync(fechadasNoPeriodo, ct);
+        var fechadasDeTrafego = await ContagensPorVendedor.FechadasAsync(
+            fechadasNoPeriodo.Where(o => db.CrmLeads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Select(l => l.Id).Contains(o.LeadId)), ct);
 
         return vendedores
             // Sem a lista de dezenas de contas inativas zeradas: só quem é ativo, recebeu lead ou vendeu no período.
@@ -296,8 +300,9 @@ public sealed class DashboardService(
                 abertas.TryGetValue(v.Id, out var aberta);
                 fechadas.TryGetValue(v.Id, out var fechada);
                 var leadsDoVendedor = leads.GetValueOrDefault(v.Id);
+                var vendasDeTrafego = fechadasDeTrafego.TryGetValue(v.Id, out var deTrafego) ? deTrafego.Ganhas : 0;
                 return new DesempenhoVendedorDto(v.Id, v.NomeCompleto, leadsDoVendedor, aberta.Quantidade, aberta.Valor,
-                    fechada?.Ganhas ?? 0, fechada?.ValorGanho ?? 0m, ContagensPorVendedor.TaxaConversaoLeads(fechada?.Ganhas ?? 0, leadsDoVendedor),
+                    fechada?.Ganhas ?? 0, fechada?.ValorGanho ?? 0m, ContagensPorVendedor.TaxaConversaoLeads(vendasDeTrafego, leadsDoVendedor),
                     fechada?.ValorAdesao ?? 0m);
             })
             // Ranking: maior conversão primeiro; quem não recebeu lead no período (conversão não se aplica) vai para o fim.
