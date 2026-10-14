@@ -89,21 +89,68 @@ public class CssOneFonteTests
         new TvAdministrativoIndicadorDto("tracker", "Rastreadores", "Rastreador instalado", 2, 0, null),
     ]);
 
+    private static readonly DateOnly Hoje = new(2026, 10, 13);
+
+    private static CssOneRegistro Registro(string id, string pessoa, DateTimeOffset data, string? tipo = null) => new(id, pessoa, "Cliente", "ABC1D23", tipo, data);
+
     [Fact]
     public void Cartao_de_rastreadores_passa_a_mostrar_os_instalados_do_CSS_One()
     {
-        var r = TvComercialService.ComRastreadoresInstalados(Administrativo(), 37)!;
+        var r = TvComercialService.ComDadosDoCssOne(Administrativo(), 37, null, Hoje)!;
         var tracker = r.Indicadores.Single(i => i.Id == "tracker");
         Assert.Equal(37, tracker.Total);
         Assert.Equal("Rastreadores instalados", tracker.Rotulo);
-        Assert.Equal(5, r.Indicadores.Single(i => i.Id == "reintegration").Total); // os outros ficam como estavam
+        Assert.Equal(5, r.Indicadores.Single(i => i.Id == "reintegration").Total); // sem dados do CSS One, o resto fica como veio do Notion
+    }
+
+    [Fact]
+    public void Reintegracoes_e_eventos_finalizados_vem_do_CSS_One_com_total_hoje_e_ultimo()
+    {
+        var agora = new DateTimeOffset(2026, 10, 13, 10, 0, 0, TimeSpan.FromHours(-3));
+        var cssOne = new CssOneAdministrativo(
+            [Registro("r2", "Ana", agora), Registro("r1", "Bia", agora.AddDays(-2))],
+            [Registro("s1", "Caio", agora.AddHours(-1), "Colisão")]);
+
+        var r = TvComercialService.ComDadosDoCssOne(Administrativo(), null, cssOne, Hoje)!;
+
+        var reint = r.Indicadores.Single(i => i.Id == "reintegration");
+        Assert.Equal(2, reint.Total);                      // o 5 do Notion é substituído
+        Assert.Equal(1, reint.Hoje);
+        Assert.Equal("Ana", reint.Ultimo!.Pessoa);
+        Assert.Equal(["r2", "r1"], reint.Registros!.Select(x => x.Id));
+        var claim = r.Indicadores.Single(i => i.Id == "claim"); // não existia no Notion: nasce com os dados do CSS One
+        Assert.Equal(1, claim.Total);
+        Assert.Equal("Colisão", claim.Ultimo!.TipoEvento);
+        Assert.Equal(2, r.Indicadores.Single(i => i.Id == "tracker").Total); // rastreadores: sem número do CSS One, fica o do Notion
+    }
+
+    [Fact]
+    public void Sem_nenhuma_fonte_devolve_nulo_e_sem_Notion_o_CSS_One_sozinho_basta()
+    {
+        Assert.Null(TvComercialService.ComDadosDoCssOne(null, null, null, Hoje));
+        var so = TvComercialService.ComDadosDoCssOne(null, 7, new CssOneAdministrativo([], []), Hoje)!;
+        Assert.Equal(["reintegration", "claim", "tracker"], so.Indicadores.Select(i => i.Id));
+        Assert.Equal(7, so.Indicadores.Single(i => i.Id == "tracker").Total);
+        Assert.Equal(0, so.Indicadores.Single(i => i.Id == "reintegration").Total);
     }
 
     [Fact]
     public void Sem_numero_do_CSS_One_o_cartao_fica_como_veio_do_Notion()
     {
-        var original = Administrativo();
-        Assert.Same(original, TvComercialService.ComRastreadoresInstalados(original, null));
-        Assert.Null(TvComercialService.ComRastreadoresInstalados(null, 37));
+        var r = TvComercialService.ComDadosDoCssOne(Administrativo(), null, null, Hoje)!;
+        Assert.Equal(2, r.Indicadores.Single(i => i.Id == "tracker").Total);
+        Assert.Equal("Rastreadores", r.Indicadores.Single(i => i.Id == "tracker").Rotulo);
+    }
+
+    [Fact]
+    public async Task Administrativo_vem_do_CSS_One()
+    {
+        var corpo = """{"mes":10,"ano":2026,"reintegracoes":[{"id":"reint-X","pessoa":"Ana","cliente":"C","placa":"P","tipoEvento":null,"data":"2026-10-13T10:00:00-03:00"}],"eventosFinalizados":[]}""";
+        var h = new Resposta(HttpStatusCode.OK, corpo);
+        var r = await Fonte(h).AdministrativoAsync(10, 2026, default);
+        Assert.NotNull(r);
+        Assert.Equal("reint-X", r!.Reintegracoes.Single().Id);
+        Assert.Empty(r.EventosFinalizados);
+        Assert.Contains("administrativo?mes=10&ano=2026", h.Ultima!.RequestUri!.ToString());
     }
 }

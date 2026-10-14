@@ -77,23 +77,51 @@ public sealed class TvComercialService(
         var assinaturaOperadores = operadores is null ? "" : string.Join(';', operadores.Select(o => $"{o.Operador}:{o.NotaMedia}:{o.QtdComNota}"));
         // Rastreadores instalados no mês, pelo Controle de Rastreador do CSS One: vira o total do cartão "Rastreadores" do Acompanhamento operacional.
         var instalados = cssOne is null ? null : await cssOne.RastreadoresInstaladosAsync(primeiro.Month, primeiro.Year, ct);
-        administrativo = ComRastreadoresInstalados(administrativo, instalados);
+        // Reintegrações e eventos finalizados também vêm do CSS One (Controle de Cobrança / Registros de Sinistros): é lá que a equipe preenche.
+        var doCssOne = cssOne is null ? null : await cssOne.AdministrativoAsync(primeiro.Month, primeiro.Year, ct);
+        administrativo = ComDadosDoCssOne(administrativo, instalados, doCssOne, hoje);
+        var assinaturaAdministrativo = doCssOne is null ? "" : $"{doCssOne.Reintegracoes.Count}:{doCssOne.Reintegracoes.FirstOrDefault()?.Id}:{doCssOne.EventosFinalizados.Count}:{doCssOne.EventosFinalizados.FirstOrDefault()?.Id}";
         return await RespostaEmCache.ObterAsync(cache, eventos, "tv-comercial",
-            new { escopo = RespostaEmCache.Escopo(visiveis), primeiro, hoje, notion = notion?.Versao ?? 0, operadores = assinaturaOperadores, instalados },
+            new { escopo = RespostaEmCache.Escopo(visiveis), primeiro, hoje, notion = notion?.Versao ?? 0, operadores = assinaturaOperadores, instalados, admCssOne = assinaturaAdministrativo },
             () => CalcularAsync(primeiro, hoje, visiveis, vendasNotion, administrativo, operadores, ct));
     }
 
+    private static readonly (string Id, string Rotulo, string Acao)[] IndicadoresAdministrativos =
+    [
+        ("reintegration", "Reintegrações", "Reintegração realizada"),
+        ("claim", "Eventos finalizados", "Evento finalizado"),
+        ("tracker", "Rastreadores", "Rastreador instalado"),
+    ];
+
     /// <summary>
-    /// Troca o total do cartão "Rastreadores" pelo número de instalados do CSS One (os demais dados do cartão continuam os do Notion). Sem o número
-    /// do CSS One, ou sem o indicador do Notion, devolve o administrativo como veio.
+    /// Monta o "Acompanhamento operacional" com os dados do CSS One: reintegrações (Controle de Cobrança), eventos finalizados (Registros de Sinistros) e
+    /// o total de rastreadores instalados. O que o CSS One não trouxe fica como veio do Notion (ou zerado, se o Notion também falhou); sem nenhuma
+    /// das fontes devolve nulo.
     /// </summary>
-    internal static TvAdministrativoDto? ComRastreadoresInstalados(TvAdministrativoDto? administrativo, int? instalados)
+    internal static TvAdministrativoDto? ComDadosDoCssOne(TvAdministrativoDto? notion, int? instalados, CssOneAdministrativo? cssOne, DateOnly hoje)
     {
-        if (administrativo is null || instalados is not { } total) return administrativo;
-        return administrativo with
+        // Sem nada do CSS One, o painel fica exatamente como o Notion mandou (inclusive nulo, que a tela mostra como "indisponível").
+        if (instalados is null && cssOne is null) return notion;
+
+        TvAdministrativoIndicadorDto DoCssOne(TvAdministrativoIndicadorDto basico, IReadOnlyList<CssOneRegistro> registros)
         {
-            Indicadores = administrativo.Indicadores.Select(i => i.Id == "tracker" ? i with { Total = total, Rotulo = "Rastreadores instalados" } : i).ToList(),
-        };
+            var itens = registros.Select(r => new TvAdministrativoRegistroDto(r.Pessoa, null, r.Cliente, r.Placa, r.TipoEvento,
+                r.Data.ToString("O", System.Globalization.CultureInfo.InvariantCulture), HorarioBrasilia.Dia(r.Data) == hoje, r.Id)).ToList();
+            return basico with { Total = itens.Count, Hoje = itens.Count(i => i.Hoje), Ultimo = itens.FirstOrDefault(), Registros = itens };
+        }
+
+        var indicadores = IndicadoresAdministrativos.Select(def =>
+        {
+            var basico = notion?.Indicadores.FirstOrDefault(i => i.Id == def.Id) ?? new TvAdministrativoIndicadorDto(def.Id, def.Rotulo, def.Acao, 0, 0, null, []);
+            return def.Id switch
+            {
+                "reintegration" when cssOne is not null => DoCssOne(basico, cssOne.Reintegracoes),
+                "claim" when cssOne is not null => DoCssOne(basico, cssOne.EventosFinalizados),
+                "tracker" when instalados is { } total => basico with { Total = total, Rotulo = "Rastreadores instalados" },
+                _ => basico,
+            };
+        }).ToList();
+        return new TvAdministrativoDto(indicadores);
     }
 
     /// <summary>
