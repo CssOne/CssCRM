@@ -34,7 +34,7 @@ public sealed class TvNotionFonte(IOptions<NotionSyncOptions> opcoes, IMemoryCac
     private static readonly string[] BasesMg134 = ["1a163799-99a8-81e2-82be-000bb2817da0", "31763799-99a8-8118-b573-000b24781bfe"];
     private const string RegionalMg134 = "MG134";
     private const string BaseOperacional = "1fa63799-99a8-8367-af6a-079831d4719c";
-    private static readonly TimeSpan Validade = TimeSpan.FromSeconds(45);
+    private static readonly TimeSpan Validade = TimeSpan.FromSeconds(20);
 
     private static readonly (string Id, string Status, string Rotulo, string Acao)[] Indicadores =
     [
@@ -196,7 +196,7 @@ public sealed class TvNotionFonte(IOptions<NotionSyncOptions> opcoes, IMemoryCac
         var vendedor = pagina.PrimeiroVendedor("Vendedor");
         var registro = new TvAdministrativoRegistroDto(
             vendedor?.Nome ?? "Não informado", vendedor is null ? null : FotoDoVendedor(pagina), pagina.Text("Name"), pagina.Text("Placa"),
-            pagina.Text("Tipo de evento"), data ?? criado.ToString("O", CultureInfo.InvariantCulture));
+            pagina.Text("Tipo de evento"), data ?? criado.ToString("O", CultureInfo.InvariantCulture), Id: pagina.PageId());
         return (definicao.Id, registro, criado);
     }
 

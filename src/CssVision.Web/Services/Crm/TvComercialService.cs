@@ -1,6 +1,7 @@
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
+using CssVision.Web.Services.CssOne;
 using CssVision.Web.Services.Notion;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -29,7 +30,8 @@ public sealed class TvComercialService(
     ICurrentUserService? currentUser = null,
     ITvNotionFonte? notion = null,
     IMemoryCache? cache = null,
-    ICrmEventHub? eventos = null) : ITvComercialService
+    ICrmEventHub? eventos = null,
+    ICssOneFonte? cssOne = null) : ITvComercialService
 {
     private const string SemRegional = "Sem regional";
 
@@ -70,9 +72,56 @@ public sealed class TvComercialService(
         // O Notion tem cache próprio; a versão dele entra na chave para o painel refletir cada atualização.
         IReadOnlyList<TvNotionVenda> vendasNotion = notion is null ? [] : await notion.VendasAsync(primeiro, ct);
         var administrativo = notion is null ? null : await notion.AdministrativoAsync(primeiro, ct);
+        // Nota média dos operadores no CSS One (cache e tolerância a falha próprios); o resultado entra na chave para o painel refletir cada mudança.
+        var operadores = cssOne is null ? null : await cssOne.RankingDeOperadoresAsync(primeiro.Month, primeiro.Year, ct);
+        var assinaturaOperadores = operadores is null ? "" : string.Join(';', operadores.Select(o => $"{o.Operador}:{o.NotaMedia}:{o.QtdComNota}"));
+        // Rastreadores instalados no mês, pelo Controle de Rastreador do CSS One: vira o total do cartão "Rastreadores" do Acompanhamento operacional.
+        var instalados = cssOne is null ? null : await cssOne.RastreadoresInstaladosAsync(primeiro.Month, primeiro.Year, ct);
+        // Reintegrações e eventos finalizados também vêm do CSS One (Controle de Cobrança / Registros de Sinistros): é lá que a equipe preenche.
+        var doCssOne = cssOne is null ? null : await cssOne.AdministrativoAsync(primeiro.Month, primeiro.Year, ct);
+        administrativo = ComDadosDoCssOne(administrativo, instalados, doCssOne, hoje);
+        var assinaturaAdministrativo = doCssOne is null ? "" : $"{doCssOne.Reintegracoes.Count}:{doCssOne.Reintegracoes.FirstOrDefault()?.Id}:{doCssOne.EventosFinalizados.Count}:{doCssOne.EventosFinalizados.FirstOrDefault()?.Id}";
         return await RespostaEmCache.ObterAsync(cache, eventos, "tv-comercial",
-            new { escopo = RespostaEmCache.Escopo(visiveis), primeiro, hoje, notion = notion?.Versao ?? 0 },
-            () => CalcularAsync(primeiro, hoje, visiveis, vendasNotion, administrativo, ct));
+            new { escopo = RespostaEmCache.Escopo(visiveis), primeiro, hoje, notion = notion?.Versao ?? 0, operadores = assinaturaOperadores, instalados, admCssOne = assinaturaAdministrativo },
+            () => CalcularAsync(primeiro, hoje, visiveis, vendasNotion, administrativo, operadores, ct));
+    }
+
+    private static readonly (string Id, string Rotulo, string Acao)[] IndicadoresAdministrativos =
+    [
+        ("reintegration", "Reintegrações", "Reintegração realizada"),
+        ("claim", "Eventos finalizados", "Evento finalizado"),
+        ("tracker", "Rastreadores", "Rastreador instalado"),
+    ];
+
+    /// <summary>
+    /// Monta o "Acompanhamento operacional" com os dados do CSS One: reintegrações (Controle de Cobrança), eventos finalizados (Registros de Sinistros) e
+    /// o total de rastreadores instalados. O que o CSS One não trouxe fica como veio do Notion (ou zerado, se o Notion também falhou); sem nenhuma
+    /// das fontes devolve nulo.
+    /// </summary>
+    internal static TvAdministrativoDto? ComDadosDoCssOne(TvAdministrativoDto? notion, int? instalados, CssOneAdministrativo? cssOne, DateOnly hoje)
+    {
+        // Sem nada do CSS One, o painel fica exatamente como o Notion mandou (inclusive nulo, que a tela mostra como "indisponível").
+        if (instalados is null && cssOne is null) return notion;
+
+        TvAdministrativoIndicadorDto DoCssOne(TvAdministrativoIndicadorDto basico, IReadOnlyList<CssOneRegistro> registros)
+        {
+            var itens = registros.Select(r => new TvAdministrativoRegistroDto(r.Pessoa, null, r.Cliente, r.Placa, r.TipoEvento,
+                r.Data.ToString("O", System.Globalization.CultureInfo.InvariantCulture), HorarioBrasilia.Dia(r.Data) == hoje, r.Id)).ToList();
+            return basico with { Total = itens.Count, Hoje = itens.Count(i => i.Hoje), Ultimo = itens.FirstOrDefault(), Registros = itens };
+        }
+
+        var indicadores = IndicadoresAdministrativos.Select(def =>
+        {
+            var basico = notion?.Indicadores.FirstOrDefault(i => i.Id == def.Id) ?? new TvAdministrativoIndicadorDto(def.Id, def.Rotulo, def.Acao, 0, 0, null, []);
+            return def.Id switch
+            {
+                "reintegration" when cssOne is not null => DoCssOne(basico, cssOne.Reintegracoes),
+                "claim" when cssOne is not null => DoCssOne(basico, cssOne.EventosFinalizados),
+                "tracker" when instalados is { } total => basico with { Total = total, Rotulo = "Rastreadores instalados" },
+                _ => basico,
+            };
+        }).ToList();
+        return new TvAdministrativoDto(indicadores);
     }
 
     /// <summary>
@@ -83,7 +132,8 @@ public sealed class TvComercialService(
         ativoEm is { } a ? (a.UtcDateTime.TimeOfDay == TimeSpan.Zero ? a.AddHours(12) : a) : dataDaVenda!.Value;
 
     private async Task<TvComercialDto> CalcularAsync(
-        DateOnly primeiro, DateOnly hoje, List<Guid>? visiveis, IReadOnlyList<TvNotionVenda> vendasNotion, TvAdministrativoDto? administrativo, CancellationToken ct)
+        DateOnly primeiro, DateOnly hoje, List<Guid>? visiveis, IReadOnlyList<TvNotionVenda> vendasNotion, TvAdministrativoDto? administrativo,
+        IReadOnlyList<TvOperadorDto>? operadores, CancellationToken ct)
     {
         var inicioMes = HorarioBrasilia.Inicio(primeiro);
         // Só vendas do mês exibido e que já aconteceram: no mês corrente o limite é o fim de hoje. Venda com data futura (data digitada
@@ -99,7 +149,10 @@ public sealed class TvComercialService(
         var vendasQuery = db.CrmOpportunities.AsNoTracking()
             .Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho
                 && (o.AtivoEm ?? o.DataEfetivaFechamento) >= folgaIni && (o.AtivoEm ?? o.DataEfetivaFechamento) < folgaFim);
-        var leadsQuery = db.CrmLeads.AsNoTracking().Where(l => !l.Arquivado && l.CriadoEm >= inicioMes && l.CriadoEm < fimMes);
+        // Conversão: "leads" = os que o consultor PEGOU no mês — tráfego pago (inclusive cards do Notion com sinal de anúncio) que passaram para ele
+        // (rodízio ou troca de responsável) entre o dia 1 e o fim do mês. Indicação e cadastro manual não entram: ninguém "pega" no rodízio.
+        var leadsQuery = db.CrmLeads.AsNoTracking().Where(OrigemLead.DeTrafegoPagoInclusiveNotion)
+            .Where(l => !l.Arquivado).Where(OrigemLead.ComPosseNoPeriodo(inicioMes, fimMes));
         if (visiveis is not null)
         {
             vendasQuery = vendasQuery.Where(o => visiveis.Contains(o.ResponsavelId));
@@ -114,6 +167,10 @@ public sealed class TvComercialService(
                 Placa = o.Veiculo != null ? o.Veiculo.Placa : null, Origem = o.TipoIndicacao ?? o.Lead.TipoIndicacao,
             })
             .ToListAsync(ct);
+        // Vendas dos leads de tráfego pago (para a taxa de conversão: vendas ÷ leads de tráfego, mesma população dos dois lados).
+        var idsVendasDeTrafego = (await vendasQuery
+                .Where(o => db.CrmLeads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Select(l => l.Id).Contains(o.LeadId))
+                .Select(o => o.Id).ToListAsync(ct)).ToHashSet();
         var vendas = vendasBrutas
             .Select(o => new VendaTv(o.Id, o.ResponsavelId, DataDaAtivacao(o.AtivoEm, o.DataEfetivaFechamento), o.Adesao, o.Atualizada, o.Cliente, o.Placa, o.Origem, false))
             .Where(v => v.Data >= inicioMes && v.Data < fimMes)
@@ -126,7 +183,7 @@ public sealed class TvComercialService(
         var (vendasSoNoNotion, pessoasDoNotion) = await VendasSoNoNotionAsync(vendasNotion, vendas, visiveis, regionais.FirstOrDefault(r => r.Nome == "MG134")?.Id, ct);
         vendas = vendas.Concat(vendasSoNoNotion).ToList();
 
-        // Leads do mês por consultor: recebidos e perdidos (conversão = vendas ÷ leads do mês, como na Visão geral).
+        // Leads de tráfego pago que o consultor pegou no mês, e quantos deles estão perdidos.
         var leadsPorConsultor = await ContagensPorVendedor.ContarLeadsAsync(leadsQuery, ct);
         var perdidosPorConsultor = await ContagensPorVendedor.ContarLeadsAsync(
             leadsQuery.Where(l => l.Etapa != null && l.Etapa.Nome == NotionEtapaLead.Perdido), ct);
@@ -162,7 +219,7 @@ public sealed class TvComercialService(
             .Select((c, i) => Linha(i + 1, c.Id, c.Qtd, c.Adesao)).ToList();
 
         // ----- conversão -----
-        var vendasPorConsultor = porConsultor.ToDictionary(c => c.Id, c => c.Qtd);
+        var vendasPorConsultor = vendas.Where(v => idsVendasDeTrafego.Contains(v.Id)).GroupBy(v => v.ResponsavelId).ToDictionary(g => g.Key, g => g.Count());
         var rankingConversao = leadsPorConsultor.Where(l => l.Value > 0 && pessoas.ContainsKey(l.Key))
             .Select(l => new
             {
@@ -230,7 +287,7 @@ public sealed class TvComercialService(
             }).ToList();
 
         return new TvComercialDto(new TvPeriodoDto(primeiro.Month, primeiro.Year), resumo, rankingVendas, rankingAdesao, rankingConversao,
-            rankingRegionais, evolucao, ultimas, DateTimeOffset.UtcNow, administrativo, vendas.Count(v => v.SoNoNotion), vendasDoMes);
+            rankingRegionais, evolucao, ultimas, DateTimeOffset.UtcNow, administrativo, vendas.Count(v => v.SoNoNotion), vendasDoMes, operadores);
     }
 
     /// <summary>

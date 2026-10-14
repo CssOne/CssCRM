@@ -109,7 +109,7 @@ public sealed class RelatorioComercialService(
 
         var leadsQuery = db.CrmLeads.AsNoTracking()
             // Veículo adicional repete o cliente: não é um lead a mais.
-            .Where(l => !l.Arquivado && l.VeiculoAdicionalDeLeadId == null && l.CriadoEm >= chegadaDe && l.CriadoEm < chegadaAte);
+            .Where(l => !l.Arquivado && l.VeiculoAdicionalDeLeadId == null).Where(OrigemLead.ChegouNoPeriodo(chegadaDe, chegadaAte));
         var vendasQuery = db.CrmOpportunities.AsNoTracking()
             .Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho
                 && ((o.AtivoEm != null && o.AtivoEm >= ativacaoDe && o.AtivoEm < ativacaoAte)
@@ -117,7 +117,7 @@ public sealed class RelatorioComercialService(
         // Se o gestor escolheu a data de chegada, as vendas também são só dos leads que chegaram nela.
         if (extras.ChegadaInicio is not null || extras.ChegadaFim is not null)
         {
-            vendasQuery = vendasQuery.Where(o => o.Lead.CriadoEm >= chegadaDe && o.Lead.CriadoEm < chegadaAte);
+            vendasQuery = vendasQuery.Where(o => db.CrmLeads.Where(OrigemLead.ChegouNoPeriodo(chegadaDe, chegadaAte)).Select(l => l.Id).Contains(o.LeadId));
         }
         if (visiveis is not null)
         {
@@ -157,7 +157,13 @@ public sealed class RelatorioComercialService(
         }
 
         var leads = await leadsQuery
-            .Select(l => new LeadLinha(l.CriadoEm, l.Origem, l.Estado, l.ProdutoInteresse, l.ResponsavelId,
+            // Mesma data de OrigemLead.ChegouNoPeriodo: lead do tráfego pago do sistema vale pela atribuição ao responsável atual; os demais, pela chegada.
+            .Select(l => new LeadLinha(
+                l.ConsentimentoOrigem != OrigemLead.MarcadorMigracaoNotion && l.ConsentimentoOrigem != OrigemLead.MarcadorSincronizacaoNotion
+                    && (l.MetaLeadId != null || l.ConsentimentoOrigem == OrigemLead.MarcadorFormularioSite)
+                    ? (l.ResponsavelAtribuidoEm ?? l.CriadoEm)
+                    : l.CriadoEm,
+                l.Origem, l.Estado, l.ProdutoInteresse, l.ResponsavelId,
                 l.Responsavel != null ? l.Responsavel.NomeCompleto : null, l.Etapa != null && l.Etapa.Nome == NotionEtapaLead.Perdido,
                 l.EtapaId, l.Etapa != null ? l.Etapa.Nome : null, l.Etapa != null ? l.Etapa.Ordem : int.MaxValue))
             .ToListAsync(ct);
