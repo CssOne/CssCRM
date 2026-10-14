@@ -30,10 +30,12 @@ public static class OrigemLead
     /// <summary>
     /// Lead de tráfego pago vindo de qualquer lugar: direto dos anúncios pelo sistema novo
     /// (<see cref="VeioDoTrafegoPago"/>) ou card do Notion com sinal de anúncio — ID do lead no Meta,
-    /// GCLID do Google ou campanha preenchida. Usado nos números da Gestão comercial.
+    /// GCLID do Google, UTM source, tag de anúncio ("Facebook ADS"/"Google ads") ou campanha preenchida. Usado nos números da Gestão comercial, no ranking de
+    /// conversão da TV e na página de tráfego pago — é a mesma regra de <see cref="DeTrafegoPago"/>.
     /// </summary>
     public static readonly System.Linq.Expressions.Expression<Func<Domain.Crm.CrmLead, bool>> DeTrafegoPagoInclusiveNotion = l =>
-        l.MetaLeadId != null || l.Gclid != null || l.ConsentimentoOrigem == MarcadorFormularioSite
+        l.MetaLeadId != null || l.Gclid != null || l.UtmSource != null || l.TagDeAnuncioNotion
+        || l.ConsentimentoOrigem == MarcadorFormularioSite
         || ((l.ConsentimentoOrigem == MarcadorMigracaoNotion || l.ConsentimentoOrigem == MarcadorSincronizacaoNotion) && l.Campanha != null);
 
     /// <summary>"Facebook ADS" / "Google ads": as tags de anúncio do campo "Tags" do card do Notion.</summary>
@@ -41,10 +43,8 @@ public static class OrigemLead
         tag is not null && (string.Equals(tag.Trim(), "Facebook ADS", StringComparison.OrdinalIgnoreCase)
             || string.Equals(tag.Trim(), "Google ads", StringComparison.OrdinalIgnoreCase));
 
-    private static readonly Func<Domain.Crm.CrmLead, bool> _deTrafegoPago = l =>
-        l.MetaLeadId != null || l.Gclid != null || l.UtmSource != null || l.TagDeAnuncioNotion
-        || l.ConsentimentoOrigem == MarcadorFormularioSite
-        || ((l.ConsentimentoOrigem == MarcadorMigracaoNotion || l.ConsentimentoOrigem == MarcadorSincronizacaoNotion) && l.Campanha != null);
+    // Mesma regra da expressão (uma só definição): antes eram duas cópias, e o ranking/Gestão comercial ignoravam a tag de anúncio e a UTM.
+    private static readonly Func<Domain.Crm.CrmLead, bool> _deTrafegoPago = DeTrafegoPagoInclusiveNotion.Compile();
 
     /// <summary>
     /// O lead tem algum sinal de tráfego pago: veio direto do anúncio ou do formulário do site, ou é um card do Notion com ID do lead no Meta, GCLID, UTM source,
