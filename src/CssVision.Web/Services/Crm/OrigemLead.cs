@@ -36,6 +36,26 @@ public static class OrigemLead
         l.MetaLeadId != null || l.Gclid != null || l.ConsentimentoOrigem == MarcadorFormularioSite
         || ((l.ConsentimentoOrigem == MarcadorMigracaoNotion || l.ConsentimentoOrigem == MarcadorSincronizacaoNotion) && l.Campanha != null);
 
+    /// <summary>
+    /// O lead está com o responsável atual dentro do período [<paramref name="inicio"/>, <paramref name="fim"/>) — é a conta de "leads que o consultor pegou".
+    /// Vale o momento em que o lead passou para o responsável atual (<see cref="Domain.Crm.CrmLead.ResponsavelAtribuidoEm"/>: rodízio ou troca de responsável),
+    /// e não o da criação: um lead atribuído a outro consultor sai da conta de quem o tinha e entra na de quem recebeu, no mês em que isso aconteceu.
+    /// Cards vindos do Notion valem pela data de chegada (<c>CriadoEm</c>): neles a atribuição é só o horário em que o sistema os importou/sincronizou.
+    /// </summary>
+    public static System.Linq.Expressions.Expression<Func<Domain.Crm.CrmLead, bool>> ComPosseNoPeriodo(DateTimeOffset inicio, DateTimeOffset fim) =>
+        l => (l.ConsentimentoOrigem == MarcadorMigracaoNotion || l.ConsentimentoOrigem == MarcadorSincronizacaoNotion
+                ? l.CriadoEm
+                : (l.ResponsavelAtribuidoEm ?? l.CriadoEm)) >= inicio
+            && (l.ConsentimentoOrigem == MarcadorMigracaoNotion || l.ConsentimentoOrigem == MarcadorSincronizacaoNotion
+                ? l.CriadoEm
+                : (l.ResponsavelAtribuidoEm ?? l.CriadoEm)) < fim;
+
+    /// <summary>Mesma regra de <see cref="ComPosseNoPeriodo"/>, sem limite final (de <paramref name="inicio"/> em diante).</summary>
+    public static System.Linq.Expressions.Expression<Func<Domain.Crm.CrmLead, bool>> ComPosseDesde(DateTimeOffset inicio) =>
+        l => (l.ConsentimentoOrigem == MarcadorMigracaoNotion || l.ConsentimentoOrigem == MarcadorSincronizacaoNotion
+                ? l.CriadoEm
+                : (l.ResponsavelAtribuidoEm ?? l.CriadoEm)) >= inicio;
+
     public const string OrigemMigracaoNotion = "Migração Notion";
     public const string OrigemSincronizacaoNotion = "Sincronização Notion";
 

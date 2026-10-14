@@ -106,7 +106,8 @@ public sealed class ManagementService(
             db.CrmOpportunities.AsNoTracking().Where(o => !o.Arquivado && idsOportunidade.Contains(o.ResponsavelId)), ct);
         // Mesma contagem dos limites: só leads do tráfego pago (ver LeadAssignmentService).
         var doTrafego = leadsDosVendedores.Where(OrigemLead.VeioDoTrafegoPago);
-        var recebidosNoMes = await ContagensPorVendedor.ContarLeadsAsync(doTrafego.Where(l => l.CriadoEm >= inicioMes), ct);
+        // Lead do tráfego é de quem o tem agora, no mês em que passou para ele (atribuição a outro consultor tira de um e dá ao outro).
+        var recebidosNoMes = await ContagensPorVendedor.ContarLeadsAsync(doTrafego.Where(OrigemLead.ComPosseDesde(inicioMes)), ct);
         var recebidosHoje = await ContagensPorVendedor.ContarLeadsAsync(doTrafego.Where(l => (l.ResponsavelAtribuidoEm ?? l.CriadoEm) >= inicioDia), ct);
         var trafegoNoMes = await LeadsDeTrafegoNoMesAsync(leadsDosVendedores, ct);
         var trafegoMesAnterior = await LeadsDeTrafegoNoMesAsync(leadsDosVendedores, ct, mesesAtras: 1);
@@ -152,7 +153,7 @@ public sealed class ManagementService(
         var fechadas = await ContagensPorVendedor.FechadasAsync(
             oportunidades.Where(o => o.DataEfetivaFechamento >= inicioMes && o.DataEfetivaFechamento < fimMes), ct);
         var recebidos = await ContagensPorVendedor.ContarLeadsAsync(
-            leadsDosConsultores.Where(OrigemLead.VeioDoTrafegoPago).Where(l => l.CriadoEm >= inicioMes), ct);
+            leadsDosConsultores.Where(OrigemLead.VeioDoTrafegoPago).Where(OrigemLead.ComPosseDesde(inicioMes)), ct);
         var trafegoNoMes = await LeadsDeTrafegoNoMesAsync(leadsDosConsultores, ct);
         var leadsDoMes = await ContagensPorVendedor.ContarLeadsAsync(
             leadsDosConsultores.Where(l => !l.Arquivado && l.CriadoEm >= inicioMes && l.CriadoEm < fimMes), ct);
@@ -383,7 +384,7 @@ public sealed class ManagementService(
         var inicioMes = HorarioBrasilia.Inicio(primeiroDia);
         var fimMes = HorarioBrasilia.Inicio(primeiroDia.AddMonths(1));
         return ContagensPorVendedor.ContarLeadsAsync(
-            leads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Where(l => !l.Arquivado && l.CriadoEm >= inicioMes && l.CriadoEm < fimMes), ct);
+            leads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Where(l => !l.Arquivado).Where(OrigemLead.ComPosseNoPeriodo(inicioMes, fimMes)), ct);
     }
 
     /// <summary>Carteira por consultor e "recebe lead": gestão comercial e Financeiro (que vê só a regional dele — o escopo vem do EquipeComercialService).</summary>

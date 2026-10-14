@@ -73,8 +73,9 @@ public sealed class DashboardService(
         var leadsSemContato = await leadsQuery.CountAsync(l => l.EtapaId == null && l.CriadoEm >= inicioUtc && l.CriadoEm <= fimUtc
             && l.Responsavel != null && l.Responsavel.Ativo, ct);
         // Card "Novos leads": só os do tráfego pago que ainda estão sem etapa (a conversão segue usando todos os leads do período).
-        var novosLeadsTrafegoSemEtapa = await leadsQuery.Where(OrigemLead.VeioDoTrafegoPago)
-            .CountAsync(l => l.EtapaId == null && l.CriadoEm >= inicioUtc && l.CriadoEm <= fimUtc, ct);
+        // Conta no período em que o lead passou para o responsável atual (atribuição), não em que foi criado.
+        var novosLeadsTrafegoSemEtapa = await leadsQuery.Where(OrigemLead.VeioDoTrafegoPago).Where(l => l.EtapaId == null)
+            .CountAsync(OrigemLead.ComPosseNoPeriodo(inicioUtc, fimUtc.AddTicks(1)), ct);
         var contatosHoje = await atividadesQuery.CountAsync(a =>
             a.Status == StatusAtividade.Pendente && a.DataHoraPrevista >= inicioHoje && a.DataHoraPrevista <= fimHoje, ct);
         var atividadesAtrasadas = await atividadesQuery.CountAsync(a => a.Status == StatusAtividade.Pendente && a.DataHoraPrevista < agora, ct);

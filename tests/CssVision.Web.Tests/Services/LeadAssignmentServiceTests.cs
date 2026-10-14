@@ -155,6 +155,7 @@ public class LeadAssignmentServiceTests
         await db.SaveChangesAsync();
         var antigo = db.CrmLeads.Local.Single(l => l.NomeOuRazaoSocial == "Antigo");
         antigo.CriadoEm = DateTimeOffset.UtcNow.AddMonths(-2);
+        antigo.ResponsavelAtribuidoEm = antigo.CriadoEm;
         await db.SaveChangesAsync();
 
         var service = new LeadAssignmentService(db);
