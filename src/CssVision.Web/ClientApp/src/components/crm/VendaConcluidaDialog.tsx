@@ -168,6 +168,8 @@ export function VendaConcluidaDialog({
   const [concorrente, setConcorrente] = useState("");
   const [previsaoFechamento, setPrevisaoFechamento] = useState("");
   const [leadEraTipoLead, setLeadEraTipoLead] = useState(false);
+  /** Card de lead do tráfego pago (etiqueta "Lead"): venda em "Venda concluída (Leads)", sem "Teve indicação" nem canal de aquisição. */
+  const [cardDeLead, setCardDeLead] = useState(false);
   const [maisVeiculos, setMaisVeiculos] = useState(false);
   const [veiculosAdicionais, setVeiculosAdicionais] = useState(1);
   /** Carro zero ainda não tem placa: a venda registra o chassi no lugar dela. */
@@ -205,6 +207,7 @@ export function VendaConcluidaDialog({
     setConcorrente("");
     setPrevisaoFechamento("");
     setLeadEraTipoLead(false);
+    setCardDeLead(false);
     setMaisVeiculos(false);
     setVeiculosAdicionais(1);
     setCarroZero(!!oportunidadeEditar?.veiculo?.chassi && !oportunidadeEditar?.veiculo?.placa);
@@ -277,6 +280,9 @@ export function VendaConcluidaDialog({
         setDataChegadaLead(lead.criadoEm);
         setNomeCliente(lead.nomeOuRazaoSocial);
         setLeadEraTipoLead(lead.tipoIndicacao?.trim().toLowerCase() === "lead");
+        // Mesma regra da etiqueta Lead/Indicação do quadro: tipo "Lead", ou card automático (tráfego pago) sem tipo.
+        const tipoDoCard = lead.tipoIndicacao?.trim().toLowerCase() ?? "";
+        setCardDeLead(tipoDoCard === "lead" || (!lead.criadoManualmente && !tipoDoCard));
         if (oportunidadeEditar) {
           // Editando uma venda que não guardou estado/canal: valem os do cadastro do cliente.
           setValores((v) => ({ ...v, estado: v.estado || lead.estado || "", tipoIndicacao: v.tipoIndicacao || lead.tipoIndicacao || "" }));
@@ -354,9 +360,11 @@ export function VendaConcluidaDialog({
   }
 
   const quantidadeVeiculosValida = !maisVeiculos || (veiculosAdicionais >= 1 && veiculosAdicionais <= MAXIMO_VEICULOS_ADICIONAIS);
-  const indicacaoPreenchida = !valores.indicacao || (valores.valorIndicacao ?? -1) > 0;
+  // Lead do tráfego pago (e não um lead levado para a coluna de Indicação): a venda não tem indicação nem canal para preencher.
+  const ocultarIndicacao = cardDeLead && !indicacaoLead && !ehNovoCliente;
+  const indicacaoPreenchida = ocultarIndicacao || !valores.indicacao || (valores.valorIndicacao ?? -1) > 0;
   // O canal de aquisição é obrigatório em toda venda (teve indicação ou não).
-  const canalPreenchido = !!valores.tipoIndicacao;
+  const canalPreenchido = ocultarIndicacao || !!valores.tipoIndicacao;
   // Adesão paga depois: com a data do pagamento marcada, o comprovante deixa de ser obrigatório.
   const pagamentoAgendado = !!valores.dataPagamentoAdesaoPrevista;
   const temComprovantePagamento = !!pagamentoArquivo || !!oportunidadeEditar?.pagamentoAdesaoArquivoUrl;
@@ -436,9 +444,9 @@ export function VendaConcluidaDialog({
       veiculo: temVeiculo ? { ...v!, dataChegada: v!.dataChegada || null } : null,
       cpf: valores.cpf || null,
       estado: valores.estado || null,
-      indicacao: valores.indicacao ?? null,
-      tipoIndicacao: valores.tipoIndicacao || null,
-      valorIndicacao: valores.indicacao ? valores.valorIndicacao : null,
+      indicacao: ocultarIndicacao ? false : valores.indicacao ?? null,
+      tipoIndicacao: ocultarIndicacao ? null : valores.tipoIndicacao || null,
+      valorIndicacao: !ocultarIndicacao && valores.indicacao ? valores.valorIndicacao : null,
       total: valores.total,
     };
     try {
@@ -606,9 +614,9 @@ export function VendaConcluidaDialog({
         rowVersion: rowVersionAtual,
         cpf: valores.cpf || null,
         estado: valores.estado || null,
-        indicacao: valores.indicacao ?? null,
+        indicacao: ocultarIndicacao ? false : valores.indicacao ?? null,
         tipoIndicacao: valores.tipoIndicacao || null,
-        valorIndicacao: valores.valorIndicacao,
+        valorIndicacao: ocultarIndicacao ? null : valores.valorIndicacao,
         total: valores.total,
         dataEfetivaFechamento: valores.dataEfetivaFechamento || null,
         dataPagamentoAdesaoPrevista: valores.dataPagamentoAdesaoPrevista || null,
@@ -656,7 +664,7 @@ export function VendaConcluidaDialog({
     rascunhoVendaRef.current = null;
     setEnviandoArquivos(false);
     onConcluido?.({
-      indicacao: !!valores.indicacao,
+      indicacao: !ocultarIndicacao && !!valores.indicacao,
       veiculosAdicionais: permitirVeiculosAdicionais && maisVeiculos ? veiculosAdicionais : 0,
       novoLeadId: novoVeiculo ? leadDaVenda ?? undefined : undefined,
     });
@@ -814,6 +822,8 @@ export function VendaConcluidaDialog({
 
           <div className="mt-4 flex flex-wrap items-end gap-4">
             <Checkbox label="É uma migração" checked={valores.migracao ?? false} onChange={(e) => set("migracao", e.target.checked)} />
+            {!ocultarIndicacao && (
+              <>
             <Checkbox
               label="Teve indicação"
               checked={valores.indicacao ?? false}
@@ -856,6 +866,8 @@ export function VendaConcluidaDialog({
                   </Label>
                   <MoneyInput id="venda-valor-indicacao" value={valores.valorIndicacao} onChange={(v) => set("valorIndicacao", v)} />
                 </div>
+              </>
+            )}
               </>
             )}
           </div>

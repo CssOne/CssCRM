@@ -333,47 +333,50 @@ export function LeadForm({
         </div>
       </div>
 
-      <div className="border-t border-[var(--border)] pt-4">
-        <h3 className="mb-3 text-sm font-semibold text-[var(--fg)]">Indicação</h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <Label>Indicado por</Label>
-            {!valores.indicadoPorLeadId ? (
-              <LeadPicker onSelecionar={(lead: LeadListItem) => {
-                // Quem indica já define o canal: "Indicação Lead" (dá para trocar depois, se for outro tipo).
-                setValores((v) => ({ ...v, indicadoPorLeadId: lead.id, indicadoPorLeadNome: lead.nomeOuRazaoSocial, tipoIndicacao: TIPO_INDICACAO_LEAD }));
-              }} />
-            ) : (
-              <div className="flex items-center justify-between rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm">
-                <span className="text-[var(--fg)]">{valores.indicadoPorLeadNome}</span>
-                <button
-                  type="button"
-                  className="focus-ring text-xs text-[var(--fg-muted)] hover:text-[var(--fg)]"
-                  onClick={() => { set("indicadoPorLeadId", ""); set("indicadoPorLeadNome", ""); }}
-                >
-                  Remover
-                </button>
+      {/* Lead do tráfego pago não é indicação: sem "Indicado por" nem canal de aquisição. */}
+      {ehIndicacao && (
+        <div className="border-t border-[var(--border)] pt-4">
+          <h3 className="mb-3 text-sm font-semibold text-[var(--fg)]">Indicação</h3>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <Label>Indicado por</Label>
+              {!valores.indicadoPorLeadId ? (
+                <LeadPicker onSelecionar={(lead: LeadListItem) => {
+                  // Quem indica já define o canal: "Indicação Lead" (dá para trocar depois, se for outro tipo).
+                  setValores((v) => ({ ...v, indicadoPorLeadId: lead.id, indicadoPorLeadNome: lead.nomeOuRazaoSocial, tipoIndicacao: TIPO_INDICACAO_LEAD }));
+                }} />
+              ) : (
+                <div className="flex items-center justify-between rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm">
+                  <span className="text-[var(--fg)]">{valores.indicadoPorLeadNome}</span>
+                  <button
+                    type="button"
+                    className="focus-ring text-xs text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                    onClick={() => { set("indicadoPorLeadId", ""); set("indicadoPorLeadNome", ""); }}
+                  >
+                    Remover
+                  </button>
+                </div>
+              )}
+            </div>
+            {ehIndicacao && (
+              <div>
+                <Label htmlFor={`${idPrefix}-tipo-indicacao`} required>
+                  Canal de Aquisição
+                </Label>
+                <Select id={`${idPrefix}-tipo-indicacao`} value={valores.tipoIndicacao} onChange={(e) => set("tipoIndicacao", e.target.value)}>
+                  <option value="">Selecione...</option>
+                  {OPCOES_TIPO_INDICACAO.filter((tipo) => tipo !== "Lead").map((tipo) => (
+                    <option key={tipo} value={tipo}>
+                      {tipo}
+                    </option>
+                  ))}
+                </Select>
+                <FieldError>{erros.tipoIndicacao}</FieldError>
               </div>
             )}
           </div>
-          {ehIndicacao && (
-            <div>
-              <Label htmlFor={`${idPrefix}-tipo-indicacao`} required>
-                Canal de Aquisição
-              </Label>
-              <Select id={`${idPrefix}-tipo-indicacao`} value={valores.tipoIndicacao} onChange={(e) => set("tipoIndicacao", e.target.value)}>
-                <option value="">Selecione...</option>
-                {OPCOES_TIPO_INDICACAO.filter((tipo) => tipo !== "Lead").map((tipo) => (
-                  <option key={tipo} value={tipo}>
-                    {tipo}
-                  </option>
-                ))}
-              </Select>
-              <FieldError>{erros.tipoIndicacao}</FieldError>
-            </div>
-          )}
         </div>
-      </div>
+      )}
 
       {podeVerMarketing && (
         <div className="border-t border-[var(--border)] pt-4">
