@@ -166,6 +166,14 @@ public sealed class LeadKanbanService(
                 .ToListAsync(ct))
             .GroupBy(o => o.LeadId)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(o => o.CriadoEm).First());
+        var dataDaVendaPorLead = (await db.CrmOpportunities.AsNoTracking()
+                .Where(o => ids.Contains(o.LeadId) && !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho && o.DataEfetivaFechamento != null)
+                .Select(o => new { o.LeadId, o.DataEfetivaFechamento })
+                .ToListAsync(ct))
+            .GroupBy(o => o.LeadId)
+            .ToDictionary(g => g.Key, g => g.Max(o => o.DataEfetivaFechamento));
+        // Data da venda do cartão (colunas "Venda concluída"): a da venda ganha mais recente, não a da oportunidade mais recente.
+        DateTimeOffset? DataDaVenda(Guid leadId) => dataDaVendaPorLead.GetValueOrDefault(leadId);
 
         return linhas.Select(l => new LeadKanbanCardDto(
             l.Id, l.NomeOuRazaoSocial, l.Telefone, l.Telefone2, l.Email, l.Estado, podeVerOrigem ? l.Origem : null, PodeVerCampanha ? l.Campanha : null,
@@ -177,7 +185,7 @@ public sealed class LeadKanbanService(
             // um telefone é preenchido.
             l.CriadoEm, l.UltimoContatoEm, string.IsNullOrWhiteSpace(l.Telefone) && string.IsNullOrWhiteSpace(l.Telefone2),
             l.Arquivado, l.RowVersion, l.ProdutoInteresse, l.ValorAdesao, l.ResponsavelFotoUrl, l.VeiculoAdicional,
-            l.MotivoPerda, l.MotivoPerdaObservacao, l.VeiculoNaoAtendido)).ToList();
+            l.MotivoPerda, l.MotivoPerdaObservacao, l.VeiculoNaoAtendido, DataDaVenda(l.Id))).ToList();
     }
 
     private (IQueryable<CrmLead> Query, bool PodeVerOrigem) Filtrar(LeadKanbanFilterRequest filtro, List<Guid>? visiveis)

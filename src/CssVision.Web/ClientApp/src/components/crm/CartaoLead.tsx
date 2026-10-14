@@ -1,7 +1,7 @@
 import { ArrowRightLeft, Car, Clock, Mail, Phone, Trash2, UserCog, XCircle } from "lucide-react";
 import type { DragEvent, MouseEvent, ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { diasRelativos, formatarDataHora, formatarMoeda, formatarTelefone } from "../../lib/format";
+import { diasRelativos, formatarData, formatarDataHora, formatarMoeda, formatarTelefone } from "../../lib/format";
 import type { LeadKanbanCard } from "../../lib/types";
 import { TIPO_INDICACAO_LEAD } from "../../lib/opcoesLead";
 import { Avatar, Badge } from "../ui";
@@ -45,6 +45,7 @@ export function CartaoLead({
   podeExcluir,
   podeVerOrigem,
   mostrarAdesao = false,
+  mostrarDataVenda = false,
   onAbrir,
   onMover,
   onTrocarResponsavel,
@@ -59,6 +60,8 @@ export function CartaoLead({
   podeVerOrigem: boolean;
   /** Coluna "Cotação": mostra o valor da adesão informado ao mover o lead para lá. */
   mostrarAdesao?: boolean;
+  /** Colunas "Venda concluída" (Leads e Indicação): mostra a data em que a venda foi fechada. */
+  mostrarDataVenda?: boolean;
   onAbrir: () => void;
   onMover: () => void;
   onTrocarResponsavel: () => void;
@@ -131,6 +134,12 @@ export function CartaoLead({
       {mostrarAdesao && cartao.valorAdesao != null && (
         <p className="mt-2 text-xs text-[var(--fg-muted)]" title="Valor da adesão informado na cotação">
           Adesão: <span className="font-semibold text-[var(--fg)]">{formatarMoeda(cartao.valorAdesao)}</span>
+        </p>
+      )}
+
+      {mostrarDataVenda && cartao.dataVenda && (
+        <p className="mt-2 text-xs text-[var(--fg-muted)]" title="Data em que a venda foi fechada">
+          Venda: <span className="font-semibold text-[var(--fg)]">{formatarData(cartao.dataVenda)}</span>
         </p>
       )}
 

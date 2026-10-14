@@ -580,6 +580,8 @@ export interface LeadLixeira {
 }
 
 export interface LeadKanbanCard {
+  /** Data em que a venda foi fechada (colunas "Venda concluída"). */
+  dataVenda?: string | null;
   leadId: string;
   nomeOuRazaoSocial: string;
   telefone?: string | null;
