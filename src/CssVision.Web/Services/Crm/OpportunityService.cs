@@ -510,7 +510,7 @@ public sealed class OpportunityService(
     /// <summary>
     /// Os dados da venda (CPF, estado, canal de aquisição, placa) são digitados na oportunidade, mas o card do cliente lê o próprio cadastro do lead:
     /// sem esta cópia o card ficava com esses campos em branco. Só preenche o que o cadastro ainda não tem (nunca sobrescreve) e nunca troca a etiqueta
-    /// "Lead" (tráfego) por um canal — isso moveria o card de coluna; o CPF/CNPJ só entra se nenhum outro cliente ativo já o usa.
+    /// do card (só completa o canal de quem já é Indicação, e nunca com "Lead") — isso moveria o card de coluna; o CPF/CNPJ só entra se nenhum outro cliente ativo já o usa.
     /// </summary>
     private async Task CompletarCadastroDoLeadAsync(CrmLead lead, string? cpf, string? estado, string? tipoIndicacao, string? placa, CancellationToken ct)
     {
@@ -518,7 +518,8 @@ public sealed class OpportunityService(
             lead.Estado = estado.Trim().ToUpperInvariant();
         if (string.IsNullOrWhiteSpace(lead.Placa) && !string.IsNullOrWhiteSpace(placa) && placa.Trim().Length <= 10)
             lead.Placa = placa.Trim().ToUpperInvariant();
-        if (string.IsNullOrWhiteSpace(lead.TipoIndicacao) && !string.IsNullOrWhiteSpace(tipoIndicacao) && tipoIndicacao.Trim().Length <= 80)
+        if (lead.CriadoManualmente && string.IsNullOrWhiteSpace(lead.TipoIndicacao) && !string.IsNullOrWhiteSpace(tipoIndicacao) && tipoIndicacao.Trim().Length <= 80
+            && !TipoIndicacaoLead.EhLead(tipoIndicacao))
             lead.TipoIndicacao = tipoIndicacao.Trim();
 
         if (string.IsNullOrEmpty(lead.DocumentoNormalizado) && !string.IsNullOrWhiteSpace(cpf))
