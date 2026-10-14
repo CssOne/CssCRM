@@ -68,7 +68,7 @@ export function OverviewPage() {
     return <ErrorState message={erro ?? "Não foi possível carregar o painel."} onRetry={() => setRecarregar((n) => n + 1)} />;
   }
 
-  const { indicadores, meta, evolucaoVendas, origemLeads, desempenhoPorVendedor, atividadesDoDia, leadsParados } = dados;
+  const { indicadores, meta, evolucaoVendas, origemVendas, desempenhoPorVendedor, atividadesDoDia, leadsParados } = dados;
   const funilLeads = dados.funilLeads ?? [];
   const resumoMensal = dados.resumoMensal ?? [];
   const leadsParadosTotal = dados.leadsParadosTotal ?? leadsParados.length;
@@ -134,8 +134,8 @@ export function OverviewPage() {
           />
         </Card>
         <Card className="p-4">
-          <h2 className="mb-3 text-sm font-semibold text-[var(--fg)]">Origem dos leads</h2>
-          <OrigemChart dados={origemLeads} />
+          <h2 className="mb-3 text-sm font-semibold text-[var(--fg)]">Origem das vendas</h2>
+          <OrigemChart dados={origemVendas} />
         </Card>
       </div>
 

@@ -2,7 +2,7 @@ import Chart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
 import { useTheme } from "../../context/ThemeContext";
 import { formatarMoeda } from "../../lib/format";
-import type { EvolucaoVendas, FunilEtapa, MarketingEvolucao, OrigemLead } from "../../lib/types";
+import type { EvolucaoVendas, FunilEtapa, MarketingEvolucao, OrigemVenda } from "../../lib/types";
 
 export const paleta = ["#2563eb", "#0ea5e9", "#8b5cf6", "#22c55e", "#f59e0b", "#f97316", "#ef4444", "#64748b"];
 
@@ -68,7 +68,7 @@ export function EvolucaoChart({ dados }: { dados: EvolucaoVendas[] }) {
   );
 }
 
-export function OrigemChart({ dados }: { dados: OrigemLead[] }) {
+export function OrigemChart({ dados }: { dados: OrigemVenda[] }) {
   const { tema } = useTheme();
   const modoEscuro = tema === "dark";
 
@@ -77,7 +77,7 @@ export function OrigemChart({ dados }: { dados: OrigemLead[] }) {
   const options: ApexOptions = {
     ...baseOptions(modoEscuro),
     chart: { ...baseOptions(modoEscuro).chart, type: "donut" },
-    labels: dados.map((d) => d.origem),
+    labels: dados.map((d) => `${d.origem} (${d.quantidade})`),
     legend: { position: "bottom" },
     dataLabels: { enabled: true, formatter: (v: number) => `${v.toFixed(0)}%` },
   };

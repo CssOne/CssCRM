@@ -962,7 +962,7 @@ export interface EvolucaoVendas {
   adesao?: number;
 }
 
-export interface OrigemLead {
+export interface OrigemVenda {
   origem: string;
   quantidade: number;
 }
@@ -993,7 +993,7 @@ export interface Dashboard {
   meta: MetaResultado;
   funil: FunilEtapa[];
   evolucaoVendas: EvolucaoVendas[];
-  origemLeads: OrigemLead[];
+  origemVendas: OrigemVenda[];
   desempenhoPorVendedor: DesempenhoVendedor[];
   atividadesDoDia: Activity[];
   leadsParados: AlertaLeadParado[];

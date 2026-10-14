@@ -119,17 +119,22 @@ public sealed class DashboardService(
 
         var evolucao = await ObterEvolucaoVendasAsync(oportunidadesQuery, hoje, ct);
 
-        // "Origem dos leads" aqui significa a origem comercial do cadastro — Leads (automático, tráfego
-        // pago/site) vs Indicação (cadastro manual) — e não o campo livre `Origem`, que serve a outros
-        // filtros (ver LeadKanbanFilterRequest.Origem).
-        var origemBruto = await leadsQuery
-            .GroupBy(l => l.CriadoManualmente)
-            .Select(g => new { g.Key, Quantidade = g.Count() })
-            .ToListAsync(ct);
-        var origens = origemBruto
-            .Select(o => new OrigemLeadDto(o.Key ? "Indicação" : "Leads", o.Quantidade))
-            .OrderByDescending(o => o.Quantidade)
-            .ToList();
+        // "Origem das vendas": as vendas ganhas do período (as mesmas do card de vendas) por origem do cliente — Indicação (card de indicação: cadastro
+        // manual ou tipo diferente de "Lead"), Tráfego pago (CRM e cards do Notion com sinal de anúncio) e, para fechar a conta, as demais.
+        // Indicação ganha de Tráfego pago: um lead de anúncio que fechou como indicação ("Indicação Lead") é venda de indicação, não de tráfego.
+        var vendasDeIndicacao = await ganhas.CountAsync(o => db.CrmLeads.Where(OrigemLead.CardDeIndicacao).Select(l => l.Id).Contains(o.LeadId), ct);
+        var vendasDeAnuncio = await ganhas.CountAsync(o => db.CrmLeads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Select(l => l.Id).Contains(o.LeadId), ct);
+        var anuncioQueFechouComoIndicacao = await ganhas.CountAsync(o => db.CrmLeads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Where(OrigemLead.CardDeIndicacao)
+            .Select(l => l.Id).Contains(o.LeadId), ct);
+        var vendasDeTrafego = vendasDeAnuncio - anuncioQueFechouComoIndicacao;
+        var origens = new List<OrigemVendaDto>
+        {
+            new("Tráfego pago", vendasDeTrafego),
+            new("Indicação", vendasDeIndicacao),
+        };
+        var vendasSemOrigem = qtdGanhas - vendasDeTrafego - vendasDeIndicacao;
+        if (vendasSemOrigem > 0) origens.Add(new("Outras origens", vendasSemOrigem));
+        origens = origens.Where(o => o.Quantidade > 0).OrderByDescending(o => o.Quantidade).ToList();
 
         var desempenho = await ObterDesempenhoPorVendedorAsync(visiveis, inicioUtc, fimUtc, ct);
         var funilLeads = await ObterFunilDeLeadsAsync(leadsQuery, inicioUtc, fimUtc, ct);
