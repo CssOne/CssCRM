@@ -110,4 +110,46 @@ public class RelatorioFiltrosExtrasTests
         Assert.Equal(1, r.Totais.Vendas); // só a de julho
         Assert.Equal(200m, r.Totais.Adesao);
     }
+
+    [Fact]
+    public async Task LeadDeTrafegoPassadoParaOutro_ContaParaQuemRecebeuNoMesDaAtribuicao_IndicacaoSegueAChegada()
+    {
+        using var factory = new TestDbContextFactory();
+        var db = factory.CreateContext();
+        var admin = await factory.CriarUsuarioAsync(db, "Admin");
+        var ana = await factory.CriarUsuarioAsync(db, "Ana");
+        var bruna = await factory.CriarUsuarioAsync(db, "Bruna");
+        await factory.AtribuirPapelAsync(db, ana, Roles.Comercial);
+        await factory.AtribuirPapelAsync(db, bruna, Roles.Comercial);
+
+        // Dois leads de março com a Ana: um de tráfego (Meta) e uma indicação. Em maio, os dois passam para a Bruna.
+        var trafego = new CrmLead { NomeOuRazaoSocial = "Trafego", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, MetaLeadId = "1" };
+        var indicacao = new CrmLead { NomeOuRazaoSocial = "Indicacao", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, TipoIndicacao = "Pessoal", CriadoManualmente = true };
+        db.CrmLeads.AddRange(trafego, indicacao);
+        await db.SaveChangesAsync();
+        var marco = new DateTimeOffset(2025, 3, 10, 15, 0, 0, TimeSpan.Zero);
+        trafego.CriadoEm = marco; trafego.ResponsavelAtribuidoEm = marco;
+        indicacao.CriadoEm = marco; indicacao.ResponsavelAtribuidoEm = marco;
+        await db.SaveChangesAsync();
+        var maio = new DateTimeOffset(2025, 5, 10, 15, 0, 0, TimeSpan.Zero);
+        trafego.ResponsavelId = bruna.Id; indicacao.ResponsavelId = bruna.Id;
+        await db.SaveChangesAsync();
+        // O contexto carimba a atribuição com a data de hoje; aqui ela volta para maio de 2025.
+        trafego.ResponsavelAtribuidoEm = maio; indicacao.ResponsavelAtribuidoEm = maio;
+        await db.SaveChangesAsync();
+
+        var usuario = TestDbContextFactory.MockCurrentUser(admin.Id, visaoTotal: true, podeGerir: true).Object;
+        var rel = new RelatorioComercialService(db, usuario, new EquipeComercialService(db, usuario));
+        int LeadsDe(RelatorioComercialDto r, Guid id) => r.PorVendedor.SingleOrDefault(v => v.VendedorId == id)?.Leads ?? 0;
+
+        var marcoR = await rel.ObterAsync(new DateOnly(2025, 3, 1), new DateOnly(2025, 3, 31), null, null, new RelatorioFiltroExtra(), CancellationToken.None);
+        Assert.Equal(0, LeadsDe(marcoR, ana.Id));    // o lead de tráfego saiu de março: foi atribuído à Bruna só em maio
+        Assert.Equal(1, LeadsDe(marcoR, bruna.Id));  // a indicação continua em março (chegada), agora com a Bruna
+        Assert.Equal(1, marcoR.Totais.Leads);
+
+        var maioR = await rel.ObterAsync(new DateOnly(2025, 5, 1), new DateOnly(2025, 5, 31), null, null, new RelatorioFiltroExtra(), CancellationToken.None);
+        Assert.Equal(1, LeadsDe(maioR, bruna.Id));   // o de tráfego entra em maio, na conta de quem recebeu
+        Assert.Equal(0, LeadsDe(maioR, ana.Id));
+        Assert.Equal(1, maioR.Totais.Leads);
+    }
 }

@@ -124,7 +124,7 @@ public sealed class TvComercialService(
         // Conversão: "leads" = os que o consultor PEGOU no mês — tráfego pago (inclusive cards do Notion com sinal de anúncio) que passaram para ele
         // (rodízio ou troca de responsável) entre o dia 1 e o fim do mês. Indicação e cadastro manual não entram: ninguém "pega" no rodízio.
         var leadsQuery = db.CrmLeads.AsNoTracking().Where(OrigemLead.DeTrafegoPagoInclusiveNotion)
-            .Where(l => !l.Arquivado && (l.ResponsavelAtribuidoEm ?? l.CriadoEm) >= inicioMes && (l.ResponsavelAtribuidoEm ?? l.CriadoEm) < fimMes);
+            .Where(l => !l.Arquivado).Where(OrigemLead.ComPosseNoPeriodo(inicioMes, fimMes));
         if (visiveis is not null)
         {
             vendasQuery = vendasQuery.Where(o => visiveis.Contains(o.ResponsavelId));

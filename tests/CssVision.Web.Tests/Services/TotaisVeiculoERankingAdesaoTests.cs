@@ -128,7 +128,7 @@ public class TotaisVeiculoERankingAdesaoTests
         await db.SaveChangesAsync();
         var primeiroDoMesAnterior = HorarioBrasilia.PrimeiroDiaDoMes(HorarioBrasilia.Hoje).AddMonths(-1);
         var meioDoMesAnterior = HorarioBrasilia.Inicio(primeiroDoMesAnterior.AddDays(10));
-        await db.CrmLeads.Where(l => l.Id == anteriorAna.Id || l.Id == anteriorAna2.Id).ExecuteUpdateAsync(s => s.SetProperty(l => l.CriadoEm, meioDoMesAnterior));
+        await db.CrmLeads.Where(l => l.Id == anteriorAna.Id || l.Id == anteriorAna2.Id).ExecuteUpdateAsync(s => s.SetProperty(l => l.CriadoEm, meioDoMesAnterior).SetProperty(l => l.ResponsavelAtribuidoEm, meioDoMesAnterior));
         // Ana vendeu mais em valor total, Bruna mais em adesão: o ranking (coluna "Valor") é pela adesão.
         db.CrmOpportunities.AddRange(
             new CrmOpportunity { LeadId = deAna.Id, Titulo = "V", ResponsavelId = ana.Id, EtapaId = ganho.Id, ValorFinal = 900m, PagamentoAdesao = 100m, DataEfetivaFechamento = DateTimeOffset.UtcNow },

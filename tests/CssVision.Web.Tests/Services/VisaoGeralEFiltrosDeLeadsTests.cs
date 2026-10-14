@@ -40,7 +40,7 @@ public class VisaoGeralEFiltrosDeLeadsTests
         var inativo = await factory.CriarUsuarioAsync(db, "Inativo sem nada");
         inativo.Ativo = false;
         var ganho = await factory.CriarEtapaAsync(db, "Ganho", 9, TipoEtapaPipeline.Ganho);
-        var leads = Enumerable.Range(1, 4).Select(i => new CrmLead { NomeOuRazaoSocial = $"L{i}", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id }).ToList();
+        var leads = Enumerable.Range(1, 4).Select(i => new CrmLead { NomeOuRazaoSocial = $"L{i}", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, MetaLeadId = $"meta-{i}" }).ToList();
         db.CrmLeads.AddRange(leads);
         await db.SaveChangesAsync();
         db.CrmOpportunities.Add(new CrmOpportunity
@@ -216,5 +216,43 @@ public class VisaoGeralEFiltrosDeLeadsTests
 
         var dosDois = await kanban.ObterBoardAsync(new LeadKanbanFilterRequest { GrupoId = [growth.Id, novoGrupo.Id] }, CancellationToken.None);
         Assert.Equal(2, dosDois.Colunas.SelectMany(c => c.Cartoes).Count());
+    }
+
+    [Fact]
+    public async Task Desempenho_ConversaoComoNaTv_SoLeadsDeTrafegoPegosNoPeriodoEVendasDeles()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var admin = await factory.CriarUsuarioAsync(db, "Admin");
+        var ana = await factory.CriarUsuarioAsync(db, "Ana");
+        var bruna = await factory.CriarUsuarioAsync(db, "Bruna");
+        var ganho = await factory.CriarEtapaAsync(db, "Ganho", 9, TipoEtapaPipeline.Ganho);
+        CrmLead Lead(string nome, Guid resp, bool trafego) => new()
+        {
+            NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = resp, MetaLeadId = trafego ? "meta-" + nome : null,
+        };
+        // Ana pegou 2 leads de tráfego e tem 1 indicação; vendeu 1 de tráfego e 1 indicação. Bruna recebeu da Ana (agora) um lead de tráfego.
+        var t1 = Lead("T1", ana.Id, true); var t2 = Lead("T2", ana.Id, true); var ind = Lead("Ind", ana.Id, false);
+        var daAna = Lead("DaAna", ana.Id, true);
+        db.CrmLeads.AddRange(t1, t2, ind, daAna);
+        await db.SaveChangesAsync();
+        daAna.ResponsavelId = bruna.Id; // passa para a Bruna: sai da conta da Ana e entra na da Bruna
+        await db.SaveChangesAsync();
+        CrmOpportunity Venda(CrmLead l, Guid resp) => new()
+        {
+            LeadId = l.Id, Titulo = "V", ResponsavelId = resp, EtapaId = ganho.Id, ValorFinal = 100m, PagamentoAdesao = 10m, DataEfetivaFechamento = DateTimeOffset.UtcNow,
+        };
+        db.CrmOpportunities.AddRange(Venda(t1, ana.Id), Venda(ind, ana.Id));
+        await db.SaveChangesAsync();
+
+        var r = await Painel(db, admin.Id).ObterAsync(new DashboardFilterRequest(null, null, null), CancellationToken.None);
+
+        var daAnaLinha = r.DesempenhoPorVendedor.Single(v => v.VendedorId == ana.Id);
+        Assert.Equal(2, daAnaLinha.LeadsAtribuidos);   // T1 e T2 (a indicação e o lead passado à Bruna ficam de fora)
+        Assert.Equal(2, daAnaLinha.VendasGanhas);      // as vendas seguem todas na coluna de vendas
+        Assert.Equal(50m, daAnaLinha.TaxaConversao);   // 1 venda de lead de tráfego ÷ 2 leads de tráfego
+        var daBrunaLinha = r.DesempenhoPorVendedor.Single(v => v.VendedorId == bruna.Id);
+        Assert.Equal(1, daBrunaLinha.LeadsAtribuidos);
+        Assert.Equal(0m, daBrunaLinha.TaxaConversao);
     }
 }
