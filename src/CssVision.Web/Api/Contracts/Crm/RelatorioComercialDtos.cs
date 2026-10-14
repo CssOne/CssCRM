@@ -40,7 +40,15 @@ public record RelatorioTotaisDto(
     decimal Rastreador,
     decimal Vistoria,
     decimal Indicacao,
-    int VendasIndicacao);
+    int VendasIndicacao,
+    /// <summary>Leads de tráfego pago (CRM e Notion) que chegaram no período e as vendas desses leads: a conversão por venda de tráfego pago.</summary>
+    int LeadsTrafegoPago = 0,
+    int VendasTrafegoPago = 0,
+    decimal TaxaConversaoTrafegoPago = 0,
+    /// <summary>Leads de cards de indicação (cadastro manual ou tipo diferente de "Lead") que chegaram no período e as vendas deles.</summary>
+    int LeadsIndicacaoCard = 0,
+    int VendasIndicacaoCard = 0,
+    decimal TaxaConversaoIndicacaoCard = 0);
 
 /// <summary>Um mês (yyyy-MM): vendas pela data da venda, leads pela data de chegada.</summary>
 public record RelatorioMesDto(

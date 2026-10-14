@@ -1481,6 +1481,12 @@ export interface RelatorioTotais {
   vistoria: number;
   indicacao: number;
   vendasIndicacao: number;
+  leadsTrafegoPago?: number;
+  vendasTrafegoPago?: number;
+  taxaConversaoTrafegoPago?: number;
+  leadsIndicacaoCard?: number;
+  vendasIndicacaoCard?: number;
+  taxaConversaoIndicacaoCard?: number;
 }
 
 export interface RelatorioMes {
