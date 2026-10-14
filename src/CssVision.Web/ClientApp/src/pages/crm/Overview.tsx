@@ -5,16 +5,13 @@ import { api, isAbortError, toQueryString } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { Dashboard } from "../../lib/types";
-import { Badge, Card, ErrorState, Input, Pagination, Skeleton } from "../../components/ui";
-import { usePaginacao } from "../../lib/usePaginacao";
+import { Badge, Card, ErrorState, Input, Skeleton } from "../../components/ui";
 import { BarrasHorizontaisChart } from "../../components/marketing/GraficosTrafego";
 import { mesAtualIso, useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { StatCard } from "../../components/crm/StatCard";
 import { PagamentosEmAberto } from "../../components/crm/PagamentosEmAberto";
 import { EvolucaoChart, OrigemChart } from "../../components/crm/Charts";
 import { FiltroRegionalDoPainel, useRegionalDoPainel } from "../../components/crm/FiltroRegionalDoPainel";
-
-const TAMANHO_PAGINA_VENDEDORES = 10;
 
 export function OverviewPage() {
   const { temPapel } = useAuth();
@@ -52,8 +49,6 @@ export function OverviewPage() {
     setRecarregar((n) => n + 1);
   });
 
-  const paginaVendedores = usePaginacao(dados?.desempenhoPorVendedor, TAMANHO_PAGINA_VENDEDORES);
-
   if (carregando && !dados) {
     return (
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -68,7 +63,7 @@ export function OverviewPage() {
     return <ErrorState message={erro ?? "Não foi possível carregar o painel."} onRetry={() => setRecarregar((n) => n + 1)} />;
   }
 
-  const { indicadores, meta, evolucaoVendas, origemVendas, desempenhoPorVendedor, atividadesDoDia, leadsParados } = dados;
+  const { indicadores, meta, evolucaoVendas, origemVendas, atividadesDoDia, leadsParados } = dados;
   const funilLeads = dados.funilLeads ?? [];
   const resumoMensal = dados.resumoMensal ?? [];
   const leadsParadosTotal = dados.leadsParadosTotal ?? leadsParados.length;
@@ -184,44 +179,6 @@ export function OverviewPage() {
         </table>
       </Card>
 
-      {desempenhoPorVendedor.length > 0 && (
-        <Card className="overflow-x-auto p-4">
-          <h2 className="text-sm font-semibold text-[var(--fg)]">Desempenho por vendedor</h2>
-          <p className="mb-3 text-xs text-[var(--fg-muted)]">
-            Ranking pela maior conversão. Leads que chegaram para o vendedor e vendas que ele fechou em {rotuloMes}. Conversão = vendas ÷ leads do mês.
-          </p>
-          <table className="w-full min-w-[560px] text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--fg-muted)]">
-                <th className="pb-2 pr-2 font-medium">#</th>
-                <th className="pb-2 font-medium">Vendedor</th>
-                <th className="pb-2 text-right font-medium">Leads</th>
-                <th className="pb-2 text-right font-medium">Vendas</th>
-                <th className="pb-2 text-right font-medium">Valor ganho</th>
-                <th className="pb-2 text-right font-medium">Adesão</th>
-                <th className="pb-2 text-right font-medium">Conversão</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginaVendedores.itensDaPagina.map((v, i) => (
-                <tr key={v.vendedorId} className="border-b border-[var(--border)] last:border-0">
-                  <td className="py-2 pr-2 text-[var(--fg-muted)]">{(paginaVendedores.pagina - 1) * TAMANHO_PAGINA_VENDEDORES + i + 1}</td>
-                  <td className="py-2 text-[var(--fg)]">{v.vendedorNome}</td>
-                  <td className="py-2 text-right text-[var(--fg-muted)]">{v.leadsAtribuidos.toLocaleString("pt-BR")}</td>
-                  <td className="py-2 text-right text-[var(--fg-muted)]">{v.vendasGanhas}</td>
-                  <td className="py-2 text-right text-[var(--fg-muted)]">{formatarMoeda(v.valorGanho)}</td>
-                  <td className="py-2 text-right text-[var(--fg-muted)]">{formatarMoeda(v.valorAdesao)}</td>
-                  <td className="py-2 text-right text-[var(--fg-muted)]" title={v.leadsAtribuidos === 0 ? "Sem leads novos no mês: as vendas são de leads anteriores" : undefined}>
-                    {v.leadsAtribuidos === 0 ? "—" : formatarPercentual(v.taxaConversao)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <Pagination pagina={paginaVendedores.pagina} totalPaginas={paginaVendedores.totalPaginas} onChange={paginaVendedores.setPagina} />
-        </Card>
-      )}
-
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-4">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--fg)]">
@@ -232,12 +189,17 @@ export function OverviewPage() {
           ) : (
             <ul className="space-y-2">
               {atividadesDoDia.map((a) => (
-                <li key={a.id} className="flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-[var(--fg)]">{a.assunto}</p>
-                    <p className="truncate text-xs text-[var(--fg-muted)]">{a.leadNome}</p>
-                  </div>
-                  <Badge variant={a.atrasada ? "danger" : "neutral"}>{formatarDataHora(a.dataHoraPrevista)}</Badge>
+                <li key={a.id}>
+                  <Link
+                    to={`/app/crm/leads/${a.leadId}`}
+                    className="focus-ring flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm hover:opacity-80"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-[var(--fg)]">{a.assunto}</p>
+                      <p className="truncate text-xs text-[var(--fg-muted)]">{a.leadNome}</p>
+                    </div>
+                    <Badge variant={a.atrasada ? "danger" : "neutral"}>{formatarDataHora(a.dataHoraPrevista)}</Badge>
+                  </Link>
                 </li>
               ))}
             </ul>
