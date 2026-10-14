@@ -25,6 +25,18 @@ public sealed class LeadKanbanService(
     /// <summary>Coluna do quadro que tem o filtro por motivo — ver CrmSeeder.cs.</summary>
     private const string EtapaPerdido = "Perdido";
 
+    /// <summary>Prefixo das colunas "Venda concluída (Leads)"/"(Indicação)".</summary>
+    private const string EtapaVendaConcluida = "Venda concluída";
+
+    /// <summary>
+    /// Nas colunas de venda concluída, o período de CHEGADA vira período da VENDA (quando o filtro não tem datas de venda): o consultor que filtra o mês quer ver as
+    /// vendas feitas no mês, e boa parte delas é de lead que chegou antes (antes só aparecia a venda de lead que chegou no mês: 1 card para 5 vendas).
+    /// </summary>
+    internal static LeadKanbanFilterRequest ParaColunaDeVenda(LeadKanbanFilterRequest filtro) =>
+        filtro.DataVendaInicio is null && filtro.DataVendaFim is null && (filtro.DataChegadaInicio is not null || filtro.DataChegadaFim is not null)
+            ? filtro with { DataVendaInicio = filtro.DataChegadaInicio, DataVendaFim = filtro.DataChegadaFim, DataChegadaInicio = null, DataChegadaFim = null }
+            : filtro;
+
     public async Task<LeadKanbanBoardDto> ObterBoardAsync(LeadKanbanFilterRequest filtro, CancellationToken ct)
     {
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
@@ -48,6 +60,14 @@ public sealed class LeadKanbanService(
             .ToListAsync(ct);
         int Total(Guid? etapaId) => totais.FirstOrDefault(t => t.EtapaId == etapaId)?.Quantidade ?? 0;
 
+        // Colunas de venda concluída: período de chegada vira período de venda (ver ParaColunaDeVenda).
+        var filtroVenda = ParaColunaDeVenda(filtro);
+        var temFiltroDeVenda = !ReferenceEquals(filtroVenda, filtro);
+        var (queryVenda, _) = temFiltroDeVenda ? Filtrar(filtroVenda, visiveis) : (query, podeVerOrigem);
+        var totaisVenda = temFiltroDeVenda
+            ? await queryVenda.GroupBy(l => l.EtapaId).Select(g => new { EtapaId = g.Key, Quantidade = g.Count() }).ToListAsync(ct)
+            : totais;
+
         // Coluna virtual (sem linha em CrmLeadStage): leads que ainda não foram trabalhados por
         // ninguém. Fica sempre em primeiro, pra vendedora enxergar de cara quem ainda não pegou.
         var colunas = new List<LeadKanbanColumnDto>
@@ -66,8 +86,10 @@ public sealed class LeadKanbanService(
                 continue;
             }
 
-            var total = Total(etapa.Id);
-            var cartoes = total == 0 ? [] : await PaginaAsync(query, etapa.Id, 0, porPagina, podeVerOrigem, ct);
+            var ehVenda = etapa.Nome.StartsWith(EtapaVendaConcluida, StringComparison.Ordinal);
+            var consulta = ehVenda ? queryVenda : query;
+            var total = (ehVenda ? totaisVenda : totais).FirstOrDefault(t => t.EtapaId == etapa.Id)?.Quantidade ?? 0;
+            var cartoes = total == 0 ? [] : await PaginaAsync(consulta, etapa.Id, 0, porPagina, podeVerOrigem, ct);
             colunas.Add(new LeadKanbanColumnDto(dto, cartoes, total));
         }
 
@@ -113,7 +135,9 @@ public sealed class LeadKanbanService(
         return await RespostaEmCache.ObterAsync(cache, eventos, "quadro-coluna", new { escopo = RespostaEmCache.Escopo(visiveis), request },
             async () =>
             {
-                var (query, podeVerOrigem) = Filtrar(request, visiveis);
+                var ehColunaDeVenda = request.EtapaId is { } idEtapa
+                    && await db.CrmLeadStages.AnyAsync(s => s.Id == idEtapa && s.Nome.StartsWith(EtapaVendaConcluida), ct);
+                var (query, podeVerOrigem) = ehColunaDeVenda ? Filtrar(ParaColunaDeVenda(request), visiveis) : Filtrar(request, visiveis);
                 // "Ver mais" da coluna Perdido respeita o filtro por motivo dela.
                 if (request.MotivoPerdaId is { Length: > 0 } && request.EtapaId is { } etapaId
                     && await db.CrmLeadStages.AnyAsync(s => s.Id == etapaId && s.Nome == EtapaPerdido, ct))
