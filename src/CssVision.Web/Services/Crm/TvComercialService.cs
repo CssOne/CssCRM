@@ -121,7 +121,10 @@ public sealed class TvComercialService(
         var vendasQuery = db.CrmOpportunities.AsNoTracking()
             .Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho
                 && (o.AtivoEm ?? o.DataEfetivaFechamento) >= folgaIni && (o.AtivoEm ?? o.DataEfetivaFechamento) < folgaFim);
-        var leadsQuery = db.CrmLeads.AsNoTracking().Where(l => !l.Arquivado && l.CriadoEm >= inicioMes && l.CriadoEm < fimMes);
+        // Conversão: "leads" = os que o consultor PEGOU no mês — tráfego pago (inclusive cards do Notion com sinal de anúncio) que passaram para ele
+        // (rodízio ou troca de responsável) entre o dia 1 e o fim do mês. Indicação e cadastro manual não entram: ninguém "pega" no rodízio.
+        var leadsQuery = db.CrmLeads.AsNoTracking().Where(OrigemLead.DeTrafegoPagoInclusiveNotion)
+            .Where(l => !l.Arquivado && (l.ResponsavelAtribuidoEm ?? l.CriadoEm) >= inicioMes && (l.ResponsavelAtribuidoEm ?? l.CriadoEm) < fimMes);
         if (visiveis is not null)
         {
             vendasQuery = vendasQuery.Where(o => visiveis.Contains(o.ResponsavelId));
@@ -136,6 +139,10 @@ public sealed class TvComercialService(
                 Placa = o.Veiculo != null ? o.Veiculo.Placa : null, Origem = o.TipoIndicacao ?? o.Lead.TipoIndicacao,
             })
             .ToListAsync(ct);
+        // Vendas dos leads de tráfego pago (para a taxa de conversão: vendas ÷ leads de tráfego, mesma população dos dois lados).
+        var idsVendasDeTrafego = (await vendasQuery
+                .Where(o => db.CrmLeads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Select(l => l.Id).Contains(o.LeadId))
+                .Select(o => o.Id).ToListAsync(ct)).ToHashSet();
         var vendas = vendasBrutas
             .Select(o => new VendaTv(o.Id, o.ResponsavelId, DataDaAtivacao(o.AtivoEm, o.DataEfetivaFechamento), o.Adesao, o.Atualizada, o.Cliente, o.Placa, o.Origem, false))
             .Where(v => v.Data >= inicioMes && v.Data < fimMes)
@@ -148,7 +155,7 @@ public sealed class TvComercialService(
         var (vendasSoNoNotion, pessoasDoNotion) = await VendasSoNoNotionAsync(vendasNotion, vendas, visiveis, regionais.FirstOrDefault(r => r.Nome == "MG134")?.Id, ct);
         vendas = vendas.Concat(vendasSoNoNotion).ToList();
 
-        // Leads do mês por consultor: recebidos e perdidos (conversão = vendas ÷ leads do mês, como na Visão geral).
+        // Leads de tráfego pago que o consultor pegou no mês, e quantos deles estão perdidos.
         var leadsPorConsultor = await ContagensPorVendedor.ContarLeadsAsync(leadsQuery, ct);
         var perdidosPorConsultor = await ContagensPorVendedor.ContarLeadsAsync(
             leadsQuery.Where(l => l.Etapa != null && l.Etapa.Nome == NotionEtapaLead.Perdido), ct);
@@ -184,7 +191,7 @@ public sealed class TvComercialService(
             .Select((c, i) => Linha(i + 1, c.Id, c.Qtd, c.Adesao)).ToList();
 
         // ----- conversão -----
-        var vendasPorConsultor = porConsultor.ToDictionary(c => c.Id, c => c.Qtd);
+        var vendasPorConsultor = vendas.Where(v => idsVendasDeTrafego.Contains(v.Id)).GroupBy(v => v.ResponsavelId).ToDictionary(g => g.Key, g => g.Count());
         var rankingConversao = leadsPorConsultor.Where(l => l.Value > 0 && pessoas.ContainsKey(l.Key))
             .Select(l => new
             {
