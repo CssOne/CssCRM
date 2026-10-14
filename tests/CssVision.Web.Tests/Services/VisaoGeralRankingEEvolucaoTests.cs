@@ -52,7 +52,8 @@ public class VisaoGeralRankingEEvolucaoTests
         var bruna = await factory.CriarUsuarioAsync(db, "Bruna"); // 1 venda / 2 leads = 50%
         var caio = await factory.CriarUsuarioAsync(db, "Caio");   // 3 vendas, sem leads novos: não tem conversão
         var ganho = await factory.CriarEtapaAsync(db, "Ganho", 9, TipoEtapaPipeline.Ganho);
-        CrmLead Lead(string nome, Guid resp) => new() { NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = resp };
+        // Leads de tráfego pago (a conversão do desempenho conta só leads de tráfego que o vendedor pegou no período).
+        CrmLead Lead(string nome, Guid resp) => new() { NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = resp, MetaLeadId = "meta-" + nome };
         var daAna = Enumerable.Range(1, 4).Select(i => Lead($"A{i}", ana.Id)).ToList();
         var daBruna = Enumerable.Range(1, 2).Select(i => Lead($"B{i}", bruna.Id)).ToList();
         var daCaio = Enumerable.Range(1, 3).Select(i => Lead($"C{i}", caio.Id)).ToList();
@@ -60,7 +61,7 @@ public class VisaoGeralRankingEEvolucaoTests
         await db.SaveChangesAsync();
         // Os leads do Caio são antigos: ele vendeu no mês, mas não recebeu lead no mês.
         var umAnoAtras = DateTimeOffset.UtcNow.AddYears(-1);
-        await db.CrmLeads.Where(l => l.ResponsavelId == caio.Id).ExecuteUpdateAsync(s => s.SetProperty(l => l.CriadoEm, umAnoAtras));
+        await db.CrmLeads.Where(l => l.ResponsavelId == caio.Id).ExecuteUpdateAsync(s => s.SetProperty(l => l.CriadoEm, umAnoAtras).SetProperty(l => l.ResponsavelAtribuidoEm, umAnoAtras));
         CrmOpportunity Venda(CrmLead lead, Guid resp, decimal total, decimal adesao) => new()
         {
             LeadId = lead.Id, Titulo = "V", ResponsavelId = resp, EtapaId = ganho.Id, ValorFinal = total, PagamentoAdesao = adesao,

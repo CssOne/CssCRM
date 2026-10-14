@@ -32,8 +32,8 @@ public class TvComercialServiceTests
         var ganho = await factory.CriarEtapaAsync(db, "Ganho", 9, TipoEtapaPipeline.Ganho);
 
         // Ana: 2 vendas, adesão 100; Bruna: 1 venda, adesão 400 (ganha no ranking de adesão, perde no de vendas).
-        // Ana recebeu 4 leads no mês (conversão 50%), Bruna 1 (conversão 100%).
-        CrmLead L(string nome, Guid resp) => new() { NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = resp };
+        // Ana pegou 4 leads de tráfego no mês (conversão 50%), Bruna 1 (conversão 100%).
+        CrmLead L(string nome, Guid resp) => new() { NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = resp, MetaLeadId = "meta-" + nome };
         var leads = new[] { L("A1", ana.Id), L("A2", ana.Id), L("A3", ana.Id), L("A4", ana.Id), L("B1", bruna.Id) };
         db.CrmLeads.AddRange(leads);
         await db.SaveChangesAsync();
@@ -137,5 +137,55 @@ public class TvComercialServiceTests
         Assert.Equal(["Ana"], r.RankingConsultores.Select(c => c.Nome));
         Assert.Equal(1, r.Resumo.VendasNoMes);
         Assert.Equal(10m, r.Resumo.ValorNoMes);
+    }
+
+    [Fact]
+    public async Task Conversao_UsaLeadsDeTrafegoQueOConsultorPegouNoMes_EVendasDesses()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var admin = await factory.CriarUsuarioAsync(db, "Admin");
+        var ana = await factory.CriarUsuarioAsync(db, "Ana");
+        var regional = new CrmRegional { Nome = "MG132" };
+        db.CrmRegionais.Add(regional);
+        await db.SaveChangesAsync();
+        ana.RegionalId = regional.Id;
+        var ganho = await factory.CriarEtapaAsync(db, "Ganho", 9, TipoEtapaPipeline.Ganho);
+
+        var agora = DateTimeOffset.UtcNow;
+        var mesPassado = agora.AddMonths(-1);
+        CrmLead L(string nome, bool trafego, DateTimeOffset? atribuidoEm = null, bool arquivado = false) => new()
+        {
+            NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, MetaLeadId = trafego ? "meta-" + nome : null,
+            ResponsavelAtribuidoEm = atribuidoEm ?? agora, Arquivado = arquivado,
+        };
+        var pegou1 = L("Pegou1", true);
+        var pegou2 = L("Pegou2", true);
+        var chegouAntesMasPegouAgora = L("Antigo", true, atribuidoEm: agora);   // criado no mês passado, passou para a Ana agora
+        var pegouMesPassado = L("MesPassado", true, atribuidoEm: mesPassado);  // criado agora, mas passou para a Ana no mês passado
+        var indicacao = L("Indicacao", false);                                  // não é tráfego: fora dos leads
+        var arquivado = L("Arquivado", true, arquivado: true);                  // arquivado: fora
+        db.CrmLeads.AddRange(pegou1, pegou2, chegouAntesMasPegouAgora, pegouMesPassado, indicacao, arquivado);
+        await db.SaveChangesAsync();
+        // O contexto preenche as duas datas sozinho ao inserir; aqui voltamos ao cenário desejado (responsável não muda, então não é reatribuído).
+        chegouAntesMasPegouAgora.CriadoEm = mesPassado;
+        pegouMesPassado.ResponsavelAtribuidoEm = mesPassado;
+        await db.SaveChangesAsync();
+
+        CrmOpportunity V(CrmLead lead) => new()
+        {
+            LeadId = lead.Id, Titulo = "V", ResponsavelId = ana.Id, EtapaId = ganho.Id, PagamentoAdesao = 100, ValorFinal = 300, DataEfetivaFechamento = agora,
+        };
+        // 1 venda de lead de tráfego e 1 de indicação: o ranking de vendas conta as duas; a conversão só a de tráfego.
+        db.CrmOpportunities.AddRange(V(pegou1), V(indicacao));
+        await db.SaveChangesAsync();
+
+        var r = await Servico(db, admin.Id).ObterAsync(null, null, CancellationToken.None);
+
+        Assert.Equal(2, Assert.Single(r.RankingConsultores).QuantidadeVendas);
+        var conv = Assert.Single(r.RankingConversao);
+        Assert.Equal(3, conv.LeadsAtendidos);        // Pegou1, Pegou2 e o criado antes mas atribuído agora
+        Assert.Equal(1, conv.VendasFechadas);        // só a venda de lead de tráfego
+        Assert.Equal(33.3m, conv.TaxaConversao);     // 1 ÷ 3
     }
 }

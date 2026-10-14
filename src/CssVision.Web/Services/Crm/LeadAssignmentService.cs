@@ -16,10 +16,11 @@ public sealed class LeadAssignmentService(
 
     /// <summary>
     /// Leads que contam no limite mensal: só os do tráfego pago, sem os do Notion. Lead excluído (arquivado) não conta: a vez do
-    /// consultor que o recebeu não foi "gasta", então ele volta a ser o próximo do rodízio.
+    /// consultor que o recebeu não foi "gasta", então ele volta a ser o próximo do rodízio. O lead é de quem o tem agora, no mês em que passou
+    /// para ele: atribuído a outro consultor, sai da conta de quem o tinha e entra na de quem recebeu (ver <see cref="OrigemLead.ComPosseDesde"/>).
     /// </summary>
     private IQueryable<CrmLead> LeadsDoTrafegoNoMes() =>
-        db.CrmLeads.AsNoTracking().Where(OrigemLead.VeioDoTrafegoPago).Where(l => !l.Arquivado && l.CriadoEm >= InicioDoMes());
+        db.CrmLeads.AsNoTracking().Where(OrigemLead.VeioDoTrafegoPago).Where(l => !l.Arquivado).Where(OrigemLead.ComPosseDesde(InicioDoMes()));
 
     /// <summary>Leads do tráfego pago que o vendedor recebeu hoje (horário de Brasília) — contam no limite diário.</summary>
     private IQueryable<CrmLead> LeadsDoTrafegoHoje()
