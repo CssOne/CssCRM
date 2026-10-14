@@ -14,8 +14,8 @@ public sealed class PreencherCadastroDosLeadsBackgroundService(
     IServiceScopeFactory scopeFactory,
     ILogger<PreencherCadastroDosLeadsBackgroundService> logger) : BackgroundService
 {
-    public const string ChaveExecutado = "crm:cadastro-leads-preenchido-em";
-    public const string ChaveStatus = "notion:cadastro-leads-preenchimento";
+    public const string ChaveExecutado = "crm:cadastro-leads-preenchido-v2-em";
+    public const string ChaveStatus = "notion:cadastro-leads-preenchimento-v2";
 
     private static readonly TimeSpan EsperaInicial = TimeSpan.FromMinutes(2);
     private const int TamanhoDoLote = 200;
@@ -51,10 +51,10 @@ public sealed class PreencherCadastroDosLeadsBackgroundService(
     {
         var ids = await db.CrmLeads.AsNoTracking()
             .Where(l => !l.Arquivado && (
-                (l.Estado == null && db.CrmOpportunities.Any(o => o.LeadId == l.Id && !o.Arquivado && o.Estado != null))
-                || (l.Placa == null && db.CrmOpportunities.Any(o => o.LeadId == l.Id && !o.Arquivado && o.Veiculo != null && o.Veiculo.Placa != null))
-                || (l.TipoIndicacao == null && l.CriadoManualmente && db.CrmOpportunities.Any(o => o.LeadId == l.Id && !o.Arquivado && o.TipoIndicacao != null))
-                || (l.DocumentoNormalizado == null && db.CrmOpportunities.Any(o => o.LeadId == l.Id && !o.Arquivado && o.Cpf != null))))
+                ((l.Estado == null || l.Estado == "" || l.Estado.Trim() == "") && db.CrmOpportunities.Any(o => o.LeadId == l.Id && !o.Arquivado && o.Estado != null))
+                || ((l.Placa == null || l.Placa == "" || l.Placa.Trim() == "") && db.CrmOpportunities.Any(o => o.LeadId == l.Id && !o.Arquivado && o.Veiculo != null && o.Veiculo.Placa != null))
+                || ((l.TipoIndicacao == null || l.TipoIndicacao == "" || l.TipoIndicacao.Trim() == "") && l.CriadoManualmente && db.CrmOpportunities.Any(o => o.LeadId == l.Id && !o.Arquivado && o.TipoIndicacao != null))
+                || ((l.DocumentoNormalizado == null || l.DocumentoNormalizado == "") && db.CrmOpportunities.Any(o => o.LeadId == l.Id && !o.Arquivado && o.Cpf != null))))
             .Select(l => l.Id)
             .ToListAsync(ct);
 
@@ -105,10 +105,10 @@ public sealed class PreencherCadastroDosLeadsBackgroundService(
         }
 
         // Cada campo só é gravado se ainda estiver vazio no banco (a condição vai no UPDATE, não só na leitura acima).
-        if (estado is not null) alterou |= await db.CrmLeads.Where(l => l.Id == leadId && l.Estado == null).ExecuteUpdateAsync(s => s.SetProperty(l => l.Estado, estado), ct) > 0;
-        if (placa is not null) alterou |= await db.CrmLeads.Where(l => l.Id == leadId && l.Placa == null).ExecuteUpdateAsync(s => s.SetProperty(l => l.Placa, placa), ct) > 0;
-        if (tipo is not null) alterou |= await db.CrmLeads.Where(l => l.Id == leadId && l.TipoIndicacao == null).ExecuteUpdateAsync(s => s.SetProperty(l => l.TipoIndicacao, tipo), ct) > 0;
-        if (documento is not null) alterou |= await db.CrmLeads.Where(l => l.Id == leadId && l.DocumentoNormalizado == null).ExecuteUpdateAsync(s => s.SetProperty(l => l.DocumentoNormalizado, documento), ct) > 0;
+        if (estado is not null) alterou |= await db.CrmLeads.Where(l => l.Id == leadId && (l.Estado == null || l.Estado.Trim() == "")).ExecuteUpdateAsync(s => s.SetProperty(l => l.Estado, estado), ct) > 0;
+        if (placa is not null) alterou |= await db.CrmLeads.Where(l => l.Id == leadId && (l.Placa == null || l.Placa.Trim() == "")).ExecuteUpdateAsync(s => s.SetProperty(l => l.Placa, placa), ct) > 0;
+        if (tipo is not null) alterou |= await db.CrmLeads.Where(l => l.Id == leadId && (l.TipoIndicacao == null || l.TipoIndicacao.Trim() == "")).ExecuteUpdateAsync(s => s.SetProperty(l => l.TipoIndicacao, tipo), ct) > 0;
+        if (documento is not null) alterou |= await db.CrmLeads.Where(l => l.Id == leadId && (l.DocumentoNormalizado == null || l.DocumentoNormalizado == "")).ExecuteUpdateAsync(s => s.SetProperty(l => l.DocumentoNormalizado, documento), ct) > 0;
         return alterou;
     }
 
