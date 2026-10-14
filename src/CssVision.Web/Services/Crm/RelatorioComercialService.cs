@@ -192,9 +192,26 @@ public sealed class RelatorioComercialService(
                 o.Indicacao == true || o.ValorIndicacao > 0, o.Fipe))
             .ToList();
 
+        // Conversão por origem: tráfego pago (CRM e Notion, sem o anúncio que fechou como indicação) e indicação (card de indicação). Leads = os que chegaram
+        // no período; vendas = as do período desses mesmos grupos de clientes. Mesma classificação da Visão geral.
+        var leadsDeAnuncio = await leadsQuery.CountAsync(OrigemLead.DeTrafegoPagoInclusiveNotion, ct);
+        var leadsDeAnuncioQueSaoIndicacao = await leadsQuery.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).CountAsync(OrigemLead.CardDeIndicacao, ct);
+        var leadsIndicacao = await leadsQuery.CountAsync(OrigemLead.CardDeIndicacao, ct);
+        var vendasDeAnuncio = await vendasQuery.CountAsync(o => db.CrmLeads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Select(l => l.Id).Contains(o.LeadId), ct);
+        var vendasDeAnuncioQueSaoIndicacao = await vendasQuery.CountAsync(o => db.CrmLeads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion)
+            .Where(OrigemLead.CardDeIndicacao).Select(l => l.Id).Contains(o.LeadId), ct);
+        var vendasIndicacaoCard = await vendasQuery.CountAsync(o => db.CrmLeads.Where(OrigemLead.CardDeIndicacao).Select(l => l.Id).Contains(o.LeadId), ct);
+        var leadsTrafego = leadsDeAnuncio - leadsDeAnuncioQueSaoIndicacao;
+        var vendasTrafego = vendasDeAnuncio - vendasDeAnuncioQueSaoIndicacao;
+        var totais = Totais(leads, vendas) with
+        {
+            LeadsTrafegoPago = leadsTrafego, VendasTrafegoPago = vendasTrafego, TaxaConversaoTrafegoPago = Taxa(vendasTrafego, leadsTrafego),
+            LeadsIndicacaoCard = leadsIndicacao, VendasIndicacaoCard = vendasIndicacaoCard, TaxaConversaoIndicacaoCard = Taxa(vendasIndicacaoCard, leadsIndicacao),
+        };
+
         return new RelatorioComercialDto(
             inicio, fim,
-            Totais(leads, vendas),
+            totais,
             PorMes(leads, vendas),
             PorSemana(leads, vendas),
             PorOrigem(leads, vendas),

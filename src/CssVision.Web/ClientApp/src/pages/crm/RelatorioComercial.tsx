@@ -431,13 +431,14 @@ export function RelatorioComercialPage() {
     tooltip: { ...base.tooltip, shared: true, intersect: false },
   };
 
+  const totalVendasFipe = dados.faixasFipe.reduce((soma, f) => soma + f.vendas, 0);
   const estados = dados.porEstado.filter((e) => e.vendas + e.leads > 0).slice(0, 15);
 
   return (
     <div className="space-y-4">
       {cabecalho}
 
-      <div className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-4 ${carregando ? "opacity-60" : ""}`}>
+      <div className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-3 ${carregando ? "opacity-60" : ""}`}>
         <Kpi rotulo="Leads recebidos" valor={inteiro(t.leads)} detalhe={`${inteiro(t.leadsPerdidos)} perdidos`} />
         <Kpi rotulo="Vendas concluídas" valor={inteiro(t.vendas)} detalhe={`conversão de ${formatarPercentual(t.taxaConversao)} sobre os leads`} />
         <Kpi rotulo="Adesão" valor={formatarMoeda(t.adesao)} detalhe={t.vendas > 0 ? `média de ${formatarMoeda(t.adesao / t.vendas)} por venda` : undefined} />
@@ -445,6 +446,16 @@ export function RelatorioComercialPage() {
         <Kpi rotulo="Rastreador" valor={formatarMoeda(t.rastreador)} />
         <Kpi rotulo="Vistoria" valor={formatarMoeda(t.vistoria)} />
         <Kpi rotulo="Indicação" valor={formatarMoeda(t.indicacao)} detalhe={`${inteiro(t.vendasIndicacao)} venda(s) por indicação`} />
+        <Kpi
+          rotulo="Conversão — tráfego pago"
+          valor={formatarPercentual(t.taxaConversaoTrafegoPago ?? 0)}
+          detalhe={`${inteiro(t.vendasTrafegoPago ?? 0)} venda(s) ÷ ${inteiro(t.leadsTrafegoPago ?? 0)} lead(s) de tráfego pago (CRM e Notion)`}
+        />
+        <Kpi
+          rotulo="Conversão — indicação"
+          valor={formatarPercentual(t.taxaConversaoIndicacaoCard ?? 0)}
+          detalhe={`${inteiro(t.vendasIndicacaoCard ?? 0)} venda(s) ÷ ${inteiro(t.leadsIndicacaoCard ?? 0)} card(s) de indicação`}
+        />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -508,7 +519,8 @@ export function RelatorioComercialPage() {
           />
           <Pagination pagina={paginaOrigens.pagina} totalPaginas={paginaOrigens.totalPaginas} onChange={paginaOrigens.setPagina} />
         </Secao>
-        <Secao titulo="Produto (O que?)">
+        <Secao titulo="Produto (O que?)" descricao="Produto de interesse informado no lead.">
+          <DonutChart itens={dados.porProduto.slice(0, 8).map((p) => ({ nome: p.produto, valor: p.leads }))} altura={260} />
           <Tabela
             colunas={["Produto", "Leads", "Vendas", "Adesão"]}
             linhas={paginaProdutos.itensDaPagina.map((p) => [p.produto, inteiro(p.leads), inteiro(p.vendas), formatarMoeda(p.adesao)])}
@@ -527,6 +539,10 @@ export function RelatorioComercialPage() {
         </Secao>
         <Secao titulo="Vendas por faixa de FIPE" descricao="Valor FIPE do veículo das vendas do período.">
           <BarrasHorizontaisChart categorias={dados.faixasFipe.map((f) => f.faixa)} series={[{ nome: "Vendas", valores: dados.faixasFipe.map((f) => f.vendas) }]} />
+          <Tabela
+            colunas={["Faixa", "Vendas", "% das vendas"]}
+            linhas={dados.faixasFipe.map((f) => [f.faixa, inteiro(f.vendas), formatarPercentual(totalVendasFipe > 0 ? (100 * f.vendas) / totalVendasFipe : 0)])}
+          />
         </Secao>
       </div>
 
