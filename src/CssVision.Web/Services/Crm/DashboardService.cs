@@ -120,7 +120,7 @@ public sealed class DashboardService(
         var evolucao = await ObterEvolucaoVendasAsync(oportunidadesQuery, hoje, ct);
 
         // "Origem das vendas": as vendas ganhas do período (as mesmas do card de vendas) por origem do cliente — Indicação (card de indicação: cadastro
-        // manual ou tipo diferente de "Lead"), Tráfego pago (CRM e cards do Notion com sinal de anúncio) e, para fechar a conta, as demais.
+        // manual ou tipo diferente de "Lead"), Tráfego pago (CRM e cards do Notion com sinal de anúncio) e, para fechar a conta, as sem origem identificada (card "Lead" sem nenhum sinal de anúncio).
         // Indicação ganha de Tráfego pago: um lead de anúncio que fechou como indicação ("Indicação Lead") é venda de indicação, não de tráfego.
         var vendasDeIndicacao = await ganhas.CountAsync(o => db.CrmLeads.Where(OrigemLead.CardDeIndicacao).Select(l => l.Id).Contains(o.LeadId), ct);
         var vendasDeAnuncio = await ganhas.CountAsync(o => db.CrmLeads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Select(l => l.Id).Contains(o.LeadId), ct);
@@ -133,7 +133,7 @@ public sealed class DashboardService(
             new("Indicação", vendasDeIndicacao),
         };
         var vendasSemOrigem = qtdGanhas - vendasDeTrafego - vendasDeIndicacao;
-        if (vendasSemOrigem > 0) origens.Add(new("Outras origens", vendasSemOrigem));
+        if (vendasSemOrigem > 0) origens.Add(new("Sem origem identificada", vendasSemOrigem));
         origens = origens.Where(o => o.Quantidade > 0).OrderByDescending(o => o.Quantidade).ToList();
 
         var desempenho = await ObterDesempenhoPorVendedorAsync(visiveis, inicioUtc, fimUtc, ct);

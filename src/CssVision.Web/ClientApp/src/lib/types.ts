@@ -1487,6 +1487,8 @@ export interface RelatorioTotais {
   leadsIndicacaoCard?: number;
   vendasIndicacaoCard?: number;
   taxaConversaoIndicacaoCard?: number;
+  leadsSemOrigemIdentificada?: number;
+  vendasSemOrigemIdentificada?: number;
 }
 
 export interface RelatorioMes {

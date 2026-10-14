@@ -48,7 +48,10 @@ public record RelatorioTotaisDto(
     /// <summary>Leads de cards de indicação (cadastro manual ou tipo diferente de "Lead") que chegaram no período e as vendas deles.</summary>
     int LeadsIndicacaoCard = 0,
     int VendasIndicacaoCard = 0,
-    decimal TaxaConversaoIndicacaoCard = 0);
+    decimal TaxaConversaoIndicacaoCard = 0,
+    /// <summary>Leads e vendas de cards "Lead" sem nenhum sinal de anúncio (nem ID do Meta, GCLID, UTM, tag ou campanha): completam o total.</summary>
+    int LeadsSemOrigemIdentificada = 0,
+    int VendasSemOrigemIdentificada = 0);
 
 /// <summary>Um mês (yyyy-MM): vendas pela data da venda, leads pela data de chegada.</summary>
 public record RelatorioMesDto(
