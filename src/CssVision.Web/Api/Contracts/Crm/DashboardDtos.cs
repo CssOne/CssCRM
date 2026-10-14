@@ -29,7 +29,8 @@ public record FunilEtapaDto(string Etapa, int Quantidade, decimal ValorTotal);
 
 public record EvolucaoVendasDto(string Periodo, decimal ValorGanho, int Quantidade, decimal Adesao = 0m);
 
-public record OrigemLeadDto(string Origem, int Quantidade);
+/// <summary>Vendas do período por origem (Tráfego pago, Indicação...).</summary>
+public record OrigemVendaDto(string Origem, int Quantidade);
 
 public record DesempenhoVendedorDto(
     Guid VendedorId,
@@ -49,7 +50,7 @@ public record DashboardDto(
     MetaResultadoDto Meta,
     IReadOnlyList<FunilEtapaDto> Funil,
     IReadOnlyList<EvolucaoVendasDto> EvolucaoVendas,
-    IReadOnlyList<OrigemLeadDto> OrigemLeads,
+    IReadOnlyList<OrigemVendaDto> OrigemVendas,
     IReadOnlyList<DesempenhoVendedorDto> DesempenhoPorVendedor,
     IReadOnlyList<ActivityDto> AtividadesDoDia,
     IReadOnlyList<AlertaLeadParadoDto> LeadsParados,

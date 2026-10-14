@@ -36,6 +36,14 @@ public static class OrigemLead
         l.MetaLeadId != null || l.Gclid != null || l.ConsentimentoOrigem == MarcadorFormularioSite
         || ((l.ConsentimentoOrigem == MarcadorMigracaoNotion || l.ConsentimentoOrigem == MarcadorSincronizacaoNotion) && l.Campanha != null);
 
+    /// <summary>
+    /// Card de indicação do quadro de leads (mesma regra de <c>NotionEtapaLead.EhIndicacao</c>, em expressão para o banco): cadastro manual ou tipo
+    /// diferente de "Lead" (Indicação, Pessoal, Indicação Lead...). Quem é "Lead" nunca é indicação.
+    /// </summary>
+    public static readonly System.Linq.Expressions.Expression<Func<Domain.Crm.CrmLead, bool>> CardDeIndicacao = l =>
+        !(l.TipoIndicacao != null && l.TipoIndicacao.ToLower() == "lead")
+        && (l.CriadoManualmente || (l.TipoIndicacao != null && l.TipoIndicacao.Trim() != ""));
+
     /// <summary>"Facebook ADS" / "Google ads": as tags de anúncio do campo "Tags" do card do Notion.</summary>
     public static bool EhTagDeAnuncio(string? tag) =>
         tag is not null && (string.Equals(tag.Trim(), "Facebook ADS", StringComparison.OrdinalIgnoreCase)
