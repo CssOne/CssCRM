@@ -197,6 +197,7 @@ public sealed class OpportunityService(
             UsuarioId = currentUser.UserId
         });
 
+        await CompletarCadastroDoLeadAsync(lead, request.Cpf, request.Estado, request.TipoIndicacao, request.Veiculo?.Placa, ct);
         await db.SaveChangesAsync(ct);
         await audit.RegistrarAsync("OportunidadeCriada", nameof(CrmOpportunity), opportunity.Id, new { opportunity.Titulo }, ct);
         eventos?.PublicarQuadroAtualizado("crm");
@@ -273,6 +274,8 @@ public sealed class OpportunityService(
         {
             opportunity.Veiculo = CriarOuAtualizarVeiculo(opportunity.Veiculo, request.Veiculo);
         }
+
+        await CompletarCadastroDoLeadAsync(opportunity.Lead, request.Cpf, request.Estado, request.TipoIndicacao, request.Veiculo?.Placa, ct);
 
         try
         {
@@ -351,6 +354,8 @@ public sealed class OpportunityService(
             opportunity.Porcentagem = request.Porcentagem;
             opportunity.Migracao = request.Migracao;
             opportunity.DataPagamentoAdesaoPrevista = request.DataPagamentoAdesaoPrevista;
+
+            await CompletarCadastroDoLeadAsync(opportunity.Lead, request.Cpf, request.Estado, request.TipoIndicacao, request.Veiculo?.Placa, ct);
 
             if (request.Veiculo is not null)
             {
@@ -501,6 +506,31 @@ public sealed class OpportunityService(
     /// </summary>
     private void TravarLeadDuranteAVenda(CrmLead lead) =>
         db.Entry(lead).Property(l => l.AtualizadoEm).IsModified = true;
+
+    /// <summary>
+    /// Os dados da venda (CPF, estado, canal de aquisição, placa) são digitados na oportunidade, mas o card do cliente lê o próprio cadastro do lead:
+    /// sem esta cópia o card ficava com esses campos em branco. Só preenche o que o cadastro ainda não tem (nunca sobrescreve) e nunca troca a etiqueta
+    /// "Lead" (tráfego) por um canal — isso moveria o card de coluna; o CPF/CNPJ só entra se nenhum outro cliente ativo já o usa.
+    /// </summary>
+    private async Task CompletarCadastroDoLeadAsync(CrmLead lead, string? cpf, string? estado, string? tipoIndicacao, string? placa, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(lead.Estado) && !string.IsNullOrWhiteSpace(estado) && estado.Trim().Length <= 2)
+            lead.Estado = estado.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(lead.Placa) && !string.IsNullOrWhiteSpace(placa) && placa.Trim().Length <= 10)
+            lead.Placa = placa.Trim().ToUpperInvariant();
+        if (string.IsNullOrWhiteSpace(lead.TipoIndicacao) && !string.IsNullOrWhiteSpace(tipoIndicacao) && tipoIndicacao.Trim().Length <= 80)
+            lead.TipoIndicacao = tipoIndicacao.Trim();
+
+        if (string.IsNullOrEmpty(lead.DocumentoNormalizado) && !string.IsNullOrWhiteSpace(cpf))
+        {
+            var documento = DocumentValidation.NormalizarDocumento(cpf, out var valido);
+            if (valido && documento is not null
+                && !await db.CrmLeads.AnyAsync(l => l.Id != lead.Id && l.DocumentoNormalizado == documento && !l.Arquivado && l.VeiculoAdicionalDeLeadId == null, ct))
+            {
+                lead.DocumentoNormalizado = documento;
+            }
+        }
+    }
 
     private async Task<IQueryable<CrmOpportunity>> QueryEscopadaAsync(CancellationToken ct)
     {
