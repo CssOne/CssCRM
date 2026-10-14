@@ -19,6 +19,7 @@ import { ConversarSobreLeadDialog } from "../../components/crm/ConversarSobreLea
 import { LeadForm, type LeadFormValues } from "../../components/crm/LeadForm";
 import { ActivityForm, type ActivityFormValues } from "../../components/crm/ActivityForm";
 import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog";
+import { EtapaDoLead } from "../../components/crm/EtapaDoLead";
 import { AlterarResponsavelDialog } from "../../components/crm/AlterarResponsavelDialog";
 import { Timeline } from "../../components/crm/Timeline";
 import { useAbrirLead, useFecharPainelLead } from "../../lib/painelLead";
@@ -352,6 +353,7 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
                 </Badge>
               ))}
             </div>
+            <EtapaDoLead lead={lead} onMudou={() => carregar()} />
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
             {sessao?.menu.some((m) => m.chave === "chat") && (
