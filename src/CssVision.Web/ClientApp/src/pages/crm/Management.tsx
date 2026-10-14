@@ -592,15 +592,15 @@ export function ManagementPage() {
                     <span className="truncate">{v.nome}</span>
                     {v.ativo === false && <Badge variant="danger">Inativo</Badge>}
                   </p>
-                  <p className="text-xs text-[var(--fg-muted)]">
-                    {v.leadsAtivos.toLocaleString("pt-BR")} leads · {v.oportunidadesAbertas} oportunidades
+                  <p
+                    className="text-xs text-[var(--fg-muted)]"
+                    title="Leads de tráfego pago (Notion e sistema novo) que chegaram para o vendedor neste mês"
+                  >
+                    <span className="font-semibold text-[var(--brand)]">{(v.leadsTrafegoNoMes ?? 0).toLocaleString("pt-BR")}</span> leads no mês ·{" "}
+                    {v.oportunidadesAbertas} oportunidades
                   </p>
-                  <p className="mt-1 text-xs" title="Leads de tráfego pago (Notion e sistema novo) que chegaram para o vendedor neste mês">
-                    <span className="font-semibold text-[var(--brand)]">{(v.leadsTrafegoNoMes ?? 0).toLocaleString("pt-BR")}</span>{" "}
-                    <span className="text-[var(--fg-muted)]">leads de tráfego pago no mês</span>
-                    <span className="text-[var(--fg-muted)]">
-                      {" "}· <span className="font-semibold text-[var(--fg)]">{(v.leadsTrafegoMesAnterior ?? 0).toLocaleString("pt-BR")}</span> no mês anterior
-                    </span>
+                  <p className="mt-1 text-xs text-[var(--fg-muted)]">
+                    <span className="font-semibold text-[var(--fg)]">{(v.leadsTrafegoMesAnterior ?? 0).toLocaleString("pt-BR")}</span> leads no mês anterior
                   </p>
                 </div>
                 <div className="space-y-1.5 border-t border-[var(--border)] pt-2">
