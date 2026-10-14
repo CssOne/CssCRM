@@ -238,6 +238,7 @@ public static class ServiceCollectionExtensions
         if (enabled)
         {
             services.AddHostedService<NotionSyncBackgroundService>();
+            services.AddHostedService<PreencherTagDeAnuncioBackgroundService>();
         }
 
         return services;
