@@ -147,6 +147,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<PushNovosLeadsBackgroundService>();
         // Etapa 1 da volta da MG134: desarquiva os leads uma vez, depois do app no ar (não bloqueia a subida).
         services.AddHostedService<ReativarLeadsMg134BackgroundService>();
+        services.AddHostedService<DesmarcarIndicacaoSemValorBackgroundService>();
         services.AddHostedService<PreencherCadastroDosLeadsBackgroundService>();
         services.AddScoped<IOpportunityService, OpportunityService>();
         services.AddScoped<IPipelineService, PipelineService>();

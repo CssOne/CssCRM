@@ -45,11 +45,6 @@ const valoresIniciais: DadosVendaConcluida = {
   dataPagamentoAdesaoPrevista: null,
 };
 
-/** Canal que não é "Lead" (Indicação Lead, Pessoal, Parceria...) é venda de indicação. */
-function ehCanalDeIndicacao(tipo?: string | null): boolean {
-  return !!tipo?.trim() && tipo.trim().toLowerCase() !== "lead";
-}
-
 function hojeLocal() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -193,9 +188,12 @@ export function VendaConcluidaDialog({
   const [temSeguro, setTemSeguro] = useState("");
   const [utilidadeVeiculo, setUtilidadeVeiculo] = useState("");
 
-  /** Venda de card "Lead" em "Venda concluída (Indicação)": já marcada como indicação "Indicação Lead". */
+  /**
+   * Venda de card "Lead" em "Venda concluída (Indicação)": o "Teve indicação" e o canal NÃO vêm marcados — o consultor escolhe
+   * (antes a venda já vinha marcada como indicação "Indicação Lead", e muita venda ficava com indicação de R$ 0,00).
+   */
   function comIndicacaoLead(v: DadosVendaConcluida): DadosVendaConcluida {
-    return indicacaoLead ? { ...v, indicacao: true, tipoIndicacao: TIPO_INDICACAO_LEAD } : v;
+    return indicacaoLead ? { ...v, indicacao: false, tipoIndicacao: v.tipoIndicacao === TIPO_INDICACAO_LEAD ? "" : v.tipoIndicacao } : v;
   }
 
   useEffect(() => {
@@ -215,7 +213,7 @@ export function VendaConcluidaDialog({
 
     if (novoCliente && !leadId) {
       // Cliente novo: nada para carregar — o formulário começa em branco (canal de indicação, que é o da coluna).
-      setValores({ ...valoresIniciais, indicacao: true, dataEfetivaFechamento: hojeBrasilia() });
+      setValores({ ...valoresIniciais, indicacao: false, dataEfetivaFechamento: hojeBrasilia() });
       setOportunidadeResolvidaId(null);
       setResponsavelIdLead(null);
       setTemRastreador(false);
@@ -291,9 +289,9 @@ export function VendaConcluidaDialog({
             ...v,
             cpf: lead.documento ?? lead.veiculoAdicionalDeDocumento ?? "",
             estado: lead.estado ?? "",
-            // O canal escolhido no cadastro do cliente já vem marcado; canal de indicação (diferente de "Lead") marca a indicação.
+            // O canal do cadastro do cliente vem preenchido, mas o "Teve indicação" não é marcado sozinho: quem marca é o consultor.
             tipoIndicacao: lead.tipoIndicacao ?? "",
-            indicacao: ehCanalDeIndicacao(lead.tipoIndicacao) ? true : v.indicacao,
+            indicacao: v.indicacao,
             // Outro veículo: a adesão e a placa são do veículo novo, não do card do cliente.
             pagamentoAdesao: novoVeiculo ? v.pagamentoAdesao : v.pagamentoAdesao ?? lead.valorAdesao ?? null,
             veiculo: { ...v.veiculo, placa: novoVeiculo ? "" : lead.placa ?? "" },
@@ -356,7 +354,9 @@ export function VendaConcluidaDialog({
   }
 
   const quantidadeVeiculosValida = !maisVeiculos || (veiculosAdicionais >= 1 && veiculosAdicionais <= MAXIMO_VEICULOS_ADICIONAIS);
-  const indicacaoPreenchida = !valores.indicacao || (!!valores.tipoIndicacao && (valores.valorIndicacao ?? -1) >= 0);
+  const indicacaoPreenchida = !valores.indicacao || (valores.valorIndicacao ?? -1) > 0;
+  // O canal de aquisição é obrigatório em toda venda (teve indicação ou não).
+  const canalPreenchido = !!valores.tipoIndicacao;
   // Adesão paga depois: com a data do pagamento marcada, o comprovante deixa de ser obrigatório.
   const pagamentoAgendado = !!valores.dataPagamentoAdesaoPrevista;
   const temComprovantePagamento = !!pagamentoArquivo || !!oportunidadeEditar?.pagamentoAdesaoArquivoUrl;
@@ -393,6 +393,7 @@ export function VendaConcluidaDialog({
     !adesaoSemValorComComprovante &&
     (valores.total ?? -1) >= 0 &&
     indicacaoPreenchida &&
+    canalPreenchido &&
     !!valores.veiculo?.descricao &&
     (carroZero ? !!valores.veiculo?.chassi?.trim() : !!valores.veiculo?.placa) &&
     (valores.veiculo?.fipe ?? -1) >= 0 &&
@@ -436,7 +437,7 @@ export function VendaConcluidaDialog({
       cpf: valores.cpf || null,
       estado: valores.estado || null,
       indicacao: valores.indicacao ?? null,
-      tipoIndicacao: valores.indicacao ? valores.tipoIndicacao || null : null,
+      tipoIndicacao: valores.tipoIndicacao || null,
       valorIndicacao: valores.indicacao ? valores.valorIndicacao : null,
       total: valores.total,
     };
@@ -827,7 +828,7 @@ export function VendaConcluidaDialog({
               }}
             />
             <div className="w-48">
-              <Label htmlFor="venda-tipo-indicacao" required={ehVenda && !!valores.indicacao}>
+              <Label htmlFor="venda-tipo-indicacao" required={ehVenda}>
                 Canal de Aquisição
               </Label>
               <Select
@@ -835,8 +836,8 @@ export function VendaConcluidaDialog({
                 value={valores.tipoIndicacao ?? ""}
                 onChange={(e) => {
                   const tipo = e.target.value;
-                  // Escolher um canal de indicação marca a indicação; "Lead" não.
-                  setValores((v) => ({ ...v, tipoIndicacao: tipo, indicacao: tipo ? ehCanalDeIndicacao(tipo) : v.indicacao }));
+                  // Escolher o canal não marca o "Teve indicação": são campos separados.
+                  setValores((v) => ({ ...v, tipoIndicacao: tipo }));
                 }}
               >
                 <option value="">Selecione...</option>
