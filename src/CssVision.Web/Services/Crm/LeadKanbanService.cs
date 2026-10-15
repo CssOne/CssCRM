@@ -272,7 +272,8 @@ public sealed class LeadKanbanService(
                 || (lead && l.TipoIndicacao != null && l.TipoIndicacao.ToLower() == "lead"));
         }
 
-        var tipos = Valores(filtro.TipoIndicacao).Select(t => t!.ToLower()).ToList();
+        // Filtro salvo no navegador com o nome antigo do canal ("Pessoal" virou "Indicação pessoal") continua valendo.
+        var tipos = Valores(filtro.TipoIndicacao).Select(t => t!.ToLower()).SelectMany(t => t == "pessoal" ? new[] { "pessoal", "indicação pessoal" } : new[] { t }).ToList();
         if (tipos.Count > 0) query = query.Where(l => l.TipoIndicacao != null && tipos.Contains(l.TipoIndicacao.ToLower()));
 
         // "Fonte" (Notion x tráfego pago): todos os usuários filtram por ela. O que continua restrito é a Origem em si (campo do cartão e filtro "Origem").

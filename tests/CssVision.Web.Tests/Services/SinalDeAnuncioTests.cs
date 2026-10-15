@@ -54,7 +54,7 @@ public class SinalDeAnuncioTests
         Assert.Equal("Indicação", NotionSyncService.TipoIndicacaoDoCard(Card(), null));
 
     [Theory]
-    [InlineData("PESSOAL", false, "Pessoal")]
+    [InlineData("PESSOAL", false, "Indicação pessoal")]
     [InlineData(null, true, "Indicação")]
     public void TipoOuIndicacaoPreenchidos_VencemOSinalDeAnuncio(string? tipo, bool indicacaoSim, string esperado) =>
         Assert.Equal(esperado, NotionSyncService.TipoIndicacaoDoCard(Card(tag: "Facebook ADS", tipo: tipo, indicacaoSim: indicacaoSim), "AGV"));

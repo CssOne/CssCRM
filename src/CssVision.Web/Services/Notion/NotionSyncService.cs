@@ -392,7 +392,7 @@ public sealed class NotionSyncService(
     /// <summary>
     /// Passada única por base: relê o "Tipo de Indicação?" de cada card "VENDA CONCLUIDA" e grava o Canal de Aquisição no lead e na venda,
     /// e os valores da venda (mensalidade, adesão, porcentagem, indicação, estado, rastreador, vistoria) —
-    /// "Pessoal" fica "Pessoal"; "Lead" com "Indicação?" = SIM vira "Indicação Lead" (e o card vai para a coluna das indicações).
+    /// "Pessoal" vira "Indicação pessoal"; "Lead" com "Indicação?" = SIM vira "Indicação Lead" (e o card vai para a coluna das indicações).
     /// Só mexe em lead que veio do Notion e já está ligado ao card.
     /// </summary>
     private async Task<string> CorrigirTipoIndicacaoDasVendasAsync(NotionClient notion, string dataSourceId, string regionalNome, string baseNome, DateTimeOffset inicio, CancellationToken ct)
@@ -697,11 +697,13 @@ public sealed class NotionSyncService(
         && (string.Equals(valor, "SIM", StringComparison.OrdinalIgnoreCase)
             || string.Equals(RemoverAcentos(valor.Trim()), "INDICACAO", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>"PESSOAL" → "Pessoal", "AÇÃO EXTERNA" → "Ação Externa", "CSS" → "CSS" (mesma grafia das opções do CRM).</summary>
+    /// <summary>"PESSOAL" → "Indicação pessoal", "AÇÃO EXTERNA" → "Ação Externa", "CSS" → "CSS" (mesma grafia das opções do CRM).</summary>
     public static string NormalizarTipoIndicacao(string tipo)
     {
         var t = tipo.Trim();
-        var conhecido = new[] { "Lead", "Indicação", TipoIndicacaoLead.IndicacaoLead, "Pessoal", "Contemplando Sonhos", "Parceria", "Ação Externa", "CSS" }
+        // "PESSOAL" do Notion é o canal "Indicação pessoal" do CRM (a opção foi renomeada).
+        if (string.Equals(RemoverAcentos(t), "pessoal", StringComparison.OrdinalIgnoreCase)) return "Indicação pessoal";
+        var conhecido = new[] { "Lead", "Indicação", TipoIndicacaoLead.IndicacaoLead, "Indicação pessoal", "Contemplando Sonhos", "Parceria", "Ação Externa", "CSS" }
             .FirstOrDefault(o => string.Equals(RemoverAcentos(o), RemoverAcentos(t), StringComparison.OrdinalIgnoreCase));
         if (conhecido is not null) return conhecido;
         var titulo = System.Globalization.CultureInfo.GetCultureInfo("pt-BR").TextInfo.ToTitleCase(t.ToLowerInvariant());

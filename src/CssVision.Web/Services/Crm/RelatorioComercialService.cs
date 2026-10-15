@@ -71,7 +71,7 @@ public sealed class RelatorioComercialService(
         }
         var etapas = etapaIds is { Count: > 0 } ? etapaIds.Distinct().Order().ToList() : null;
         // Tipos de indicação sem maiúsculas/minúsculas (o dado veio de épocas com grafias diferentes), ordenados para a chave do cache.
-        var tipos = (extras?.TiposIndicacao ?? []).Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim().ToLower()).Distinct().Order().ToList();
+        var tipos = (extras?.TiposIndicacao ?? []).Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim().ToLower()).SelectMany(t => t == "pessoal" ? new[] { "pessoal", "indicação pessoal" } : new[] { t }).Distinct().Order().ToList();
         var filtroExtra = new RelatorioFiltroExtra(extras?.ChegadaInicio, extras?.ChegadaFim, extras?.VendaInicio, extras?.VendaFim, extras?.Indicacao, tipos, extras?.RegionalId);
         var relatorio = await RespostaEmCache.ObterAsync(cache, eventos, "relatorio-comercial",
             new { escopo = RespostaEmCache.Escopo(visiveis), inicio, fim, consultorId, etapas, extras = new { filtroExtra.ChegadaInicio, filtroExtra.ChegadaFim, filtroExtra.VendaInicio, filtroExtra.VendaFim, filtroExtra.Indicacao, tipos, filtroExtra.RegionalId } },
