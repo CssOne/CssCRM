@@ -46,7 +46,7 @@ public class NotionSyncTipoIndicacaoTests
     }
 
     [Theory]
-    [InlineData("PESSOAL", true, "AGV", "Pessoal")]
+    [InlineData("PESSOAL", true, "AGV", "Indicação pessoal")]
     [InlineData("LEAD", true, "AGV", "Indicação Lead")] // venda de lead que fechou por indicação
     [InlineData("LEAD", false, "AGV", "Lead")]
     [InlineData("CONTEMPLANDO SONHOS", false, "AGV", "Contemplando Sonhos")]
@@ -84,7 +84,7 @@ public class NotionSyncTipoIndicacaoTests
 
     [Fact]
     public void TipoIndicacao_AchaOCampoPeloNomeAproximado() =>
-        Assert.Equal("Pessoal", NotionSyncService.TipoIndicacaoDoCard(Pagina("PESSOAL", false, nomePropTipo: "Tipo de indicação?"), "AGV"));
+        Assert.Equal("Indicação pessoal", NotionSyncService.TipoIndicacaoDoCard(Pagina("PESSOAL", false, nomePropTipo: "Tipo de indicação?"), "AGV"));
 
     [Theory]
     [InlineData("AGV ELETRICO")]   // grafia do Notion, sem acento
@@ -100,7 +100,7 @@ public class NotionSyncTipoIndicacaoTests
     [InlineData(null, "123456789", null, null, "Lead")]                  // sem "O que", mas com ID de lead da Meta
     [InlineData(null, null, "Cj0KCQ", null, "Lead")]                    // sem "O que", mas com GCLID
     [InlineData("OUTRO PRODUTO", "123456789", null, null, "Lead")]       // "O que" desconhecido com anúncio
-    [InlineData(null, "123456789", null, "PESSOAL", "Pessoal")]           // tipo explícito do Notion vale mais que o anúncio
+    [InlineData(null, "123456789", null, "PESSOAL", "Indicação pessoal")]           // tipo explícito do Notion vale mais que o anúncio
     [InlineData(null, "123456789", null, "LEAD", "Lead")]
     [InlineData("OUTRO PRODUTO", null, null, null, "Indicação")]          // sem anúncio, sem "O que" conhecido: continua indicação
     public void CardComSinalDeAnuncio_NuncaViraIndicacaoPorPadrao(string? oQue, string? metaLeadId, string? gclid, string? tipo, string esperado) =>
@@ -199,12 +199,12 @@ public class NotionSyncTipoIndicacaoTests
         await service.ProcessarPaginaAsync(Pagina("PESSOAL", true, vendedorEmail: anaEmail), regional, "MG132", etapas, ganho, placeholder, false, CancellationToken.None);
 
         var lead = await db.CrmLeads.SingleAsync();
-        Assert.Equal("Pessoal", lead.TipoIndicacao);
+        Assert.Equal("Indicação pessoal", lead.TipoIndicacao);
         Assert.True(lead.CriadoManualmente);
         Assert.Equal(etapas["Venda concluída (Indicação)"], lead.EtapaId);
         var oportunidade = await db.CrmOpportunities.SingleAsync();
         Assert.True(oportunidade.Indicacao);
-        Assert.Equal("Pessoal", oportunidade.TipoIndicacao);
+        Assert.Equal("Indicação pessoal", oportunidade.TipoIndicacao);
     }
 
     [Fact]
@@ -226,7 +226,7 @@ public class NotionSyncTipoIndicacaoTests
             Pagina("PESSOAL", true, whatsapp: "(31) 99214-2811"), regional, "MG132", placeholder, CancellationToken.None, etapas);
 
         var lead = await db.CrmLeads.SingleAsync();
-        Assert.Equal("Pessoal", lead.TipoIndicacao);
+        Assert.Equal("Indicação pessoal", lead.TipoIndicacao);
         Assert.Equal(etapas["Venda concluída (Indicação)"], lead.EtapaId);
     }
 }
