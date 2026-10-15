@@ -172,6 +172,7 @@ public sealed class UserManagementService(
             // Só administrador (visão total) pode "só administrar"; os demais papéis sempre atuam nas vendas.
             AtuaNasVendas = request.Papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial) || (request.AtuaNasVendas ?? true),
             VerOutrasRegionaisNoRelatorio = request.Papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial) || (request.VerOutrasRegionaisNoRelatorio ?? true),
+            VerPainelTv = request.VerPainelTv ?? false,
         };
 
         var resultado = await userManager.CreateAsync(usuario, request.Senha);
@@ -287,6 +288,8 @@ public sealed class UserManagementService(
         else if (request.AtuaNasVendas is { } atua) usuario.AtuaNasVendas = atua;
         if (request.Papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial)) usuario.VerOutrasRegionaisNoRelatorio = true;
         else if (request.VerOutrasRegionaisNoRelatorio is { } ver) usuario.VerOutrasRegionaisNoRelatorio = ver;
+        // Só quando vier: outras telas que editam o usuário não mandam o campo.
+        if (request.VerPainelTv is { } verTv) usuario.VerPainelTv = verTv;
 
         var papeisAtuais = await userManager.GetRolesAsync(usuario);
         if (!papeisAtuais.Contains(request.Papel))
@@ -511,7 +514,8 @@ public sealed class UserManagementService(
             [.. EscopoRegional.Ler(usuario.RegionaisOcultas)],
             await NomesDasOcultasAsync(usuario.RegionaisOcultas, ct),
             usuario.AtuaNasVendas,
-            usuario.VerOutrasRegionaisNoRelatorio);
+            usuario.VerOutrasRegionaisNoRelatorio,
+            usuario.VerPainelTv);
     }
 
     private async Task<IReadOnlyList<string>> NomesDasOcultasAsync(string? ocultas, CancellationToken ct)
