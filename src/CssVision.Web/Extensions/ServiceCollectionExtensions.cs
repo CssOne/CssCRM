@@ -149,6 +149,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<ReativarLeadsMg134BackgroundService>();
         services.AddHostedService<RenomearCanalPessoalBackgroundService>();
         services.AddHostedService<OutroVeiculoComoIndicacaoLeadBackgroundService>();
+        services.AddHostedService<UnirVendasDuplicadasDoTrafegoBackgroundService>();
         services.AddHostedService<DesmarcarIndicacaoSemValorBackgroundService>();
         services.AddHostedService<DevolverCardsDaMg134AoVendedorBackgroundService>();
         services.AddHostedService<PreencherCadastroDosLeadsBackgroundService>();
