@@ -151,6 +151,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<OutroVeiculoComoIndicacaoLeadBackgroundService>();
         services.AddHostedService<UnirVendasDuplicadasDoTrafegoBackgroundService>();
         services.AddHostedService<DesmarcarIndicacaoSemValorBackgroundService>();
+        services.AddHostedService<UnificarContasDoSamysBackgroundService>();
         services.AddHostedService<DevolverCardsDaMg134AoVendedorBackgroundService>();
         services.AddHostedService<PreencherCadastroDosLeadsBackgroundService>();
         services.AddScoped<IOpportunityService, OpportunityService>();
