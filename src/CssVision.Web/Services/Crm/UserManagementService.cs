@@ -171,6 +171,7 @@ public sealed class UserManagementService(
             LimiteDiarioLeads = request.Papel == Roles.Comercial ? request.LimiteDiarioLeads : null,
             // Só administrador (visão total) pode "só administrar"; os demais papéis sempre atuam nas vendas.
             AtuaNasVendas = request.Papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial) || (request.AtuaNasVendas ?? true),
+            VerOutrasRegionaisNoRelatorio = request.Papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial) || (request.VerOutrasRegionaisNoRelatorio ?? true),
         };
 
         var resultado = await userManager.CreateAsync(usuario, request.Senha);
@@ -284,6 +285,8 @@ public sealed class UserManagementService(
         usuario.Ativo = request.Ativo;
         if (request.Papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial)) usuario.AtuaNasVendas = true;
         else if (request.AtuaNasVendas is { } atua) usuario.AtuaNasVendas = atua;
+        if (request.Papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial)) usuario.VerOutrasRegionaisNoRelatorio = true;
+        else if (request.VerOutrasRegionaisNoRelatorio is { } ver) usuario.VerOutrasRegionaisNoRelatorio = ver;
 
         var papeisAtuais = await userManager.GetRolesAsync(usuario);
         if (!papeisAtuais.Contains(request.Papel))
@@ -507,7 +510,8 @@ public sealed class UserManagementService(
             usuario.Ativo, usuario.LimiteMensalLeads, usuario.FotoUrl, usuario.CriadoEm, FiltroOQue.Separar(usuario.RecebeSomenteOQue), usuario.LimiteDiarioLeads,
             [.. EscopoRegional.Ler(usuario.RegionaisOcultas)],
             await NomesDasOcultasAsync(usuario.RegionaisOcultas, ct),
-            usuario.AtuaNasVendas);
+            usuario.AtuaNasVendas,
+            usuario.VerOutrasRegionaisNoRelatorio);
     }
 
     private async Task<IReadOnlyList<string>> NomesDasOcultasAsync(string? ocultas, CancellationToken ct)

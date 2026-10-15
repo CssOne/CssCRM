@@ -33,6 +33,8 @@ export interface UserFormValues {
   ocultasAlteradas: boolean;
   /** Administrador que pega leads / atua nas vendas (falso = só administra a plataforma). */
   atuaNasVendas: boolean;
+  /** Administrador: ver as outras regionais no Relatório comercial (desmarcado = só a regional dele). */
+  verOutrasRegionaisNoRelatorio: boolean;
   ativo: boolean;
 }
 
@@ -55,6 +57,7 @@ function valoresVazios(papelFixo?: string): UserFormValues {
     regionaisOcultas: [],
     ocultasAlteradas: false,
     atuaNasVendas: true,
+    verOutrasRegionaisNoRelatorio: true,
     ativo: true,
   };
 }
@@ -75,6 +78,7 @@ export function paraFormValues(usuario: UserSummary): UserFormValues {
     regionaisOcultas: usuario.regionaisOcultasIds ?? [],
     ocultasAlteradas: false,
     atuaNasVendas: usuario.atuaNasVendas ?? true,
+    verOutrasRegionaisNoRelatorio: usuario.verOutrasRegionaisNoRelatorio ?? true,
     ativo: usuario.ativo,
   };
 }
@@ -94,6 +98,7 @@ export function paraCriarRequest(v: UserFormValues): UserCreateRequest {
     recebeSomenteOQue: v.papel === "Comercial" ? v.recebeSomenteOQue : null,
     regionaisOcultasIds: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.regionaisOcultas : null,
     atuaNasVendas: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.atuaNasVendas : null,
+    verOutrasRegionaisNoRelatorio: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.verOutrasRegionaisNoRelatorio : null,
   };
 }
 
@@ -112,6 +117,7 @@ export function paraAtualizarRequest(v: UserFormValues): UserUpdateRequest {
     regionaisOcultasIds: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.regionaisOcultas : null,
     alterarRegionaisOcultas: v.ocultasAlteradas,
     atuaNasVendas: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.atuaNasVendas : null,
+    verOutrasRegionaisNoRelatorio: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.verOutrasRegionaisNoRelatorio : null,
   };
 }
 
@@ -279,6 +285,20 @@ export function UserForm({
             <p className="mt-1 text-xs text-[var(--fg-muted)]">
               Desmarcado, este administrador só administra a plataforma: não pega leads do tráfego pago e o nome dele não aparece na Gestão
               comercial, no quadro de leads, nas listas de consultores nem nos rankings (inclusive o da TV).
+            </p>
+          </div>
+        )}
+
+        {podeGerenciarTudo && PAPEIS_COM_VISAO_TOTAL.includes(valores.papel) && (
+          <div className="sm:col-span-2">
+            <Checkbox
+              label="Ver as outras regionais no Relatório comercial"
+              checked={valores.verOutrasRegionaisNoRelatorio}
+              onChange={(e) => set("verOutrasRegionaisNoRelatorio", e.target.checked)}
+            />
+            <p className="mt-1 text-xs text-[var(--fg-muted)]">
+              Desmarcado, o Relatório comercial deste administrador mostra só a regional do cadastro dele (é preciso ter uma regional definida);
+              as demais telas não mudam.
             </p>
           </div>
         )}

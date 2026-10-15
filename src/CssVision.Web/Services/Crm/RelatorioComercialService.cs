@@ -67,7 +67,7 @@ public sealed class RelatorioComercialService(
             throw new CrmBusinessException("A data final não pode ser anterior à inicial.", "periodo_invalido");
         }
 
-        var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
+        var (visiveis, regionalFixa) = await VisiveisDoRelatorioAsync(ct);
         if (extras?.RegionalId is { } regionalId)
         {
             // Aba de uma regional: só os consultores dela, dentro do que quem consulta já enxerga.
@@ -86,7 +86,7 @@ public sealed class RelatorioComercialService(
         // (como no quadro de leads), o produto, o desempenho por vendedor e o controle de marketing do Notion (gasto em anúncios e faturamento da empresa, que
         // não é filtrado por consultor). Aplicado depois do cache, porque a resposta guardada é a mesma para usuários com o mesmo escopo e permissões diferentes.
         return currentUser.PodeGerirComercial
-            ? relatorio
+            ? relatorio with { RegionalFixaId = regionalFixa }
             : relatorio with { PorOrigem = [], PorProduto = [], PorVendedor = [], MarketingNotion = [] };
     }
 
@@ -109,7 +109,7 @@ public sealed class RelatorioComercialService(
         var fim = dataFim ?? hoje;
         if (fim < inicio) throw new CrmBusinessException("A data final não pode ser anterior à inicial.", "periodo_invalido");
 
-        var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
+        var (visiveis, _) = await VisiveisDoRelatorioAsync(ct);
         if (extras?.RegionalId is { } regionalId)
         {
             var daRegional = await db.Users.AsNoTracking().Where(u => u.RegionalId == regionalId).Select(u => u.Id).ToListAsync(ct);
@@ -268,6 +268,20 @@ public sealed class RelatorioComercialService(
         }
 
         return (leadsQuery, vendasQuery);
+    }
+
+    /// <summary>
+    /// Quem o relatório mostra: o que o usuário já enxerga e, se o cadastro dele tem "ver outras regionais no Relatório comercial" desligado (só vale para visão
+    /// total), apenas os consultores da regional do próprio cadastro. Sem regional no cadastro, não há o que restringir.
+    /// </summary>
+    private async Task<(List<Guid>? Visiveis, Guid? RegionalFixa)> VisiveisDoRelatorioAsync(CancellationToken ct)
+    {
+        var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
+        if (!currentUser.TemVisaoTotal) return (visiveis, null);
+        var eu = await db.Users.AsNoTracking().Where(u => u.Id == currentUser.UserId).Select(u => new { u.VerOutrasRegionaisNoRelatorio, u.RegionalId }).FirstOrDefaultAsync(ct);
+        if (eu is null || eu.VerOutrasRegionaisNoRelatorio || eu.RegionalId is not { } minha) return (visiveis, null);
+        var daMinha = await db.Users.AsNoTracking().Where(u => u.RegionalId == minha).Select(u => u.Id).ToListAsync(ct);
+        return (visiveis is null ? daMinha : visiveis.Intersect(daMinha).ToList(), minha);
     }
 
     private async Task<RelatorioComercialDto> CalcularAsync(DateOnly inicio, DateOnly fim, List<Guid>? visiveis, Guid? consultorId, List<Guid>? etapaIds,

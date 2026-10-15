@@ -387,15 +387,15 @@ export function RelatorioComercialPage() {
       {filtro}
       {podeGerir && (
       <div role="tablist" aria-label="Regional" className="flex w-full flex-wrap gap-1.5 border-b border-[var(--border)] pb-2">
-        {[{ id: "", nome: "Todas as regionais" }, ...regionais.filter((r) => r.ativa)].map((r) => (
+        {(dados?.regionalFixaId ? regionais.filter((r) => r.id === dados.regionalFixaId) : [{ id: "", nome: "Todas as regionais" }, ...regionais.filter((r) => r.ativa)]).map((r) => (
           <button
             key={r.id || "todas"}
             type="button"
             role="tab"
-            aria-selected={regionalId === r.id}
+            aria-selected={!!dados?.regionalFixaId || regionalId === r.id}
             onClick={() => { setRegionalId(r.id); setConsultorId(""); pesquisar({ regionalId: r.id, consultorId: "" }); }}
             className={`focus-ring cursor-pointer rounded-lg px-3 py-1.5 text-sm font-medium ${
-              regionalId === r.id ? "bg-[var(--brand)] text-white" : "text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+              dados?.regionalFixaId || regionalId === r.id ? "bg-[var(--brand)] text-white" : "text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
             }`}
           >
             {r.nome}

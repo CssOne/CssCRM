@@ -1380,6 +1380,8 @@ export interface UserSummary {
   regionaisOcultasNomes?: string[] | null;
   /** Administrador que pega leads / atua nas vendas. Falso = só administra a plataforma (some de tudo que remete a vendas). */
   atuaNasVendas?: boolean;
+  /** Administrador: falso = o Relatório comercial dele mostra só a regional do próprio cadastro. */
+  verOutrasRegionaisNoRelatorio?: boolean;
 }
 
 export interface UserFilterRequest {
@@ -1406,6 +1408,7 @@ export interface UserCreateRequest {
   limiteDiarioLeads?: number | null;
   regionaisOcultasIds?: string[] | null;
   atuaNasVendas?: boolean | null;
+  verOutrasRegionaisNoRelatorio?: boolean | null;
 }
 
 export interface UserUpdateRequest {
@@ -1423,6 +1426,7 @@ export interface UserUpdateRequest {
   /** Verdadeiro quando a lista acima foi mexida (lista vazia + verdadeiro = mostra todas de novo). */
   alterarRegionaisOcultas?: boolean;
   atuaNasVendas?: boolean | null;
+  verOutrasRegionaisNoRelatorio?: boolean | null;
 }
 
 export interface GrupoMembro {
@@ -1563,6 +1567,8 @@ export interface RelatorioMarketingMes {
 }
 
 export interface RelatorioComercial {
+  /** Quando o cadastro do usuário limita o relatório a uma regional, o id dela. */
+  regionalFixaId?: string | null;
   dataInicio: string;
   dataFim: string;
   totais: RelatorioTotais;

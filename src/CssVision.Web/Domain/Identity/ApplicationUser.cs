@@ -59,6 +59,12 @@ public class ApplicationUser : IdentityUser<Guid>
     public bool AtuaNasVendas { get; set; } = true;
 
     /// <summary>
+    /// Administrador (visão total): com <c>false</c> o Relatório comercial dele mostra só a regional do próprio cadastro, sem as outras. Os demais
+    /// papéis já enxergam só a própria regional/equipe; para eles o valor não tem efeito.
+    /// </summary>
+    public bool VerOutrasRegionaisNoRelatorio { get; set; } = true;
+
+    /// <summary>
     /// Id do usuário no Notion (campo "Vendedor" dos cards). Liga o card ao usuário mesmo quando o Notion
     /// não informa o e-mail da pessoa — assim o lead não cai em "Vendedor não identificado".
     /// </summary>
