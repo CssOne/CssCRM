@@ -1720,3 +1720,22 @@ export interface DiscordAvisosCanais {
   /** Aviso de cada lead de anúncio novo no canal da regional (com link para abrir no CRM; sem dados do cliente). */
   leadNovo?: boolean;
 }
+
+/** Os clientes por trás de um card do Relatório comercial ou de uma fatia do gráfico de origem das vendas. */
+export interface RelatorioDetalheItem {
+  leadId: string;
+  cliente: string;
+  consultor?: string | null;
+  data: string;
+  etapa?: string | null;
+  canal?: string | null;
+  valor?: number | null;
+}
+
+export interface RelatorioDetalhe {
+  titulo: string;
+  total: number;
+  rotuloData: string;
+  rotuloValor?: string | null;
+  itens: RelatorioDetalheItem[];
+}

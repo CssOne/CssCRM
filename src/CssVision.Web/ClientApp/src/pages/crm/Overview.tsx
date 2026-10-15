@@ -12,6 +12,7 @@ import { StatCard } from "../../components/crm/StatCard";
 import { PagamentosEmAberto } from "../../components/crm/PagamentosEmAberto";
 import { EvolucaoChart, OrigemChart } from "../../components/crm/Charts";
 import { FiltroRegionalDoPainel, useRegionalDoPainel } from "../../components/crm/FiltroRegionalDoPainel";
+import { DetalheDoCardModal } from "../../components/crm/DetalheDoCardModal";
 
 export function OverviewPage() {
   const { temPapel } = useAuth();
@@ -21,6 +22,8 @@ export function OverviewPage() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [recarregar, setRecarregar] = useState(0);
+  // Fatia do gráfico de origem das vendas aberta: as vendas daquela origem.
+  const [origemAberta, setOrigemAberta] = useState<string | null>(null);
   // Mês mostrado (YYYY-MM): começa no mês atual e acompanha a virada do mês se ninguém escolheu outro.
   const [mes, setMes] = useState(() => mesAtualIso().slice(0, 7));
   const mesAtualRef = useRef(mesAtualIso().slice(0, 7));
@@ -130,7 +133,7 @@ export function OverviewPage() {
         </Card>
         <Card className="p-4">
           <h2 className="mb-3 text-sm font-semibold text-[var(--fg)]">Origem das vendas</h2>
-          <OrigemChart dados={origemVendas} />
+          <OrigemChart dados={origemVendas} onSelecionar={setOrigemAberta} />
         </Card>
       </div>
 
@@ -238,6 +241,22 @@ export function OverviewPage() {
           )}
         </Card>
       </div>
+
+      <DetalheDoCardModal
+        aberto={origemAberta !== null}
+        titulo={origemAberta ? `Origem das vendas — ${origemAberta}` : ""}
+        abas={
+          origemAberta
+            ? [
+                {
+                  rotulo: origemAberta,
+                  url: `/crm/dashboard/origem-vendas${toQueryString({ origem: origemAberta, dataInicio: `${mes}-01`, dataFim: `${mes}-${String(new Date(Number(mes.split("-")[0]), Number(mes.split("-")[1]), 0).getDate()).padStart(2, "0")}`, regionalId: regionalId || undefined })}`,
+                },
+              ]
+            : []
+        }
+        onFechar={() => setOrigemAberta(null)}
+      />
     </div>
   );
 }

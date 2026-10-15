@@ -96,3 +96,24 @@ public record RelatorioMarketingMesDto(
     decimal? CustoPorLead,
     decimal? Roas,
     decimal? TaxaConversao);
+
+/// <summary>Uma linha do detalhe de um card do relatório: o cliente (lead) por trás do número.</summary>
+public record RelatorioDetalheItemDto(
+    Guid LeadId,
+    string Cliente,
+    string? Consultor,
+    DateTimeOffset Data,
+    string? Etapa,
+    string? Canal,
+    decimal? Valor);
+
+/// <summary>
+/// O que há por trás de um card do relatório. <see cref="Total"/> é a quantidade do card; <see cref="Itens"/> traz os 500 mais recentes.
+/// <see cref="RotuloData"/> e <see cref="RotuloValor"/> dizem o que a data e o valor de cada linha são (nulo = a coluna não se aplica).
+/// </summary>
+public record RelatorioDetalheDto(
+    string Titulo,
+    int Total,
+    string RotuloData,
+    string? RotuloValor,
+    IReadOnlyList<RelatorioDetalheItemDto> Itens);
