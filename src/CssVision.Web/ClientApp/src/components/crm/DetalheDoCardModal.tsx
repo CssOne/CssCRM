@@ -61,7 +61,7 @@ export function DetalheDoCardModal({ aberto, titulo, abas, onFechar }: { aberto:
   }, 500);
 
   return (
-    <Modal open={aberto} onClose={onFechar} title={titulo} size="lg">
+    <Modal open={aberto} onClose={onFechar} title={titulo} size="xl">
       {abas.length > 1 && (
         <div role="tablist" className="mb-3 flex flex-wrap gap-1.5 border-b border-[var(--border)] pb-2">
           {abas.map((a, i) => (
@@ -94,8 +94,8 @@ export function DetalheDoCardModal({ aberto, titulo, abas, onFechar }: { aberto:
           {dados.itens.length === 0 ? (
             <p className="py-6 text-center text-sm text-[var(--fg-muted)]">Nada neste período.</p>
           ) : (
-            <div className="max-h-[60vh] overflow-auto rounded-lg border border-[var(--border)]">
-              <table className="w-full min-w-[720px] text-sm">
+            <div className="max-h-[72vh] overflow-y-auto rounded-lg border border-[var(--border)]">
+              <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-[var(--surface)]">
                   <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--fg-muted)]">
                     <th className="px-3 py-2 font-medium">Cliente</th>
