@@ -881,7 +881,7 @@ export function LeadsKanbanPage() {
           description={filtrosAtivos ? "Ajuste os filtros ou cadastre um novo lead." : "Cadastre um novo lead para começar."}
         />
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-1">
+        <div className="barra-quadro flex gap-4 overflow-x-auto pb-2">
           {colunasExibidas.map((coluna) => {
             const chaveColuna = coluna.etapa.id ?? "sem-etapa";
             const restantes = Math.max(0, coluna.total - coluna.cartoes.length);

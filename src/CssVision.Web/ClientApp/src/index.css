@@ -97,6 +97,26 @@ body {
   border-radius: 999px;
 }
 
+/* Barra de rolagem horizontal do quadro de leads: mais escura e mais grossa que a padrão, para aparecer bem. */
+.barra-quadro {
+  scrollbar-color: #475569 var(--border);
+}
+.barra-quadro::-webkit-scrollbar {
+  height: 14px;
+}
+.barra-quadro::-webkit-scrollbar-track {
+  background: var(--border);
+  border-radius: 999px;
+}
+.barra-quadro::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 999px;
+  border: 3px solid var(--border);
+}
+.barra-quadro::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
 .focus-ring {
   outline: none;
 }
