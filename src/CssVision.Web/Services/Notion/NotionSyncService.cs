@@ -997,6 +997,12 @@ public sealed class NotionSyncService(
         if (await GarantirColunaDeVendaAsync(lead, isVendaConcluida, etapasPorNome, ct)) mudouDeColuna = true;
 
         await db.SaveChangesAsync(ct);
+        // Card de venda quase vazio que duplica a venda de um lead do tráfego pago (a placa chega depois da criação do card): arquiva o duplicado (ver DuplicidadeDeVendaDoNotion).
+        if (!criadoAgora && isVendaConcluida && await DuplicidadeDeVendaDoNotion.ArquivarSeDuplicadoDeTrafegoAsync(db, lead, ct))
+        {
+            _mudancasNoQuadro++;
+            return false;
+        }
         if (criadoAgora || mudouDeColuna) _mudancasNoQuadro++;
         return criadoAgora;
     }
