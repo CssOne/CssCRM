@@ -5,7 +5,7 @@ import { api, ApiRequestError, isAbortError, uploadFile } from "../../lib/api";
 import { TipoEtapaPipeline, TipoPessoa, type LeadDuplicateWarning, type ChangeStageRequest, type LeadDetail, type Opportunity, type OpportunityCreateRequest, type OpportunityUpdateRequest, type PipelineBoard } from "../../lib/types";
 import { ESTADOS_BRASIL } from "../../lib/estados";
 import { formatarData, hojeBrasilia } from "../../lib/format";
-import { Button, Checkbox, CpfInput, Input, Label, Modal, MoneyInput, Select, useToast } from "../ui";
+import { Button, Checkbox, DocumentoInput, Input, Label, Modal, MoneyInput, Select, useToast } from "../ui";
 import { leadFormVazio, paraLeadCreateRequest } from "./LeadForm";
 import { CidadeInput } from "../CidadeInput";
 import { useAuth } from "../../context/AuthContext";
@@ -748,7 +748,7 @@ export function VendaConcluidaDialog({
                 </Select>
               </div>
             </div>
-            <p className="mt-2 text-xs text-[var(--fg-muted)]">CPF, estado, canal de aquisição e placa são preenchidos uma vez só, abaixo.</p>
+            <p className="mt-2 text-xs text-[var(--fg-muted)]">CPF/CNPJ, estado, canal de aquisição e placa são preenchidos uma vez só, abaixo.</p>
           </div>
         )}
         <div>
@@ -801,9 +801,9 @@ export function VendaConcluidaDialog({
             )}
             <div>
               <Label htmlFor="venda-cpf" required={ehVenda}>
-                CPF
+                CPF/CNPJ
               </Label>
-              <CpfInput id="venda-cpf" value={valores.cpf ?? ""} onChange={(e) => set("cpf", e.target.value)} />
+              <DocumentoInput id="venda-cpf" value={valores.cpf ?? ""} onChange={(e) => set("cpf", e.target.value)} />
             </div>
             <div>
               <Label htmlFor="venda-estado" required={ehVenda}>
