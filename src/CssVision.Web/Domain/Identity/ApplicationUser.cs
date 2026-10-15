@@ -65,6 +65,12 @@ public class ApplicationUser : IdentityUser<Guid>
     public bool VerOutrasRegionaisNoRelatorio { get; set; } = true;
 
     /// <summary>
+    /// Libera o Painel da TV (/tv/comercial) para este usuário mesmo sem papel de gestão — é como o consultor passa a ver a TV, e quem escolhe é o gestor na tela
+    /// de Usuários. Quem tem papel de gestão sempre vê a TV; para eles o valor não tem efeito.
+    /// </summary>
+    public bool VerPainelTv { get; set; }
+
+    /// <summary>
     /// Id do usuário no Notion (campo "Vendedor" dos cards). Liga o card ao usuário mesmo quando o Notion
     /// não informa o e-mail da pessoa — assim o lead não cai em "Vendedor não identificado".
     /// </summary>

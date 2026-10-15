@@ -35,6 +35,8 @@ export interface UserFormValues {
   atuaNasVendas: boolean;
   /** Administrador: ver as outras regionais no Relatório comercial (desmarcado = só a regional dele). */
   verOutrasRegionaisNoRelatorio: boolean;
+  /** Consultor: libera o Painel da TV para ele. */
+  verPainelTv: boolean;
   ativo: boolean;
 }
 
@@ -58,6 +60,7 @@ function valoresVazios(papelFixo?: string): UserFormValues {
     ocultasAlteradas: false,
     atuaNasVendas: true,
     verOutrasRegionaisNoRelatorio: true,
+    verPainelTv: false,
     ativo: true,
   };
 }
@@ -79,6 +82,7 @@ export function paraFormValues(usuario: UserSummary): UserFormValues {
     ocultasAlteradas: false,
     atuaNasVendas: usuario.atuaNasVendas ?? true,
     verOutrasRegionaisNoRelatorio: usuario.verOutrasRegionaisNoRelatorio ?? true,
+    verPainelTv: usuario.verPainelTv ?? false,
     ativo: usuario.ativo,
   };
 }
@@ -99,6 +103,7 @@ export function paraCriarRequest(v: UserFormValues): UserCreateRequest {
     regionaisOcultasIds: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.regionaisOcultas : null,
     atuaNasVendas: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.atuaNasVendas : null,
     verOutrasRegionaisNoRelatorio: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.verOutrasRegionaisNoRelatorio : null,
+    verPainelTv: v.papel === "Comercial" ? v.verPainelTv : null,
   };
 }
 
@@ -118,6 +123,7 @@ export function paraAtualizarRequest(v: UserFormValues): UserUpdateRequest {
     alterarRegionaisOcultas: v.ocultasAlteradas,
     atuaNasVendas: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.atuaNasVendas : null,
     verOutrasRegionaisNoRelatorio: PAPEIS_COM_VISAO_TOTAL.includes(v.papel) ? v.verOutrasRegionaisNoRelatorio : null,
+    verPainelTv: v.papel === "Comercial" ? v.verPainelTv : null,
   };
 }
 
@@ -299,6 +305,19 @@ export function UserForm({
             <p className="mt-1 text-xs text-[var(--fg-muted)]">
               Desmarcado, o Relatório comercial deste administrador mostra só a regional do cadastro dele (é preciso ter uma regional definida);
               as demais telas não mudam.
+            </p>
+          </div>
+        )}
+
+        {podeGerenciarTudo && valores.papel === "Comercial" && (
+          <div className="sm:col-span-2">
+            <Checkbox
+              label="Pode ver o Painel da TV"
+              checked={valores.verPainelTv}
+              onChange={(e) => set("verPainelTv", e.target.checked)}
+            />
+            <p className="mt-1 text-xs text-[var(--fg-muted)]">
+              Marcado, o consultor ganha o item "Painel da TV" no menu e vê o painel completo (todas as regionais). Quem tem papel de gestão sempre vê.
             </p>
           </div>
         )}

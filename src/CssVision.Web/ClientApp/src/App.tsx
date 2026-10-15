@@ -55,7 +55,7 @@ function RotaTelaCheia({ papeis, children }: { papeis: string[]; children: React
 
   if (carregando) return <CarregandoTelaCheia />;
   if (!sessao) return <Navigate to="/login" replace />;
-  if (!temPapel(...papeis)) return <Navigate to={sessao.areaInicial} replace />;
+  if (!temPapel(...papeis) && !sessao.verPainelTv) return <Navigate to={sessao.areaInicial} replace />;
 
   return <>{children}</>;
 }

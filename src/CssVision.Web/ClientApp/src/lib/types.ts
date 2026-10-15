@@ -80,6 +80,8 @@ export interface Session {
   papeis: string[];
   areaInicial: string;
   menu: MenuItem[];
+  /** Consultor com o Painel da TV liberado em Usuários. */
+  verPainelTv?: boolean;
 }
 
 export interface LoginResult {
@@ -1382,6 +1384,8 @@ export interface UserSummary {
   atuaNasVendas?: boolean;
   /** Administrador: falso = o Relatório comercial dele mostra só a regional do próprio cadastro. */
   verOutrasRegionaisNoRelatorio?: boolean;
+  /** Consultor com o Painel da TV liberado. */
+  verPainelTv?: boolean;
 }
 
 export interface UserFilterRequest {
@@ -1409,6 +1413,7 @@ export interface UserCreateRequest {
   regionaisOcultasIds?: string[] | null;
   atuaNasVendas?: boolean | null;
   verOutrasRegionaisNoRelatorio?: boolean | null;
+  verPainelTv?: boolean | null;
 }
 
 export interface UserUpdateRequest {
@@ -1427,6 +1432,7 @@ export interface UserUpdateRequest {
   alterarRegionaisOcultas?: boolean;
   atuaNasVendas?: boolean | null;
   verOutrasRegionaisNoRelatorio?: boolean | null;
+  verPainelTv?: boolean | null;
 }
 
 export interface GrupoMembro {

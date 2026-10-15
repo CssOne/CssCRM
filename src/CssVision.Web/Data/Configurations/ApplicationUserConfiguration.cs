@@ -18,6 +18,7 @@ public class ApplicationUserConfiguration : IEntityTypeConfiguration<Application
         builder.Property(e => e.RegionaisOcultas).HasMaxLength(2000);
         builder.Property(e => e.AtuaNasVendas).HasDefaultValue(true);
         builder.Property(e => e.VerOutrasRegionaisNoRelatorio).HasDefaultValue(true);
+        builder.Property(e => e.VerPainelTv).HasDefaultValue(false);
 
         builder.HasOne(e => e.GestorComercial)
             .WithMany()

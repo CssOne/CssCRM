@@ -415,6 +415,11 @@ public class AccountController(
             menu.Add(new MenuItemDto("avisos-pagamento", "Avisos de pagamento", "wallet", "/app/crm/avisos-pagamento"));
             menu.Add(new MenuItemDto("tv-comercial", "Painel da TV", "monitor", "/tv/comercial"));
         }
+        else if (usuario.VerPainelTv)
+        {
+            // Consultor a quem o gestor liberou a TV em Usuários.
+            menu.Add(new MenuItemDto("tv-comercial", "Painel da TV", "monitor", "/tv/comercial"));
+        }
 
         if (papeis.Contains(Roles.Admin) || papeis.Contains(Roles.Marketing))
         {
@@ -432,7 +437,7 @@ public class AccountController(
         menu.Add(new MenuItemDto("discord", "Discord", "message-circle", "/app/discord"));
         menu.Add(new MenuItemDto("suporte", "Suporte", "life-buoy", "/app/suporte"));
 
-        return new SessionDto(usuario.Id, usuario.Email!, usuario.NomeCompleto, usuario.FotoUrl, papeis.ToList(), areaInicial, menu);
+        return new SessionDto(usuario.Id, usuario.Email!, usuario.NomeCompleto, usuario.FotoUrl, papeis.ToList(), areaInicial, menu, usuario.VerPainelTv);
     }
 
     private async Task ExcluirArquivoFotoAtualAsync(ApplicationUser usuario, CancellationToken ct)

@@ -13,6 +13,9 @@ public interface ITvComercialService
 {
     Task<TvComercialDto> ObterAsync(int? mes, int? ano, CancellationToken ct);
 
+    /// <summary>O painel inteiro (todas as regionais), para o consultor a quem o gestor liberou a TV em Usuários.</summary>
+    Task<TvComercialDto> ObterCompletoAsync(int? mes, int? ano, CancellationToken ct);
+
     /// <summary>
     /// O mesmo ranking do painel da TV (todas as regionais, qualquer que seja o escopo de quem pede) — usado no Portal do consultor, que
     /// espelha a TV.
@@ -42,6 +45,8 @@ public sealed class TvComercialService(
     private sealed record PessoaTv(Guid Id, string NomeCompleto, string? FotoUrl, Guid? RegionalId, string? Regional);
 
     public Task<TvComercialDto> ObterAsync(int? mes, int? ano, CancellationToken ct) => ObterInternoAsync(mes, ano, escopoCompleto: false, ct);
+
+    public Task<TvComercialDto> ObterCompletoAsync(int? mes, int? ano, CancellationToken ct) => ObterInternoAsync(mes, ano, escopoCompleto: true, ct);
 
     public async Task<TvRankingGeralDto> ObterRankingGeralAsync(int? mes, int? ano, CancellationToken ct)
     {

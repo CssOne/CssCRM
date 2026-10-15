@@ -11,7 +11,8 @@ public record SessionDto(
     string? FotoUrl,
     IReadOnlyList<string> Papeis,
     string AreaInicial,
-    IReadOnlyList<MenuItemDto> Menu);
+    IReadOnlyList<MenuItemDto> Menu,
+    bool VerPainelTv = false);
 
 /// <summary>Resultado de uma tentativa de login: ou já veio com a sessão pronta, ou precisa do segundo fator.</summary>
 public record LoginResultDto(bool RequerDoisFatores, SessionDto? Sessao);
