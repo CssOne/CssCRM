@@ -432,6 +432,8 @@ public sealed class LeadService(
         }
         lead.IndicadoPorLeadId = request.IndicadoPorLeadId;
         var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
+        // Canal escolhido aqui vale mais que o do Notion: a sincronização não o sobrescreve mais (ver CrmLead.TipoIndicacaoEditadoNoCrm).
+        if (!string.Equals(lead.TipoIndicacao?.Trim(), request.TipoIndicacao?.Trim(), StringComparison.OrdinalIgnoreCase)) lead.TipoIndicacaoEditadoNoCrm = true;
         lead.TipoIndicacao = request.TipoIndicacao;
         var etapaAcertada = await AcertarColunaDaEtiquetaAsync(lead, eraIndicacao, ct);
         lead.Observacoes = request.Observacoes;

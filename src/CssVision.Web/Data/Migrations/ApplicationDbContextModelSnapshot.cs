@@ -923,6 +923,9 @@ namespace CssVision.Web.Data.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
+                    b.Property<bool>("TipoIndicacaoEditadoNoCrm")
+                        .HasColumnType("boolean");
+
                     b.Property<int>("TipoPessoa")
                         .HasColumnType("integer");
 

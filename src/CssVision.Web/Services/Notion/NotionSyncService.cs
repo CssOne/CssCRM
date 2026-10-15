@@ -355,6 +355,7 @@ public sealed class NotionSyncService(
                     var lead = await db.CrmLeads.FirstOrDefaultAsync(l => l.NotionPageId == pageId && !l.Arquivado, ct);
                     if (lead is null || lead.ConsentimentoOrigem is not (OrigemLead.MarcadorMigracaoNotion or OrigemLead.MarcadorSincronizacaoNotion)) continue;
                     if (!string.IsNullOrWhiteSpace(lead.TipoIndicacao) && !EhTipoLead(lead.TipoIndicacao)) continue;
+                    if (lead.TipoIndicacaoEditadoNoCrm) continue;
 
                     var antes = (lead.TipoIndicacao, lead.CriadoManualmente, lead.EtapaId);
                     lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, TipoIndicacaoDoCard(page, page.Select("O que")));
@@ -411,8 +412,11 @@ public sealed class NotionSyncService(
 
                 var antes = (lead.TipoIndicacao, lead.CriadoManualmente, lead.EtapaId);
                 var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
-                lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, TipoIndicacaoDoCard(page, page.Select("O que")));
-                lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
+                if (!lead.TipoIndicacaoEditadoNoCrm)
+                {
+                    lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, TipoIndicacaoDoCard(page, page.Select("O que")));
+                    lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
+                }
                 TrocarColunaLeadIndicacao(lead, etapasPorNome);
                 if (antes != (lead.TipoIndicacao, lead.CriadoManualmente, lead.EtapaId)) leadsAtualizados++;
 
@@ -632,8 +636,11 @@ public sealed class NotionSyncService(
         if (lead.ConsentimentoOrigem is OrigemLead.MarcadorMigracaoNotion or OrigemLead.MarcadorSincronizacaoNotion)
         {
             var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
-            lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, TipoIndicacaoDoCard(page, page.Select("O que")));
-            lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
+            if (!lead.TipoIndicacaoEditadoNoCrm)
+            {
+                lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, TipoIndicacaoDoCard(page, page.Select("O que")));
+                lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
+            }
             // Sempre alinha a coluna "(Leads)/(Indicação)" com a etiqueta (não só quando a etiqueta mudou): lead que ficou com a coluna trocada se acerta.
             if (etapasPorNome is not null && TrocarColunaLeadIndicacao(lead, etapasPorNome))
             {
@@ -950,8 +957,12 @@ public sealed class NotionSyncService(
         }
         lead.ProdutoInteresse = Cortar(oQue, 120) ?? lead.ProdutoInteresse;
         var eraIndicacao = NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
-        lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, tipoIndicacao);
-        lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
+        // Canal editado no CRM não volta ao valor do Notion.
+        if (!lead.TipoIndicacaoEditadoNoCrm)
+        {
+            lead.TipoIndicacao = TipoIndicacaoLead.ManterIndicacaoLead(lead.TipoIndicacao, tipoIndicacao);
+            lead.CriadoManualmente = !EhTipoLead(lead.TipoIndicacao);
+        }
         if (!criadoAgora && TrocarColunaLeadIndicacao(lead, etapasPorNome))
         {
             _mudancasNoQuadro++;
