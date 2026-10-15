@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Chart from "react-apexcharts";
 import type { ApexOptions } from "apexcharts";
 import { api, isAbortError } from "../../lib/api";
@@ -15,6 +15,7 @@ import { useCrmEventos } from "../../lib/useCrmEventos";
 import { useMudancaDeDia } from "../../lib/useAoVivo";
 import { baseOptions, SemDados } from "../../components/crm/Charts";
 import { BarrasHorizontaisChart, DonutChart } from "../../components/marketing/GraficosTrafego";
+import { DetalheDoCardModal, type AbaDoDetalhe } from "../../components/crm/DetalheDoCardModal";
 
 const EMPTY_GUID = "00000000-0000-0000-0000-000000000000";
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -50,12 +51,26 @@ function atalhosPeriodo() {
   ];
 }
 
-function Kpi({ rotulo, valor, detalhe }: { rotulo: string; valor: string; detalhe?: string }) {
-  return (
-    <Card className="p-4">
+function Kpi({ rotulo, valor, detalhe, onClick }: { rotulo: string; valor: string; detalhe?: string; onClick?: () => void }) {
+  const conteudo = (
+    <>
       <p className="text-xs text-[var(--fg-muted)]">{rotulo}</p>
       <p className="mt-1 text-2xl font-semibold text-[var(--fg)]">{valor}</p>
       {detalhe && <p className="mt-0.5 text-xs text-[var(--fg-muted)]">{detalhe}</p>}
+    </>
+  );
+  if (!onClick) return <Card className="p-4">{conteudo}</Card>;
+  // Clicável: abre a lista de clientes por trás do número.
+  return (
+    <Card className="p-0">
+      <button
+        type="button"
+        onClick={onClick}
+        title="Ver os clientes por trás deste número"
+        className="focus-ring block h-full w-full cursor-pointer rounded-xl p-4 text-left transition hover:bg-[var(--surface-hover)]"
+      >
+        {conteudo}
+      </button>
     </Card>
   );
 }
@@ -107,6 +122,22 @@ interface Filtros {
   vendaFim: string;
   indicacao: "" | "sim" | "nao";
   tiposIndicacao: string[];
+}
+
+/** Os filtros do relatório como parâmetros do endereço (o relatório e o detalhe de cada card usam os mesmos). */
+function paramsDoFiltro(f: Filtros): URLSearchParams {
+  const filtros = new URLSearchParams({ dataInicio: f.inicio, dataFim: f.fim });
+  if (f.consultorId) filtros.set("consultorId", f.consultorId);
+  if (f.regionalId) filtros.set("regionalId", f.regionalId);
+  // "Sem etapa" (id nulo) vai como Guid vazio.
+  f.etapaIds.forEach((id) => filtros.append("etapaId", id));
+  if (f.chegadaInicio) filtros.set("chegadaInicio", f.chegadaInicio);
+  if (f.chegadaFim) filtros.set("chegadaFim", f.chegadaFim);
+  if (f.vendaInicio) filtros.set("vendaInicio", f.vendaInicio);
+  if (f.vendaFim) filtros.set("vendaFim", f.vendaFim);
+  if (f.indicacao) filtros.set("indicacao", f.indicacao === "sim" ? "true" : "false");
+  f.tiposIndicacao.forEach((t) => filtros.append("tipoIndicacao", t));
+  return filtros;
 }
 
 export function RelatorioComercialPage() {
@@ -174,6 +205,10 @@ export function RelatorioComercialPage() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [recarregar, setRecarregar] = useState(0);
+  const filtroCarregadoRef = useRef<Filtros | null>(null);
+  const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
+  // Card aberto: a lista de clientes por trás do número.
+  const [detalhe, setDetalhe] = useState<{ titulo: string; abas: AbaDoDetalhe[] } | null>(null);
   const [consultores, setConsultores] = useState<VendedorResumo[]>([]);
   // Abas por regional: "Todas" + uma por regional (mesmo com uma só cadastrada).
   const [regionais, setRegionais] = useState<Regional[]>([]);
@@ -195,22 +230,17 @@ export function RelatorioComercialPage() {
       return;
     }
     const controller = new AbortController();
-    setCarregando(true);
+    // Tempo real: o recarregamento por evento (mesmos filtros) é silencioso — os números trocam sem piscar. Só mudar de filtro mostra o carregamento.
+    const mudouFiltro = filtroCarregadoRef.current !== aplicado;
+    filtroCarregadoRef.current = aplicado;
+    if (mudouFiltro) setCarregando(true);
     setErro(null);
-    const filtros = new URLSearchParams({ dataInicio: f.inicio, dataFim: f.fim });
-    if (f.consultorId) filtros.set("consultorId", f.consultorId);
-    if (f.regionalId) filtros.set("regionalId", f.regionalId);
-    // "Sem etapa" (id nulo) vai como Guid vazio.
-    f.etapaIds.forEach((id) => filtros.append("etapaId", id));
-    if (f.chegadaInicio) filtros.set("chegadaInicio", f.chegadaInicio);
-    if (f.chegadaFim) filtros.set("chegadaFim", f.chegadaFim);
-    if (f.vendaInicio) filtros.set("vendaInicio", f.vendaInicio);
-    if (f.vendaFim) filtros.set("vendaFim", f.vendaFim);
-    if (f.indicacao) filtros.set("indicacao", f.indicacao === "sim" ? "true" : "false");
-    f.tiposIndicacao.forEach((t) => filtros.append("tipoIndicacao", t));
     api
-      .get<RelatorioComercial>(`/crm/relatorio-comercial?${filtros.toString()}`, controller.signal)
-      .then(setDados)
+      .get<RelatorioComercial>(`/crm/relatorio-comercial?${paramsDoFiltro(f).toString()}`, controller.signal)
+      .then((d) => {
+        setDados(d);
+        setAtualizadoEm(new Date());
+      })
       .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar o relatório."); })
       .finally(() => { if (!controller.signal.aborted) setCarregando(false); });
     return () => controller.abort();
@@ -218,7 +248,8 @@ export function RelatorioComercialPage() {
 
   // Tempo real (vendas, leads, sincronização); na virada do dia, o período que terminava "hoje" passa a
   // terminar no dia novo — quem escolheu um período passado continua nele.
-  useCrmEventos(() => setRecarregar((n) => n + 1), 500);
+  // (rede de segurança de 30 s: se a conexão em tempo real cair, a tela se atualiza do mesmo jeito)
+  useCrmEventos(() => setRecarregar((n) => n + 1), 500, 30_000);
   useMudancaDeDia((hoje, anterior) => {
     // "Este mês" aberto na virada do mês: o período passa para o mês novo (início e fim juntos).
     const virouMes = (i: string, f: string) => f === anterior && i.slice(0, 7) === anterior.slice(0, 7) && i.endsWith("-01") && hoje.slice(0, 7) !== anterior.slice(0, 7);
@@ -346,6 +377,13 @@ export function RelatorioComercialPage() {
           {!podeGerir && " Aqui você vê só os seus resultados."}
         </p>
       </div>
+      <p className="flex items-center gap-1.5 self-start text-xs text-[var(--fg-muted)]" title="Os números e as listas se atualizam sozinhos quando algo é cadastrado ou muda no sistema">
+        <span className="relative flex size-2">
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-[var(--success)] opacity-60" />
+          <span className="relative inline-flex size-2 rounded-full bg-[var(--success)]" />
+        </span>
+        Ao vivo{atualizadoEm ? ` · atualizado às ${atualizadoEm.toLocaleTimeString("pt-BR")}` : ""}
+      </p>
       {filtro}
       {podeGerir && (
       <div role="tablist" aria-label="Regional" className="flex w-full flex-wrap gap-1.5 border-b border-[var(--border)] pb-2">
@@ -388,6 +426,15 @@ export function RelatorioComercialPage() {
   }
 
   const t = dados.totais;
+  const abrirDetalhe = (titulo: string, abas: [string, string][]) =>
+    setDetalhe({
+      titulo,
+      abas: abas.map(([rotulo, tipo]) => {
+        const params = paramsDoFiltro(aplicado);
+        params.set("tipo", tipo);
+        return { rotulo, url: `/crm/relatorio-comercial/detalhe?${params.toString()}` };
+      }),
+    });
   const meses = dados.porMes.map((m) => rotuloMes(m.mes));
 
   const vendasEAdesao: ApexOptions = {
@@ -439,28 +486,43 @@ export function RelatorioComercialPage() {
       {cabecalho}
 
       <div className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-3 ${carregando ? "opacity-60" : ""}`}>
-        <Kpi rotulo="Leads recebidos" valor={inteiro(t.leads)} detalhe={`${inteiro(t.leadsPerdidos)} perdidos`} />
+        <Kpi
+          rotulo="Leads recebidos"
+          valor={inteiro(t.leads)}
+          detalhe={`${inteiro(t.leadsPerdidos)} perdidos`}
+          onClick={() => abrirDetalhe("Leads recebidos", [["Recebidos", "leads"], ["Perdidos", "perdidos"]])}
+        />
         <Kpi
           rotulo="Vendas concluídas"
           valor={inteiro(t.vendas)}
           detalhe={`conversão de ${formatarPercentual(t.taxaConversao)} sobre os leads · ${inteiro(t.vendasTrafegoPago ?? 0)} tráfego pago · ${inteiro(t.vendasIndicacaoCard ?? 0)} indicação${
             (t.vendasSemOrigemIdentificada ?? 0) > 0 ? ` · ${inteiro(t.vendasSemOrigemIdentificada ?? 0)} sem origem de anúncio identificada` : ""
           }`}
+          onClick={() =>
+            abrirDetalhe("Vendas concluídas", [["Todas", "vendas"], ["Tráfego pago", "trafego-vendas"], ["Indicação", "indicacao-vendas"], ["Sem origem identificada", "sem-origem-vendas"]])
+          }
         />
-        <Kpi rotulo="Adesão" valor={formatarMoeda(t.adesao)} detalhe={t.vendas > 0 ? `média de ${formatarMoeda(t.adesao / t.vendas)} por venda` : undefined} />
-        <Kpi rotulo="Mensalidade" valor={formatarMoeda(t.mensalidade)} detalhe={`ticket médio de ${formatarMoeda(t.ticketMensalidade)}`} />
-        <Kpi rotulo="Rastreador" valor={formatarMoeda(t.rastreador)} />
-        <Kpi rotulo="Vistoria" valor={formatarMoeda(t.vistoria)} />
-        <Kpi rotulo="Indicação" valor={formatarMoeda(t.indicacao)} detalhe={`${inteiro(t.vendasIndicacao)} venda(s) por indicação`} />
+        <Kpi rotulo="Adesão" valor={formatarMoeda(t.adesao)} detalhe={t.vendas > 0 ? `média de ${formatarMoeda(t.adesao / t.vendas)} por venda` : undefined} onClick={() => abrirDetalhe("Adesão", [["Vendas com adesão", "adesao"]])} />
+        <Kpi rotulo="Mensalidade" valor={formatarMoeda(t.mensalidade)} detalhe={`ticket médio de ${formatarMoeda(t.ticketMensalidade)}`} onClick={() => abrirDetalhe("Mensalidade", [["Vendas com mensalidade", "mensalidade"]])} />
+        <Kpi rotulo="Rastreador" valor={formatarMoeda(t.rastreador)} onClick={() => abrirDetalhe("Rastreador", [["Vendas com rastreador", "rastreador"]])} />
+        <Kpi rotulo="Vistoria" valor={formatarMoeda(t.vistoria)} onClick={() => abrirDetalhe("Vistoria", [["Vendas com vistoria", "vistoria"]])} />
+        <Kpi
+          rotulo="Indicação"
+          valor={formatarMoeda(t.indicacao)}
+          detalhe={`${inteiro(t.vendasIndicacao)} venda(s) por indicação`}
+          onClick={() => abrirDetalhe("Indicação", [["Vendas com indicação", "indicacao"]])}
+        />
         <Kpi
           rotulo="Conversão — tráfego pago"
           valor={formatarPercentual(t.taxaConversaoTrafegoPago ?? 0)}
           detalhe={`${inteiro(t.vendasTrafegoPago ?? 0)} venda(s) ÷ ${inteiro(t.leadsTrafegoPago ?? 0)} lead(s) de tráfego pago (CRM e Notion)`}
+          onClick={() => abrirDetalhe("Conversão — tráfego pago", [["Vendas", "trafego-vendas"], ["Leads", "trafego-leads"]])}
         />
         <Kpi
           rotulo="Conversão — indicação"
           valor={formatarPercentual(t.taxaConversaoIndicacaoCard ?? 0)}
           detalhe={`${inteiro(t.vendasIndicacaoCard ?? 0)} venda(s) ÷ ${inteiro(t.leadsIndicacaoCard ?? 0)} card(s) de indicação`}
+          onClick={() => abrirDetalhe("Conversão — indicação", [["Vendas", "indicacao-vendas"], ["Cards", "indicacao-leads"]])}
         />
       </div>
 
@@ -579,6 +641,8 @@ export function RelatorioComercialPage() {
           />
         </Secao>
       )}
+
+      <DetalheDoCardModal aberto={!!detalhe} titulo={detalhe?.titulo ?? ""} abas={detalhe?.abas ?? []} onFechar={() => setDetalhe(null)} />
     </div>
   );
 }

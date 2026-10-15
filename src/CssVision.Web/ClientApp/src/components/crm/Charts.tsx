@@ -68,7 +68,7 @@ export function EvolucaoChart({ dados }: { dados: EvolucaoVendas[] }) {
   );
 }
 
-export function OrigemChart({ dados }: { dados: OrigemVenda[] }) {
+export function OrigemChart({ dados, onSelecionar }: { dados: OrigemVenda[]; onSelecionar?: (origem: string) => void }) {
   const { tema } = useTheme();
   const modoEscuro = tema === "dark";
 
@@ -76,13 +76,22 @@ export function OrigemChart({ dados }: { dados: OrigemVenda[] }) {
 
   const options: ApexOptions = {
     ...baseOptions(modoEscuro),
-    chart: { ...baseOptions(modoEscuro).chart, type: "donut" },
     labels: dados.map((d) => `${d.origem} (${d.quantidade})`),
     legend: { position: "bottom" },
     dataLabels: { enabled: true, formatter: (v: number) => `${v.toFixed(0)}%` },
+    // Clicar numa fatia abre as vendas daquela origem.
+    chart: {
+      ...baseOptions(modoEscuro).chart,
+      type: "donut",
+      events: { dataPointSelection: (_e, _c, cfg) => { const i = cfg?.dataPointIndex; if (i !== undefined && dados[i]) onSelecionar?.(dados[i].origem); } },
+    },
   };
 
-  return <Chart type="donut" height={280} options={options} series={dados.map((d) => d.quantidade)} />;
+  return (
+    <div className={onSelecionar ? "cursor-pointer" : undefined} title={onSelecionar ? "Clique numa fatia para ver as vendas" : undefined}>
+      <Chart type="donut" height={280} options={options} series={dados.map((d) => d.quantidade)} />
+    </div>
+  );
 }
 
 export function LeadsEvolucaoChart({ dados }: { dados: MarketingEvolucao[] }) {

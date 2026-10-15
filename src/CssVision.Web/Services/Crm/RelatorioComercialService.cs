@@ -17,6 +17,11 @@ public interface IRelatorioComercialService
 
     /// <param name="extras">Datas próprias de chegada/venda, "Indicação?" e tipo de indicação.</param>
     Task<RelatorioComercialDto> ObterAsync(DateOnly? dataInicio, DateOnly? dataFim, Guid? consultorId, IReadOnlyCollection<Guid>? etapaIds, RelatorioFiltroExtra? extras, CancellationToken ct);
+
+    /// <summary>A lista de clientes por trás de um card do relatório (mesmos filtros do relatório). <paramref name="tipo"/>: leads, perdidos, vendas, adesao, mensalidade,
+    /// rastreador, vistoria, indicacao, trafego-leads, trafego-vendas, indicacao-leads, indicacao-vendas, sem-origem-leads, sem-origem-vendas.</summary>
+    Task<RelatorioDetalheDto> ObterDetalheAsync(
+        string tipo, DateOnly? dataInicio, DateOnly? dataFim, Guid? consultorId, IReadOnlyCollection<Guid>? etapaIds, RelatorioFiltroExtra? extras, CancellationToken ct);
 }
 
 /// <summary>
@@ -92,8 +97,114 @@ public sealed class RelatorioComercialService(
         DateTimeOffset Data, Guid ResponsavelId, string Responsavel, string? Origem, string? Estado, string? Produto,
         decimal Adesao, decimal Mensalidade, decimal Rastreador, decimal Vistoria, decimal Indicacao, bool Indicada, decimal? Fipe);
 
-    private async Task<RelatorioComercialDto> CalcularAsync(DateOnly inicio, DateOnly fim, List<Guid>? visiveis, Guid? consultorId, List<Guid>? etapaIds,
-        RelatorioFiltroExtra extras, List<string> tiposIndicacao, CancellationToken ct)
+    private const int MaximoDoDetalhe = 500;
+
+    private static IQueryable<CrmOpportunity> ComLeadEm(IQueryable<CrmOpportunity> vendas, IQueryable<Guid> idsDeLeads) => vendas.Where(o => idsDeLeads.Contains(o.LeadId));
+
+    public async Task<RelatorioDetalheDto> ObterDetalheAsync(
+        string tipo, DateOnly? dataInicio, DateOnly? dataFim, Guid? consultorId, IReadOnlyCollection<Guid>? etapaIds, RelatorioFiltroExtra? extras, CancellationToken ct)
+    {
+        var hoje = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(-3));
+        var inicio = dataInicio ?? InicioPadrao;
+        var fim = dataFim ?? hoje;
+        if (fim < inicio) throw new CrmBusinessException("A data final não pode ser anterior à inicial.", "periodo_invalido");
+
+        var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
+        if (extras?.RegionalId is { } regionalId)
+        {
+            var daRegional = await db.Users.AsNoTracking().Where(u => u.RegionalId == regionalId).Select(u => u.Id).ToListAsync(ct);
+            visiveis = visiveis is null ? daRegional : visiveis.Intersect(daRegional).ToList();
+        }
+        var etapas = etapaIds is { Count: > 0 } ? etapaIds.Distinct().Order().ToList() : null;
+        var tipos = (extras?.TiposIndicacao ?? []).Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim().ToLower())
+            .SelectMany(t => t == "pessoal" ? new[] { "pessoal", "indicação pessoal" } : new[] { t }).Distinct().Order().ToList();
+        var filtroExtra = new RelatorioFiltroExtra(extras?.ChegadaInicio, extras?.ChegadaFim, extras?.VendaInicio, extras?.VendaFim, extras?.Indicacao, tipos, extras?.RegionalId);
+        var (leadsQuery, vendasQuery) = MontarConsultas(inicio, fim, visiveis, consultorId, etapas, filtroExtra, tipos);
+
+        // Mesmos grupos dos cards de conversão (tráfego pago, indicação, sem origem identificada): ver CalcularAsync.
+        IQueryable<CrmLead> Grupo(IQueryable<CrmLead> q, string grupo) => grupo switch
+        {
+            "trafego" => q.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Where(l => !db.CrmLeads.Where(OrigemLead.CardDeIndicacao).Select(x => x.Id).Contains(l.Id)),
+            "indicacao" => q.Where(OrigemLead.CardDeIndicacao),
+            _ => q.Where(l => !db.CrmLeads.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Select(x => x.Id).Contains(l.Id)
+                && !db.CrmLeads.Where(OrigemLead.CardDeIndicacao).Select(x => x.Id).Contains(l.Id)),
+        };
+        IQueryable<Guid> IdsDoGrupo(string grupo) => Grupo(db.CrmLeads.AsNoTracking(), grupo).Select(l => l.Id);
+
+        if (tipo is "leads" or "perdidos" or "trafego-leads" or "indicacao-leads" or "sem-origem-leads")
+        {
+            var consulta = tipo switch
+            {
+                "perdidos" => leadsQuery.Where(l => l.Etapa != null && l.Etapa.Nome == NotionEtapaLead.Perdido),
+                "trafego-leads" => Grupo(leadsQuery, "trafego"),
+                "indicacao-leads" => Grupo(leadsQuery, "indicacao"),
+                "sem-origem-leads" => Grupo(leadsQuery, "sem-origem"),
+                _ => leadsQuery,
+            };
+            var total = await consulta.CountAsync(ct);
+            var linhas = await consulta.OrderByDescending(l => l.CriadoEm).Take(MaximoDoDetalhe)
+                .Select(l => new RelatorioDetalheItemDto(l.Id, l.NomeOuRazaoSocial, l.Responsavel != null ? l.Responsavel.NomeCompleto : null, l.CriadoEm,
+                    l.Etapa != null ? l.Etapa.Nome : null, l.TipoIndicacao, null))
+                .ToListAsync(ct);
+            var titulo = tipo switch
+            {
+                "perdidos" => "Leads perdidos", "trafego-leads" => "Leads de tráfego pago", "indicacao-leads" => "Cards de indicação",
+                "sem-origem-leads" => "Leads sem origem de anúncio identificada", _ => "Leads recebidos",
+            };
+            return new RelatorioDetalheDto(titulo, total, "Chegada", null, linhas);
+        }
+
+        // Vendas (e os valores que somam nos cards de adesão, mensalidade, rastreador, vistoria e indicação).
+        var vendas = tipo switch
+        {
+            "adesao" => vendasQuery.Where(o => o.PagamentoAdesao > 0),
+            "mensalidade" => vendasQuery.Where(o => o.Mensalidade > 0),
+            "rastreador" => vendasQuery.Where(o => o.Veiculo != null && o.Veiculo.Rastreador > 0),
+            "vistoria" => vendasQuery.Where(o => o.Veiculo != null && o.Veiculo.ValorVistoria > 0),
+            "indicacao" => vendasQuery.Where(o => o.Indicacao == true || o.ValorIndicacao > 0),
+            "trafego-vendas" => ComLeadEm(vendasQuery, IdsDoGrupo("trafego")),
+            "indicacao-vendas" => ComLeadEm(vendasQuery, IdsDoGrupo("indicacao")),
+            "sem-origem-vendas" => ComLeadEm(vendasQuery, IdsDoGrupo("sem-origem")),
+            _ => vendasQuery,
+        };
+        var (tituloVendas, rotuloValor) = tipo switch
+        {
+            "adesao" => ("Vendas com adesão", "Adesão"),
+            "mensalidade" => ("Vendas com mensalidade", "Mensalidade"),
+            "rastreador" => ("Vendas com rastreador", "Rastreador"),
+            "vistoria" => ("Vendas com vistoria", "Vistoria"),
+            "indicacao" => ("Vendas com indicação", "Valor da indicação"),
+            "trafego-vendas" => ("Vendas de tráfego pago", "Adesão"),
+            "indicacao-vendas" => ("Vendas de indicação", "Adesão"),
+            "sem-origem-vendas" => ("Vendas sem origem de anúncio identificada", "Adesão"),
+            _ => ("Vendas concluídas", "Adesão"),
+        };
+        var totalVendas = await vendas.CountAsync(ct);
+        var brutas = await vendas.OrderByDescending(o => o.AtivoEm ?? o.DataEfetivaFechamento).Take(MaximoDoDetalhe)
+            .Select(o => new
+            {
+                o.LeadId, Cliente = o.Lead.NomeOuRazaoSocial, Consultor = o.Responsavel.NomeCompleto, o.AtivoEm, o.DataEfetivaFechamento,
+                Etapa = o.Lead.Etapa != null ? o.Lead.Etapa.Nome : null, Canal = o.TipoIndicacao ?? o.Lead.TipoIndicacao,
+                o.PagamentoAdesao, o.Mensalidade, o.ValorIndicacao, Rastreador = o.Veiculo != null ? o.Veiculo.Rastreador : null,
+                Vistoria = o.Veiculo != null ? o.Veiculo.ValorVistoria : null,
+            })
+            .ToListAsync(ct);
+        var itens = brutas.Select(o => new RelatorioDetalheItemDto(
+                o.LeadId, o.Cliente, o.Consultor, DataDaVenda(o.AtivoEm, o.DataEfetivaFechamento), o.Etapa, o.Canal,
+                tipo switch
+                {
+                    "mensalidade" => o.Mensalidade, "rastreador" => o.Rastreador, "vistoria" => o.Vistoria, "indicacao" => o.ValorIndicacao, _ => o.PagamentoAdesao,
+                }))
+            .ToList();
+        return new RelatorioDetalheDto(tituloVendas, totalVendas, "Venda", rotuloValor, itens);
+    }
+
+    /// <summary>
+    /// As consultas de leads e de vendas do relatório com todos os filtros aplicados. É a mesma base dos totais e do detalhe dos cards (ObterDetalheAsync): o número do card
+    /// e a lista que abre ao clicar nele saem da mesma consulta.
+    /// </summary>
+    private (IQueryable<CrmLead> Leads, IQueryable<CrmOpportunity> Vendas) MontarConsultas(
+        DateOnly inicio, DateOnly fim, List<Guid>? visiveis, Guid? consultorId, List<Guid>? etapaIds, RelatorioFiltroExtra extras, List<string> tiposIndicacao)
     {
         // Datas do relatório em horário de Brasília (UTC-3), como o resto do CRM.
         static DateTimeOffset InicioDoDia(DateOnly d) => new DateTimeOffset(d.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero).AddHours(3);
@@ -155,6 +266,14 @@ public sealed class RelatorioComercialService(
             vendasQuery = vendasQuery.Where(o => (o.TipoIndicacao != null && tiposIndicacao.Contains(o.TipoIndicacao.ToLower()))
                 || (o.Lead.TipoIndicacao != null && tiposIndicacao.Contains(o.Lead.TipoIndicacao.ToLower())));
         }
+
+        return (leadsQuery, vendasQuery);
+    }
+
+    private async Task<RelatorioComercialDto> CalcularAsync(DateOnly inicio, DateOnly fim, List<Guid>? visiveis, Guid? consultorId, List<Guid>? etapaIds,
+        RelatorioFiltroExtra extras, List<string> tiposIndicacao, CancellationToken ct)
+    {
+        var (leadsQuery, vendasQuery) = MontarConsultas(inicio, fim, visiveis, consultorId, etapaIds, extras, tiposIndicacao);
 
         var leads = await leadsQuery
             // Mesma data de OrigemLead.ChegouNoPeriodo: lead do tráfego pago do sistema vale pela atribuição ao responsável atual; os demais, pela chegada.

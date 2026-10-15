@@ -25,16 +25,9 @@ public sealed class DashboardService(
     public Task<DashboardDto> ObterAsync(DashboardFilterRequest filtro, CancellationToken ct) =>
         RespostaEmCache.ObterAsync(cache, eventos, "painel", new { usuario = currentUser.UserId, filtro }, () => CalcularAsync(filtro, ct));
 
-    private async Task<DashboardDto> CalcularAsync(DashboardFilterRequest filtro, CancellationToken ct)
+    /// <summary>Quem o painel enxerga (equipe do usuário, regional escolhida, vendedor escolhido). Usado pelo painel e pelo detalhe do gráfico de origem das vendas.</summary>
+    private async Task<(List<Guid>? Visiveis, Guid? RegionalFiltrada)> ResolverEscopoAsync(DashboardFilterRequest filtro, CancellationToken ct)
     {
-        // Mês e dia de hoje no horário de Brasília: o painel passa para o mês novo à meia-noite daqui.
-        var hoje = HorarioBrasilia.Hoje;
-        var inicioPeriodo = filtro.DataInicio ?? HorarioBrasilia.PrimeiroDiaDoMes(hoje);
-        var fimPeriodo = filtro.DataFim ?? hoje;
-        var inicioUtc = HorarioBrasilia.Inicio(inicioPeriodo);
-        var fimUtc = HorarioBrasilia.Fim(fimPeriodo);
-        var agora = DateTimeOffset.UtcNow;
-
         var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
 
         // Filtro de regional: só para quem tem visão total (os demais já estão presos à própria equipe). Fica só quem é da regional escolhida.
@@ -53,6 +46,55 @@ public sealed class DashboardService(
             }
             visiveis = [filtro.VendedorId.Value];
         }
+
+        return (visiveis, regionalFiltrada);
+    }
+
+    public async Task<RelatorioDetalheDto> ObterVendasDaOrigemAsync(DashboardFilterRequest filtro, string origem, CancellationToken ct)
+    {
+        var hoje = HorarioBrasilia.Hoje;
+        var inicioPeriodo = filtro.DataInicio ?? HorarioBrasilia.PrimeiroDiaDoMes(hoje);
+        var fimPeriodo = filtro.DataFim ?? hoje;
+        var inicioUtc = HorarioBrasilia.Inicio(inicioPeriodo);
+        var fimUtc = HorarioBrasilia.Fim(fimPeriodo);
+        var (visiveis, _) = await ResolverEscopoAsync(filtro, ct);
+
+        // Mesmas vendas do card de vendas e mesmos grupos do gráfico (ver CalcularAsync).
+        var ganhas = db.CrmOpportunities.AsNoTracking().Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho
+            && o.DataEfetivaFechamento >= inicioUtc && o.DataEfetivaFechamento <= fimUtc);
+        if (visiveis is not null) ganhas = ganhas.Where(o => visiveis.Contains(o.ResponsavelId));
+
+        var idsIndicacao = db.CrmLeads.AsNoTracking().Where(OrigemLead.CardDeIndicacao).Select(l => l.Id);
+        var idsAnuncio = db.CrmLeads.AsNoTracking().Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Select(l => l.Id);
+        var consulta = origem switch
+        {
+            "Tráfego pago" => ganhas.Where(o => idsAnuncio.Contains(o.LeadId) && !idsIndicacao.Contains(o.LeadId)),
+            "Indicação" => ganhas.Where(o => idsIndicacao.Contains(o.LeadId)),
+            _ => ganhas.Where(o => !idsAnuncio.Contains(o.LeadId) && !idsIndicacao.Contains(o.LeadId)),
+        };
+        var total = await consulta.CountAsync(ct);
+        var brutas = await consulta.OrderByDescending(o => o.DataEfetivaFechamento).Take(500)
+            .Select(o => new
+            {
+                o.LeadId, Cliente = o.Lead.NomeOuRazaoSocial, Consultor = o.Responsavel.NomeCompleto, o.DataEfetivaFechamento,
+                Etapa = o.Lead.Etapa != null ? o.Lead.Etapa.Nome : null, Canal = o.TipoIndicacao ?? o.Lead.TipoIndicacao, o.PagamentoAdesao,
+            })
+            .ToListAsync(ct);
+        var itens = brutas.Select(o => new RelatorioDetalheItemDto(o.LeadId, o.Cliente, o.Consultor, o.DataEfetivaFechamento ?? DateTimeOffset.UtcNow, o.Etapa, o.Canal, o.PagamentoAdesao)).ToList();
+        return new RelatorioDetalheDto($"Vendas — {origem}", total, "Venda", "Adesão", itens);
+    }
+
+    private async Task<DashboardDto> CalcularAsync(DashboardFilterRequest filtro, CancellationToken ct)
+    {
+        // Mês e dia de hoje no horário de Brasília: o painel passa para o mês novo à meia-noite daqui.
+        var hoje = HorarioBrasilia.Hoje;
+        var inicioPeriodo = filtro.DataInicio ?? HorarioBrasilia.PrimeiroDiaDoMes(hoje);
+        var fimPeriodo = filtro.DataFim ?? hoje;
+        var inicioUtc = HorarioBrasilia.Inicio(inicioPeriodo);
+        var fimUtc = HorarioBrasilia.Fim(fimPeriodo);
+        var agora = DateTimeOffset.UtcNow;
+
+        var (visiveis, regionalFiltrada) = await ResolverEscopoAsync(filtro, ct);
 
         var leadsQuery = db.CrmLeads.AsNoTracking().Where(l => !l.Arquivado);
         if (visiveis is not null) leadsQuery = leadsQuery.Where(l => visiveis.Contains(l.ResponsavelId ?? Guid.Empty));

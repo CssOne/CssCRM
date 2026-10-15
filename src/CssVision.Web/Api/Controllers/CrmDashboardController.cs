@@ -18,4 +18,10 @@ public class CrmDashboardController(IDashboardService dashboardService) : Contro
         var resultado = await dashboardService.ObterAsync(new DashboardFilterRequest(dataInicio, dataFim, vendedorId, regionalId), ct);
         return Ok(resultado);
     }
+
+    /// <summary>As vendas por trás de uma fatia do gráfico "Origem das vendas" da Visão geral.</summary>
+    [HttpGet("origem-vendas")]
+    public async Task<ActionResult<RelatorioDetalheDto>> ObterVendasDaOrigem(
+        [FromQuery] string origem, [FromQuery] DateOnly? dataInicio, [FromQuery] DateOnly? dataFim, [FromQuery] Guid? vendedorId, [FromQuery] Guid? regionalId, CancellationToken ct) =>
+        Ok(await dashboardService.ObterVendasDaOrigemAsync(new DashboardFilterRequest(dataInicio, dataFim, vendedorId, regionalId), origem, ct));
 }
