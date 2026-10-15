@@ -78,9 +78,10 @@ public sealed class DashboardService(
             {
                 o.LeadId, Cliente = o.Lead.NomeOuRazaoSocial, Consultor = o.Responsavel.NomeCompleto, o.DataEfetivaFechamento,
                 Etapa = o.Lead.Etapa != null ? o.Lead.Etapa.Nome : null, Canal = o.TipoIndicacao ?? o.Lead.TipoIndicacao, o.PagamentoAdesao,
+                o.Lead.Placa, o.Lead.Telefone,
             })
             .ToListAsync(ct);
-        var itens = brutas.Select(o => new RelatorioDetalheItemDto(o.LeadId, o.Cliente, o.Consultor, o.DataEfetivaFechamento ?? DateTimeOffset.UtcNow, o.Etapa, o.Canal, o.PagamentoAdesao)).ToList();
+        var itens = brutas.Select(o => new RelatorioDetalheItemDto(o.LeadId, o.Cliente, o.Consultor, o.DataEfetivaFechamento ?? DateTimeOffset.UtcNow, o.Etapa, o.Canal, o.PagamentoAdesao, o.Placa, o.Telefone)).ToList();
         return new RelatorioDetalheDto($"Vendas — {origem}", total, "Venda", "Adesão", itens);
     }
 

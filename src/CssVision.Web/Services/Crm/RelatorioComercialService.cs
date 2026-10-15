@@ -144,7 +144,7 @@ public sealed class RelatorioComercialService(
             var total = await consulta.CountAsync(ct);
             var linhas = await consulta.OrderByDescending(l => l.CriadoEm).Take(MaximoDoDetalhe)
                 .Select(l => new RelatorioDetalheItemDto(l.Id, l.NomeOuRazaoSocial, l.Responsavel != null ? l.Responsavel.NomeCompleto : null, l.CriadoEm,
-                    l.Etapa != null ? l.Etapa.Nome : null, l.TipoIndicacao, null))
+                    l.Etapa != null ? l.Etapa.Nome : null, l.TipoIndicacao, null, l.Placa, l.Telefone))
                 .ToListAsync(ct);
             var titulo = tipo switch
             {
@@ -186,7 +186,7 @@ public sealed class RelatorioComercialService(
                 o.LeadId, Cliente = o.Lead.NomeOuRazaoSocial, Consultor = o.Responsavel.NomeCompleto, o.AtivoEm, o.DataEfetivaFechamento,
                 Etapa = o.Lead.Etapa != null ? o.Lead.Etapa.Nome : null, Canal = o.TipoIndicacao ?? o.Lead.TipoIndicacao,
                 o.PagamentoAdesao, o.Mensalidade, o.ValorIndicacao, Rastreador = o.Veiculo != null ? o.Veiculo.Rastreador : null,
-                Vistoria = o.Veiculo != null ? o.Veiculo.ValorVistoria : null,
+                Vistoria = o.Veiculo != null ? o.Veiculo.ValorVistoria : null, o.Lead.Placa, o.Lead.Telefone,
             })
             .ToListAsync(ct);
         var itens = brutas.Select(o => new RelatorioDetalheItemDto(
@@ -194,7 +194,8 @@ public sealed class RelatorioComercialService(
                 tipo switch
                 {
                     "mensalidade" => o.Mensalidade, "rastreador" => o.Rastreador, "vistoria" => o.Vistoria, "indicacao" => o.ValorIndicacao, _ => o.PagamentoAdesao,
-                }))
+                },
+                o.Placa, o.Telefone))
             .ToList();
         return new RelatorioDetalheDto(tituloVendas, totalVendas, "Venda", rotuloValor, itens);
     }

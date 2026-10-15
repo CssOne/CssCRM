@@ -95,10 +95,12 @@ export function DetalheDoCardModal({ aberto, titulo, abas, onFechar }: { aberto:
             <p className="py-6 text-center text-sm text-[var(--fg-muted)]">Nada neste período.</p>
           ) : (
             <div className="max-h-[60vh] overflow-auto rounded-lg border border-[var(--border)]">
-              <table className="w-full min-w-[520px] text-sm">
+              <table className="w-full min-w-[720px] text-sm">
                 <thead className="sticky top-0 bg-[var(--surface)]">
                   <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--fg-muted)]">
                     <th className="px-3 py-2 font-medium">Cliente</th>
+                    <th className="px-3 py-2 font-medium">Placa</th>
+                    <th className="px-3 py-2 font-medium">Telefone</th>
                     <th className="px-3 py-2 font-medium">Consultor</th>
                     <th className="px-3 py-2 font-medium">{dados.rotuloData}</th>
                     <th className="px-3 py-2 font-medium">Coluna</th>
@@ -117,6 +119,8 @@ export function DetalheDoCardModal({ aberto, titulo, abas, onFechar }: { aberto:
                       className="cursor-pointer border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)]"
                     >
                       <td className="px-3 py-2 font-medium text-[var(--brand)]">{i.cliente}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-[var(--fg-muted)]">{i.placa ?? "—"}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-[var(--fg-muted)]">{i.telefone ?? "—"}</td>
                       <td className="px-3 py-2 text-[var(--fg-muted)]">{i.consultor ?? "—"}</td>
                       <td className="whitespace-nowrap px-3 py-2 text-[var(--fg-muted)]">{formatarData(i.data)}</td>
                       <td className="px-3 py-2 text-[var(--fg-muted)]">{i.etapa ?? "Sem etapa"}</td>
