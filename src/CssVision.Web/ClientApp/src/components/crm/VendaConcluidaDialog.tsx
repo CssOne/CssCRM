@@ -8,6 +8,7 @@ import { formatarData, hojeBrasilia } from "../../lib/format";
 import { Button, Checkbox, DocumentoInput, Input, Label, Modal, MoneyInput, Select, useToast } from "../ui";
 import { leadFormVazio, paraLeadCreateRequest } from "./LeadForm";
 import { CidadeInput } from "../CidadeInput";
+import { erroDocumento, erroTelefone } from "../../lib/validacao";
 import { useAuth } from "../../context/AuthContext";
 
 export type DadosVendaConcluida = Omit<ChangeStageRequest, "novaEtapaId" | "motivoPerdaId">;
@@ -378,7 +379,7 @@ export function VendaConcluidaDialog({
   const dadosNovoClienteOk =
     !ehNovoCliente ||
     (!!nomeCliente.trim() &&
-      telefone.replace(/\D/g, "").length >= 8 &&
+      !erroTelefone(telefone) &&
       /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) &&
       !!cidade.trim() &&
       !!temSeguro &&
@@ -392,6 +393,7 @@ export function VendaConcluidaDialog({
     !!valores.dataEfetivaFechamento &&
     !dataDaVendaFutura &&
     !!valores.cpf &&
+    !erroDocumento(valores.cpf) &&
     !!valores.estado &&
     (valores.porcentagem ?? -1) >= 0 &&
     (valores.porcentagem ?? 0) <= 100 &&
@@ -413,6 +415,50 @@ export function VendaConcluidaDialog({
     dadosNovoClienteOk &&
     !enviandoArquivos &&
     !enviando;
+
+  // O que falta (ou está errado) para concluir: o botão fica desabilitado, então a tela diz o motivo em vez de deixar o usuário adivinhar.
+  const pendencias: string[] = [];
+  if (ehVenda) {
+    const falta = (ok: boolean, msg: string) => {
+      if (!ok) pendencias.push(msg);
+    };
+    falta((valores.valorFinal ?? -1) >= 0, "Informe o valor final da venda.");
+    falta(!!valores.dataEfetivaFechamento, "Informe a data da venda.");
+    falta(!dataDaVendaFutura, "A data da venda não pode ser no futuro.");
+    if (!valores.cpf) pendencias.push("Informe o CPF/CNPJ do cliente.");
+    else {
+      const e = erroDocumento(valores.cpf);
+      if (e) pendencias.push(e);
+    }
+    falta(!!valores.estado, "Selecione o estado (UF).");
+    falta((valores.porcentagem ?? -1) >= 0 && (valores.porcentagem ?? 0) <= 100, "A porcentagem de desconto deve estar entre 0 e 100.");
+    falta((valores.mensalidade ?? -1) >= 0, "Informe a mensalidade.");
+    falta((valores.mensalidadeComCupom ?? -1) >= 0, "Informe a mensalidade com cupom.");
+    falta((valores.pagamentoAdesao ?? -1) >= 0, "Informe o valor da adesão paga (pode ser 0,00).");
+    falta(!adesaoSemValorComComprovante, "Com o comprovante anexado, o valor da adesão paga precisa ser maior que zero.");
+    falta((valores.total ?? -1) >= 0, "O total da venda não pode ser negativo: confira a adesão, o rastreador e a vistoria.");
+    falta(!!valores.veiculo?.descricao, "Informe a descrição do veículo.");
+    falta(carroZero ? !!valores.veiculo?.chassi?.trim() : !!valores.veiculo?.placa, carroZero ? "Informe o chassi do veículo (carro zero)." : "Informe a placa do veículo.");
+    falta((valores.veiculo?.fipe ?? -1) >= 0, "Informe o valor FIPE do veículo.");
+    falta(!temRastreador || (valores.veiculo?.rastreador ?? -1) >= 0, "Informe o valor do rastreador.");
+    falta(!temVistoria || (valores.veiculo?.valorVistoria ?? -1) >= 0, "Informe o valor da vistoria.");
+    falta(indicacaoPreenchida, "Teve indicação: informe o valor da indicação (maior que zero).");
+    falta(canalPreenchido, "Selecione o canal de aquisição.");
+    falta(!!termoArquivo || !!oportunidadeEditar?.termoAdesaoArquivoUrl, "Anexe o termo de adesão.");
+    falta(temComprovantePagamento || pagamentoAgendado, "Anexe o comprovante do pagamento da adesão ou marque a data em que ela será paga.");
+    falta(quantidadeVeiculosValida, `Informe de 1 a ${MAXIMO_VEICULOS_ADICIONAIS} veículos adicionais.`);
+    if (ehNovoCliente) {
+      falta(!!nomeCliente.trim(), "Informe o nome do cliente.");
+      const eTel = erroTelefone(telefone);
+      if (eTel) pendencias.push(eTel);
+      falta(/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email), "Informe um e-mail válido (nome@dominio.com).");
+      falta(!!cidade.trim(), "Informe a cidade do cliente.");
+      falta(!!temSeguro, "Informe se o cliente tem seguro.");
+      falta(!!utilidadeVeiculo, "Informe a utilidade do veículo.");
+    }
+  } else {
+    if (!nomeCliente.trim()) pendencias.push("Informe o nome do cliente.");
+  }
 
   async function criarOportunidade() {
     if (!leadId || !nomeCliente.trim()) return;
@@ -1066,6 +1112,16 @@ export function VendaConcluidaDialog({
           </div>
         </div>
 
+        {!podeConfirmar && !enviando && !enviandoArquivos && pendencias.length > 0 && (
+          <div role="alert" className="rounded-lg border border-[var(--danger)] bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">
+            <p className="font-medium">Falta o seguinte para continuar:</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5">
+              {pendencias.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
           <Button variant="secondary" onClick={cancelar} disabled={enviandoArquivos || enviando}>
             Cancelar

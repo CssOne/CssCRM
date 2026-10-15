@@ -7,6 +7,7 @@ import { ESTADOS_BRASIL } from "../../lib/estados";
 import { OPCOES_ORIGEM, OPCOES_TIPO_INDICACAO, TIPO_INDICACAO_LEAD } from "../../lib/opcoesLead";
 import { TagSelect } from "./TagSelect";
 import { CidadeInput } from "../CidadeInput";
+import { erroDocumento, erroTelefone } from "../../lib/validacao";
 
 export interface LeadFormValues {
   nomeOuRazaoSocial: string;
@@ -134,6 +135,7 @@ export function LeadForm({
 }) {
   const [valores, setValores] = useState<LeadFormValues>(valoresIniciais ?? leadFormVazio);
   const [erros, setErros] = useState<Record<string, string>>({});
+  const [aviso, setAviso] = useState<string | null>(null);
   const { temPapel } = useAuth();
   const ehConsultor = temPapel("Comercial") && !temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
   const podeVerMarketing = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
@@ -147,14 +149,24 @@ export function LeadForm({
   function validar(): boolean {
     const novosErros: Record<string, string> = {};
     if (!valores.nomeOuRazaoSocial.trim()) novosErros.nome = "Informe o nome ou razão social.";
-    if (valores.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(valores.email)) novosErros.email = "E-mail inválido.";
-    if (valores.telefone.replace(/\D/g, "").length < 8) novosErros.telefone = "Informe o telefone do cliente.";
+    const erroDoc = erroDocumento(valores.documento);
+    if (erroDoc) novosErros.documento = erroDoc;
+    if (valores.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(valores.email)) novosErros.email = "E-mail inválido: use o formato nome@dominio.com.";
+    const erroTel = erroTelefone(valores.telefone);
+    if (erroTel) novosErros.telefone = erroTel;
+    if (valores.telefone2.trim()) {
+      const e2 = erroTelefone(valores.telefone2);
+      if (e2) novosErros.telefone2 = e2;
+    }
     if (!valores.cidade.trim()) novosErros.cidade = "Informe a cidade.";
-    if (valores.estado.length !== 2) novosErros.estado = "Selecione o estado.";
+    if (valores.estado.length !== 2) novosErros.estado = "Selecione o estado (UF).";
     if (!valores.placa.trim()) novosErros.placa = "Informe a placa do veículo.";
     if (ehIndicacao && !valores.tipoIndicacao) novosErros.tipoIndicacao = "Selecione o canal de aquisição.";
     setErros(novosErros);
-    return Object.keys(novosErros).length === 0;
+    const faltando = Object.keys(novosErros).length;
+    if (faltando > 0) setAviso(`Corrija ${faltando === 1 ? "o campo destacado" : `os ${faltando} campos destacados`} para salvar.`);
+    else setAviso(null);
+    return faltando === 0;
   }
 
   function handleSubmit(e: FormEvent) {
@@ -193,6 +205,7 @@ export function LeadForm({
         <div>
           <Label htmlFor={`${idPrefix}-doc`}>{valores.tipoPessoa === TipoPessoa.Fisica ? "CPF" : "CNPJ"}</Label>
           <DocumentoInput id={`${idPrefix}-doc`} value={valores.documento} onChange={(e) => set("documento", e.target.value)} />
+          <FieldError>{erros.documento}</FieldError>
         </div>
 
         <div>
@@ -206,6 +219,7 @@ export function LeadForm({
         <div>
           <Label htmlFor={`${idPrefix}-tel2`}>Telefone 2</Label>
           <Input id={`${idPrefix}-tel2`} value={valores.telefone2} onChange={(e) => set("telefone2", e.target.value)} />
+          <FieldError>{erros.telefone2}</FieldError>
         </div>
 
         <div className="sm:col-span-2">
@@ -423,6 +437,11 @@ export function LeadForm({
         <Textarea id={`${idPrefix}-obs`} value={valores.observacoes} onChange={(e) => set("observacoes", e.target.value)} />
       </div>
 
+      {aviso && (
+        <p role="alert" className="rounded-lg border border-[var(--danger)] bg-[var(--danger)]/10 px-3 py-2 text-sm text-[var(--danger)]">
+          {aviso}
+        </p>
+      )}
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={salvando}>
           Cancelar
