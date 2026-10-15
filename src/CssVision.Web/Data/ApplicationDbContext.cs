@@ -98,13 +98,53 @@ public class ApplicationDbContext(
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         AplicarAuditoria();
+        TravaDasColunasDeVendaConcluidaAsync(CancellationToken.None).GetAwaiter().GetResult();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
-    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         AplicarAuditoria();
-        return base.SaveChangesAsync(cancellationToken);
+        await TravaDasColunasDeVendaConcluidaAsync(cancellationToken);
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    private const string ColunaVendaConcluidaLeads = "Venda concluída (Leads)";
+    private const string ColunaVendaConcluidaIndicacao = "Venda concluída (Indicação)";
+    private (Guid Leads, Guid Indicacao)? _colunasDeVenda;
+
+    /// <summary>
+    /// Trava das colunas "Venda concluída (Leads)" e "Venda concluída (Indicação)": nenhum caminho (tela, API, sincronização do Notion, carga, edição do
+    /// canal) pode deixar um card de Indicação na coluna dos Leads nem um card Lead na das Indicações. Se um card for gravado na coluna que não é a da etiqueta
+    /// dele, vai para a coluna da etiqueta — a etiqueta nunca é trocada aqui (a exceção "Lead que vendeu por indicação" ganha a etiqueta "Indicação Lead" antes,
+    /// em MudarEtapa/concluir venda).
+    /// </summary>
+    private async Task TravaDasColunasDeVendaConcluidaAsync(CancellationToken ct)
+    {
+        var candidatos = ChangeTracker.Entries<CrmLead>()
+            .Where(e => e.State == EntityState.Added
+                || (e.State == EntityState.Modified && (e.Property(l => l.EtapaId).IsModified || e.Property(l => l.TipoIndicacao).IsModified || e.Property(l => l.CriadoManualmente).IsModified)))
+            .Where(e => e.Entity.EtapaId is not null)
+            .ToList();
+        if (candidatos.Count == 0) return;
+
+        if (_colunasDeVenda is null)
+        {
+            var colunas = await CrmLeadStages.AsNoTracking().Where(s => s.Nome == ColunaVendaConcluidaLeads || s.Nome == ColunaVendaConcluidaIndicacao)
+                .Select(s => new { s.Id, s.Nome }).ToListAsync(ct);
+            var leads = colunas.FirstOrDefault(c => c.Nome == ColunaVendaConcluidaLeads);
+            var indicacao = colunas.FirstOrDefault(c => c.Nome == ColunaVendaConcluidaIndicacao);
+            if (leads is null || indicacao is null) return;
+            _colunasDeVenda = (leads.Id, indicacao.Id);
+        }
+
+        var (idLeads, idIndicacao) = _colunasDeVenda.Value;
+        foreach (var entry in candidatos)
+        {
+            var lead = entry.Entity;
+            if (lead.EtapaId != idLeads && lead.EtapaId != idIndicacao) continue;
+            lead.EtapaId = Services.Notion.NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao) ? idIndicacao : idLeads;
+        }
     }
 
     private void AplicarAuditoria()
