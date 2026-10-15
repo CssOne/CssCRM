@@ -27,7 +27,9 @@ public record RelatorioComercialDto(
     IReadOnlyList<RelatorioFaixaFipeDto> FaixasFipe,
     IReadOnlyList<RelatorioProdutoDto> PorProduto,
     IReadOnlyList<RelatorioMarketingMesDto> MarketingNotion,
-    IReadOnlyList<RelatorioEtapaDto> PorEtapa);
+    IReadOnlyList<RelatorioEtapaDto> PorEtapa,
+    /// <summary>Preenchido quando o cadastro do usuário limita o relatório a uma só regional (a tela mostra só essa aba).</summary>
+    Guid? RegionalFixaId = null);
 
 public record RelatorioTotaisDto(
     int Leads,
