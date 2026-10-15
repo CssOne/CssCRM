@@ -460,7 +460,7 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
 
                       {temDadosVenda && (
                         <div className="mt-3 grid gap-3 border-t border-[var(--border)] pt-3 @md:grid-cols-2 @4xl:grid-cols-3">
-                          {op.cpf && <InfoItem icone={IdCard} label="CPF" valor={formatarDocumento(op.cpf)} />}
+                          {op.cpf && <InfoItem icone={IdCard} label="CPF/CNPJ" valor={formatarDocumento(op.cpf)} />}
                           {op.estado && <InfoItem icone={MapPin} label="Estado" valor={op.estado} />}
                           {op.ativoEm && <InfoItem icone={Calendar} label="Ativo em" valor={formatarData(op.ativoEm)} />}
                           {op.porcentagem != null && <InfoItem icone={Percent} label="Porcentagem" valor={`${op.porcentagem}%`} />}
