@@ -31,6 +31,30 @@ export function isAbortError(erro: unknown): boolean {
   return erro instanceof DOMException && erro.name === "AbortError";
 }
 
+function mensagemPorStatus(status: number): string {
+  switch (status) {
+    case 400: return "Os dados enviados são inválidos. Confira os campos e tente novamente.";
+    case 401: return "Sua sessão expirou. Entre novamente.";
+    case 403: return "Você não tem permissão para fazer isso.";
+    case 404: return "Registro não encontrado. Ele pode ter sido removido: atualize a página.";
+    case 409: return "Este registro foi alterado por outra pessoa. Atualize a página e tente novamente.";
+    case 413: return "O arquivo é grande demais.";
+    case 429: return "Muitas tentativas seguidas. Aguarde um instante e tente novamente.";
+    default: return status >= 500 ? "O servidor não conseguiu concluir a operação. Tente novamente em instantes." : `Erro inesperado (${status}).`;
+  }
+}
+
+/** Traduz a resposta de erro da API (mensagem do CRM, erros de validação do ASP.NET ou corpo vazio) numa mensagem específica. */
+function erroDaResposta(status: number, payload: unknown): ApiError {
+  const p = payload as { mensagem?: string; codigo?: string | null; detalhes?: unknown; errors?: Record<string, string[]>; title?: string } | undefined;
+  if (p?.mensagem) return p as ApiError;
+  if (p?.errors) {
+    const msgs = Object.values(p.errors).flat().filter(Boolean);
+    if (msgs.length > 0) return { mensagem: msgs.join(" "), codigo: "validacao", detalhes: p.errors };
+  }
+  return { mensagem: mensagemPorStatus(status), codigo: p?.codigo ?? null };
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
@@ -49,7 +73,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (init?.signal?.aborted) {
       throw new DOMException("Aborted", "AbortError");
     }
-    throw erro;
+    throw new ApiRequestError(0, { mensagem: "Sem conexão com o servidor. Verifique sua internet e tente novamente.", codigo: "sem_conexao" });
   }
 
   if (response.status === 204) {
@@ -60,8 +84,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const payload = isJson ? await response.json() : undefined;
 
   if (!response.ok) {
-    const erro: ApiError = isJson ? payload : { mensagem: `Erro inesperado (${response.status}).` };
-    throw new ApiRequestError(response.status, erro);
+    throw new ApiRequestError(response.status, erroDaResposta(response.status, isJson ? payload : undefined));
   }
 
   return payload as T;

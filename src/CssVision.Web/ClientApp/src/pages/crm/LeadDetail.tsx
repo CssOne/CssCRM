@@ -203,7 +203,7 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
         notificar("error", "Este lead foi alterado por outro usuário. Recarregando dados atuais.");
         carregar();
       } else {
-        notificar("error", "Não foi possível salvar as alterações.");
+        notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível salvar as alterações.");
       }
     } finally {
       setSalvando(false);
