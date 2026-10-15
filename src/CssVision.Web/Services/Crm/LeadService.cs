@@ -509,7 +509,12 @@ public sealed class LeadService(
             throw new CrmNotFoundException("Etapa de lead", etapaInformada);
         }
         // Para a coluna Leads/Indicação, o card novo é cadastro manual de quem registra (não herda a etiqueta do outro).
-        var referenciaDeEtapa = deOutroConsultor ? new CrmLead { CriadoManualmente = true } : original;
+        // Outro veículo de um cliente do tráfego pago, já com a venda concluída: ela conta como indicação ("Indicação Lead"), então o card nasce com essa etiqueta, na coluna das
+        // indicações e sem as etiquetas do produto e do anúncio (ver OpportunityService.ComoIndicacaoLeadDeOutroVeiculo).
+        var outroVeiculoDeLead = request.VendaConcluida && !deOutroConsultor && !NotionEtapaLead.EhIndicacao(original.CriadoManualmente, original.TipoIndicacao);
+        var referenciaDeEtapa = deOutroConsultor ? new CrmLead { CriadoManualmente = true }
+            : outroVeiculoDeLead ? new CrmLead { CriadoManualmente = original.CriadoManualmente, TipoIndicacao = TipoIndicacaoLead.IndicacaoLead }
+            : original;
         var etapaId = request.VendaConcluida
             ? await EtapaVendaConcluidaAsync(referenciaDeEtapa, ct)
             : request.EtapaId ?? (deOutroConsultor ? await ObterEtapaInicialIdAsync(ct) : await EtapaDoVeiculoAdicionalAsync(original, ct));
@@ -555,9 +560,10 @@ public sealed class LeadService(
                 Cidade = principal.Cidade,
                 Estado = principal.Estado,
                 Regional = principal.Regional,
-                Origem = principal.Origem,
-                ProdutoInteresse = original.ProdutoInteresse,
-                TipoIndicacao = original.TipoIndicacao,
+                Origem = outroVeiculoDeLead ? null : principal.Origem,
+                ProdutoInteresse = outroVeiculoDeLead ? null : original.ProdutoInteresse,
+                TipoIndicacao = outroVeiculoDeLead ? TipoIndicacaoLead.IndicacaoLead : original.TipoIndicacao,
+                TipoIndicacaoEditadoNoCrm = outroVeiculoDeLead,
                 IndicadoPorLeadId = principal.IndicadoPorLeadId,
                 CriadoManualmente = original.CriadoManualmente,
                 ResponsavelId = original.ResponsavelId,

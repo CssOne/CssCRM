@@ -135,7 +135,7 @@ public class IndicacaoLeadEVeiculosAdicionaisTests
     }
 
     [Theory]
-    [InlineData("Lead", "Venda concluída (Leads)")]
+    [InlineData("Lead", "Venda concluída (Indicação)")] // outro veículo de cliente do tráfego: a venda dele é indicação ("Indicação Lead")
     [InlineData("Indicação Lead", "Venda concluída (Indicação)")]
     [InlineData("Pessoal", "Venda concluída (Indicação)")]
     public async Task OutroVeiculo_ComVendaConcluida_CardNasceEmVendaConcluidaDaMesmaEtiqueta(string tipo, string colunaEsperada)
