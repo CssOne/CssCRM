@@ -1730,6 +1730,8 @@ export interface RelatorioDetalheItem {
   etapa?: string | null;
   canal?: string | null;
   valor?: number | null;
+  placa?: string | null;
+  telefone?: string | null;
 }
 
 export interface RelatorioDetalhe {

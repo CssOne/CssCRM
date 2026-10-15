@@ -105,7 +105,9 @@ public record RelatorioDetalheItemDto(
     DateTimeOffset Data,
     string? Etapa,
     string? Canal,
-    decimal? Valor);
+    decimal? Valor,
+    string? Placa = null,
+    string? Telefone = null);
 
 /// <summary>
 /// O que há por trás de um card do relatório. <see cref="Total"/> é a quantidade do card; <see cref="Itens"/> traz os 500 mais recentes.
