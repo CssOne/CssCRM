@@ -23,7 +23,7 @@ public class RelatorioFiltrosExtrasTests
 
         CrmLead Lead(string nome, string? tipo, int mesChegada) => new()
         {
-            NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, TipoIndicacao = tipo,
+            NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, TipoIndicacao = tipo, UtmSource = "teste",
         };
         // Lead A (tipo "Lead", chegou em março) e lead B (indicação "Pessoal", chegou em maio); os dois viram venda em junho.
         var a = Lead("A", "Lead", 3);
@@ -124,7 +124,7 @@ public class RelatorioFiltrosExtrasTests
 
         // Dois leads de março com a Ana: um de tráfego (Meta) e uma indicação. Em maio, os dois passam para a Bruna.
         var trafego = new CrmLead { NomeOuRazaoSocial = "Trafego", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, MetaLeadId = "1" };
-        var indicacao = new CrmLead { NomeOuRazaoSocial = "Indicacao", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, TipoIndicacao = "Pessoal", CriadoManualmente = true };
+        var indicacao = new CrmLead { NomeOuRazaoSocial = "Indicacao", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, TipoIndicacao = "Pessoal", CriadoManualmente = true, UtmSource = "teste" };
         db.CrmLeads.AddRange(trafego, indicacao);
         await db.SaveChangesAsync();
         var marco = new DateTimeOffset(2025, 3, 10, 15, 0, 0, TimeSpan.Zero);

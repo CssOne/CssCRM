@@ -135,11 +135,11 @@ public sealed class RelatorioComercialService(
         {
             var consulta = tipo switch
             {
-                "perdidos" => leadsQuery.Where(l => l.Etapa != null && l.Etapa.Nome == NotionEtapaLead.Perdido),
+                "perdidos" => leadsQuery.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Where(l => l.Etapa != null && l.Etapa.Nome == NotionEtapaLead.Perdido),
                 "trafego-leads" => Grupo(leadsQuery, "trafego"),
                 "indicacao-leads" => Grupo(leadsQuery, "indicacao"),
                 "sem-origem-leads" => Grupo(leadsQuery, "sem-origem"),
-                _ => leadsQuery,
+                _ => leadsQuery.Where(OrigemLead.DeTrafegoPagoInclusiveNotion),
             };
             var total = await consulta.CountAsync(ct);
             var linhas = await consulta.OrderByDescending(l => l.CriadoEm).Take(MaximoDoDetalhe)
@@ -149,7 +149,7 @@ public sealed class RelatorioComercialService(
             var titulo = tipo switch
             {
                 "perdidos" => "Leads perdidos", "trafego-leads" => "Leads de tráfego pago", "indicacao-leads" => "Cards de indicação",
-                "sem-origem-leads" => "Leads sem origem de anúncio identificada", _ => "Leads recebidos",
+                "sem-origem-leads" => "Leads sem origem de anúncio identificada", _ => "Leads recebidos (tráfego pago)",
             };
             return new RelatorioDetalheDto(titulo, total, "Chegada", null, linhas);
         }
@@ -290,7 +290,10 @@ public sealed class RelatorioComercialService(
     {
         var (leadsQuery, vendasQuery) = MontarConsultas(inicio, fim, visiveis, consultorId, etapaIds, extras, tiposIndicacao);
 
-        var leads = await leadsQuery
+        var totalDeCards = await leadsQuery.CountAsync(ct);
+        // "Leads recebidos" = só o que é lead de tráfego pago (CRM e Notion), a mesma regra dos leads "pegos" do painel da TV; indicação, cadastro manual e
+        // cards sem sinal de anúncio não entram nos totais, gráficos e desempenho por vendedor (aparecem em "Conversão — indicação" e "sem origem").
+        var leads = await leadsQuery.Where(OrigemLead.DeTrafegoPagoInclusiveNotion)
             // Mesma data de OrigemLead.ChegouNoPeriodo: lead do tráfego pago do sistema vale pela atribuição ao responsável atual; os demais, pela chegada.
             .Select(l => new LeadLinha(
                 l.ConsentimentoOrigem != OrigemLead.MarcadorMigracaoNotion && l.ConsentimentoOrigem != OrigemLead.MarcadorSincronizacaoNotion
@@ -341,7 +344,7 @@ public sealed class RelatorioComercialService(
         {
             LeadsTrafegoPago = leadsTrafego, VendasTrafegoPago = vendasTrafego, TaxaConversaoTrafegoPago = Taxa(vendasTrafego, leadsTrafego),
             LeadsIndicacaoCard = leadsIndicacao, VendasIndicacaoCard = vendasIndicacaoCard, TaxaConversaoIndicacaoCard = Taxa(vendasIndicacaoCard, leadsIndicacao),
-            LeadsSemOrigemIdentificada = leads.Count - leadsTrafego - leadsIndicacao,
+            LeadsSemOrigemIdentificada = totalDeCards - leadsTrafego - leadsIndicacao,
             VendasSemOrigemIdentificada = vendas.Count - vendasTrafego - vendasIndicacaoCard,
         };
 

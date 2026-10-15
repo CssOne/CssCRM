@@ -87,7 +87,7 @@ public class RelatorioFiltrosCorrigidosTests
         var admin = await factory.CriarUsuarioAsync(db, "Admin");
         var ana = await factory.CriarUsuarioAsync(db, "Ana");
         await factory.AtribuirPapelAsync(db, ana, Roles.Comercial);
-        CrmLead L(string nome, string? tipo, bool manual) => new() { NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, TipoIndicacao = tipo, CriadoManualmente = manual };
+        CrmLead L(string nome, string? tipo, bool manual) => new() { NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, TipoIndicacao = tipo, CriadoManualmente = manual, UtmSource = "teste" };
         db.CrmLeads.AddRange(L("trafego", "Lead", false), L("semTipo", null, false), L("manualSemTipo", null, true), L("pessoal", "Pessoal", false), L("manualLead", "Lead", true));
         await db.SaveChangesAsync();
         var usuario = TestDbContextFactory.MockCurrentUser(admin.Id, visaoTotal: true, podeGerir: true).Object;

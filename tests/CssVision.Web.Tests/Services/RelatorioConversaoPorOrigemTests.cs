@@ -61,6 +61,7 @@ public class RelatorioConversaoPorOrigemTests
         Assert.Equal(1, t.VendasSemOrigemIdentificada);
         Assert.Equal(1, t.LeadsSemOrigemIdentificada);
         Assert.Equal(t.Vendas, t.VendasTrafegoPago + t.VendasIndicacaoCard + t.VendasSemOrigemIdentificada);
-        Assert.Equal(t.Leads, t.LeadsTrafegoPago + t.LeadsIndicacaoCard + t.LeadsSemOrigemIdentificada);
+        // "Leads pegos" do relatório = só os com sinal de tráfego pago (t1, t2, n1, n2, il e ugc), como o painel da TV.
+        Assert.Equal(6, t.Leads);
     }
 }

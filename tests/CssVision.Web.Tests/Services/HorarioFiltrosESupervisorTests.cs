@@ -98,7 +98,7 @@ public class HorarioFiltrosESupervisorTests
 
         CrmLead Lead(string nome, Guid resp, Guid? etapa) => new()
         {
-            NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = resp, EtapaId = etapa,
+            NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = resp, EtapaId = etapa, UtmSource = "teste",
         };
         var daAnaVenda = Lead("Ana venda", ana.Id, vendaConcluida.Id);
         var daAnaAtend = Lead("Ana atendimento", ana.Id, atendimento.Id);

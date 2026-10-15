@@ -487,10 +487,10 @@ export function RelatorioComercialPage() {
 
       <div className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-3 ${carregando ? "opacity-60" : ""}`}>
         <Kpi
-          rotulo="Leads recebidos"
+          rotulo="Leads pegos"
           valor={inteiro(t.leads)}
-          detalhe={`${inteiro(t.leadsPerdidos)} perdidos`}
-          onClick={() => abrirDetalhe("Leads recebidos", [["Recebidos", "leads"], ["Perdidos", "perdidos"]])}
+          detalhe={`${inteiro(t.leadsPerdidos)} perdidos · só tráfego pago (CRM e Notion)`}
+          onClick={() => abrirDetalhe("Leads pegos", [["Pegos", "leads"], ["Perdidos", "perdidos"]])}
         />
         <Kpi
           rotulo="Vendas concluídas"
