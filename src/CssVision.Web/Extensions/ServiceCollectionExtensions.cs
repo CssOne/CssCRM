@@ -148,6 +148,7 @@ public static class ServiceCollectionExtensions
         // Etapa 1 da volta da MG134: desarquiva os leads uma vez, depois do app no ar (não bloqueia a subida).
         services.AddHostedService<ReativarLeadsMg134BackgroundService>();
         services.AddHostedService<RenomearCanalPessoalBackgroundService>();
+        services.AddHostedService<OutroVeiculoComoIndicacaoLeadBackgroundService>();
         services.AddHostedService<DesmarcarIndicacaoSemValorBackgroundService>();
         services.AddHostedService<DevolverCardsDaMg134AoVendedorBackgroundService>();
         services.AddHostedService<PreencherCadastroDosLeadsBackgroundService>();

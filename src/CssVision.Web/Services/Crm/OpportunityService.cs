@@ -177,7 +177,10 @@ public sealed class OpportunityService(
             Cpf = string.IsNullOrWhiteSpace(request.Cpf) ? null : request.Cpf.Trim(),
             Estado = string.IsNullOrWhiteSpace(request.Estado) ? null : request.Estado.Trim().ToUpperInvariant(),
             Indicacao = request.Indicacao,
-            TipoIndicacao = string.IsNullOrWhiteSpace(request.TipoIndicacao) ? null : request.TipoIndicacao.Trim(),
+            // Venda do outro veículo de um cliente do tráfego pago: o canal da venda é o do card ("Indicação Lead").
+            TipoIndicacao = Services.Crm.TipoIndicacaoLead.EhIndicacaoLead(lead.TipoIndicacao) && lead.VeiculoAdicionalDeLeadId is not null
+                ? Services.Crm.TipoIndicacaoLead.IndicacaoLead
+                : string.IsNullOrWhiteSpace(request.TipoIndicacao) ? null : request.TipoIndicacao.Trim(),
             ValorIndicacao = request.ValorIndicacao,
             Total = request.Total
         };
@@ -344,6 +347,8 @@ public sealed class OpportunityService(
             opportunity.Estado = string.IsNullOrWhiteSpace(request.Estado) ? null : request.Estado.Trim().ToUpperInvariant();
             opportunity.Indicacao = request.Indicacao;
             opportunity.TipoIndicacao = string.IsNullOrWhiteSpace(request.TipoIndicacao) ? null : request.TipoIndicacao.Trim();
+            // Venda do outro veículo de um cliente do tráfego pago: o canal da venda é o do card ("Indicação Lead").
+            if (TipoIndicacaoLead.EhIndicacaoLead(opportunity.Lead.TipoIndicacao) && opportunity.Lead.VeiculoAdicionalDeLeadId is not null) opportunity.TipoIndicacao = TipoIndicacaoLead.IndicacaoLead;
             opportunity.ValorIndicacao = request.ValorIndicacao;
             opportunity.Total = request.Total;
             opportunity.AtivoEm = NormalizarParaUtc(request.AtivoEm);
@@ -468,6 +473,8 @@ public sealed class OpportunityService(
     /// </summary>
     private async Task<CrmLeadStage?> MoverLeadParaVendaConcluidaAsync(CrmLead lead, bool? vendaComIndicacao, CancellationToken ct)
     {
+        // Outro veículo de um cliente do tráfego pago: a segunda venda é uma venda de indicação ("Indicação Lead"), sem a etiqueta do produto nem a do anúncio.
+        if (EhOutroVeiculoDeLead(lead)) ComoIndicacaoLeadDeOutroVeiculo(lead);
         var vaiComoIndicacao = Services.Notion.NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao)
             || (vendaComIndicacao == true && Services.Crm.TipoIndicacaoLead.EhLead(lead.TipoIndicacao));
         var nomeDestino = vaiComoIndicacao ? ColunaVendaConcluidaIndicacao : ColunaVendaConcluidaLeads;
@@ -482,6 +489,23 @@ public sealed class OpportunityService(
         lead.MotivoPerdaObservacao = null;
         lead.VeiculoNaoAtendido = null;
         return destino;
+    }
+
+    /// <summary>Card de "Outro veículo" (veículo adicional) de um cliente que veio como Lead (tráfego pago): ainda não é indicação.</summary>
+    internal static bool EhOutroVeiculoDeLead(CrmLead lead) =>
+        lead.VeiculoAdicionalDeLeadId is not null && !Services.Notion.NotionEtapaLead.EhIndicacao(lead.CriadoManualmente, lead.TipoIndicacao);
+
+    /// <summary>
+    /// A venda do outro veículo de um cliente do tráfego pago conta como indicação: canal "Indicação Lead", e o card perde a etiqueta do produto (AGV...) e a do anúncio
+    /// (origem/campanha — a venda não veio de um anúncio). A marca de edição no CRM impede a sincronização do Notion de desfazer.
+    /// </summary>
+    internal static void ComoIndicacaoLeadDeOutroVeiculo(CrmLead lead)
+    {
+        lead.TipoIndicacao = Services.Crm.TipoIndicacaoLead.IndicacaoLead;
+        lead.TipoIndicacaoEditadoNoCrm = true;
+        lead.ProdutoInteresse = null;
+        lead.Origem = null;
+        lead.Campanha = null;
     }
 
     /// <summary>
