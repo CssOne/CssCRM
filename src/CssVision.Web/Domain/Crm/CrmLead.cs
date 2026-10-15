@@ -143,6 +143,12 @@ public class CrmLead : CrmArchivableEntity
     /// </summary>
     public bool TagDeAnuncioNotion { get; set; }
 
+    /// <summary>
+    /// O Canal de Aquisição (<see cref="TipoIndicacao"/>) foi escolhido no CRM: a sincronização com o Notion deixa de sobrescrevê-lo com o do card (antes a
+    /// edição voltava ao valor do Notion na próxima vez que o card era relido, e a etiqueta do quadro "não mudava"). Gravado ao editar o canal do cliente.
+    /// </summary>
+    public bool TipoIndicacaoEditadoNoCrm { get; set; }
+
     /// <summary>Data/hora do último contato efetivo (atividade concluída) — usado para "leads parados".</summary>
     public DateTimeOffset? UltimoContatoEm { get; set; }
 
