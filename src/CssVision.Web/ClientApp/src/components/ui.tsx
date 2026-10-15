@@ -274,6 +274,11 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
 );
 Textarea.displayName = "Textarea";
 
+/** Celular e tablet (ponteiro por toque): aí o teclado virtual aparece ao focar um campo de texto. */
+function toqueFino(): boolean {
+  return typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches === true;
+}
+
 type OpcaoDoSelect = { valor: string; rotulo: string; desabilitada: boolean };
 
 /** Lê as `<option>` (também dentro de fragmentos, listas e `<optgroup>`) dos filhos do Select. */
@@ -342,23 +347,35 @@ export function Select({
 
   useEffect(() => {
     if (!aberto) return;
-    buscaRef.current?.focus();
-    const fora = (e: MouseEvent) => {
+    // Celular/tablet: focar o campo de pesquisa ao abrir levanta o teclado, que redimensiona a janela e rola a página — e a lista fechava sozinha logo
+    // ao abrir. No toque, o campo só recebe foco quando a pessoa toca nele.
+    const toque = toqueFino();
+    if (!toque) buscaRef.current?.focus();
+    const larguraAoAbrir = window.innerWidth;
+    const abertoEm = Date.now();
+    const fora = (e: Event) => {
       const alvo = e.target as Node;
       if (!painelRef.current?.contains(alvo) && !botaoRef.current?.contains(alvo)) setAberto(false);
     };
-    // A lista é fixa na tela: rolar a página (fora da lista) ou redimensionar a janela fecha, para ela não ficar solta do campo.
-    const fechar = (e: Event) => {
+    // A lista é fixa na tela: rolar a página (fora da lista) ou virar a tela fecha, para ela não ficar solta do campo. O teclado virtual muda só a ALTURA da
+    // janela e rola a página para mostrar o campo: isso não fecha. No toque a rolagem não fecha (o teclado e o próprio toque a provocam).
+    const fecharRolagem = (e: Event) => {
+      if (toque || Date.now() - abertoEm < 600) return;
       if (e.target instanceof Node && painelRef.current?.contains(e.target)) return;
       setAberto(false);
     };
+    const fecharRedimensionar = () => {
+      if (window.innerWidth !== larguraAoAbrir) setAberto(false);
+    };
     document.addEventListener("mousedown", fora);
-    window.addEventListener("scroll", fechar, true);
-    window.addEventListener("resize", fechar);
+    document.addEventListener("touchstart", fora, { passive: true });
+    window.addEventListener("scroll", fecharRolagem, true);
+    window.addEventListener("resize", fecharRedimensionar);
     return () => {
       document.removeEventListener("mousedown", fora);
-      window.removeEventListener("scroll", fechar, true);
-      window.removeEventListener("resize", fechar);
+      document.removeEventListener("touchstart", fora);
+      window.removeEventListener("scroll", fecharRolagem, true);
+      window.removeEventListener("resize", fecharRedimensionar);
     };
   }, [aberto]);
 

@@ -31,17 +31,20 @@ export function MultiSelect({
 
   useEffect(() => {
     if (!aberto) return;
-    buscaRef.current?.focus();
-    const fecharFora = (e: MouseEvent) => {
+    // No celular/tablet, focar o campo ao abrir levanta o teclado e a lista some; lá o campo só recebe foco quando a pessoa toca nele.
+    if (!window.matchMedia?.("(pointer: coarse)").matches) buscaRef.current?.focus();
+    const fecharFora = (e: Event) => {
       if (!raizRef.current?.contains(e.target as Node)) setAberto(false);
     };
     const fecharEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") setAberto(false);
     };
     document.addEventListener("mousedown", fecharFora);
+    document.addEventListener("touchstart", fecharFora, { passive: true });
     document.addEventListener("keydown", fecharEsc);
     return () => {
       document.removeEventListener("mousedown", fecharFora);
+      document.removeEventListener("touchstart", fecharFora);
       document.removeEventListener("keydown", fecharEsc);
     };
   }, [aberto]);
