@@ -163,18 +163,23 @@ export function Flutuante({
   ancora,
   onFechar,
   largura = 312,
+  larguraDaAncora = false,
   rotulo,
+  className = "p-4",
   children,
 }: {
   aberto: boolean;
   ancora: React.RefObject<HTMLElement | null>;
   onFechar: () => void;
   largura?: number;
+  /** Usa a largura do elemento âncora (ex.: o painel de filtros acompanha a barra). */
+  larguraDaAncora?: boolean;
   rotulo: string;
+  className?: string;
   children: ReactNode;
 }) {
   const painel = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number } | null>(null);
+  const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number } | null>(null);
 
   useLayoutEffect(() => {
     if (!aberto) return;
@@ -182,17 +187,21 @@ export function Flutuante({
     if (!r) return;
     const abaixo = window.innerHeight - r.bottom;
     const paraCima = abaixo < 400 && r.top > abaixo;
+    const w = larguraDaAncora ? Math.min(r.width, window.innerWidth - 16) : largura;
     setPos({
-      left: Math.max(8, Math.min(r.left, window.innerWidth - largura - 8)),
+      width: w,
+      left: Math.max(8, Math.min(r.left, window.innerWidth - w - 8)),
       ...(paraCima ? { bottom: window.innerHeight - r.top + 8 } : { top: r.bottom + 8 }),
     });
-  }, [aberto, ancora, largura]);
+  }, [aberto, ancora, largura, larguraDaAncora]);
 
   useEffect(() => {
     if (!aberto) return;
     const aberturaEm = Date.now();
     const fora = (e: MouseEvent) => {
       const alvo = e.target as Node;
+      // Listas e calendários abertos de dentro deste painel (renderizados à parte, no <body>) não contam como "fora".
+      if (alvo instanceof Element && alvo.closest('[role="listbox"], [data-flutuante]') && !painel.current?.contains(alvo)) return;
       if (!painel.current?.contains(alvo) && !ancora.current?.contains(alvo)) onFechar();
     };
     const tecla = (e: KeyboardEvent) => {
@@ -224,8 +233,9 @@ export function Flutuante({
       ref={painel}
       role="dialog"
       aria-label={rotulo}
-      style={{ position: "fixed", left: pos.left, top: pos.top, bottom: pos.bottom, width: largura }}
-      className="z-[80] rounded-2xl border border-[var(--border)] bg-[var(--surface-solid)] p-4 shadow-[0_20px_50px_-12px_rgb(0_0_0/0.3)]"
+      data-flutuante
+      style={{ position: "fixed", left: pos.left, top: pos.top, bottom: pos.bottom, width: pos.width }}
+      className={`z-[80] rounded-2xl border border-[var(--border)] bg-[var(--surface-solid)] shadow-[0_20px_50px_-12px_rgb(0_0_0/0.3)] ${className}`}
     >
       {children}
     </div>,
