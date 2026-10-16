@@ -313,6 +313,24 @@ export function Shell({ children }: { children: ReactNode }) {
   let indiceItem = 0; // ordem do item no menu, para a entrada em sequência
   const alternarMenu = () => setColapsado((v) => !v);
 
+  // Com a barra recolhida, passar o mouse por cima abre ela temporariamente (por cima do conteúdo, sem empurrá-lo).
+  const [aoPassar, setAoPassar] = useState(false);
+  const tempoHover = useRef<number | undefined>(undefined);
+  const recolhida = colapsado && !aoPassar;
+  const abrirAoPassar = () => {
+    if (!colapsado) return;
+    window.clearTimeout(tempoHover.current);
+    tempoHover.current = window.setTimeout(() => setAoPassar(true), 90);
+  };
+  const fecharAoSair = () => {
+    window.clearTimeout(tempoHover.current);
+    tempoHover.current = window.setTimeout(() => setAoPassar(false), 160);
+  };
+  useEffect(() => {
+    if (!colapsado) setAoPassar(false);
+    return () => window.clearTimeout(tempoHover.current);
+  }, [colapsado]);
+
   async function handleLogout() {
     await logout();
     navigate("/login");
@@ -332,17 +350,19 @@ export function Shell({ children }: { children: ReactNode }) {
 
       {/* Barra lateral nas cores da empresa: azul-marinho cheio, menu em seções e marcador claro no item ativo. */}
       <aside
-        key={colapsado ? "recolhida" : "expandida"}
+        key={recolhida ? "recolhida" : "expandida"}
+        onMouseEnter={abrirAoPassar}
+        onMouseLeave={fecharAoSair}
         className={`ui-bar barra-anim fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] text-[var(--sidebar-fg)] transition-[transform,width] lg:translate-x-0 ${
           menuAberto ? "translate-x-0" : "-translate-x-full"
         } ${
-          colapsado
+          recolhida
             ? "lg:bottom-auto lg:left-4 lg:top-1/2 lg:h-auto lg:max-h-[calc(100vh-2rem)] lg:w-16 lg:-translate-y-1/2 lg:rounded-[2rem] lg:border lg:border-white/10 lg:shadow-[0_10px_28px_-10px_rgb(4_38_76/0.55)] lg:[background-image:linear-gradient(180deg,rgb(255_255_255/0.09),transparent_38%)]"
             : "lg:inset-y-3 lg:left-3 lg:w-60 lg:rounded-[1.75rem] lg:border lg:border-white/10 lg:shadow-[0_10px_28px_-10px_rgb(4_38_76/0.5)] lg:[background-image:linear-gradient(180deg,rgb(255_255_255/0.07),transparent_32%)]"
         }`}
       >
-        <div className={`flex h-16 shrink-0 items-center justify-between gap-2 px-4 ${colapsado ? "lg:h-auto lg:flex-col lg:justify-center lg:gap-2 lg:px-2 lg:pb-1 lg:pt-4" : ""}`}>
-          <Logo subtitulo={emPortal ? "Portal do consultor" : "CRM comercial"} colapsado={colapsado} />
+        <div className={`flex h-16 shrink-0 items-center justify-between gap-2 px-4 ${recolhida ? "lg:h-auto lg:flex-col lg:justify-center lg:gap-2 lg:px-2 lg:pb-1 lg:pt-4" : ""}`}>
+          <Logo subtitulo={emPortal ? "Portal do consultor" : "CRM comercial"} colapsado={recolhida} />
           <IconButton label="Fechar menu" className="text-white/70 hover:bg-[var(--sidebar-hover)] hover:text-white lg:hidden" onClick={() => setMenuAberto(false)}>
             <X className="size-4" />
           </IconButton>
@@ -356,15 +376,15 @@ export function Shell({ children }: { children: ReactNode }) {
           </button>
         </div>
 
-        <nav className={`sidebar-nav min-h-0 flex-1 overflow-y-auto px-3 pb-3 ${colapsado ? "lg:px-2" : ""}`} aria-label="Navegação principal">
+        <nav className={`sidebar-nav min-h-0 flex-1 overflow-y-auto px-3 pb-3 ${recolhida ? "lg:px-2" : ""}`} aria-label="Navegação principal">
           {agruparNav((itensNav ?? []).filter((i) => i.chave !== "suporte")).map((grupo, gi) => (
-            <div key={grupo.rotulo} className={gi === 0 ? "" : colapsado ? "mt-4 lg:mt-3" : "mt-4"}>
+            <div key={grupo.rotulo} className={gi === 0 ? "" : recolhida ? "mt-4 lg:mt-3" : "mt-4"}>
               {!emPortal && (
-                <p className={`mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--sidebar-fg-muted)]/70 ${colapsado ? "lg:hidden" : ""}`}>{grupo.rotulo}</p>
+                <p className={`mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--sidebar-fg-muted)]/70 ${recolhida ? "lg:hidden" : ""}`}>{grupo.rotulo}</p>
               )}
               <div className="space-y-0.5">
                 {grupo.itens.map((item) => {
-                  const linhaBase = `focus-ring group relative flex h-9 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium transition-colors ${colapsado ? "lg:mx-auto lg:size-10 lg:justify-center lg:rounded-full lg:px-0" : ""}`;
+                  const linhaBase = `focus-ring group relative flex h-9 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium transition-colors ${recolhida ? "lg:mx-auto lg:size-10 lg:justify-center lg:rounded-full lg:px-0" : ""}`;
                   const inativa = "text-[var(--sidebar-fg-muted)] hover:bg-[var(--sidebar-hover)] hover:text-white";
                   return (
                     <div key={item.chave} className="menu-item-anim" style={{ "--i": indiceItem++ } as React.CSSProperties}>
@@ -373,34 +393,34 @@ export function Shell({ children }: { children: ReactNode }) {
                           href={item.rota}
                           target="_blank"
                           rel="noopener"
-                          title={colapsado ? `${item.rotulo} (abre em outra aba)` : "Abre em outra aba"}
+                          title={recolhida ? `${item.rotulo} (abre em outra aba)` : "Abre em outra aba"}
                           className={`${linhaBase} ${inativa}`}
                         >
                           <item.icone className="size-[18px] shrink-0" aria-hidden />
-                          <span className={colapsado ? "lg:hidden" : undefined}>{item.rotulo}</span>
+                          <span className={recolhida ? "lg:hidden" : undefined}>{item.rotulo}</span>
                         </a>
                       ) : (
                         <NavLink
                           to={item.rota}
                           end={item.rota === "/app" || item.rota === "/app/crm" || item.rota === "/app/portal"}
                           onClick={() => setMenuAberto(false)}
-                          title={colapsado ? item.rotulo : undefined}
+                          title={recolhida ? item.rotulo : undefined}
                           className={({ isActive: ativoPelaRota }) => {
                             const isActive = ativoPelaRota && item.rota === rotaAtiva;
                             return `${linhaBase} ${
                               isActive
                                 ? `bg-[var(--sidebar-bg-active)] font-semibold text-white before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-full before:bg-[var(--sidebar-accent)] ${
-                                    colapsado ? "lg:bg-white lg:text-[#04264c] lg:shadow-[0_6px_16px_-6px_rgb(0_0_0/0.5)] lg:before:hidden" : ""
+                                    recolhida ? "lg:bg-white lg:text-[#04264c] lg:shadow-[0_6px_16px_-6px_rgb(0_0_0/0.5)] lg:before:hidden" : ""
                                   }`
                                 : inativa
                             }`;
                           }}
                         >
                           <item.icone className="size-[18px] shrink-0" aria-hidden />
-                          <span className={`truncate ${colapsado ? "lg:hidden" : ""}`}>{item.rotulo}</span>
+                          <span className={`truncate ${recolhida ? "lg:hidden" : ""}`}>{item.rotulo}</span>
                           {item.chave === "chat" && chatNaoLidas.total > 0 && (
                             <span
-                              className={`ml-auto rounded-full bg-[var(--danger)] px-1.5 text-[11px] font-semibold text-white ${colapsado ? "lg:absolute lg:right-1.5 lg:top-0.5 lg:ml-0 lg:px-1 lg:text-[10px]" : ""}`}
+                              className={`ml-auto rounded-full bg-[var(--danger)] px-1.5 text-[11px] font-semibold text-white ${recolhida ? "lg:absolute lg:right-1.5 lg:top-0.5 lg:ml-0 lg:px-1 lg:text-[10px]" : ""}`}
                               aria-label={`${chatNaoLidas.total} mensagens não lidas`}
                             >
                               {rotuloNaoLidas(chatNaoLidas.total)}
@@ -408,7 +428,7 @@ export function Shell({ children }: { children: ReactNode }) {
                           )}
                         </NavLink>
                       )}
-                      {item.divisor && <div className={`my-2 border-t border-[var(--sidebar-border)] ${colapsado ? "lg:hidden" : ""}`} />}
+                      {item.divisor && <div className={`my-2 border-t border-[var(--sidebar-border)] ${recolhida ? "lg:hidden" : ""}`} />}
                     </div>
                   );
                 })}
