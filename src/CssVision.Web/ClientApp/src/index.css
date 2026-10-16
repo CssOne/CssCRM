@@ -194,6 +194,11 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   filter: invert(1);
 }
 
+/* Escala geral do sistema: tudo em rem (textos, espaços, ícones, botões) encolhe junto, na proporção dos filtros. */
+html {
+  font-size: 14px;
+}
+
 body {
   background: var(--page-bg);
   min-height: 100vh;

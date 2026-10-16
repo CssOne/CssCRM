@@ -8,6 +8,7 @@ import {
   TipoPessoa,
   type ActivityCreateRequest,
   type LeadDetail,
+  type LeadStage,
   type LeadDuplicateWarning,
   type LeadOpportunitySummary,
   type LeadTimelineItem,
@@ -84,6 +85,10 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
   const { notificar } = useToast();
 
   const [lead, setLead] = useState<LeadDetail | null>(null);
+  const [coresEtapas, setCoresEtapas] = useState<LeadStage[]>([]);
+  useEffect(() => {
+    api.get<LeadStage[]>("/crm/settings/lead-stages").then(setCoresEtapas).catch(() => setCoresEtapas([]));
+  }, []);
   const [timeline, setTimeline] = useState<LeadTimelineItem[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -304,6 +309,8 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
     return <ErrorState message={erro ?? "Lead não encontrado."} onRetry={() => navigate("/app/crm/leads")} />;
   }
 
+  const corEtapa = coresEtapas.find((e) => e.id === lead.etapaId)?.cor ?? "#64748b";
+
   return (
     <div className="@container space-y-4">
       {!noPainel && (
@@ -313,11 +320,15 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
       )}
 
       <Card className="overflow-hidden !rounded-3xl p-0">
-        <div aria-hidden className="h-16 bg-gradient-to-r from-[var(--brand)] via-[color-mix(in_srgb,var(--brand)_70%,#467FC5)] to-[color-mix(in_srgb,var(--brand)_40%,#A6C3E0)]" />
+        <div
+          aria-hidden
+          className="h-16 transition-colors"
+          style={{ backgroundImage: `linear-gradient(90deg, ${corEtapa}, color-mix(in srgb, ${corEtapa} 70%, white) 60%, color-mix(in srgb, ${corEtapa} 38%, white))` }}
+        />
         <div className="px-5 pb-5">
         <div className="-mt-8 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <span className="flex size-16 items-center justify-center rounded-2xl border-4 border-[var(--surface-solid)] bg-[color-mix(in_srgb,var(--brand)_18%,var(--surface-solid))] text-xl font-bold text-[var(--brand)] shadow-[var(--shadow-card)]">
+            <span className="flex size-16 items-center justify-center rounded-2xl border-4 border-[var(--surface-solid)] text-xl font-bold shadow-[var(--shadow-card)]" style={{ color: corEtapa, backgroundColor: `color-mix(in srgb, ${corEtapa} 18%, var(--surface-solid))` }}>
               {lead.nomeOuRazaoSocial.split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join("").toUpperCase()}
             </span>
             <h1 className="mt-2 text-xl font-bold tracking-tight text-[var(--fg)]">{lead.nomeOuRazaoSocial}</h1>
