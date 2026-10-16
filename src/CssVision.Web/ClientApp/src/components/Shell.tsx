@@ -409,23 +409,6 @@ export function Shell({ children }: { children: ReactNode }) {
           ))}
         </nav>
 
-        <div className={`border-t border-[var(--sidebar-border)] p-3 ${colapsado ? "lg:border-t-0 lg:px-2 lg:pb-4" : ""}`}>
-          <div className={`flex items-center gap-2.5 rounded-xl bg-white/[0.06] p-2 ${colapsado ? "lg:flex-col lg:bg-transparent lg:p-0" : ""}`}>
-            <Avatar nome={sessao.nomeCompleto} fotoUrl={sessao.fotoUrl} className="size-8 text-xs ring-2 ring-white/25" />
-            <div className={`min-w-0 flex-1 leading-tight ${colapsado ? "lg:hidden" : ""}`}>
-              <p className="truncate text-[13px] font-semibold text-white">{sessao.nomeCompleto}</p>
-              <p className="truncate text-[11px] text-[var(--sidebar-fg-muted)]">{PAPEL_LABEL[sessao.papeis[0]] ?? sessao.papeis[0]}</p>
-            </div>
-            <button
-              onClick={handleLogout}
-              aria-label="Sair"
-              title="Sair"
-              className="focus-ring flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-[var(--sidebar-fg-muted)] hover:bg-[var(--sidebar-hover)] hover:text-white"
-            >
-              <LogOut className="size-4" aria-hidden />
-            </button>
-          </div>
-        </div>
       </aside>
 
       <div className={`flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] [--menu-w:0px] lg:pl-[var(--menu-w)] ${colapsado ? "lg:[--menu-w:6rem]" : "lg:[--menu-w:16.5rem]"}`}>
