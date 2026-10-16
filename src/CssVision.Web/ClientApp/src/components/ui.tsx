@@ -25,19 +25,24 @@ import { paraBusca } from "../lib/busca";
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "dangerSoft";
 type ButtonSize = "sm" | "md";
 
+// Botões em pílula: o principal ganha degradê, brilho interno e sombra na própria cor (sobe um pouco no hover); o secundário é
+// um contorno claro que ganha a cor da marca; o fantasma só aparece no hover. Todos encolhem levemente ao clicar.
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: "bg-[var(--brand)] text-[var(--brand-fg)] hover:brightness-110 active:brightness-95 disabled:opacity-50",
+  primary:
+    "bg-gradient-to-b from-[color-mix(in_srgb,var(--brand)_88%,white)] to-[var(--brand)] text-[var(--brand-fg)] shadow-[inset_0_1px_0_rgb(255_255_255/0.22),0_1px_2px_rgb(0_0_0/0.14),0_6px_14px_-7px_var(--brand)] hover:-translate-y-px hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.26),0_1px_2px_rgb(0_0_0/0.14),0_10px_20px_-8px_var(--brand)] disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none",
   secondary:
-    "bg-[var(--surface-hover)] text-[var(--fg)] hover:brightness-95 active:brightness-90 disabled:opacity-50",
-  ghost: "text-[var(--fg)] hover:bg-[var(--surface-hover)] disabled:opacity-50",
-  danger: "bg-[var(--danger)] text-white hover:opacity-90 disabled:opacity-50",
+    "border border-[var(--border)] bg-[var(--surface)] text-[var(--fg)] shadow-[0_1px_2px_rgb(0_0_0/0.05)] hover:border-[color-mix(in_srgb,var(--brand)_45%,var(--border))] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)] disabled:opacity-50 disabled:hover:border-[var(--border)] disabled:hover:bg-[var(--surface)] disabled:hover:text-[var(--fg)]",
+  ghost: "text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)] disabled:opacity-50 disabled:hover:bg-transparent",
+  danger:
+    "bg-gradient-to-b from-[color-mix(in_srgb,var(--danger)_88%,white)] to-[var(--danger)] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.22),0_1px_2px_rgb(0_0_0/0.14),0_6px_14px_-7px_var(--danger)] hover:-translate-y-px disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none",
   /** Ação destrutiva que só abre uma confirmação (listas): fundo suave em vez do vermelho cheio. */
-  dangerSoft: "bg-[var(--danger-soft)] text-[var(--danger)] hover:brightness-95 disabled:opacity-50",
+  dangerSoft:
+    "border border-[color-mix(in_srgb,var(--danger)_25%,transparent)] bg-[var(--danger-soft)] text-[var(--danger)] hover:border-[var(--danger)] hover:bg-[var(--danger)] hover:text-white disabled:opacity-50",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "h-7 px-2.5 text-[13px] gap-1.5",
-  md: "h-9 px-3.5 text-sm gap-2",
+  sm: "h-8 px-3.5 text-[13px] gap-1.5",
+  md: "h-10 px-5 text-sm gap-2",
 };
 
 export const Button = forwardRef<
@@ -47,7 +52,7 @@ export const Button = forwardRef<
   <button
     ref={ref}
     disabled={disabled || loading}
-    className={`focus-ring inline-flex items-center justify-center whitespace-nowrap rounded-lg font-medium transition-[background,filter] cursor-pointer disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+    className={`focus-ring inline-flex items-center justify-center whitespace-nowrap rounded-full font-semibold transition-all duration-200 active:scale-[0.97] cursor-pointer disabled:cursor-not-allowed disabled:active:scale-100 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
     {...props}
   >
     {loading && <Loader2 className="size-4 animate-spin" aria-hidden />}
