@@ -118,8 +118,25 @@ function Logo({ subtitulo, colapsado = false }: { subtitulo: string; colapsado?:
   );
 }
 
+const itemMenu = "focus-ring flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-medium text-[var(--fg)] hover:bg-[var(--surface-hover)]";
+const iconeMenu = "flex size-7 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]";
+
 /** Chip do usuário no cabeçalho; ao clicar abre um menu com Configurações. */
-function MenuDoUsuario({ nome, fotoUrl, papel }: { nome: string; fotoUrl?: string | null; papel: string }) {
+function MenuDoUsuario({
+  nome,
+  email,
+  fotoUrl,
+  papel,
+  temSuporte,
+  onSair,
+}: {
+  nome: string;
+  email?: string | null;
+  fotoUrl?: string | null;
+  papel: string;
+  temSuporte: boolean;
+  onSair: () => void;
+}) {
   const [aberto, setAberto] = useState(false);
   const raiz = useRef<HTMLDivElement>(null);
   const local = useLocation();
@@ -156,17 +173,48 @@ function MenuDoUsuario({ nome, fotoUrl, papel }: { nome: string; fotoUrl?: strin
         <ChevronDown className={`size-3.5 text-[var(--fg-muted)] transition-transform ${aberto ? "rotate-180" : ""}`} aria-hidden />
       </button>
       {aberto && (
-        <div role="menu" className="ui-surface absolute right-0 top-full z-50 mt-2 w-52 rounded-2xl border border-[var(--border)] bg-[var(--surface-solid)] p-1.5 shadow-[var(--shadow-card)]">
-          <Link
-            role="menuitem"
-            to="/app/portal/configuracoes"
-            className="focus-ring flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-medium text-[var(--fg)] hover:bg-[var(--surface-hover)]"
-          >
-            <span className="flex size-7 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]">
-              <Settings className="size-4" aria-hidden />
-            </span>
-            Configurações
-          </Link>
+        <div role="menu" className="ui-surface absolute right-0 top-full z-50 mt-2 w-64 rounded-2xl border border-[var(--border)] bg-[var(--surface-solid)] p-1.5 shadow-[var(--shadow-card)]">
+          <div className="flex items-center gap-3 rounded-xl bg-[var(--surface-hover)] p-2.5">
+            <Avatar nome={nome} fotoUrl={fotoUrl} className="size-10 text-sm" />
+            <div className="min-w-0 leading-tight">
+              <p className="truncate text-sm font-semibold text-[var(--fg)]">{nome}</p>
+              {email && <p className="truncate text-xs text-[var(--fg-muted)]">{email}</p>}
+              <p className="mt-0.5 text-[11px] font-medium text-[var(--brand)]">{papel}</p>
+            </div>
+          </div>
+          <div className="mt-1.5 space-y-0.5">
+            <Link role="menuitem" to="/app/portal/configuracoes" className={itemMenu}>
+              <span className={iconeMenu}>
+                <Settings className="size-4" aria-hidden />
+              </span>
+              Configurações
+            </Link>
+            {temSuporte && (
+              <Link role="menuitem" to="/app/suporte" className={itemMenu}>
+                <span className={iconeMenu}>
+                  <LifeBuoy className="size-4" aria-hidden />
+                </span>
+                Ajuda e suporte
+              </Link>
+            )}
+          </div>
+          <div className="mx-1 mt-1.5 flex items-center justify-between border-t border-[var(--border)] px-1.5 pb-1 pt-2.5">
+            <span className="text-xs font-medium text-[var(--fg-muted)]">Aparência</span>
+            <SeletorDeTema />
+          </div>
+          <div className="mt-1 border-t border-[var(--border)] pt-1.5">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={onSair}
+              className="focus-ring flex w-full cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-medium text-[var(--danger)] hover:bg-[var(--danger-soft)]"
+            >
+              <span className="flex size-7 items-center justify-center rounded-lg bg-[var(--danger-soft)]">
+                <LogOut className="size-4" aria-hidden />
+              </span>
+              Sair
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -428,7 +476,14 @@ export function Shell({ children }: { children: ReactNode }) {
             )}
             <div className="mx-1.5 hidden h-6 w-px bg-[var(--border)] sm:block" />
             <SeletorDeTema />
-            <MenuDoUsuario nome={sessao.nomeCompleto} fotoUrl={sessao.fotoUrl} papel={PAPEL_LABEL[sessao.papeis[0]] ?? sessao.papeis[0]} />
+            <MenuDoUsuario
+              nome={sessao.nomeCompleto}
+              email={sessao.email}
+              fotoUrl={sessao.fotoUrl}
+              papel={PAPEL_LABEL[sessao.papeis[0]] ?? sessao.papeis[0]}
+              temSuporte={sessao.menu.some((m) => m.chave === "suporte")}
+              onSair={handleLogout}
+            />
           </div>
         </header>
 
