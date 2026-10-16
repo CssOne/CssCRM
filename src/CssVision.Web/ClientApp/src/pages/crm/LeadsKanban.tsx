@@ -893,7 +893,7 @@ export function LeadsKanbanPage() {
           description={filtrosAtivos ? "Ajuste os filtros ou cadastre um novo lead." : "Cadastre um novo lead para começar."}
         />
       ) : (
-        <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-3 lg:-ml-[calc(var(--menu-w)+2rem)] lg:-mr-8 lg:pl-[calc(var(--menu-w)+2rem)] lg:pr-8">
+        <div className="-mx-4 flex items-start gap-4 overflow-x-auto px-4 pb-3 lg:ml-0 lg:-mr-8 lg:pl-0 lg:pr-8">
           {colunasExibidas.map((coluna) => {
             const chaveColuna = coluna.etapa.id ?? "sem-etapa";
             const restantes = Math.max(0, coluna.total - coluna.cartoes.length);
