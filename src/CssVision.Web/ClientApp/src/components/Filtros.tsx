@@ -1,6 +1,5 @@
 import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Flutuante } from "./Calendario";
 
 export interface ChipDeFiltro {
   rotulo: string;
@@ -9,9 +8,9 @@ export interface ChipDeFiltro {
 }
 
 /**
- * Barra de filtros: busca em destaque + botão "Filtros" que abre um painel flutuante com os demais campos.
- * O painel não empurra a tela para baixo e tem rodapé com "Limpar tudo" e "Concluir". Os filtros ativos aparecem como
- * "chips" removíveis abaixo da barra (clicar no chip abre o painel), então dá para ver e tirar cada um sem abrir nada.
+ * Barra de filtros num cartão: busca em destaque e, logo abaixo, todos os campos sempre à vista, em linhas compactas.
+ * O botão "Filtros" recolhe/expande os campos (a escolha fica guardada por tela). Recolhido, os filtros ativos aparecem como
+ * "chips" removíveis (clicar no chip reabre os campos).
  * Atalhos: "/" foca a busca; Esc na busca limpa o texto.
  */
 export function BarraDeFiltros({
@@ -37,8 +36,24 @@ export function BarraDeFiltros({
   /** Linha fixa no pé do painel, acima dos botões (ex.: filtros salvos). */
   rodape?: ReactNode;
 }) {
-  const [aberto, setAberto] = useState(false);
-  const barra = useRef<HTMLDivElement>(null);
+  // Aberto por padrão; a escolha de recolher fica guardada por tela, neste navegador.
+  const chave = `filtros-aberto:${typeof window === "undefined" ? "" : window.location.pathname}`;
+  const [aberto, setAberto] = useState(() => {
+    try {
+      return localStorage.getItem(chave) !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const alternar = () =>
+    setAberto((v) => {
+      try {
+        localStorage.setItem(chave, v ? "0" : "1");
+      } catch {
+        /* sem armazenamento local: só não lembra */
+      }
+      return !v;
+    });
   const campoBusca = useRef<HTMLInputElement>(null);
 
   // "/" leva o cursor para a busca (se a pessoa não estiver digitando em outro campo).
@@ -58,8 +73,8 @@ export function BarraDeFiltros({
   const temAtivos = chips.length > 0;
 
   return (
-    <div className="space-y-2.5">
-      <div ref={barra} className="flex flex-wrap items-center gap-2">
+    <div className="ui-surface rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[var(--shadow-card)]">
+      <div className="flex flex-wrap items-center gap-2">
         {onBusca && (
           <div className="relative min-w-56 flex-1 sm:max-w-md">
             <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--fg-muted)]" aria-hidden />
@@ -98,73 +113,56 @@ export function BarraDeFiltros({
           </div>
         )}
 
-        <button
-          type="button"
-          aria-expanded={aberto}
-          aria-haspopup="dialog"
-          onClick={() => setAberto((v) => !v)}
-          className={`focus-ring inline-flex h-9 cursor-pointer items-center gap-2 rounded-full px-3.5 text-sm font-medium transition-colors ${
-            aberto || temAtivos ? "bg-[var(--brand-soft)] text-[var(--brand)]" : "bg-[var(--surface-hover)] text-[var(--fg)] hover:brightness-95"
-          }`}
-        >
-          <SlidersHorizontal className="size-4" aria-hidden />
-          Filtros
-          {temAtivos && <span className="flex size-5 items-center justify-center rounded-full bg-[var(--brand)] text-[11px] font-semibold text-[var(--brand-fg)]">{chips.length}</span>}
-          <ChevronDown className={`size-3.5 transition-transform ${aberto ? "rotate-180" : ""}`} aria-hidden />
-        </button>
-
         {acoes}
-      </div>
 
-      <Flutuante aberto={aberto} ancora={barra} onFechar={() => setAberto(false)} rotulo="Filtros" larguraDaAncora className="p-0">
-        <div className="max-h-[min(70vh,34rem)] overflow-y-auto p-4">
-          <div className="filtros-painel grid gap-x-3 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-6">{children}</div>
-          {rodape && <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">{rodape}</div>}
-        </div>
-        <div className="flex items-center justify-between gap-2 rounded-b-2xl border-t border-[var(--border)] bg-[var(--surface-hover)] px-4 py-2.5">
-          <span className="text-xs text-[var(--fg-muted)]">{temAtivos ? `${chips.length} filtro(s) ativo(s)` : "Nenhum filtro ativo"}</span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={!temAtivos}
-              onClick={onLimparTudo}
-              className="focus-ring h-8 cursor-pointer rounded-full px-3 text-sm font-medium text-[var(--fg-muted)] hover:text-[var(--fg)] disabled:cursor-not-allowed disabled:opacity-40"
-            >
+        <div className="ml-auto flex items-center gap-1">
+          {temAtivos && (
+            <button type="button" onClick={onLimparTudo} className="focus-ring h-9 cursor-pointer rounded-full px-3 text-sm font-medium text-[var(--fg-muted)] hover:text-[var(--fg)]">
               Limpar tudo
             </button>
-            <button
-              type="button"
-              onClick={() => setAberto(false)}
-              className="focus-ring h-8 cursor-pointer rounded-full bg-[var(--brand)] px-4 text-sm font-medium text-[var(--brand-fg)] hover:brightness-110"
-            >
-              Concluir
-            </button>
-          </div>
-        </div>
-      </Flutuante>
-
-      {temAtivos && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {chips.map((c) => (
-            <span key={c.rotulo} className="inline-flex h-7 items-center gap-1 rounded-full bg-[var(--brand-soft)] pl-1 pr-1 text-xs text-[var(--brand)]">
-              <button type="button" onClick={() => setAberto(true)} title="Editar filtros" className="focus-ring flex h-full max-w-72 cursor-pointer items-center gap-1 rounded-full pl-2 pr-1">
-                <span className="text-[var(--fg-muted)]">{c.rotulo}</span>
-                <span className="truncate font-semibold">{c.valor}</span>
-              </button>
-              <button
-                type="button"
-                aria-label={`Remover filtro ${c.rotulo}`}
-                onClick={c.limpar}
-                className="focus-ring flex size-5 cursor-pointer items-center justify-center rounded-full hover:bg-[var(--brand)]/15"
-              >
-                <X className="size-3" />
-              </button>
-            </span>
-          ))}
-          <button type="button" onClick={onLimparTudo} className="focus-ring ml-1 cursor-pointer rounded-md px-1.5 text-xs font-medium text-[var(--fg-muted)] hover:text-[var(--fg)]">
-            Limpar tudo
+          )}
+          <button
+            type="button"
+            aria-expanded={aberto}
+            onClick={alternar}
+            className={`focus-ring inline-flex h-9 cursor-pointer items-center gap-2 rounded-full px-3.5 text-sm font-medium transition-colors ${
+              temAtivos ? "bg-[var(--brand-soft)] text-[var(--brand)]" : "bg-[var(--surface-hover)] text-[var(--fg)] hover:brightness-95"
+            }`}
+          >
+            <SlidersHorizontal className="size-4" aria-hidden />
+            Filtros
+            {temAtivos && <span className="flex size-5 items-center justify-center rounded-full bg-[var(--brand)] text-[11px] font-semibold text-[var(--brand-fg)]">{chips.length}</span>}
+            <ChevronDown className={`size-3.5 transition-transform ${aberto ? "rotate-180" : ""}`} aria-hidden />
           </button>
         </div>
+      </div>
+
+      {aberto ? (
+        <div className="mt-3 border-t border-[var(--border)] pt-3">
+          <div className="filtros-painel grid gap-x-3 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-6">{children}</div>
+          {rodape && <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">{rodape}</div>}
+        </div>
+      ) : (
+        temAtivos && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-[var(--border)] pt-3">
+            {chips.map((c) => (
+              <span key={c.rotulo} className="inline-flex h-7 items-center gap-1 rounded-full bg-[var(--brand-soft)] pl-1 pr-1 text-xs text-[var(--brand)]">
+                <button type="button" onClick={alternar} title="Editar filtros" className="focus-ring flex h-full max-w-72 cursor-pointer items-center gap-1 rounded-full pl-2 pr-1">
+                  <span className="text-[var(--fg-muted)]">{c.rotulo}</span>
+                  <span className="truncate font-semibold">{c.valor}</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Remover filtro ${c.rotulo}`}
+                  onClick={c.limpar}
+                  className="focus-ring flex size-5 cursor-pointer items-center justify-center rounded-full hover:bg-[var(--brand)]/15"
+                >
+                  <X className="size-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+        )
       )}
     </div>
   );
