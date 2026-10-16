@@ -431,8 +431,8 @@ public sealed class ManagementService(
             .Select(a => new { LeadId = a.EntidadeId!.Value, a.OcorridoEm })
             .ToListAsync(ct);
         var atividades = await db.CrmActivities.AsNoTracking()
-            .Where(a => ids.Contains(a.LeadId) && a.Status == StatusAtividade.Concluida && a.DataHoraConclusao != null)
-            .Select(a => new { a.LeadId, OcorridoEm = a.DataHoraConclusao!.Value })
+            .Where(a => ids.Contains(a.LeadId!.Value) && a.Status == StatusAtividade.Concluida && a.DataHoraConclusao != null)
+            .Select(a => new { LeadId = a.LeadId!.Value, OcorridoEm = a.DataHoraConclusao!.Value })
             .ToListAsync(ct);
 
         var contatos = movimentos.Concat(atividades)

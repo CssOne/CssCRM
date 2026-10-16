@@ -889,8 +889,9 @@ export interface LossReason {
 
 export interface Activity {
   id: string;
-  leadId: string;
-  leadNome: string;
+  /** Nulo = atividade pessoal (sem lead). */
+  leadId?: string | null;
+  leadNome?: string | null;
   opportunityId?: string | null;
   opportunityTitulo?: string | null;
   responsavelId: string;
@@ -908,7 +909,7 @@ export interface Activity {
 }
 
 export interface ActivityCreateRequest {
-  leadId: string;
+  leadId?: string | null;
   opportunityId?: string | null;
   responsavelId?: string | null;
   tipo: TipoAtividade;

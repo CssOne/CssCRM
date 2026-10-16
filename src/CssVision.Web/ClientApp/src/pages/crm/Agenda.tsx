@@ -135,6 +135,7 @@ export function AgendaPage() {
 
   const [novaNoDia, setNovaNoDia] = useState<Date | null>(null);
   const [leadNova, setLeadNova] = useState<LeadListItem | null>(null);
+  const [pessoal, setPessoal] = useState(false); // atividade pessoal: sem lead
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
@@ -290,11 +291,11 @@ export function AgendaPage() {
   }
 
   async function criarAtividade(valores: ActivityFormValues) {
-    if (!leadNova) return;
+    if (!leadNova && !pessoal) return;
     setSalvando(true);
     try {
       const request: ActivityCreateRequest = {
-        leadId: leadNova.id,
+        leadId: leadNova?.id ?? null,
         tipo: valores.tipo,
         assunto: valores.assunto,
         descricao: valores.descricao || null,
@@ -305,6 +306,7 @@ export function AgendaPage() {
       notificar("success", "Atividade agendada.");
       setNovaNoDia(null);
       setLeadNova(null);
+      setPessoal(false);
       avisarAtividadesAlteradas();
     } catch (e) {
       notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível agendar a atividade.");
@@ -357,9 +359,9 @@ export function AgendaPage() {
       onDragEnd={() => setArrastando(null)}
       onClick={(e) => {
         e.stopPropagation();
-        abrirLead(a.leadId);
+        if (a.leadId) abrirLead(a.leadId);
       }}
-      title={`${tipoLabel[a.tipo]} · ${a.assunto} · ${a.leadNome}${a.status === StatusAtividade.Pendente ? " (arraste para reagendar)" : ""}`}
+      title={`${tipoLabel[a.tipo]} · ${a.assunto} · ${a.leadNome ?? "Pessoal"}${a.status === StatusAtividade.Pendente ? " (arraste para reagendar)" : ""}`}
       className={`group flex cursor-pointer items-center gap-1.5 truncate rounded-lg px-1.5 py-1 text-[11px] leading-tight transition hover:brightness-95 ${
         a.status === StatusAtividade.Concluida ? "opacity-50 line-through" : ""
       }`}
@@ -433,7 +435,7 @@ export function AgendaPage() {
           <span className="text-[12px] font-bold leading-none [font-variant-numeric:tabular-nums]">{hora(a.dataHoraPrevista)}</span>
         </div>
 
-        <button type="button" onClick={() => abrirLead(a.leadId)} className="min-w-0 flex-1 cursor-pointer text-left">
+        <button type="button" onClick={() => a.leadId && abrirLead(a.leadId)} className={`min-w-0 flex-1 text-left ${a.leadId ? "cursor-pointer" : "cursor-default"}`}>
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: `color-mix(in srgb, ${cor} 72%, var(--fg))` }}>
               {tipoLabel[a.tipo]}
@@ -444,7 +446,7 @@ export function AgendaPage() {
           </div>
           <p className={`truncate font-semibold leading-snug text-[var(--fg)] ${concluida ? "line-through" : ""}`}>{a.assunto}</p>
           <p className="flex items-center gap-1.5 truncate text-[11px] text-[var(--fg-muted)]">
-            <span className="truncate">{a.leadNome}</span>
+            <span className="truncate">{a.leadNome ?? "Pessoal"}</span>
             {ehGestao && a.responsavelNome && (
               <>
                 <span aria-hidden>·</span>
@@ -770,16 +772,37 @@ export function AgendaPage() {
         onClose={() => {
           setNovaNoDia(null);
           setLeadNova(null);
+          setPessoal(false);
         }}
         title={novaNoDia ? `Nova atividade · ${novaNoDia.toLocaleDateString("pt-BR")}` : "Nova atividade"}
       >
         {novaNoDia &&
-          (!leadNova ? (
-            <LeadPicker onSelecionar={setLeadNova} />
+          (!leadNova && !pessoal ? (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setPessoal(true)}
+                className="focus-ring flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-[color-mix(in_srgb,var(--brand)_55%,var(--border))] bg-[var(--brand-soft)] px-3 py-2.5 text-left transition hover:brightness-95"
+              >
+                <span className="flex size-9 items-center justify-center rounded-xl bg-[var(--brand)] text-[var(--brand-fg)]">
+                  <Plus className="size-4" />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-[var(--fg)]">Atividade pessoal</span>
+                  <span className="block text-xs text-[var(--fg-muted)]">Lembrete ou compromisso seu, sem ligar a um lead</span>
+                </span>
+              </button>
+              <p className="text-center text-xs text-[var(--fg-muted)]">ou escolha o lead da atividade</p>
+              <LeadPicker onSelecionar={setLeadNova} />
+            </div>
           ) : (
             <div>
               <p className="mb-3 text-sm text-[var(--fg-muted)]">
-                Lead: <strong className="text-[var(--fg)]">{leadNova.nomeOuRazaoSocial}</strong>
+                {leadNova ? (
+                  <>Lead: <strong className="text-[var(--fg)]">{leadNova.nomeOuRazaoSocial}</strong></>
+                ) : (
+                  <strong className="text-[var(--fg)]">Atividade pessoal</strong>
+                )}
               </p>
               <ActivityForm
                 valoresIniciais={{ tipo: TipoAtividade.Ligacao, assunto: "", descricao: "", dataHoraPrevista: datetimeLocal(novaNoDia), lembreteMinutosAntes: "" }}
@@ -788,6 +811,7 @@ export function AgendaPage() {
                 onCancel={() => {
                   setNovaNoDia(null);
                   setLeadNova(null);
+                  setPessoal(false);
                 }}
               />
             </div>
@@ -807,7 +831,7 @@ export function AgendaPage() {
         {atividadeEditando && (
           <div>
             <p className="mb-3 text-sm text-[var(--fg-muted)]">
-              Lead: <strong className="text-[var(--fg)]">{atividadeEditando.leadNome}</strong>
+              {atividadeEditando.leadId ? <>Lead: <strong className="text-[var(--fg)]">{atividadeEditando.leadNome}</strong></> : <strong className="text-[var(--fg)]">Atividade pessoal</strong>}
             </p>
             <ActivityForm
               modoEdicao

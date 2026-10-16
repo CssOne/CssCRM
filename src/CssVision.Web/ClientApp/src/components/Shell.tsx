@@ -32,7 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { mostrarNotificacao, somLigado, tocarPlim } from "../lib/avisosDoChat";
 import { usePresenca } from "../lib/usePresenca";
@@ -390,6 +390,21 @@ export function Shell({ children }: { children: ReactNode }) {
           {!emPortal && temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial") && <AlertaDistribuicaoLimites />}
           {children}
         </main>
+        <footer className="ui-surface mx-4 mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-xs text-[var(--fg-muted)] lg:mx-8">
+          <span>
+            © {new Date().getFullYear()} <strong className="font-semibold text-[var(--fg)]">CSS Brasil</strong> · CRM comercial
+          </span>
+          <span className="flex items-center gap-3">
+            {sessao.menu.some((m) => m.chave === "suporte") && (
+              <Link to="/app/suporte" className="focus-ring rounded font-medium hover:text-[var(--brand)]">
+                Suporte
+              </Link>
+            )}
+            <span className="flex items-center gap-1.5">
+              <span className="size-1.5 rounded-full bg-[var(--success)]" aria-hidden /> Sistema online
+            </span>
+          </span>
+        </footer>
         {!emPortal && !soFinanceiro && <LembretesAdesao />}
         {!emPortal && !soFinanceiro && <NotificacaoNovosLeads usuarioId={sessao.id} />}
         {!soFinanceiro && temPapel("Comercial") && <NotificacaoAvisosPagamento usuarioId={sessao.id} />}

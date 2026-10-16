@@ -23,7 +23,7 @@ public class CrmActivityConfiguration : IEntityTypeConfiguration<CrmActivity>
 
         builder.HasOne(e => e.Lead)
             .WithMany(l => l.Atividades)
-            .HasForeignKey(e => e.LeadId)
+            .HasForeignKey(e => e.LeadId).IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasOne(e => e.Opportunity)

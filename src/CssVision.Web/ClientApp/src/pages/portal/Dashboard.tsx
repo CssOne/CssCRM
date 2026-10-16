@@ -157,10 +157,10 @@ export function PortalDashboardPage() {
             <ul className="space-y-3">
               {pendencias.map((a) => (
                 <li key={a.id}>
-                  <Link to={`/app/crm/leads/${a.leadId}`} className="focus-ring flex items-start justify-between gap-2 hover:opacity-80">
+                  <Link to={a.leadId ? `/app/crm/leads/${a.leadId}` : "/app/crm/agenda"} className="focus-ring flex items-start justify-between gap-2 hover:opacity-80">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-[var(--fg)]">{a.assunto}</p>
-                      <p className="truncate text-xs text-[var(--fg-muted)]">Cliente: {a.leadNome}</p>
+                      <p className="truncate text-xs text-[var(--fg-muted)]">{a.leadId ? `Cliente: ${a.leadNome}` : "Atividade pessoal"}</p>
                     </div>
                     <span className={`shrink-0 text-xs font-medium ${a.atrasada ? "text-[var(--danger)]" : "text-[var(--warning)]"}`}>
                       {formatarDataHora(a.dataHoraPrevista).split(" ")[0]}
