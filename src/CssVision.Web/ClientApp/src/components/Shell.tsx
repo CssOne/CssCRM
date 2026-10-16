@@ -226,8 +226,8 @@ export function Shell({ children }: { children: ReactNode }) {
           menuAberto ? "translate-x-0" : "-translate-x-full"
         } ${
           colapsado
-            ? "lg:bottom-auto lg:left-4 lg:top-1/2 lg:h-auto lg:max-h-[calc(100vh-2rem)] lg:w-16 lg:-translate-y-1/2 lg:rounded-[2rem] lg:border lg:border-white/10 lg:shadow-[0_22px_60px_-14px_rgb(4_38_76/0.6)]"
-            : "lg:inset-y-3 lg:left-3 lg:w-60 lg:rounded-[1.75rem] lg:border lg:border-white/10 lg:shadow-[0_22px_60px_-14px_rgb(4_38_76/0.55)]"
+            ? "lg:bottom-auto lg:left-4 lg:top-1/2 lg:h-auto lg:max-h-[calc(100vh-2rem)] lg:w-16 lg:-translate-y-1/2 lg:rounded-[2rem] lg:border lg:border-white/10 lg:shadow-[0_10px_28px_-10px_rgb(4_38_76/0.55)] lg:[background-image:linear-gradient(180deg,rgb(255_255_255/0.09),transparent_38%)]"
+            : "lg:inset-y-3 lg:left-3 lg:w-60 lg:rounded-[1.75rem] lg:border lg:border-white/10 lg:shadow-[0_10px_28px_-10px_rgb(4_38_76/0.5)] lg:[background-image:linear-gradient(180deg,rgb(255_255_255/0.07),transparent_32%)]"
         }`}
       >
         <div className={`flex h-16 shrink-0 items-center justify-between gap-2 px-4 ${colapsado ? "lg:h-auto lg:flex-col lg:justify-center lg:gap-2 lg:px-2 lg:pb-1 lg:pt-4" : ""}`}>
@@ -328,7 +328,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className={`flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] ${colapsado ? "lg:pl-24" : "lg:pl-[16.5rem]"}`}>
+      <div className={`flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] [--menu-w:0px] lg:pl-[var(--menu-w)] ${colapsado ? "lg:[--menu-w:6rem]" : "lg:[--menu-w:16.5rem]"}`}>
         {/* Cabeçalho flutuante: cartão arredondado (combina com o menu), trilha da seção, busca, ações e o usuário. */}
         <header className="ui-bar sticky top-3 z-20 mx-4 mt-3 flex h-14 items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] px-2.5 shadow-[var(--shadow-card)] lg:mx-8">
           <div className="flex min-w-0 items-center gap-2">
