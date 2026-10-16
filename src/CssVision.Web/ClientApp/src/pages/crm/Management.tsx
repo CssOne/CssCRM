@@ -4,7 +4,9 @@ import { Link } from "react-router-dom";
 import { api, isAbortError } from "../../lib/api";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { GestaoComercialResumo, RecebeLeadsHistorico, RedistribuicaoHistorico, VendedorResumo } from "../../lib/types";
-import { Badge, Card, ConfirmDialog, ErrorState, Select, Skeleton, useToast, Pagination } from "../../components/ui";
+import { AlertTriangle, Timer, UserPlus, Users } from "lucide-react";
+import { Avatar, Badge, Card, ConfirmDialog, ErrorState, Select, Skeleton, useToast, Pagination } from "../../components/ui";
+import { StatCard } from "../../components/crm/StatCard";
 import { OPCOES_O_QUE } from "../../lib/opcoesLead";
 import { useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
@@ -341,7 +343,7 @@ function LeadsDoDiaCard({ vendedores, filtrado = false }: { vendedores: Vendedor
     <Card className="p-4">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-[var(--fg)]">Leads de hoje por vendedor</h2>
+          <h2 className="text-[15px] font-semibold tracking-tight text-[var(--fg)]">Leads de hoje por vendedor</h2>
           <p className="text-xs text-[var(--fg-muted)]">Só quem está marcado para receber leads. Conta os leads de tráfego pago atribuídos hoje. Segue os filtros acima.</p>
         </div>
         <div className="flex flex-wrap gap-4 text-center">
@@ -371,25 +373,27 @@ function LeadsDoDiaCard({ vendedores, filtrado = false }: { vendedores: Vendedor
         <>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {pagina.itensDaPagina.map(({ v, pegou, limite, faltam, foraDoDia }) => (
-              <div
-                key={v.id}
-                className={`flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface-hover)]/60 px-3 py-2 text-sm ${foraDoDia ? "opacity-60" : ""}`}
-              >
-                <span className="truncate font-medium text-[var(--fg)]" title={v.nome}>
-                  {v.nome}
-                </span>
-                <span className="shrink-0 text-right text-xs text-[var(--fg-muted)]">
-                  <strong className="text-[var(--fg)]">{pegou}</strong> pegou
-                  {foraDoDia ? (
-                    <span className="block">não recebe hoje</span>
-                  ) : faltam === null ? (
-                    <span className="block">sem limite diário</span>
-                  ) : (
-                    <span className="block">
-                      {faltam === 0 ? "limite atingido" : `faltam ${faltam}`} (de {limite})
-                    </span>
-                  )}
-                </span>
+              <div key={v.id} className={`rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 ${foraDoDia ? "opacity-60" : ""}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-sm font-medium text-[var(--fg)]" title={v.nome}>
+                    {v.nome}
+                  </span>
+                  <span className="shrink-0 text-xs text-[var(--fg-muted)] [font-variant-numeric:tabular-nums]">
+                    <strong className="text-sm text-[var(--fg)]">{pegou}</strong>
+                    {limite !== null ? ` / ${limite}` : ""}
+                  </span>
+                </div>
+                {limite !== null && !foraDoDia && (
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface-hover)]">
+                    <div
+                      className={`h-full rounded-full ${faltam === 0 ? "bg-[var(--success)]" : "bg-[var(--brand)]"}`}
+                      style={{ width: `${Math.min(100, limite === 0 ? 0 : (pegou / limite) * 100)}%` }}
+                    />
+                  </div>
+                )}
+                <p className="mt-1.5 text-[11px] text-[var(--fg-muted)]">
+                  {foraDoDia ? "não recebe hoje" : faltam === null ? "sem limite diário" : faltam === 0 ? "limite atingido" : `faltam ${faltam}`}
+                </p>
               </div>
             ))}
           </div>
@@ -543,11 +547,18 @@ export function ManagementPage() {
         </CampoDeFiltro>
       </BarraDeFiltros>
 
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard titulo="Recebendo leads" valor={String(vendedoresFiltrados.filter((v) => v.ativo !== false && v.recebeLeads).length)} icone={Users} tom="brand" subtitulo={`de ${vendedoresFiltrados.filter((v) => v.ativo !== false).length} consultores ativos`} />
+        <StatCard titulo="Leads no mês (tráfego)" valor={vendedoresFiltrados.reduce((n, v) => n + (v.leadsTrafegoNoMes ?? 0), 0).toLocaleString("pt-BR")} icone={UserPlus} tom="success" subtitulo="atribuídos à equipe" />
+        <StatCard titulo="1º contato (média)" valor={(resumo.leadsComPrimeiroContato ?? 0) > 0 ? formatarDuracao(resumo.tempoMedioPrimeiroContatoHoras) : "—"} icone={Timer} tom="warning" subtitulo="da chegada ao contato" />
+        <StatCard titulo="Oportunidades paradas" valor={String(resumo.oportunidadesSemMovimentacao.length)} icone={AlertTriangle} tom={resumo.oportunidadesSemMovimentacao.length > 0 ? "danger" : "neutral"} subtitulo="sem movimentação" />
+      </div>
+
       <LeadsDoDiaCard vendedores={vendedoresFiltrados} filtrado={temFiltro} />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="p-4">
-          <h2 className="mb-2 text-sm font-semibold text-[var(--fg)]">Tempo médio até 1º contato</h2>
+          <h2 className="mb-3 text-[15px] font-semibold tracking-tight text-[var(--fg)]">Tempo médio até 1º contato</h2>
           {(resumo.leadsComPrimeiroContato ?? 0) === 0 ? (
             <p className="text-sm text-[var(--fg-muted)]">
               Nenhum lead do CRM teve contato neste mês. O contato conta quando o consultor move o lead de etapa no quadro ou conclui uma
@@ -555,7 +566,7 @@ export function ManagementPage() {
             </p>
           ) : (
             <>
-              <p className="text-2xl font-semibold text-[var(--fg)]">{formatarDuracao(resumo.tempoMedioPrimeiroContatoHoras)}</p>
+              <p className="text-4xl font-semibold tracking-tight text-[var(--brand)] [font-variant-numeric:tabular-nums]">{formatarDuracao(resumo.tempoMedioPrimeiroContatoHoras)}</p>
               <p className="text-xs text-[var(--fg-muted)]">
                 média de {resumo.leadsComPrimeiroContato} lead(s) deste mês, da chegada até o consultor mover de etapa ou concluir uma atividade
               </p>
@@ -578,33 +589,50 @@ export function ManagementPage() {
           )}
         </Card>
         <Card className="p-4 lg:col-span-2">
-          <h2 className="mb-2 text-sm font-semibold text-[var(--fg)]">Carteira por vendedor</h2>
+          <h2 className="mb-3 text-[15px] font-semibold tracking-tight text-[var(--fg)]">Carteira por vendedor</h2>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {paginaCarteira.itensDaPagina.map((v) => (
-              <div key={v.id} className="space-y-2 rounded-xl border border-[var(--border)] bg-[var(--surface-hover)]/60 p-3 text-sm">
+              <div key={v.id} className="space-y-3.5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
+                <div className="flex items-center gap-3">
+                  <Avatar nome={v.nome} className="size-9 text-xs" />
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-2 font-semibold text-[var(--fg)]" title={v.nome}>
+                      <span className="truncate">{v.nome}</span>
+                      {v.ativo === false && <Badge variant="danger">Inativo</Badge>}
+                    </p>
+                    <p className="truncate text-xs text-[var(--fg-muted)]">{v.regionalNome ?? "Sem regional"}</p>
+                  </div>
+                </div>
+                <dl
+                  className="grid grid-cols-3 gap-2 rounded-xl bg-[var(--surface-hover)] p-2.5 text-center [font-variant-numeric:tabular-nums]"
+                  title="Leads de tráfego pago (Notion e sistema novo) que chegaram para o vendedor"
+                >
+                  <div>
+                    <dd className="text-base font-semibold text-[var(--brand)]">{(v.leadsTrafegoNoMes ?? 0).toLocaleString("pt-BR")}</dd>
+                    <dt className="text-[10px] text-[var(--fg-muted)]">leads no mês</dt>
+                  </div>
+                  <div>
+                    <dd className="text-base font-semibold text-[var(--fg)]">{(v.leadsTrafegoMesAnterior ?? 0).toLocaleString("pt-BR")}</dd>
+                    <dt className="text-[10px] text-[var(--fg-muted)]">mês anterior</dt>
+                  </div>
+                  <div>
+                    <dd className="text-base font-semibold text-[var(--fg)]">{v.oportunidadesAbertas}</dd>
+                    <dt className="text-[10px] text-[var(--fg-muted)]">oportunidades</dt>
+                  </div>
+                </dl>
                 <div>
-                  <p className="flex items-center gap-2 font-semibold text-[var(--fg)]" title={v.nome}>
-                    <span className="truncate">{v.nome}</span>
-                    {v.ativo === false && <Badge variant="danger">Inativo</Badge>}
-                  </p>
-                  <p
-                    className="text-xs text-[var(--fg-muted)]"
-                    title="Leads de tráfego pago (Notion e sistema novo) que chegaram para o vendedor neste mês"
-                  >
-                    <span className="font-semibold text-[var(--brand)]">{(v.leadsTrafegoNoMes ?? 0).toLocaleString("pt-BR")}</span> leads no mês ·{" "}
-                    {v.oportunidadesAbertas} oportunidades
-                  </p>
-                  <p className="mt-1 text-xs text-[var(--fg-muted)]">
-                    <span className="font-semibold text-[var(--fg)]">{(v.leadsTrafegoMesAnterior ?? 0).toLocaleString("pt-BR")}</span> leads no mês anterior
-                  </p>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">Limites de leads</p>
+                  <div className="space-y-1.5">
+                    <LimiteInput tipo="mensal" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
+                    <LimiteInput tipo="diario" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
+                  </div>
                 </div>
-                <div className="space-y-1.5 border-t border-[var(--border)] pt-2">
-                  <LimiteInput tipo="mensal" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
-                  <LimiteInput tipo="diario" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
+                <div className="space-y-2.5 border-t border-[var(--border)] pt-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">Distribuição</p>
+                  <TiposLeadSelect key={`${v.id}-${v.recebeSomenteOQue?.join("|")}`} vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
+                  <JanelaRecebimento key={`${v.id}-${v.horarioInicioLeads}-${v.horarioFimLeads}-${v.diasSemanaLeads?.join("")}`} vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
+                  <RecebeLeadsSwitch vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
                 </div>
-                <TiposLeadSelect key={`${v.id}-${v.recebeSomenteOQue?.join("|")}`} vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
-                <JanelaRecebimento key={`${v.id}-${v.horarioInicioLeads}-${v.horarioFimLeads}-${v.diasSemanaLeads?.join("")}`} vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
-                <RecebeLeadsSwitch vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
               </div>
             ))}
           </div>
@@ -631,7 +659,7 @@ export function ManagementPage() {
               <tbody>
                 {paginaRanking.itensDaPagina.map((r) => (
                   <tr key={r.vendedorId} className="border-b border-[var(--border)] last:border-0">
-                    <td className="py-2 text-[var(--fg-muted)]">{r.posicao}</td>
+                    <td className="py-2"><span className={`flex size-6 items-center justify-center rounded-full text-xs font-semibold ${r.posicao <= 3 ? "bg-[var(--brand)] text-[var(--brand-fg)]" : "bg-[var(--surface-hover)] text-[var(--fg-muted)]"}`}>{r.posicao}</span></td>
                     <td className="py-2 text-[var(--fg)]">{r.vendedorNome}</td>
                     <td className="py-2 text-[var(--fg-muted)]">{r.vendasGanhas}</td>
                     <td className="py-2 text-[var(--fg-muted)]">{formatarMoeda(r.valorAdesao ?? 0)}</td>
