@@ -1,4 +1,4 @@
-import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
+import { ChevronDown, Pin, PinOff, Search, SlidersHorizontal, X } from "lucide-react";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 
 /** Rótulos dos filtros ativos: os campos do painel que combinam com algum deles ganham destaque. */
@@ -39,20 +39,26 @@ export function BarraDeFiltros({
   /** Linha fixa no pé do painel, acima dos botões (ex.: filtros salvos). */
   rodape?: ReactNode;
 }) {
-  // Aberto por padrão; a escolha de recolher fica guardada por tela, neste navegador.
-  const chave = `filtros-aberto:${typeof window === "undefined" ? "" : window.location.pathname}`;
-  const [aberto, setAberto] = useState(() => {
+  // Fixados (padrão): os campos ficam sempre abertos. Soltos: abrem ao passar o mouse e fecham ao sair, como a barra lateral.
+  // A escolha de fixar fica guardada por tela, neste navegador.
+  const chave = `filtros-fixado:${typeof window === "undefined" ? "" : window.location.pathname}`;
+  const [fixado, setFixado] = useState(() => {
     try {
-      return localStorage.getItem(chave) !== "0";
+      const salvo = localStorage.getItem(chave);
+      if (salvo !== null) return salvo !== "0";
+      return localStorage.getItem(chave.replace("fixado", "aberto")) !== "0"; // preferência antiga
     } catch {
       return true;
     }
   });
+  const [aoPassar, setAoPassar] = useState(false);
+  const tempoHover = useRef<number | undefined>(undefined);
+  const aberto = fixado || aoPassar;
   // Durante a animação o conteúdo é cortado (overflow escondido); depois, volta a ficar solto para as listas dos campos abrirem por cima.
   const [animando, setAnimando] = useState(false);
-  const alternar = () => {
+  const alternarFixado = () => {
     setAnimando(true);
-    setAberto((v) => {
+    setFixado((v) => {
       try {
         localStorage.setItem(chave, v ? "0" : "1");
       } catch {
@@ -60,7 +66,28 @@ export function BarraDeFiltros({
       }
       return !v;
     });
+    setAoPassar(!fixado); // soltando, o painel fecha na hora; o mouse volta a abrir ao reentrar
   };
+  const abrirAoPassar = () => {
+    if (fixado) return;
+    window.clearTimeout(tempoHover.current);
+    tempoHover.current = window.setTimeout(() => {
+      setAnimando(true);
+      setAoPassar(true);
+    }, 120);
+  };
+  const fecharAoSair = () => {
+    if (fixado) return;
+    window.clearTimeout(tempoHover.current);
+    tempoHover.current = window.setTimeout(() => {
+      // Não fecha enquanto alguma lista de campo (select) estiver aberta por cima do painel.
+      if (document.querySelector("[role=listbox]")) return;
+      setAnimando(true);
+      setAoPassar(false);
+    }, 280);
+  };
+  useEffect(() => () => window.clearTimeout(tempoHover.current), []);
+  const alternar = alternarFixado;
   const campoBusca = useRef<HTMLInputElement>(null);
 
   // "/" leva o cursor para a busca (se a pessoa não estiver digitando em outro campo).
@@ -81,7 +108,7 @@ export function BarraDeFiltros({
 
   return (
     <AtivosContext.Provider value={chips.map((c) => c.rotulo.toLowerCase())}>
-    <div className="ui-surface rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[var(--shadow-card)]">
+    <div onMouseEnter={abrirAoPassar} onMouseLeave={fecharAoSair} className="ui-surface rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[var(--shadow-card)]">
       <div className="flex flex-wrap items-center gap-2">
         {onBusca && (
           <div className="relative min-w-44 flex-1 sm:max-w-64">
@@ -137,6 +164,18 @@ export function BarraDeFiltros({
             Filtros
             {temAtivos && <span className="flex size-5 items-center justify-center rounded-full bg-[var(--brand)] text-[11px] font-semibold text-[var(--brand-fg)]">{chips.length}</span>}
             <ChevronDown className={`size-3.5 transition-transform ${aberto ? "rotate-180" : ""}`} aria-hidden />
+          </button>
+          <button
+            type="button"
+            aria-pressed={fixado}
+            aria-label={fixado ? "Soltar filtros" : "Fixar filtros abertos"}
+            title={fixado ? "Soltar (os filtros passam a abrir ao passar o mouse)" : "Fixar filtros abertos"}
+            onClick={alternarFixado}
+            className={`focus-ring flex size-9 cursor-pointer items-center justify-center rounded-full transition-colors ${
+              fixado ? "bg-[var(--brand-soft)] text-[var(--brand)]" : "text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+            }`}
+          >
+            {fixado ? <PinOff className="size-4" /> : <Pin className="size-4" />}
           </button>
         </div>
       </div>
