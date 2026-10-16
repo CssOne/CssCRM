@@ -1,4 +1,4 @@
-import { ArrowRightLeft, List, Plus, RotateCcw, Save, Trash2, X, Car } from "lucide-react";
+import { ArrowRightLeft, List, Plus, RotateCcw, Save, Trash2, Car } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
@@ -25,6 +25,7 @@ import { AdesaoCotacaoDialog } from "../../components/crm/AdesaoCotacaoDialog";
 import { AlterarResponsavelDialog } from "../../components/crm/AlterarResponsavelDialog";
 import { CartaoLead, classificarCartao } from "../../components/crm/CartaoLead";
 import { MultiSelect } from "../../components/MultiSelect";
+import { BarraDeFiltros, CampoDeFiltro, type ChipDeFiltro } from "../../components/Filtros";
 import { useAbrirLead } from "../../lib/painelLead";
 import { OPCOES_FILTRO_TIPO_INDICACAO } from "../../lib/opcoesLead";
 import { useAuth } from "../../context/AuthContext";
@@ -661,6 +662,21 @@ export function LeadsKanbanPage() {
     [colunasExibidas]
   );
 
+  // Filtros ativos como chips removíveis (mostrados abaixo da busca).
+  const dataCurta = (d: string) => (d ? d.split("-").reverse().slice(0, 2).join("/") : "…");
+  const chipsDeFiltro: ChipDeFiltro[] = [];
+  const addChip = (rotulo: string, valor: string, limpar: () => void) => chipsDeFiltro.push({ rotulo, valor, limpar });
+  if (origem.length) addChip("Origem", origem.join(", "), () => setOrigem([]));
+  if (categoria.length) addChip("Categoria", categoria.join(", "), () => setCategoria([]));
+  if (tipoIndicacao.length) addChip("Canal", tipoIndicacao.join(", "), () => setTipoIndicacao([]));
+  if (fonte.length) addChip("Fonte", fonte.map((f) => (f === "TrafegoPago" ? "Tráfego pago" : f)).join(", "), () => setFonte([]));
+  if (dataChegadaInicio || dataChegadaFim) addChip("Chegada", `${dataCurta(dataChegadaInicio)} → ${dataCurta(dataChegadaFim)}`, () => { setDataChegadaInicio(""); setDataChegadaFim(""); });
+  if (dataVendaInicio || dataVendaFim) addChip("Ativação", `${dataCurta(dataVendaInicio)} → ${dataCurta(dataVendaFim)}`, () => { setDataVendaInicio(""); setDataVendaFim(""); });
+  if (responsavelId.length) addChip("Vendedor", vendedores.filter((v) => responsavelId.includes(v.id)).map((v) => v.nome).join(", ") || `${responsavelId.length} selecionado(s)`, () => setResponsavelId([]));
+  if (regional.length) addChip("Regional", regional.join(", "), () => setRegional([]));
+  if (grupoId.length) addChip("Grupo", grupos.filter((g) => grupoId.includes(g.id)).map((g) => g.nome).join(", ") || `${grupoId.length} selecionado(s)`, () => setGrupoId([]));
+  if (incluirArquivados) addChip("Status", "Inclui arquivados", () => setIncluirArquivados(false));
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -683,25 +699,70 @@ export function LeadsKanbanPage() {
         </div>
       </div>
 
-      <div className="ui-surface flex flex-wrap items-end gap-3 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-card)]">
-        <div className="w-56">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Buscar</label>
-          <Input placeholder="Nome, placa, telefone ou e-mail" value={busca} onChange={(e) => setBusca(e.target.value)} />
-        </div>
+      <BarraDeFiltros
+        busca={busca}
+        onBusca={setBusca}
+        placeholder="Buscar por nome, placa, telefone ou e-mail"
+        chips={chipsDeFiltro}
+        onLimparTudo={limparFiltros}
+        rodape={
+          <>
+            <div className="w-56">
+              <Select aria-label="Filtros salvos" value={filtroSalvoAtual} onChange={(e) => escolherFiltroSalvo(e.target.value)} disabled={filtrosSalvos.length === 0}>
+                <option value="">{filtrosSalvos.length === 0 ? "Nenhum filtro salvo" : "Filtros salvos…"}</option>
+                {filtrosSalvos.map((f) => (
+                  <option key={f.nome} value={f.nome}>
+                    {f.nome}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            {filtroSalvoAtual && (
+              <Button variant="ghost" size="sm" onClick={excluirFiltroSalvo}>
+                <Trash2 className="size-4" /> Excluir filtro
+              </Button>
+            )}
+            {salvandoFiltro ? (
+              <form
+                className="flex flex-wrap items-center gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  salvarFiltro();
+                }}
+              >
+                <div className="w-56">
+                  <Input aria-label="Nome do filtro" autoFocus value={nomeFiltro} onChange={(e) => setNomeFiltro(e.target.value)} placeholder="Nome do filtro, ex.: Tráfego pago da semana" />
+                </div>
+                <Button size="sm" type="submit" disabled={!nomeFiltro.trim()}>
+                  Salvar
+                </Button>
+                <Button variant="ghost" size="sm" type="button" onClick={() => setSalvandoFiltro(false)}>
+                  Cancelar
+                </Button>
+              </form>
+            ) : (
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!filtrosAtivos}
+                title={filtrosAtivos ? undefined : "Escolha algum filtro para salvar"}
+                onClick={() => {
+                  setNomeFiltro(filtroSalvoAtual);
+                  setSalvandoFiltro(true);
+                }}
+              >
+                <Save className="size-4" /> Salvar filtro atual
+              </Button>
+            )}
+          </>
+        }
+      >
         {podeVerOrigem && (
-          <div className="w-44">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Origem</label>
-            <MultiSelect
-              ariaLabel="Origem"
-              rotuloTodos="Todas"
-              opcoes={origens.map((o) => ({ valor: o, rotulo: o }))}
-              valores={origem}
-              onChange={setOrigem}
-            />
-          </div>
+          <CampoDeFiltro rotulo="Origem">
+            <MultiSelect ariaLabel="Origem" rotuloTodos="Todas" opcoes={origens.map((o) => ({ valor: o, rotulo: o }))} valores={origem} onChange={setOrigem} />
+          </CampoDeFiltro>
         )}
-        <div className="w-44">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Categoria</label>
+        <CampoDeFiltro rotulo="Categoria">
           <MultiSelect
             ariaLabel="Categoria"
             rotuloTodos="Todas"
@@ -709,18 +770,11 @@ export function LeadsKanbanPage() {
             valores={categoria}
             onChange={setCategoria}
           />
-        </div>
-        <div className="w-48">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Canal de Aquisição</label>
-          <MultiSelect
-            ariaLabel="Canal de Aquisição"
-            opcoes={OPCOES_FILTRO_TIPO_INDICACAO.map((t) => ({ valor: t, rotulo: t }))}
-            valores={tipoIndicacao}
-            onChange={setTipoIndicacao}
-          />
-        </div>
-        <div className="w-44">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Fonte</label>
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Canal de aquisição">
+          <MultiSelect ariaLabel="Canal de Aquisição" opcoes={OPCOES_FILTRO_TIPO_INDICACAO.map((t) => ({ valor: t, rotulo: t }))} valores={tipoIndicacao} onChange={setTipoIndicacao} />
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Fonte">
           <MultiSelect
             ariaLabel="Fonte"
             rotuloTodos="Todas"
@@ -731,32 +785,24 @@ export function LeadsKanbanPage() {
             valores={fonte}
             onChange={setFonte}
           />
-        </div>
-        <div className="flex items-end gap-1">
-          <div className="w-36">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Chegada de</label>
-            <Input type="date" value={dataChegadaInicio} onChange={(e) => setDataChegadaInicio(e.target.value)} />
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Chegada" className="sm:col-span-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Input type="date" aria-label="Chegada de" value={dataChegadaInicio} onChange={(e) => setDataChegadaInicio(e.target.value)} />
+            <Input type="date" aria-label="Chegada até" value={dataChegadaFim} onChange={(e) => setDataChegadaFim(e.target.value)} />
           </div>
-          <div className="w-36">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">até</label>
-            <Input type="date" value={dataChegadaFim} onChange={(e) => setDataChegadaFim(e.target.value)} />
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Ativação" className="sm:col-span-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Input type="date" aria-label="Ativação de" value={dataVendaInicio} onChange={(e) => setDataVendaInicio(e.target.value)} />
+            <Input type="date" aria-label="Ativação até" value={dataVendaFim} onChange={(e) => setDataVendaFim(e.target.value)} />
           </div>
-        </div>
-        <div className="flex items-end gap-1">
-          <div className="w-36">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Ativação de</label>
-            <Input type="date" value={dataVendaInicio} onChange={(e) => setDataVendaInicio(e.target.value)} />
-          </div>
-          <div className="w-36">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">até</label>
-            <Input type="date" value={dataVendaFim} onChange={(e) => setDataVendaFim(e.target.value)} />
-          </div>
-        </div>
+        </CampoDeFiltro>
         {podeGerir && (
           <>
-            <div className="w-48">
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <label className="block text-xs font-medium text-[var(--fg-muted)]">Vendedor</label>
+            <CampoDeFiltro
+              rotulo="Vendedor"
+              extra={
                 <select
                   aria-label="Quais vendedores listar"
                   value={vendedoresInativos ? "todos" : "ativos"}
@@ -766,7 +812,8 @@ export function LeadsKanbanPage() {
                   <option value="ativos">Só ativos</option>
                   <option value="todos">Todos (inclui inativos)</option>
                 </select>
-              </div>
+              }
+            >
               <MultiSelect
                 ariaLabel="Vendedor"
                 opcoes={vendedores
@@ -776,19 +823,11 @@ export function LeadsKanbanPage() {
                 valores={responsavelId}
                 onChange={setResponsavelId}
               />
-            </div>
-            <div className="w-44">
-              <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Regional</label>
-              <MultiSelect
-                ariaLabel="Regional"
-                rotuloTodos="Todas"
-                opcoes={regionais.map((r) => ({ valor: r.nome, rotulo: r.nome }))}
-                valores={regional}
-                onChange={setRegional}
-              />
-            </div>
-            <div className="w-52">
-              <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Grupo</label>
+            </CampoDeFiltro>
+            <CampoDeFiltro rotulo="Regional">
+              <MultiSelect ariaLabel="Regional" rotuloTodos="Todas" opcoes={regionais.map((r) => ({ valor: r.nome, rotulo: r.nome }))} valores={regional} onChange={setRegional} />
+            </CampoDeFiltro>
+            <CampoDeFiltro rotulo="Grupo">
               <MultiSelect
                 ariaLabel="Grupo"
                 rotuloTodos="Todos"
@@ -799,73 +838,16 @@ export function LeadsKanbanPage() {
                 valores={grupoId}
                 onChange={setGrupoId}
               />
-            </div>
-            <div className="w-40">
-              <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Status</label>
+            </CampoDeFiltro>
+            <CampoDeFiltro rotulo="Status">
               <Select value={incluirArquivados ? "todos" : "ativos"} onChange={(e) => setIncluirArquivados(e.target.value === "todos")}>
                 <option value="ativos">Ativos</option>
                 <option value="todos">Todos (inclui arquivados)</option>
               </Select>
-            </div>
+            </CampoDeFiltro>
           </>
         )}
-        {filtrosAtivos && (
-          <Button variant="ghost" size="sm" onClick={limparFiltros}>
-            <X className="size-4" /> Limpar filtros
-          </Button>
-        )}
-        <div className="flex w-full flex-wrap items-end gap-2 border-t border-[var(--border)] pt-3">
-          <div className="w-56">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Filtros salvos</label>
-            <Select value={filtroSalvoAtual} onChange={(e) => escolherFiltroSalvo(e.target.value)} disabled={filtrosSalvos.length === 0}>
-              <option value="">{filtrosSalvos.length === 0 ? "Nenhum filtro salvo" : "Escolha um filtro..."}</option>
-              {filtrosSalvos.map((f) => (
-                <option key={f.nome} value={f.nome}>
-                  {f.nome}
-                </option>
-              ))}
-            </Select>
-          </div>
-          {filtroSalvoAtual && (
-            <Button variant="ghost" size="sm" onClick={excluirFiltroSalvo}>
-              <Trash2 className="size-4" /> Excluir filtro
-            </Button>
-          )}
-          {salvandoFiltro ? (
-            <form
-              className="flex items-end gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                salvarFiltro();
-              }}
-            >
-              <div className="w-56">
-                <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Nome do filtro</label>
-                <Input autoFocus value={nomeFiltro} onChange={(e) => setNomeFiltro(e.target.value)} placeholder="Ex.: Tráfego pago da semana" />
-              </div>
-              <Button size="sm" type="submit" disabled={!nomeFiltro.trim()}>
-                Salvar
-              </Button>
-              <Button variant="ghost" size="sm" type="button" onClick={() => setSalvandoFiltro(false)}>
-                Cancelar
-              </Button>
-            </form>
-          ) : (
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!filtrosAtivos}
-              title={filtrosAtivos ? undefined : "Escolha algum filtro para salvar"}
-              onClick={() => {
-                setNomeFiltro(filtroSalvoAtual);
-                setSalvandoFiltro(true);
-              }}
-            >
-              <Save className="size-4" /> Salvar filtro atual
-            </Button>
-          )}
-        </div>
-      </div>
+      </BarraDeFiltros>
 
       {carregando ? (
         <div className="flex gap-4 overflow-x-auto">
