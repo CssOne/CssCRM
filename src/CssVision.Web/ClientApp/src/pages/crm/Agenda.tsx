@@ -8,8 +8,11 @@ import {
   ChevronRight,
   Clock,
   List,
+  Pencil,
   Plus,
   RotateCcw,
+  Trash2,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
@@ -25,8 +28,8 @@ import {
   type PagedResult,
   type VendedorResumo,
 } from "../../lib/types";
-import { Button, Card, Checkbox, ErrorState, Modal, Select, Skeleton, useToast } from "../../components/ui";
-import { ActivityForm, tipoLabel, type ActivityFormValues } from "../../components/crm/ActivityForm";
+import { Button, Card, Checkbox, ConfirmDialog, ErrorState, Modal, Select, Skeleton, useToast } from "../../components/ui";
+import { ActivityForm, isoParaDatetimeLocal, tipoLabel, type ActivityFormValues } from "../../components/crm/ActivityForm";
 import { LeadPicker } from "../../components/crm/LeadPicker";
 import { avisarAtividadesAlteradas, concluirAtividade, EVENTO_ATIVIDADES_ALTERADAS } from "../../components/crm/NotificacoesAtividades";
 import { useAuth } from "../../context/AuthContext";
@@ -123,6 +126,13 @@ export function AgendaPage() {
   const [arrastando, setArrastando] = useState<Activity | null>(null);
   const [diaSobre, setDiaSobre] = useState<string | null>(null);
 
+  // Trazido da antiga aba "Atividades": editar, excluir e filtrar por lead agora são feitos aqui.
+  const [atividadeEditando, setAtividadeEditando] = useState<Activity | null>(null);
+  const [atividadeExcluindo, setAtividadeExcluindo] = useState<Activity | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
+  const [leadFiltro, setLeadFiltro] = useState<LeadListItem | null>(null);
+  const [escolhendoLeadFiltro, setEscolhendoLeadFiltro] = useState(false);
+
   const [novaNoDia, setNovaNoDia] = useState<Date | null>(null);
   const [leadNova, setLeadNova] = useState<LeadListItem | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -158,7 +168,7 @@ export function AgendaPage() {
   useEffect(() => {
     const controller = new AbortController();
     setErro(null);
-    const filtroBase = { responsavelId: responsavelId || undefined };
+    const filtroBase = { responsavelId: responsavelId || undefined, leadId: leadFiltro?.id };
     async function carregarTudo() {
       // O período pode ter mais atividades que uma página (máx. 100): busca página por página.
       const todas: Activity[] = [];
@@ -189,7 +199,7 @@ export function AgendaPage() {
     });
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveDia(inicio), chaveDia(fim), responsavelId, recarregar]);
+  }, [chaveDia(inicio), chaveDia(fim), responsavelId, leadFiltro?.id, recarregar]);
 
   const visiveis = useMemo(
     () =>
@@ -364,12 +374,50 @@ export function AgendaPage() {
   );
 
   /** Atividade completa (lista do dia, semana e lista). */
+  async function salvarEdicao(valores: ActivityFormValues) {
+    if (!atividadeEditando) return;
+    setSalvando(true);
+    try {
+      const request: ActivityUpdateRequest = {
+        tipo: valores.tipo,
+        assunto: valores.assunto,
+        descricao: valores.descricao || null,
+        dataHoraPrevista: new Date(valores.dataHoraPrevista).toISOString(),
+        lembreteMinutosAntes: valores.lembreteMinutosAntes ? Number(valores.lembreteMinutosAntes) : null,
+        rowVersion: atividadeEditando.rowVersion,
+      };
+      await api.put(`/crm/activities/${atividadeEditando.id}`, request);
+      notificar("success", "Atividade atualizada com sucesso.");
+      setAtividadeEditando(null);
+      setRecarregar((n) => n + 1);
+    } catch (e) {
+      notificar("error", e instanceof Error ? e.message : "Não foi possível salvar as alterações.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function excluirAtividade() {
+    if (!atividadeExcluindo) return;
+    setExcluindo(true);
+    try {
+      await api.del(`/crm/activities/${atividadeExcluindo.id}`);
+      notificar("success", "Atividade excluída com sucesso.");
+      setAtividadeExcluindo(null);
+      setRecarregar((n) => n + 1);
+    } catch (e) {
+      notificar("error", e instanceof Error ? e.message : "Não foi possível excluir a atividade.");
+    } finally {
+      setExcluindo(false);
+    }
+  }
+
   const Cartao = ({ a }: { a: Activity }) => (
     <div
       draggable={a.status === StatusAtividade.Pendente}
       onDragStart={() => setArrastando(a)}
       onDragEnd={() => setArrastando(null)}
-      className={`flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2.5 text-sm transition hover:shadow-sm ${
+      className={`group flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2.5 text-sm transition hover:shadow-sm ${
         a.status === StatusAtividade.Concluida ? "opacity-60" : ""
       }`}
       style={{ borderLeft: `3px solid ${COR_TIPO[a.tipo]}` }}
@@ -390,6 +438,26 @@ export function AgendaPage() {
           {ehGestao && ` · ${a.responsavelNome}`}
         </p>
       </button>
+      <div className="flex shrink-0 flex-col gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+        <button
+          type="button"
+          title="Editar atividade"
+          aria-label="Editar atividade"
+          onClick={() => setAtividadeEditando(a)}
+          className="focus-ring cursor-pointer rounded-md p-1 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+        >
+          <Pencil className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          title="Excluir atividade"
+          aria-label="Excluir atividade"
+          onClick={() => setAtividadeExcluindo(a)}
+          className="focus-ring cursor-pointer rounded-md p-1 text-[var(--fg-muted)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      </div>
     </div>
   );
 
@@ -494,6 +562,18 @@ export function AgendaPage() {
                   ))}
               </Select>
             </div>
+          )}
+          {leadFiltro ? (
+            <span className="inline-flex h-8 items-center gap-1 rounded-full bg-[var(--brand-soft)] pl-3 pr-1 text-sm font-medium text-[var(--brand)]">
+              Lead: {leadFiltro.nomeOuRazaoSocial}
+              <button type="button" aria-label="Remover filtro de lead" onClick={() => setLeadFiltro(null)} className="focus-ring flex size-6 cursor-pointer items-center justify-center rounded-full hover:bg-[var(--brand)]/15">
+                <X className="size-3.5" />
+              </button>
+            </span>
+          ) : (
+            <Button size="sm" variant="secondary" onClick={() => setEscolhendoLeadFiltro(true)}>
+              Filtrar por lead
+            </Button>
           )}
           <Checkbox label="Mostrar concluídas" checked={mostrarConcluidas} onChange={(e) => setMostrarConcluidas(e.target.checked)} />
         </div>
@@ -673,6 +753,49 @@ export function AgendaPage() {
             </div>
           ))}
       </Modal>
+
+      <Modal open={escolhendoLeadFiltro} onClose={() => setEscolhendoLeadFiltro(false)} title="Filtrar por lead">
+        <LeadPicker
+          onSelecionar={(lead) => {
+            setLeadFiltro(lead);
+            setEscolhendoLeadFiltro(false);
+          }}
+        />
+      </Modal>
+
+      <Modal open={!!atividadeEditando} onClose={() => setAtividadeEditando(null)} title="Editar atividade">
+        {atividadeEditando && (
+          <div>
+            <p className="mb-3 text-sm text-[var(--fg-muted)]">
+              Lead: <strong className="text-[var(--fg)]">{atividadeEditando.leadNome}</strong>
+            </p>
+            <ActivityForm
+              modoEdicao
+              valoresIniciais={{
+                tipo: atividadeEditando.tipo,
+                assunto: atividadeEditando.assunto,
+                descricao: atividadeEditando.descricao ?? "",
+                dataHoraPrevista: isoParaDatetimeLocal(atividadeEditando.dataHoraPrevista),
+                lembreteMinutosAntes: atividadeEditando.lembreteMinutosAntes != null ? String(atividadeEditando.lembreteMinutosAntes) : "",
+              }}
+              salvando={salvando}
+              onSubmit={salvarEdicao}
+              onCancel={() => setAtividadeEditando(null)}
+            />
+          </div>
+        )}
+      </Modal>
+
+      <ConfirmDialog
+        open={!!atividadeExcluindo}
+        title="Excluir atividade"
+        message={<>Tem certeza que deseja excluir a atividade <strong className="text-[var(--fg)]">{atividadeExcluindo?.assunto}</strong>? Essa ação não pode ser desfeita.</>}
+        confirmLabel="Excluir"
+        danger
+        loading={excluindo}
+        onConfirm={excluirAtividade}
+        onCancel={() => setAtividadeExcluindo(null)}
+      />
     </div>
   );
 }

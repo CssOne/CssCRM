@@ -91,7 +91,7 @@ const PORTAL_NAV = [
 /** Seções do menu lateral. Cada item cai na seção da sua chave; o que não estiver aqui vai para "Outros". */
 const SECOES: { rotulo: string; chaves: string[] }[] = [
   { rotulo: "Início", chaves: ["portal", "crm-overview", "overview"] },
-  { rotulo: "Comercial", chaves: ["crm-leads", "crm-leads-kanban", "crm-pipeline", "crm-activities", "crm-agenda", "crm-goals", "crm-relatorio"] },
+  { rotulo: "Comercial", chaves: ["crm-leads", "crm-leads-kanban", "crm-pipeline", "crm-agenda", "crm-goals", "crm-relatorio"] },
   { rotulo: "Gestão", chaves: ["crm-management", "crm-consultores", "crm-users", "avisos-pagamento", "tv-comercial"] },
   { rotulo: "Marketing e sistema", chaves: ["marketing", "admin-backups"] },
   { rotulo: "Comunicação", chaves: ["chat", "discord", "suporte"] },

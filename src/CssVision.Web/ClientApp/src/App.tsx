@@ -10,7 +10,6 @@ import { LeadsPage } from "./pages/crm/Leads";
 import { LeadsKanbanPage } from "./pages/crm/LeadsKanban";
 import { LeadDetailPage } from "./pages/crm/LeadDetail";
 import { PipelinePage } from "./pages/crm/Pipeline";
-import { ActivitiesPage } from "./pages/crm/Activities";
 import { AgendaPage } from "./pages/crm/Agenda";
 import { GoalsPage } from "./pages/crm/Goals";
 import { ManagementPage } from "./pages/crm/Management";
@@ -92,7 +91,8 @@ export default function App() {
       <Route path="/app/crm/leads/kanban" element={<RotaProtegida><LeadsKanbanPage /></RotaProtegida>} />
       <Route path="/app/crm/leads/:id" element={<RotaProtegida><LeadDetailPage /></RotaProtegida>} />
       <Route path="/app/crm/pipeline" element={<RotaProtegida><PipelinePage /></RotaProtegida>} />
-      <Route path="/app/crm/activities" element={<RotaProtegida><ActivitiesPage /></RotaProtegida>} />
+      {/* A aba "Atividades" foi unida à Agenda: links e favoritos antigos continuam funcionando. */}
+      <Route path="/app/crm/activities" element={<Navigate to="/app/crm/agenda" replace />} />
       <Route path="/app/crm/agenda" element={<RotaProtegida><AgendaPage /></RotaProtegida>} />
       <Route path="/app/crm/goals" element={<RotaProtegida><GoalsPage /></RotaProtegida>} />
       <Route

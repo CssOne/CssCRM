@@ -170,7 +170,7 @@ export function PortalDashboardPage() {
               ))}
             </ul>
           )}
-          <Link to="/app/crm/activities" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[var(--brand)] hover:underline">
+          <Link to="/app/crm/agenda" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[var(--brand)] hover:underline">
             Ver todas pendências →
           </Link>
         </Card>

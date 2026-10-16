@@ -402,7 +402,6 @@ public class AccountController(
         menu.Add(new MenuItemDto("crm-leads", "Leads", "users", "/app/crm/leads"));
         menu.Add(new MenuItemDto("crm-leads-kanban", "Quadro de leads", "layout-grid", "/app/crm/leads/kanban"));
         menu.Add(new MenuItemDto("crm-pipeline", "Pipeline", "kanban-square", "/app/crm/pipeline"));
-        menu.Add(new MenuItemDto("crm-activities", "Atividades", "check-square", "/app/crm/activities"));
         menu.Add(new MenuItemDto("crm-agenda", "Agenda", "calendar-days", "/app/crm/agenda"));
         menu.Add(new MenuItemDto("crm-goals", "Metas", "target", "/app/crm/goals"));
         menu.Add(new MenuItemDto("crm-relatorio", "Relatório comercial", "chart-column", "/app/crm/relatorio-comercial"));
