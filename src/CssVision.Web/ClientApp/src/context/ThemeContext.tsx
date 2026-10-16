@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { flushSync } from "react-dom";
 
 export type Tema = "light" | "dark" | "glass";
 
@@ -53,18 +52,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const trocar = useCallback((novo: Tema) => {
     const raiz = document.documentElement;
     const reduzir = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    // Só as variáveis de CSS mudam durante a animação (barato, mesmo com milhares de cartões); o estado do React, que
+    // refaz gráficos e componentes pesados, é atualizado depois, sem competir com a animação.
     const aplicar = () => {
-      flushSync(() => setTema(novo));
       raiz.dataset.theme = novo;
     };
     if (reduzir) {
       aplicar();
+      setTema(novo);
       return;
     }
     const vt = (document as Document & { startViewTransition?: (cb: () => void) => { ready: Promise<void>; finished: Promise<void> } }).startViewTransition;
     if (!vt) {
       raiz.classList.add("tema-trocando");
       aplicar();
+      setTema(novo);
       window.setTimeout(() => raiz.classList.remove("tema-trocando"), 450);
       return;
     }
@@ -75,10 +77,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       .then(() => {
         raiz.animate(
           { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${raio}px at ${x}px ${y}px)`] },
-          { duration: 650, easing: "cubic-bezier(0.22, 1, 0.36, 1)", pseudoElement: "::view-transition-new(root)" },
+          { duration: 600, easing: "cubic-bezier(0.22, 1, 0.36, 1)", pseudoElement: "::view-transition-new(root)" },
         );
       })
       .catch(() => undefined);
+    transicao.finished.finally(() => setTema(novo));
   }, []);
 
   return (
