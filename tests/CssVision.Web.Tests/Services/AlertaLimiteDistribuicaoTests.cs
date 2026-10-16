@@ -53,6 +53,7 @@ public class AlertaLimiteDistribuicaoTests
         await factory.AtribuirPapelAsync(db, bruna, Roles.Comercial);
         await factory.AtribuirPapelAsync(db, gestor, Roles.GestorComercial);
         await factory.AtribuirPapelAsync(db, admin, Roles.Admin);
+        admin.RecebeLeads = false; // administrador só entra no rodízio quando liga "Recebe leads"
         ana.LimiteDiarioLeads = 1;
         bruna.LimiteDiarioLeads = 1;
         db.CrmLeads.AddRange(Trafego("Da Ana", ana.Id), Trafego("Da Bruna", bruna.Id), Trafego("Parado", null));
