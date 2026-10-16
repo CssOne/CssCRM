@@ -247,10 +247,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
         <nav className={`sidebar-nav min-h-0 flex-1 overflow-y-auto px-3 pb-3 ${colapsado ? "lg:px-2" : ""}`} aria-label="Navegação principal">
           {agruparNav(itensNav ?? []).map((grupo, gi) => (
-            <div key={grupo.rotulo} className={gi === 0 ? "" : colapsado ? "mt-4 lg:mt-2" : "mt-4"}>
-              {emPortal ? null : colapsado ? (
-                gi > 0 && <div className="mx-2 mb-2 hidden border-t border-white/10 lg:block" />
-              ) : null}
+            <div key={grupo.rotulo} className={gi === 0 ? "" : colapsado ? "mt-4 lg:mt-3" : "mt-4"}>
               {!emPortal && (
                 <p className={`mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--sidebar-fg-muted)]/70 ${colapsado ? "lg:hidden" : ""}`}>{grupo.rotulo}</p>
               )}
@@ -300,7 +297,7 @@ export function Shell({ children }: { children: ReactNode }) {
                           )}
                         </NavLink>
                       )}
-                      {item.divisor && <div className="my-2 border-t border-[var(--sidebar-border)]" />}
+                      {item.divisor && <div className={`my-2 border-t border-[var(--sidebar-border)] ${colapsado ? "lg:hidden" : ""}`} />}
                     </div>
                   );
                 })}
@@ -309,7 +306,7 @@ export function Shell({ children }: { children: ReactNode }) {
           ))}
         </nav>
 
-        <div className={`border-t border-[var(--sidebar-border)] p-3 ${colapsado ? "lg:px-2 lg:pb-4" : ""}`}>
+        <div className={`border-t border-[var(--sidebar-border)] p-3 ${colapsado ? "lg:border-t-0 lg:px-2 lg:pb-4" : ""}`}>
           <div className={`flex items-center gap-2.5 rounded-xl bg-white/[0.06] p-2 ${colapsado ? "lg:flex-col lg:bg-transparent lg:p-0" : ""}`}>
             <Avatar nome={sessao.nomeCompleto} fotoUrl={sessao.fotoUrl} className="size-8 text-xs ring-2 ring-white/25" />
             <div className={`min-w-0 flex-1 leading-tight ${colapsado ? "lg:hidden" : ""}`}>
