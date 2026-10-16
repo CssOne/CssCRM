@@ -22,6 +22,7 @@ import {
   Moon,
   Search,
   Sparkles,
+  ChevronDown,
   Settings,
   Sun,
   Target,
@@ -85,7 +86,6 @@ const PORTAL_NAV = [
   { chave: "portal-dashboard", rotulo: "Dashboard", icone: Gauge, rota: "/app/portal" },
   { chave: "portal-clientes", rotulo: "Clientes", icone: Users, rota: "/app/portal/clientes" },
   { chave: "portal-propostas", rotulo: "Propostas", icone: FileText, rota: "/app/portal/propostas" },
-  { chave: "portal-config", rotulo: "Configurações", icone: Settings, rota: "/app/portal/configuracoes" },
 ];
 
 /** Seções do menu lateral. Cada item cai na seção da sua chave; o que não estiver aqui vai para "Outros". */
@@ -112,6 +112,61 @@ function Logo({ subtitulo, colapsado = false }: { subtitulo: string; colapsado?:
         <div className="min-w-0 leading-tight">
           <p className="truncate text-sm font-semibold tracking-tight text-[var(--sidebar-fg)]">CSS Brasil</p>
           <p className="truncate text-[10px] font-medium text-[var(--sidebar-fg-muted)]">{subtitulo}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Chip do usuário no cabeçalho; ao clicar abre um menu com Configurações. */
+function MenuDoUsuario({ nome, fotoUrl, papel }: { nome: string; fotoUrl?: string | null; papel: string }) {
+  const [aberto, setAberto] = useState(false);
+  const raiz = useRef<HTMLDivElement>(null);
+  const local = useLocation();
+
+  useEffect(() => setAberto(false), [local.pathname]);
+  useEffect(() => {
+    if (!aberto) return;
+    const fora = (e: MouseEvent) => {
+      if (raiz.current && !raiz.current.contains(e.target as Node)) setAberto(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setAberto(false);
+    document.addEventListener("mousedown", fora);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", fora);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [aberto]);
+
+  return (
+    <div ref={raiz} className="relative ml-2 hidden sm:block">
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={aberto}
+        onClick={() => setAberto((v) => !v)}
+        className="focus-ring flex cursor-pointer items-center gap-2.5 rounded-full border border-[var(--border)] bg-[var(--surface)] py-1 pl-1 pr-3 text-left transition hover:bg-[var(--surface-hover)]"
+      >
+        <Avatar nome={nome} fotoUrl={fotoUrl} className="size-8 text-xs" />
+        <div className="hidden min-w-0 leading-tight md:block">
+          <p className="max-w-36 truncate text-[13px] font-semibold text-[var(--fg)]">{nome}</p>
+          <p className="text-[11px] text-[var(--fg-muted)]">{papel}</p>
+        </div>
+        <ChevronDown className={`size-3.5 text-[var(--fg-muted)] transition-transform ${aberto ? "rotate-180" : ""}`} aria-hidden />
+      </button>
+      {aberto && (
+        <div role="menu" className="ui-surface absolute right-0 top-full z-50 mt-2 w-52 rounded-2xl border border-[var(--border)] bg-[var(--surface-solid)] p-1.5 shadow-[var(--shadow-card)]">
+          <Link
+            role="menuitem"
+            to="/app/portal/configuracoes"
+            className="focus-ring flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-medium text-[var(--fg)] hover:bg-[var(--surface-hover)]"
+          >
+            <span className="flex size-7 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]">
+              <Settings className="size-4" aria-hidden />
+            </span>
+            Configurações
+          </Link>
         </div>
       )}
     </div>
@@ -373,13 +428,7 @@ export function Shell({ children }: { children: ReactNode }) {
             )}
             <div className="mx-1.5 hidden h-6 w-px bg-[var(--border)] sm:block" />
             <SeletorDeTema />
-            <div className="ml-2 hidden items-center gap-2.5 rounded-full border border-[var(--border)] bg-[var(--surface)] py-1 pl-1 pr-4 sm:flex">
-              <Avatar nome={sessao.nomeCompleto} fotoUrl={sessao.fotoUrl} className="size-8 text-xs" />
-              <div className="hidden min-w-0 leading-tight md:block">
-                <p className="max-w-36 truncate text-[13px] font-semibold text-[var(--fg)]">{sessao.nomeCompleto}</p>
-                <p className="text-[11px] text-[var(--fg-muted)]">{PAPEL_LABEL[sessao.papeis[0]] ?? sessao.papeis[0]}</p>
-              </div>
-            </div>
+            <MenuDoUsuario nome={sessao.nomeCompleto} fotoUrl={sessao.fotoUrl} papel={PAPEL_LABEL[sessao.papeis[0]] ?? sessao.papeis[0]} />
           </div>
         </header>
 
