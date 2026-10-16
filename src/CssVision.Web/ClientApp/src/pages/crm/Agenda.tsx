@@ -360,10 +360,10 @@ export function AgendaPage() {
         abrirLead(a.leadId);
       }}
       title={`${tipoLabel[a.tipo]} · ${a.assunto} · ${a.leadNome}${a.status === StatusAtividade.Pendente ? " (arraste para reagendar)" : ""}`}
-      className={`group flex cursor-pointer items-center gap-1 truncate rounded-md px-1 py-0.5 text-[11px] leading-tight transition hover:brightness-95 ${
+      className={`group flex cursor-pointer items-center gap-1.5 truncate rounded-lg px-1.5 py-1 text-[11px] leading-tight transition hover:brightness-95 ${
         a.status === StatusAtividade.Concluida ? "opacity-50 line-through" : ""
       }`}
-      style={{ backgroundColor: `${COR_TIPO[a.tipo]}1f`, color: a.atrasada ? "var(--danger)" : "var(--fg)" }}
+      style={{ backgroundColor: `color-mix(in srgb, ${COR_TIPO[a.tipo]} 16%, transparent)`, color: a.atrasada ? "var(--danger)" : "var(--fg)" }}
     >
       <CheckBotao a={a} pequeno />
       <span className="shrink-0 font-semibold" style={{ color: COR_TIPO[a.tipo] }}>
@@ -417,15 +417,17 @@ export function AgendaPage() {
       draggable={a.status === StatusAtividade.Pendente}
       onDragStart={() => setArrastando(a)}
       onDragEnd={() => setArrastando(null)}
-      className={`group flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2.5 text-sm transition hover:shadow-sm ${
+      className={`group flex items-start gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm shadow-[var(--shadow-card)] transition hover:-translate-y-px hover:shadow-md ${
         a.status === StatusAtividade.Concluida ? "opacity-60" : ""
       }`}
-      style={{ borderLeft: `3px solid ${COR_TIPO[a.tipo]}` }}
     >
       <CheckBotao a={a} />
       <button type="button" onClick={() => abrirLead(a.leadId)} className="min-w-0 flex-1 cursor-pointer text-left">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-semibold" style={{ color: COR_TIPO[a.tipo] }}>
+          <span
+            className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+            style={{ backgroundColor: `color-mix(in srgb, ${COR_TIPO[a.tipo]} 16%, transparent)`, color: `color-mix(in srgb, ${COR_TIPO[a.tipo]} 72%, var(--fg))` }}
+          >
             {tipoLabel[a.tipo]}
           </span>
           <span className={`flex items-center gap-1 text-xs ${a.atrasada ? "font-semibold text-[var(--danger)]" : "text-[var(--fg-muted)]"}`}>
@@ -539,11 +541,11 @@ export function AgendaPage() {
               key={t}
               type="button"
               onClick={() => setTiposOcultos((l) => (oculto ? l.filter((x) => x !== t) : [...l, t]))}
-              className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition ${oculto ? "opacity-40" : ""}`}
-              style={{ borderColor: COR_TIPO[t], color: COR_TIPO[t] }}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition hover:brightness-95 ${oculto ? "bg-[var(--surface-hover)] text-[var(--fg-muted)] line-through opacity-70" : ""}`}
+              style={oculto ? undefined : { backgroundColor: `color-mix(in srgb, ${COR_TIPO[t]} 15%, transparent)`, color: `color-mix(in srgb, ${COR_TIPO[t]} 70%, var(--fg))` }}
               title={oculto ? "Mostrar" : "Esconder"}
             >
-              <span className="size-2 rounded-full" style={{ backgroundColor: COR_TIPO[t] }} /> {tipoLabel[t]}
+              <span className="size-2 rounded-full" style={{ backgroundColor: oculto ? "var(--fg-muted)" : COR_TIPO[t] }} /> {tipoLabel[t]}
             </button>
           );
         })}
@@ -614,10 +616,10 @@ export function AgendaPage() {
       ) : (
         <div className={`grid gap-4 ${visao === "mes" ? "xl:grid-cols-[1fr_20rem]" : ""}`}>
           {/* Calendário */}
-          <Card className="overflow-hidden p-0">
-            <div className="grid grid-cols-7 border-b border-[var(--border)] bg-[var(--surface-hover)]">
+          <Card className="overflow-hidden !rounded-3xl p-0">
+            <div className="grid grid-cols-7 border-b border-[var(--border)]">
               {DIAS_SEMANA.map((d, i) => (
-                <div key={d} className={`px-2 py-2 text-center text-xs font-semibold uppercase ${i >= 5 ? "text-[var(--fg-muted)]" : "text-[var(--fg)]"}`}>
+                <div key={d} className={`px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider ${i >= 5 ? "text-[var(--fg-muted)]/60" : "text-[var(--fg-muted)]"}`}>
                   {d}
                 </div>
               ))}
@@ -640,16 +642,16 @@ export function AgendaPage() {
                     }}
                     onDragLeave={() => setDiaSobre((atual) => (atual === k ? null : atual))}
                     onDrop={(e) => aoSoltar(e, dia)}
-                    className={`group relative cursor-pointer border-b border-r border-[var(--border)] p-1.5 transition-colors [&:nth-child(7n)]:border-r-0 ${
+                    className={`group relative cursor-pointer border-b border-r border-[var(--border)] p-2 transition-colors [&:nth-child(7n)]:border-r-0 ${
                       visao === "mes" ? "min-h-28" : "min-h-[26rem]"
                     } ${foraDoMes ? "bg-[var(--surface-hover)]/50" : "bg-[var(--surface)]"} ${
-                      diaSobre === k ? "!bg-[var(--brand-soft)]" : selecionado && visao === "mes" ? "bg-[var(--brand-soft)]/40" : "hover:bg-[var(--surface-hover)]/60"
+                      diaSobre === k ? "!bg-[var(--brand-soft)]" : selecionado && visao === "mes" ? "bg-[var(--brand-soft)]/50 ring-2 ring-inset ring-[var(--brand)]/45" : "hover:bg-[var(--surface-hover)]/60"
                     }`}
                   >
                     <div className="mb-1 flex items-center justify-between">
                       <span
-                        className={`flex size-6 items-center justify-center rounded-full text-xs font-semibold ${
-                          ehHoje ? "bg-[var(--brand)] text-white" : foraDoMes ? "text-[var(--fg-muted)]/60" : "text-[var(--fg)]"
+                        className={`flex size-7 items-center justify-center rounded-full text-[13px] font-semibold ${
+                          ehHoje ? "bg-[var(--brand)] text-white shadow-[0_4px_10px_-4px_var(--brand)]" : foraDoMes ? "text-[var(--fg-muted)]/60" : "text-[var(--fg)]"
                         }`}
                       >
                         {dia.getDate()}
@@ -690,11 +692,17 @@ export function AgendaPage() {
           {visao === "mes" && (
             <Card className="flex flex-col p-4 xl:sticky xl:top-20 xl:max-h-[calc(100vh-7rem)]">
               <div className="mb-3 flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-sm font-semibold text-[var(--fg)]">{tituloDia(diaSelecionado)}</p>
-                  <p className="text-xs text-[var(--fg-muted)]">
-                    {doDiaSelecionado.length} atividade(s){selecionadoChave === hojeChave && " · hoje"}
-                  </p>
+                <div className="flex items-center gap-3">
+                  <div className="flex size-12 shrink-0 flex-col items-center justify-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand)]">
+                    <span className="text-[10px] font-semibold uppercase leading-none">{diaSelecionado.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "")}</span>
+                    <span className="text-lg font-bold leading-tight [font-variant-numeric:tabular-nums]">{diaSelecionado.getDate()}</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--fg)]">{tituloDia(diaSelecionado)}</p>
+                    <p className="text-xs text-[var(--fg-muted)]">
+                      {doDiaSelecionado.length} atividade(s){selecionadoChave === hojeChave && " · hoje"}
+                    </p>
+                  </div>
                 </div>
                 <Button size="sm" variant="secondary" onClick={() => setNovaNoDia(diaSelecionado)}>
                   <Plus className="size-3.5" /> Agendar

@@ -139,7 +139,7 @@ export function PipelinePage() {
     return (
       <div className="flex gap-4 overflow-x-auto">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-96 w-72 shrink-0" />
+          <Skeleton key={i} className="h-96 w-[clamp(15rem,calc((100vw-var(--menu-w)-7.9rem)/4),20rem)] shrink-0" />
         ))}
       </div>
     );
@@ -165,7 +165,7 @@ export function PipelinePage() {
               key={coluna.etapa.id}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => handleDrop(coluna.etapa.id)}
-              className="ui-surface flex w-72 shrink-0 flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface-hover)]"
+              className="ui-surface flex w-[clamp(15rem,calc((100vw-var(--menu-w)-7.9rem)/4),20rem)] shrink-0 flex-col rounded-3xl border border-[var(--border)] bg-[var(--surface-hover)]"
             >
               <div className="sticky top-0 flex items-center justify-between px-4 pb-1 pt-3.5">
                 <div className="flex items-center gap-2">
