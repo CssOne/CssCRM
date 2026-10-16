@@ -88,10 +88,26 @@ const PORTAL_NAV = [
   { chave: "portal-config", rotulo: "Configurações", icone: Settings, rota: "/app/portal/configuracoes" },
 ];
 
+/** Seções do menu lateral. Cada item cai na seção da sua chave; o que não estiver aqui vai para "Outros". */
+const SECOES: { rotulo: string; chaves: string[] }[] = [
+  { rotulo: "Início", chaves: ["portal", "crm-overview", "overview"] },
+  { rotulo: "Comercial", chaves: ["crm-leads", "crm-leads-kanban", "crm-pipeline", "crm-activities", "crm-agenda", "crm-goals", "crm-relatorio"] },
+  { rotulo: "Gestão", chaves: ["crm-management", "crm-consultores", "crm-users", "avisos-pagamento", "tv-comercial"] },
+  { rotulo: "Marketing e sistema", chaves: ["marketing", "admin-backups"] },
+  { rotulo: "Comunicação", chaves: ["chat", "discord", "suporte"] },
+];
+
+function agruparNav<T extends { chave: string }>(itens: T[]): { rotulo: string; itens: T[] }[] {
+  const grupos = SECOES.map((sec) => ({ rotulo: sec.rotulo, itens: itens.filter((i) => sec.chaves.includes(i.chave)) }));
+  const outros = itens.filter((i) => !SECOES.some((sec) => sec.chaves.includes(i.chave)));
+  if (outros.length) grupos.push({ rotulo: "Outros", itens: outros });
+  return grupos.filter((g) => g.itens.length > 0);
+}
+
 function Logo({ subtitulo, colapsado = false }: { subtitulo: string; colapsado?: boolean }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      <img src="/logo-css.svg" alt="CSS Brasil" className="size-7 shrink-0 object-contain" />
+      <img src="/logo-css-white.png" alt="CSS Brasil" className="size-8 shrink-0 object-contain" />
       {!colapsado && (
         <div className="min-w-0 leading-tight">
           <p className="truncate text-sm font-semibold tracking-tight text-[var(--sidebar-fg)]">CSS Brasil</p>
@@ -199,92 +215,107 @@ export function Shell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen bg-[var(--bg)]">
       {menuAberto && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setMenuAberto(false)} />}
 
-      {/* Barra lateral no estilo macOS: painel translúcido colado na borda, itens simples e seleção em tom suave da marca. */}
+      {/* Barra lateral nas cores da empresa: azul-marinho cheio, menu em seções e marcador claro no item ativo. */}
       <aside
-        className={`ui-bar fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] transition-[transform,width] lg:translate-x-0 ${
+        className={`ui-bar fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] text-[var(--sidebar-fg)] transition-[transform,width] lg:translate-x-0 ${
           menuAberto ? "translate-x-0" : "-translate-x-full"
-        } ${colapsado ? "lg:w-16" : "lg:w-56"}`}
+        } ${
+          colapsado
+            ? "lg:bottom-auto lg:left-4 lg:top-1/2 lg:h-auto lg:max-h-[calc(100vh-2rem)] lg:w-16 lg:-translate-y-1/2 lg:rounded-[2rem] lg:border lg:border-white/10 lg:shadow-[0_22px_60px_-14px_rgb(4_38_76/0.6)]"
+            : "lg:inset-y-3 lg:left-3 lg:w-60 lg:rounded-[1.75rem] lg:border lg:border-white/10 lg:shadow-[0_22px_60px_-14px_rgb(4_38_76/0.55)]"
+        }`}
       >
-        <div className={`flex h-14 shrink-0 items-center justify-between gap-2 px-3.5 ${colapsado ? "lg:flex-col lg:justify-center lg:gap-1 lg:px-2" : ""}`}>
+        <div className={`flex h-16 shrink-0 items-center justify-between gap-2 px-4 ${colapsado ? "lg:h-auto lg:flex-col lg:justify-center lg:gap-2 lg:px-2 lg:pb-1 lg:pt-4" : ""}`}>
           <Logo subtitulo={emPortal ? "Portal do consultor" : "CRM comercial"} colapsado={colapsado} />
-          <IconButton label="Fechar menu" className="lg:hidden" onClick={() => setMenuAberto(false)}>
+          <IconButton label="Fechar menu" className="text-white/70 hover:bg-[var(--sidebar-hover)] hover:text-white lg:hidden" onClick={() => setMenuAberto(false)}>
             <X className="size-4" />
           </IconButton>
           <button
             aria-label={colapsado ? "Expandir menu" : "Recolher menu"}
             title={colapsado ? "Expandir menu" : "Recolher menu"}
             onClick={() => setColapsado((v) => !v)}
-            className="focus-ring hidden size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-[var(--sidebar-fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--sidebar-fg)] lg:flex"
+            className="focus-ring hidden size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-[var(--sidebar-fg-muted)] hover:bg-[var(--sidebar-hover)] hover:text-white lg:flex"
           >
             {colapsado ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
           </button>
         </div>
 
-        <nav className="flex-1 space-y-px overflow-y-auto px-2 pb-2 pt-1" aria-label="Navegação principal">
-          {itensNav?.map((item) => {
-            const linhaBase = `focus-ring group relative flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors ${colapsado ? "lg:justify-center lg:px-0" : ""}`;
-            const inativa = "text-[var(--sidebar-fg)] hover:bg-[var(--surface-hover)]";
-            return (
-              <div key={item.chave}>
-                {item.rota.startsWith("/tv/") ? (
-                  <a
-                    href={item.rota}
-                    target="_blank"
-                    rel="noopener"
-                    title={colapsado ? `${item.rotulo} (abre em outra aba)` : "Abre em outra aba"}
-                    className={`${linhaBase} ${inativa}`}
-                  >
-                    <item.icone className="size-[17px] shrink-0 text-[var(--sidebar-fg-muted)]" aria-hidden />
-                    <span className={colapsado ? "lg:hidden" : undefined}>{item.rotulo}</span>
-                  </a>
-                ) : (
-                  <NavLink
-                    to={item.rota}
-                    end={item.rota === "/app" || item.rota === "/app/crm" || item.rota === "/app/portal"}
-                    onClick={() => setMenuAberto(false)}
-                    title={colapsado ? item.rotulo : undefined}
-                    className={({ isActive: ativoPelaRota }) => {
-                      const isActive = ativoPelaRota && item.rota === rotaAtiva;
-                      return `${linhaBase} ${isActive ? "bg-[var(--sidebar-bg-active)] font-semibold text-[var(--sidebar-active-fg)]" : inativa}`;
-                    }}
-                  >
-                    {({ isActive: ativoPelaRota }) => (
-                      <>
-                        <item.icone
-                          className={`size-[17px] shrink-0 ${ativoPelaRota && item.rota === rotaAtiva ? "text-[var(--brand)]" : "text-[var(--sidebar-fg-muted)]"}`}
-                          aria-hidden
-                        />
-                        <span className={`truncate ${colapsado ? "lg:hidden" : ""}`}>{item.rotulo}</span>
-                        {item.chave === "chat" && chatNaoLidas.total > 0 && (
-                          <span
-                            className={`ml-auto rounded-full bg-[var(--danger)] px-1.5 text-[11px] font-semibold text-white ${colapsado ? "lg:absolute lg:right-1 lg:top-0.5 lg:ml-0 lg:px-1 lg:text-[10px]" : ""}`}
-                            aria-label={`${chatNaoLidas.total} mensagens não lidas`}
-                          >
-                            {rotuloNaoLidas(chatNaoLidas.total)}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </NavLink>
-                )}
-                {item.divisor && <div className="my-2 border-t border-[var(--sidebar-border)]" />}
+        <nav className={`sidebar-nav min-h-0 flex-1 overflow-y-auto px-3 pb-3 ${colapsado ? "lg:px-2" : ""}`} aria-label="Navegação principal">
+          {agruparNav(itensNav ?? []).map((grupo, gi) => (
+            <div key={grupo.rotulo} className={gi === 0 ? "" : colapsado ? "mt-4 lg:mt-2" : "mt-4"}>
+              {emPortal ? null : colapsado ? (
+                gi > 0 && <div className="mx-2 mb-2 hidden border-t border-white/10 lg:block" />
+              ) : null}
+              {!emPortal && (
+                <p className={`mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--sidebar-fg-muted)]/70 ${colapsado ? "lg:hidden" : ""}`}>{grupo.rotulo}</p>
+              )}
+              <div className="space-y-0.5">
+                {grupo.itens.map((item) => {
+                  const linhaBase = `focus-ring group relative flex h-9 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium transition-colors ${colapsado ? "lg:mx-auto lg:size-10 lg:justify-center lg:rounded-full lg:px-0" : ""}`;
+                  const inativa = "text-[var(--sidebar-fg-muted)] hover:bg-[var(--sidebar-hover)] hover:text-white";
+                  return (
+                    <div key={item.chave}>
+                      {item.rota.startsWith("/tv/") ? (
+                        <a
+                          href={item.rota}
+                          target="_blank"
+                          rel="noopener"
+                          title={colapsado ? `${item.rotulo} (abre em outra aba)` : "Abre em outra aba"}
+                          className={`${linhaBase} ${inativa}`}
+                        >
+                          <item.icone className="size-[18px] shrink-0" aria-hidden />
+                          <span className={colapsado ? "lg:hidden" : undefined}>{item.rotulo}</span>
+                        </a>
+                      ) : (
+                        <NavLink
+                          to={item.rota}
+                          end={item.rota === "/app" || item.rota === "/app/crm" || item.rota === "/app/portal"}
+                          onClick={() => setMenuAberto(false)}
+                          title={colapsado ? item.rotulo : undefined}
+                          className={({ isActive: ativoPelaRota }) => {
+                            const isActive = ativoPelaRota && item.rota === rotaAtiva;
+                            return `${linhaBase} ${
+                              isActive
+                                ? `bg-[var(--sidebar-bg-active)] font-semibold text-white before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-full before:bg-[var(--sidebar-accent)] ${
+                                    colapsado ? "lg:bg-white lg:text-[#04264c] lg:shadow-[0_6px_16px_-6px_rgb(0_0_0/0.5)] lg:before:hidden" : ""
+                                  }`
+                                : inativa
+                            }`;
+                          }}
+                        >
+                          <item.icone className="size-[18px] shrink-0" aria-hidden />
+                          <span className={`truncate ${colapsado ? "lg:hidden" : ""}`}>{item.rotulo}</span>
+                          {item.chave === "chat" && chatNaoLidas.total > 0 && (
+                            <span
+                              className={`ml-auto rounded-full bg-[var(--danger)] px-1.5 text-[11px] font-semibold text-white ${colapsado ? "lg:absolute lg:right-1.5 lg:top-0.5 lg:ml-0 lg:px-1 lg:text-[10px]" : ""}`}
+                              aria-label={`${chatNaoLidas.total} mensagens não lidas`}
+                            >
+                              {rotuloNaoLidas(chatNaoLidas.total)}
+                            </span>
+                          )}
+                        </NavLink>
+                      )}
+                      {item.divisor && <div className="my-2 border-t border-[var(--sidebar-border)]" />}
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </nav>
 
-        <div className="border-t border-[var(--sidebar-border)] p-2.5">
-          <div className={`flex items-center gap-2.5 ${colapsado ? "lg:flex-col" : ""}`}>
-            <Avatar nome={sessao.nomeCompleto} fotoUrl={sessao.fotoUrl} className="size-8 text-xs" />
+        <div className={`border-t border-[var(--sidebar-border)] p-3 ${colapsado ? "lg:px-2 lg:pb-4" : ""}`}>
+          <div className={`flex items-center gap-2.5 rounded-xl bg-white/[0.06] p-2 ${colapsado ? "lg:flex-col lg:bg-transparent lg:p-0" : ""}`}>
+            <Avatar nome={sessao.nomeCompleto} fotoUrl={sessao.fotoUrl} className="size-8 text-xs ring-2 ring-white/25" />
             <div className={`min-w-0 flex-1 leading-tight ${colapsado ? "lg:hidden" : ""}`}>
-              <p className="truncate text-[13px] font-medium text-[var(--sidebar-fg)]">{sessao.nomeCompleto}</p>
+              <p className="truncate text-[13px] font-semibold text-white">{sessao.nomeCompleto}</p>
               <p className="truncate text-[11px] text-[var(--sidebar-fg-muted)]">{PAPEL_LABEL[sessao.papeis[0]] ?? sessao.papeis[0]}</p>
             </div>
             <button
               onClick={handleLogout}
               aria-label="Sair"
               title="Sair"
-              className="focus-ring flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-[var(--sidebar-fg-muted)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
+              className="focus-ring flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-[var(--sidebar-fg-muted)] hover:bg-[var(--sidebar-hover)] hover:text-white"
             >
               <LogOut className="size-4" aria-hidden />
             </button>
@@ -292,7 +323,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className={`flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] ${colapsado ? "lg:pl-16" : "lg:pl-56"}`}>
+      <div className={`flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] ${colapsado ? "lg:pl-24" : "lg:pl-[16.5rem]"}`}>
         <header className="ui-bar sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-[var(--sidebar-border)] bg-[var(--header-bg)] px-4 lg:px-8">
           <div className="flex items-center gap-2">
             <IconButton label="Abrir menu" className="lg:hidden" onClick={() => setMenuAberto(true)}>

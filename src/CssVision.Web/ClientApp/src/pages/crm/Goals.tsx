@@ -15,7 +15,8 @@ function mesAtualIso(): string {
 }
 
 /** Cartão de meta compartilhado entre consultores e regionais — só muda o rótulo e quem pode editar. */
-function CartaoMeta({
+/** Uma linha da lista de metas: nome, barra de progresso, vendas, valor e ação — compacta, para caber mais por tela. */
+function LinhaMeta({
   nome,
   temMeta,
   metaQuantidade,
@@ -37,35 +38,38 @@ function CartaoMeta({
   const metaQtd = metaQuantidade ?? 0;
   const percentual = metaQtd === 0 ? 0 : Math.min(100, (realizadoQuantidade / metaQtd) * 100);
   return (
-    <Card className="p-4">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <p className="font-medium text-[var(--fg)]">{nome}</p>
-          {!temMeta && <Badge variant="neutral">Sem meta definida</Badge>}
-        </div>
-        {temMeta && <span className="text-sm text-[var(--fg-muted)]">{formatarPercentual(Math.round(percentual))}</span>}
-      </div>
+    <li className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-[var(--surface-hover)] sm:grid-cols-[12rem_minmax(6rem,1fr)_3rem_7rem_minmax(14rem,17rem)_auto]">
+      <p className="truncate text-sm font-medium text-[var(--fg)]" title={nome}>
+        {nome}
+      </p>
       {temMeta ? (
         <>
-          <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--surface-hover)]">
+          <div className="order-last col-span-2 h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface-hover)] sm:order-none sm:col-span-1">
             <div className="h-full rounded-full bg-[var(--brand)]" style={{ width: `${percentual}%` }} />
           </div>
-          <p className="mt-2 text-sm text-[var(--fg-muted)]">
+          <span className="hidden text-right text-sm font-semibold text-[var(--fg)] [font-variant-numeric:tabular-nums] sm:block">{formatarPercentual(Math.round(percentual))}</span>
+          <span className="hidden whitespace-nowrap text-right text-sm text-[var(--fg-muted)] [font-variant-numeric:tabular-nums] sm:block">
             {realizadoQuantidade}/{metaQuantidade} vendas
-            {metaValor != null && ` · ${formatarMoeda(realizadoValor)} de ${formatarMoeda(metaValor)}`}
-          </p>
+          </span>
+          <span className="hidden whitespace-nowrap text-right text-sm text-[var(--fg-muted)] [font-variant-numeric:tabular-nums] sm:block">
+            {metaValor != null ? `${formatarMoeda(realizadoValor)} de ${formatarMoeda(metaValor)}` : "—"}
+          </span>
         </>
       ) : (
-        <p className="text-sm text-[var(--fg-muted)]">{realizadoQuantidade} venda(s) no mês, sem meta cadastrada para comparar.</p>
+        <>
+          <p className="col-span-1 text-sm text-[var(--fg-muted)] sm:col-span-4">
+            <Badge variant="neutral">Sem meta definida</Badge> <span className="ml-1">{realizadoQuantidade} venda(s) no mês</span>
+          </p>
+        </>
       )}
-      {podeEditar && (
-        <div className="mt-3 flex justify-end">
-          <Button size="sm" variant="secondary" onClick={onEditar}>
-            {temMeta ? "Editar meta" : "Definir meta"}
-          </Button>
-        </div>
+      {podeEditar ? (
+        <Button size="sm" variant="ghost" onClick={onEditar} className="justify-self-end">
+          {temMeta ? "Editar" : "Definir"}
+        </Button>
+      ) : (
+        <span />
       )}
-    </Card>
+    </li>
   );
 }
 
@@ -222,9 +226,9 @@ export function GoalsPage() {
     }
   }
 
-  // Paginação: os cartões de meta crescem com o número de consultores/regionais.
-  const paginaMetas = usePaginacao(metas, 10);
-  const paginaRegionais = usePaginacao(metasRegionais, 6);
+  // Paginação: a lista de metas cresce com o número de consultores/regionais (linhas compactas, 20 por página).
+  const paginaMetas = usePaginacao(metas, 20);
+  const paginaRegionais = usePaginacao(metasRegionais, 12);
 
   return (
     <div className="space-y-4">
@@ -255,9 +259,10 @@ export function GoalsPage() {
         <EmptyState title="Nenhum consultor encontrado" description="Cadastre consultores para acompanhar a meta de vendas de cada um." />
       ) : (
         <>
-        <div className="grid gap-3 lg:grid-cols-2">
+        <Card className="overflow-hidden">
+        <ul className="divide-y divide-[var(--border)]">
           {paginaMetas.itensDaPagina.map((meta) => (
-            <CartaoMeta
+            <LinhaMeta
               key={meta.vendedorId}
               nome={meta.vendedorNome}
               temMeta={meta.id != null}
@@ -269,7 +274,8 @@ export function GoalsPage() {
               onEditar={() => abrirModalParaMeta(meta)}
             />
           ))}
-        </div>
+        </ul>
+        </Card>
         <Pagination pagina={paginaMetas.pagina} totalPaginas={paginaMetas.totalPaginas} onChange={paginaMetas.setPagina} />
         </>
       )}
@@ -295,9 +301,10 @@ export function GoalsPage() {
             <EmptyState title="Nenhuma regional encontrada" description="Cadastre regionais para definir uma meta geral por mês." />
           ) : (
             <>
-            <div className="grid gap-3 lg:grid-cols-2">
+            <Card className="overflow-hidden">
+            <ul className="divide-y divide-[var(--border)]">
               {paginaRegionais.itensDaPagina.map((meta) => (
-                <CartaoMeta
+                <LinhaMeta
                   key={meta.regionalId}
                   nome={meta.regionalNome}
                   temMeta={meta.id != null}
@@ -309,7 +316,8 @@ export function GoalsPage() {
                   onEditar={() => abrirModalParaRegional(meta)}
                 />
               ))}
-            </div>
+            </ul>
+            </Card>
             <Pagination pagina={paginaRegionais.pagina} totalPaginas={paginaRegionais.totalPaginas} onChange={paginaRegionais.setPagina} />
             </>
           )}
