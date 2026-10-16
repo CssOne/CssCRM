@@ -91,10 +91,10 @@ const PORTAL_NAV = [
 function Logo({ subtitulo, colapsado = false }: { subtitulo: string; colapsado?: boolean }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      <img src="/logo-css.svg" alt="CSS Brasil" className="size-9 shrink-0 object-contain" />
+      <img src="/logo-css.svg" alt="CSS Brasil" className="size-8 shrink-0 object-contain" />
       {!colapsado && (
         <div className="min-w-0 leading-tight">
-          <p className="truncate text-base font-extrabold tracking-tight text-[var(--sidebar-fg)]">CSS Brasil</p>
+          <p className="truncate text-sm font-extrabold tracking-tight text-[var(--sidebar-fg)]">CSS Brasil</p>
           <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-[var(--sidebar-fg-muted)]">{subtitulo}</p>
         </div>
       )}
@@ -203,9 +203,9 @@ export function Shell({ children }: { children: ReactNode }) {
       <aside
         className={`ui-surface fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] transition-[transform,width] max-lg:border-r lg:inset-y-3 lg:left-3 lg:translate-x-0 lg:rounded-[1.75rem] lg:border lg:shadow-[var(--shadow-card)] ${
           menuAberto ? "translate-x-0" : "-translate-x-full"
-        } ${colapsado ? "lg:w-[4.75rem]" : "lg:w-64"}`}
+        } ${colapsado ? "lg:w-16" : "lg:w-56"}`}
       >
-        <div className={`flex items-center justify-between gap-2 p-4 ${colapsado ? "lg:flex-col lg:px-2" : ""}`}>
+        <div className={`flex items-center justify-between gap-2 px-3 py-3 ${colapsado ? "lg:flex-col lg:px-2" : ""}`}>
           <Logo subtitulo={emPortal ? "Portal do consultor" : "CRM comercial"} colapsado={colapsado} />
           <IconButton label="Fechar menu" className="lg:hidden" onClick={() => setMenuAberto(false)}>
             <X className="size-4" />
@@ -220,11 +220,11 @@ export function Shell({ children }: { children: ReactNode }) {
           </button>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-3" aria-label="Navegação principal">
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-2" aria-label="Navegação principal">
           {itensNav?.map((item) => {
-            const linhaBase = `focus-ring group relative flex items-center gap-3 rounded-2xl p-1.5 pr-3 text-sm font-medium transition-colors ${colapsado ? "lg:justify-center lg:pr-1.5" : ""}`;
+            const linhaBase = `focus-ring group relative flex items-center gap-2.5 rounded-xl p-1 pr-2.5 text-[13px] font-medium transition-colors ${colapsado ? "lg:justify-center lg:pr-1" : ""}`;
             const azulejo = (ativo: boolean) =>
-              `flex size-9 shrink-0 items-center justify-center rounded-xl transition-colors ${
+              `flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
                 ativo
                   ? "bg-[var(--brand)] text-[var(--brand-fg)] shadow-[0_6px_14px_-6px_var(--brand)]"
                   : "bg-[var(--surface-hover)] text-[var(--sidebar-fg-muted)] group-hover:text-[var(--brand)]"
@@ -240,7 +240,7 @@ export function Shell({ children }: { children: ReactNode }) {
                     className={`${linhaBase} text-[var(--sidebar-fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--sidebar-fg)]`}
                   >
                     <span className={azulejo(false)}>
-                      <item.icone className="size-[18px]" aria-hidden />
+                      <item.icone className="size-4" aria-hidden />
                     </span>
                     <span className={colapsado ? "lg:hidden" : undefined}>{item.rotulo}</span>
                   </a>
@@ -262,7 +262,7 @@ export function Shell({ children }: { children: ReactNode }) {
                     {({ isActive: ativoPelaRota }) => (
                       <>
                         <span className={azulejo(ativoPelaRota && item.rota === rotaAtiva)}>
-                          <item.icone className="size-[18px]" aria-hidden />
+                          <item.icone className="size-4" aria-hidden />
                         </span>
                         <span className={`truncate ${colapsado ? "lg:hidden" : ""}`}>{item.rotulo}</span>
                         {item.chave === "chat" && chatNaoLidas.total > 0 && (
@@ -284,12 +284,12 @@ export function Shell({ children }: { children: ReactNode }) {
         </nav>
 
         {/* Cartão do usuário no rodapé, com o botão de sair. */}
-        <div className="p-3">
-          <div className={`flex items-center gap-2.5 rounded-2xl bg-[var(--surface-hover)] p-2 ${colapsado ? "lg:flex-col lg:p-1.5" : ""}`}>
-            <Avatar nome={sessao.nomeCompleto} fotoUrl={sessao.fotoUrl} className="size-9 text-sm" />
+        <div className="p-2">
+          <div className={`flex items-center gap-2 rounded-xl bg-[var(--surface-hover)] p-1.5 ${colapsado ? "lg:flex-col lg:p-1.5" : ""}`}>
+            <Avatar nome={sessao.nomeCompleto} fotoUrl={sessao.fotoUrl} className="size-8 text-xs" />
             <div className={`min-w-0 flex-1 leading-tight ${colapsado ? "lg:hidden" : ""}`}>
-              <p className="truncate text-sm font-semibold text-[var(--sidebar-fg)]">{sessao.nomeCompleto}</p>
-              <p className="truncate text-xs text-[var(--sidebar-fg-muted)]">{PAPEL_LABEL[sessao.papeis[0]] ?? sessao.papeis[0]}</p>
+              <p className="truncate text-[13px] font-semibold text-[var(--sidebar-fg)]">{sessao.nomeCompleto}</p>
+              <p className="truncate text-[11px] text-[var(--sidebar-fg-muted)]">{PAPEL_LABEL[sessao.papeis[0]] ?? sessao.papeis[0]}</p>
             </div>
             <button
               onClick={handleLogout}
@@ -303,7 +303,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className={`flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] ${colapsado ? "lg:pl-[6.25rem]" : "lg:pl-[17.5rem]"}`}>
+      <div className={`flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] ${colapsado ? "lg:pl-[5.5rem]" : "lg:pl-[15.5rem]"}`}>
         <header className="ui-surface sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--header-bg)] px-4 lg:px-6">
           <div className="flex items-center gap-2">
             <IconButton label="Abrir menu" className="lg:hidden" onClick={() => setMenuAberto(true)}>
