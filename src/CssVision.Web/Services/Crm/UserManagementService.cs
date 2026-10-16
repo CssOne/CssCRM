@@ -171,6 +171,8 @@ public sealed class UserManagementService(
             LimiteDiarioLeads = request.Papel == Roles.Comercial ? request.LimiteDiarioLeads : null,
             // Só administrador (visão total) pode "só administrar"; os demais papéis sempre atuam nas vendas.
             AtuaNasVendas = request.Papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial) || (request.AtuaNasVendas ?? true),
+            // Administrador novo não entra no rodízio sozinho: quem quiser que ele pegue leads liga "Recebe leads" na Gestão comercial.
+            RecebeLeads = request.Papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial),
             VerOutrasRegionaisNoRelatorio = request.Papel is not (Roles.Admin or Roles.GestorMaster or Roles.SupervisorComercial) || (request.VerOutrasRegionaisNoRelatorio ?? true),
             VerPainelTv = request.VerPainelTv ?? false,
         };

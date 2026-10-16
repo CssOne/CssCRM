@@ -51,6 +51,15 @@ public sealed class LeadAssignmentService(
             : null;
     }
 
+    /// <summary>
+    /// Quem entra no rodízio: usuário ativo com "Recebe leads" ligado que é consultor (papel Comercial) ou administrador que atua nas vendas (visão total com
+    /// "Pega leads / atua nas vendas" marcado). A Gestão comercial já lista esses administradores com a opção "Recebe leads"; sem isto o rodízio os ignorava.
+    /// </summary>
+    private IQueryable<Domain.Identity.ApplicationUser> QuemRecebeLeads() =>
+        db.Users.Where(u => u.Ativo && u.RecebeLeads
+            && db.UserRoles.Any(ur => ur.UserId == u.Id
+                && db.Roles.Any(r => r.Id == ur.RoleId && (r.Name == Roles.Comercial || (u.AtuaNasVendas && Roles.VisaoTotal.Contains(r.Name!))))));
+
     public Task<Guid?> ProximoResponsavelAsync(string? oQue, CancellationToken ct) => ProximoResponsavelAsync(oQue, null, ct);
 
     public async Task<Guid?> ProximoResponsavelAsync(string? oQue, string? regional, CancellationToken ct)
@@ -62,9 +71,8 @@ public sealed class LeadAssignmentService(
 
     private async Task<Guid?> ProximoAsync(string? oQue, string? regional, bool ignorarLimites, bool ignorarHorario, CancellationToken ct)
     {
-        var todos = await db.UserRoles
-            .Join(db.Roles.Where(r => r.Name == Roles.Comercial), ur => ur.RoleId, r => r.Id, (ur, _) => ur.UserId)
-            .Join(db.Users.Where(u => u.Ativo && u.RecebeLeads), id => id, u => u.Id, (_, u) => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.RecebeSomenteOQue, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads, RegionalNome = u.Regional != null ? u.Regional.Nome : null })
+        var todos = await QuemRecebeLeads()
+            .Select(u => new { u.Id, u.NomeCompleto, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.RecebeSomenteOQue, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads, RegionalNome = u.Regional != null ? u.Regional.Nome : null })
             .ToListAsync(ct);
 
         // Regional do lead: com ela, só concorrem os consultores dela. Sem ela, ficam de fora os das regionais exclusivas.
@@ -214,10 +222,8 @@ public sealed class LeadAssignmentService(
         }
 
         var agora = Agora;
-        var consultores = await db.UserRoles
-            .Join(db.Roles.Where(r => r.Name == Roles.Comercial), ur => ur.RoleId, r => r.Id, (ur, _) => ur.UserId)
-            .Join(db.Users.Where(u => u.Ativo && u.RecebeLeads), id => id, u => u.Id,
-                (_, u) => new { u.Id, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads })
+        var consultores = await QuemRecebeLeads()
+            .Select(u => new { u.Id, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads })
             .ToListAsync(ct);
         var totalAtivos = consultores.Count;
         consultores = consultores
