@@ -33,6 +33,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { mostrarNotificacao, somLigado, tocarPlim } from "../lib/avisosDoChat";
@@ -306,6 +307,23 @@ export function Shell({ children }: { children: ReactNode }) {
     ? { secao: emPortal ? "Portal do consultor" : SECOES.find((sec) => sec.chaves.includes(itemAtivo.chave))?.rotulo, titulo: itemAtivo.rotulo }
     : null;
 
+  /**
+   * Recolhe/expande a barra lateral com uma transição de forma: a barra (nomeada "sidebar") se transforma de painel em cápsula
+   * e o conteúdo desliza com um fade curto (View Transitions). Sem suporte ou com "reduzir movimento", troca direto.
+   */
+  function alternarMenu() {
+    const raiz = document.documentElement;
+    const vt = (document as Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void> } }).startViewTransition;
+    if (!vt || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || !window.matchMedia("(min-width: 1024px)").matches) {
+      setColapsado((v) => !v);
+      return;
+    }
+    raiz.dataset.vt = "menu";
+    vt.call(document, () => flushSync(() => setColapsado((v) => !v))).finished.finally(() => {
+      delete raiz.dataset.vt;
+    });
+  }
+
   async function handleLogout() {
     await logout();
     navigate("/login");
@@ -325,7 +343,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
       {/* Barra lateral nas cores da empresa: azul-marinho cheio, menu em seções e marcador claro no item ativo. */}
       <aside
-        className={`ui-bar fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] text-[var(--sidebar-fg)] transition-[transform,width] lg:translate-x-0 ${
+        className={`ui-bar fixed inset-y-0 left-0 z-40 flex w-64 lg:[view-transition-name:sidebar] flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] text-[var(--sidebar-fg)] transition-[transform,width] lg:translate-x-0 ${
           menuAberto ? "translate-x-0" : "-translate-x-full"
         } ${
           colapsado
@@ -341,7 +359,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <button
             aria-label={colapsado ? "Expandir menu" : "Recolher menu"}
             title={colapsado ? "Expandir menu" : "Recolher menu"}
-            onClick={() => setColapsado((v) => !v)}
+            onClick={alternarMenu}
             className="focus-ring hidden size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-[var(--sidebar-fg-muted)] hover:bg-[var(--sidebar-hover)] hover:text-white lg:flex"
           >
             {colapsado ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
@@ -448,7 +466,7 @@ export function Shell({ children }: { children: ReactNode }) {
             {temChat && (
               <div className="relative">
                 <IconButton label="Chat" onClick={() => navigate("/app/chat")}>
-                  <MessageCircle className="size-[18px]" />
+                  <MessageCircle className="size-4" />
                 </IconButton>
                 {chatNaoLidas.total > 0 && (
                   <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full bg-[var(--danger)] px-1 text-[10px] font-bold leading-4 text-white">

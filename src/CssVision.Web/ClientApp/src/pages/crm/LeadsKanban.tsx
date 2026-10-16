@@ -893,7 +893,7 @@ export function LeadsKanbanPage() {
           description={filtrosAtivos ? "Ajuste os filtros ou cadastre um novo lead." : "Cadastre um novo lead para começar."}
         />
       ) : (
-        <div className="-mx-4 flex items-start gap-4 overflow-x-auto px-4 pb-3 lg:ml-0 lg:-mr-8 lg:pl-0 lg:pr-8">
+        <div className="-mx-4 flex items-stretch gap-4 overflow-x-auto px-4 pb-3 lg:ml-0 lg:-mr-8 lg:pl-0 lg:pr-8">
           {colunasExibidas.map((coluna) => {
             const chaveColuna = coluna.etapa.id ?? "sem-etapa";
             const restantes = Math.max(0, coluna.total - coluna.cartoes.length);
@@ -923,7 +923,7 @@ export function LeadsKanbanPage() {
                         borderColor: `color-mix(in srgb, ${cor} 24%, var(--border))`,
                       }
                 }
-                className={`ui-surface flex w-[clamp(15rem,calc((100vw-var(--menu-w)-7.9rem)/4),20rem)] shrink-0 flex-col overflow-hidden rounded-3xl border transition-colors ${
+                className={`ui-surface flex h-[max(28rem,calc(100vh-15rem))] w-[clamp(15rem,calc((100vw-var(--menu-w)-7.9rem)/4),20rem)] shrink-0 flex-col overflow-hidden rounded-3xl border transition-colors ${
                   alvo ? "border-[var(--brand)] bg-[var(--brand-soft)]" : ""
                 }`}
               >
@@ -970,7 +970,7 @@ export function LeadsKanbanPage() {
                   )}
                 </header>
 
-                <div className="max-h-[calc(100vh-17rem)] min-h-24 space-y-2.5 overflow-y-auto p-2.5">
+                <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-2.5">
                   {coluna.cartoes.length === 0 && (
                     <p className="rounded-xl border border-dashed border-[var(--border)] px-3 py-6 text-center text-xs text-[var(--fg-muted)]">
                       Nenhum lead aqui
