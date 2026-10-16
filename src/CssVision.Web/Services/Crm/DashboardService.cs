@@ -104,7 +104,7 @@ public sealed class DashboardService(
         if (visiveis is not null) oportunidadesQuery = oportunidadesQuery.Where(o => visiveis.Contains(o.ResponsavelId));
 
         // Atividade de lead excluído (lixeira) não conta.
-        var atividadesQuery = db.CrmActivities.AsNoTracking().Where(a => !a.Arquivado && !a.Lead.Arquivado);
+        var atividadesQuery = db.CrmActivities.AsNoTracking().Where(a => !a.Arquivado && (a.Lead == null || !a.Lead.Arquivado));
         if (visiveis is not null) atividadesQuery = atividadesQuery.Where(a => visiveis.Contains(a.ResponsavelId));
 
         var inicioHoje = HorarioBrasilia.Inicio(hoje);

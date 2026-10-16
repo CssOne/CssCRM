@@ -1,62 +1,179 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
 }
 
-:root {
-  --bg: #eef1f8;
+/*
+ * Três temas, escolhidos por data-theme no <html>: light (claro), dark (escuro) e glass (translúcido).
+ * Linguagem visual inspirada na Apple: neutros quase sem cor, uma cor de destaque (azul da marca), bordas de 1px bem
+ * sutis, sombras discretas e barras com material translúcido (desfoque). Os componentes só usam estes tokens.
+ */
+:root,
+[data-theme="light"] {
+  --bg: #f5f5f7;
   --surface: #ffffff;
-  --surface-hover: #f1f4fa;
-  --border: #e4e8f2;
-  --fg: #131b3a;
-  --fg-muted: #667085;
-  --brand: #2f6fed;
+  --surface-hover: #f2f2f5;
+  --surface-solid: #ffffff;
+  --field: #ffffff;
+  --border: #e5e5ea;
+  --fg: #1d1d1f;
+  --fg-muted: #6e6e73;
+  --brand: #07428b;
   --brand-fg: #ffffff;
-  --brand-soft: #eaf1fe;
-  --success: #16a34a;
-  --success-soft: #eafaf0;
-  --warning: #d97706;
-  --warning-soft: #fef6e7;
-  --danger: #dc2626;
-  --danger-soft: #fdecec;
-  --info: #0ea5e9;
-  --shadow-color: 220 30% 10%;
+  --brand-soft: rgb(7 66 139 / 0.08);
+  --success: #248a3d;
+  --success-soft: rgb(36 138 61 / 0.1);
+  --warning: #b25000;
+  --warning-soft: rgb(255 159 10 / 0.14);
+  --danger: #d70015;
+  --danger-soft: rgb(215 0 21 / 0.08);
+  --info: #467fc5;
+  --shadow-color: 0 0% 0%;
+  --radius-card: 1rem;
+  --shadow-card: 0 0 0 0.5px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.04), 0 6px 20px -10px rgb(0 0 0 / 0.1);
 
-  /* Barra lateral: navy escuro fixo, igual em tema claro ou escuro (não é redefinido em .dark). */
-  --sidebar-bg: #0b1440;
-  --sidebar-bg-active: #1a2668;
-  --sidebar-border: #1c2559;
-  --sidebar-fg: #e7ebfc;
-  --sidebar-fg-muted: #8e97c7;
+  --sidebar-bg: #04264c;
+  --sidebar-bg-active: rgb(255 255 255 / 0.13);
+  --sidebar-border: rgb(255 255 255 / 0.09);
+  --sidebar-fg: #ffffff;
+  --sidebar-fg-muted: rgb(255 255 255 / 0.62);
+  --sidebar-active-fg: #ffffff;
+  --sidebar-active-ring: transparent;
+  --header-bg: rgb(245 245 247 / 0.78);
+  --overlay: rgb(0 0 0 / 0.32);
+  --glass-blur: 0px;
+  --sidebar-hover: rgb(255 255 255 / 0.07);
+  --sidebar-accent: #a6c3e0;
+  --bar-blur: 28px;
+  --page-bg: var(--bg);
 }
 
-.dark {
-  --bg: #0e1116;
-  --surface: #171b22;
-  --surface-hover: #1f2430;
-  --border: #2a2f3a;
-  --fg: #e7eaf0;
-  --fg-muted: #9aa4b2;
-  --brand: #5b8cff;
-  --brand-fg: #0b1020;
-  --brand-soft: #17223f;
-  --success: #34d399;
-  --success-soft: #10261d;
-  --warning: #fbbf24;
-  --warning-soft: #2b2210;
-  --danger: #f87171;
-  --danger-soft: #2c1414;
-  --info: #38bdf8;
+[data-theme="dark"] {
+  --bg: #0b0b0d;
+  --surface: #1c1c1e;
+  --surface-hover: #2a2a2d;
+  --surface-solid: #232326;
+  --field: #2c2c30;
+  --border: #2e2e32;
+  --fg: #f5f5f7;
+  --fg-muted: #98989f;
+  --brand: #4d86c9;
+  --brand-fg: #ffffff;
+  --brand-soft: rgb(77 134 201 / 0.18);
+  --success: #30d158;
+  --success-soft: rgb(48 209 88 / 0.14);
+  --warning: #ff9f0a;
+  --warning-soft: rgb(255 159 10 / 0.16);
+  --danger: #ff453a;
+  --danger-soft: rgb(255 69 58 / 0.16);
+  --info: #7fb0e6;
+  --shadow-color: 0 0% 0%;
+  --shadow-card: 0 0 0 0.5px rgb(255 255 255 / 0.04), 0 8px 24px -12px rgb(0 0 0 / 0.6);
+
+  --sidebar-bg: #031a33;
+  --sidebar-bg-active: rgb(255 255 255 / 0.13);
+  --sidebar-border: rgb(255 255 255 / 0.09);
+  --sidebar-fg: #ffffff;
+  --sidebar-fg-muted: rgb(255 255 255 / 0.62);
+  --sidebar-active-fg: #ffffff;
+  --sidebar-active-ring: transparent;
+  --header-bg: rgb(11 11 13 / 0.72);
+  --overlay: rgb(0 0 0 / 0.6);
+  --page-bg: var(--bg);
+}
+
+[data-theme="glass"] {
+  --bg: #e4ebf4;
+  --surface: rgb(255 255 255 / 0.56);
+  --surface-hover: rgb(255 255 255 / 0.5);
+  --surface-solid: rgb(250 252 255 / 0.9);
+  --field: rgb(255 255 255 / 0.75);
+  --border: rgb(255 255 255 / 0.7);
+  --fg: #1d1d1f;
+  --fg-muted: #5b6573;
+  --brand: #07428b;
+  --brand-fg: #ffffff;
+  --brand-soft: rgb(7 66 139 / 0.1);
+  --success: #1f7f38;
+  --success-soft: rgb(36 138 61 / 0.14);
+  --warning: #a64b00;
+  --warning-soft: rgb(255 159 10 / 0.2);
+  --danger: #c4122a;
+  --danger-soft: rgb(215 0 21 / 0.1);
+  --info: #467fc5;
+  --shadow-color: 215 50% 25%;
+  --radius-card: 1.25rem;
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.85) inset, 0 0 0 0.5px rgb(255 255 255 / 0.5), 0 12px 40px -12px rgb(30 50 90 / 0.18);
+
+  --sidebar-bg: rgb(4 38 76 / 0.86);
+  --sidebar-bg-active: rgb(255 255 255 / 0.13);
+  --sidebar-border: rgb(255 255 255 / 0.09);
+  --sidebar-fg: #ffffff;
+  --sidebar-fg-muted: rgb(255 255 255 / 0.62);
+  --sidebar-active-fg: #ffffff;
+  --sidebar-active-ring: transparent;
+  --header-bg: rgb(255 255 255 / 0.38);
+  --overlay: rgb(30 45 80 / 0.28);
+  --glass-blur: 30px;
+  --surface-filter: blur(30px) saturate(1.8);
+  --bar-blur: 30px;
+  --page-bg:
+    radial-gradient(60rem 42rem at 4% -4%, #b9d0ea 0%, transparent 62%),
+    radial-gradient(52rem 40rem at 98% 6%, #d6e4f4 0%, transparent 60%),
+    radial-gradient(54rem 40rem at 72% 104%, #a6c3e0 0%, transparent 64%),
+    linear-gradient(165deg, #e2eaf5, #eef3f9);
+}
+
+/* Título de página (h1 do conteúdo): um padrão só para todas as telas. */
+main h1 {
+  font-size: 1.625rem;
+  line-height: 2rem;
+  font-weight: 650;
+  letter-spacing: -0.022em;
+}
+
+/* Tabelas: cabeçalho discreto (sem faixa), linhas finas e realce suave ao passar o mouse. */
+main table thead tr {
+  background: transparent;
+  border-bottom: 1px solid var(--border);
+}
+main table thead th {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+main table tbody tr {
+  transition: background-color 120ms;
+}
+main table tbody tr:hover {
+  background: var(--surface-hover);
+}
+
+/* Superfície "vidro": só o tema glass desfoca o que está atrás (nos outros o filtro fica desligado). */
+.ui-surface {
+  -webkit-backdrop-filter: var(--surface-filter, none);
+  backdrop-filter: var(--surface-filter, none);
+}
+/* Barras (menu lateral e cabeçalho): material translúcido em todos os temas. */
+.ui-bar {
+  -webkit-backdrop-filter: blur(var(--bar-blur)) saturate(1.8);
+  backdrop-filter: blur(var(--bar-blur)) saturate(1.8);
+}
+[data-theme="glass"] body {
+  background-attachment: fixed;
 }
 
 /* Campos nativos (data, mês, rolagem) seguem o tema: sem isto o ícone do calendário some no tema escuro. */
 :root {
   color-scheme: light;
 }
-.dark {
+[data-theme="dark"] {
   color-scheme: dark;
 }
 /* Ícone desenhado com máscara e cor do tema: visível em claro e escuro, independente do navegador. */
@@ -73,48 +190,72 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
   opacity: 1;
 }
-.dark input[type="time"]::-webkit-calendar-picker-indicator {
+[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator {
   filter: invert(1);
 }
 
+/* Escala geral do sistema: tudo em rem (textos, espaços, ícones, botões) encolhe junto, na proporção dos filtros. */
+html {
+  font-size: 14px;
+}
+
 body {
-  background: var(--bg);
+  background: var(--page-bg);
+  min-height: 100vh;
   color: var(--fg);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.011em;
+  font-feature-settings: "cv11", "ss01";
 }
 
 * {
   border-color: var(--border);
 }
 
+/*
+ * Barras de rolagem refinadas: finas, arredondadas e sem setas. Ficam invisíveis até o mouse passar sobre a área rolável
+ * (como no macOS) e engordam um pouco quando o mouse chega nelas.
+ */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 999px;
-}
-
-/* Barra de rolagem horizontal do quadro de leads: mais escura e mais grossa que a padrão, para aparecer bem. */
-.barra-quadro {
-  scrollbar-color: #475569 var(--border);
-}
-.barra-quadro::-webkit-scrollbar {
+  width: 14px;
   height: 14px;
 }
-.barra-quadro::-webkit-scrollbar-track {
-  background: var(--border);
-  border-radius: 999px;
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
-.barra-quadro::-webkit-scrollbar-thumb {
-  background: #475569;
-  border-radius: 999px;
-  border: 3px solid var(--border);
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
-.barra-quadro::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  background-clip: padding-box;
+  border: 4px solid transparent;
+  border-radius: 999px;
+  min-height: 36px;
+  min-width: 36px;
+  transition: background-color 160ms;
+}
+*:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--fg-muted) 38%, transparent);
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--fg-muted) 65%, transparent);
+  border-width: 3px;
+}
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--brand);
+  border-width: 3px;
+}
+/* Firefox não tem o pseudo-elemento acima: usa a barra fina padrão na mesma cor. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--fg-muted) 40%, transparent) transparent;
+  }
 }
 
 .focus-ring {
@@ -127,7 +268,7 @@ body {
 
 /* Fundo animado do painel de login */
 .login-aurora {
-  background: linear-gradient(-45deg, #0b1440, #142363, #1a2668, #0b1440);
+  background: linear-gradient(160deg, #04264c 0%, #07428b 55%, #1f5fae 100%);
   background-size: 400% 400%;
   animation: aurora-shift 16s ease infinite;
 }
@@ -146,7 +287,7 @@ body {
   left: -10%;
   width: 55%;
   height: 55%;
-  background: #5b8cff;
+  background: #467fc5;
   animation: aurora-float-1 14s ease-in-out infinite;
 }
 
@@ -155,7 +296,7 @@ body {
   right: -10%;
   width: 60%;
   height: 60%;
-  background: #2f6fed;
+  background: #a6c3e0;
   animation: aurora-float-2 18s ease-in-out infinite;
 }
 
@@ -212,4 +353,132 @@ body {
 .painel-lead-entrar { animation: painel-lead-entrar 220ms cubic-bezier(0.22, 1, 0.36, 1); }
 @media (prefers-reduced-motion: reduce) {
   .painel-lead-fundo, .painel-lead-entrar { animation: none; }
+}
+
+/* Rolagem do menu lateral (fundo azul-marinho): trilho claro em vez da cor do tema. */
+.sidebar-nav:hover::-webkit-scrollbar-thumb {
+  background-color: rgb(255 255 255 / 0.28);
+}
+.sidebar-nav::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(255 255 255 / 0.5);
+}
+
+/* Painel de filtros: campos menores e em formato de pílula, para caber em duas linhas. */
+.filtros-painel :is(button, input)[class*="h-9"],
+.filtros-painel :is(button, input)[class*="h-10"] {
+  height: 2rem;
+  border-radius: 9999px;
+  padding-inline: 0.875rem;
+  font-size: 0.8125rem;
+}
+.filtros-painel input[type="checkbox"] {
+  height: auto;
+  border-radius: 0.25rem;
+}
+
+/* Campos do painel de filtros: hover/foco suaves e destaque quando o campo está filtrando. */
+.filtros-painel :is(button, input)[class*="h-9"],
+.filtros-painel :is(button, input)[class*="h-10"] {
+  transition: border-color 150ms, background-color 150ms, box-shadow 150ms;
+}
+.filtros-painel :is(button, input)[class*="h-9"]:hover,
+.filtros-painel :is(button, input)[class*="h-10"]:hover {
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--border));
+}
+.filtro-campo[data-ativo="true"] :is(button, input)[class*="h-9"],
+.filtro-campo[data-ativo="true"] :is(button, input)[class*="h-10"] {
+  border-color: color-mix(in srgb, var(--brand) 55%, transparent);
+  background-color: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 500;
+}
+
+/* Troca de tema: a tela nova é revelada em círculo a partir do botão (animada em ThemeContext). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) {
+  z-index: 0;
+}
+::view-transition-new(root) {
+  z-index: 1;
+}
+
+/* Alternativa sem View Transitions: as cores se misturam suavemente por um instante. */
+html.tema-trocando *,
+html.tema-trocando *::before,
+html.tema-trocando *::after {
+  transition: background-color 400ms ease, border-color 400ms ease, color 400ms ease, fill 400ms ease, stroke 400ms ease, box-shadow 400ms ease !important;
+}
+
+/* Títulos das telas: negrito com um sublinhado curto na cor da marca; o subtítulo vem logo abaixo. */
+main h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  color: var(--fg);
+}
+main h1::after {
+  content: "";
+  display: block;
+  width: 2.25rem;
+  height: 3px;
+  margin: 0.5rem 0 0.35rem;
+  border-radius: 999px;
+  background: var(--brand);
+}
+main h1 + p {
+  margin-top: 0;
+}
+
+/* Recolher/expandir a barra lateral: a barra "respira" com uma pequena mola e sai do desfoque; os itens entram em cascata. */
+@media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
+  .barra-anim {
+    transform-origin: left center;
+    animation: tvx-barra-pop 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    will-change: transform, opacity, filter;
+  }
+  .menu-item-anim {
+    animation: tvx-item-entra 520ms cubic-bezier(0.34, 1.45, 0.64, 1) both;
+    animation-delay: calc(90ms + var(--i, 0) * 20ms);
+  }
+}
+@keyframes tvx-barra-pop {
+  0% {
+    opacity: 0.25;
+    transform: scale(0.86, 0.95);
+    filter: blur(4px);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.025, 1.004);
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes tvx-item-entra {
+  from {
+    opacity: 0;
+    transform: translateX(-14px) scale(0.8);
+    filter: blur(2px);
+  }
+  to {
+    filter: blur(0);
+  }
+}
+
+/* Menu lateral: a barra de rolagem fica totalmente invisível (a rolagem continua funcionando com roda, trackpad e teclado). */
+.sidebar-nav {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.sidebar-nav::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }

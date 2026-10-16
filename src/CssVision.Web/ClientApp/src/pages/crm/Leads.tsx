@@ -1,4 +1,4 @@
-import { Download, LayoutGrid, Plus, Upload, X } from "lucide-react";
+import { Download, LayoutGrid, Plus, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiRequestError, downloadUrl, isAbortError, toQueryString } from "../../lib/api";
@@ -15,15 +15,15 @@ import {
   type VendedorResumo,
 } from "../../lib/types";
 import { MultiSelect } from "../../components/MultiSelect";
+import { PeriodoInput } from "../../components/PeriodoInput";
+import { BarraDeFiltros, CampoDeFiltro, type ChipDeFiltro } from "../../components/Filtros";
 import { useAuth } from "../../context/AuthContext";
 import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
-import {
+import { Avatar,
   Badge,
   Button,
-  Checkbox,
   EmptyState,
   ErrorState,
-  Input,
   Modal,
   Pagination,
   Skeleton,
@@ -32,6 +32,9 @@ import {
 import { LeadForm, leadFormVazio, paraLeadCreateRequest, type LeadFormValues } from "../../components/crm/LeadForm";
 import { ImportModal } from "../../components/crm/ImportModal";
 import { AssignModal } from "../../components/crm/AssignModal";
+
+/** Nome da etapa sem o complemento entre parênteses ("Em atendimento (Leads)" → "Em atendimento"). */
+const rotuloEtapa = (nome: string) => nome.replace(/\s*\([^)]*\)\s*$/, "");
 
 export function LeadsPage() {
   const { temPapel } = useAuth();
@@ -160,10 +163,6 @@ export function LeadsPage() {
     };
   }
 
-  const filtrosAtivos = !!(
-    busca || etapaIds.length || origens.length || consultorIds.length || regionais.length || grupoIds.length ||
-    chegadaDe || chegadaAte || vendaDe || vendaAte
-  );
   const dinheiro = (n?: number | null) => (n == null ? "—" : formatarMoeda(n));
 
   function alternarSelecao(id: string) {
@@ -204,8 +203,20 @@ export function LeadsPage() {
     }
   }
 
+  // Filtros ativos como chips removíveis (mostrados abaixo da busca).
+  const dataCurta = (d: string) => (d ? d.split("-").reverse().slice(0, 2).join("/") : "…");
+  const chipsDeFiltro: ChipDeFiltro[] = [];
+  const addChip = (rotulo: string, valor: string, limpar: () => void) => chipsDeFiltro.push({ rotulo, valor, limpar });
+  if (etapaIds.length) addChip("Etapa", etapaIds.map((id) => etapas.find((e) => e.id === id)?.nome ?? "Sem etapa").join(", "), () => comPagina1(setEtapaIds)([]));
+  if (consultorIds.length) addChip("Consultor", consultores.filter((c) => consultorIds.includes(c.id)).map((c) => c.nome).join(", ") || `${consultorIds.length} selecionado(s)`, () => comPagina1(setConsultorIds)([]));
+  if (origens.length) addChip("Origem", origens.join(", "), () => comPagina1(setOrigens)([]));
+  if (regionais.length) addChip("Regional", regionais.join(", "), () => comPagina1(setRegionais)([]));
+  if (grupoIds.length) addChip("Grupo", listaGrupos.filter((g) => grupoIds.includes(g.id)).map((g) => g.nome).join(", ") || `${grupoIds.length} selecionado(s)`, () => comPagina1(setGrupoIds)([]));
+  if (chegadaDe || chegadaAte) addChip("Chegada", `${dataCurta(chegadaDe)} → ${dataCurta(chegadaAte)}`, () => { comPagina1(setChegadaDe)(""); comPagina1(setChegadaAte)(""); });
+  if (vendaDe || vendaAte) addChip("Ativação", `${dataCurta(vendaDe)} → ${dataCurta(vendaAte)}`, () => { comPagina1(setVendaDe)(""); comPagina1(setVendaAte)(""); });
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-[var(--fg)]">Leads</h1>
@@ -233,107 +244,69 @@ export function LeadsPage() {
         </div>
       </div>
 
-      <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-48 flex-1">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Buscar</label>
-            <Input
-              placeholder="Nome, documento, telefone ou e-mail"
-              value={busca}
-              onChange={(e) => {
-                setBusca(e.target.value);
-                setPagina(1);
-              }}
-            />
-          </div>
-          <div className="w-52">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Etapa</label>
+      <BarraDeFiltros
+        busca={busca}
+        onBusca={(v) => {
+          setBusca(v);
+          setPagina(1);
+        }}
+        placeholder="Buscar por nome, documento, telefone ou e-mail"
+        chips={chipsDeFiltro}
+        onLimparTudo={limparFiltros}
+      >
+        <CampoDeFiltro rotulo="Etapa">
+          <MultiSelect
+            ariaLabel="Etapa"
+            rotuloTodos="Todas"
+            opcoes={[
+              ...etapas.filter((e) => e.ativa !== false && e.id).map((e) => ({ valor: e.id!, rotulo: e.nome })),
+              { valor: "00000000-0000-0000-0000-000000000000", rotulo: "Sem etapa" },
+            ]}
+            valores={etapaIds}
+            onChange={comPagina1(setEtapaIds)}
+          />
+        </CampoDeFiltro>
+        {podeGerir && (
+          <CampoDeFiltro rotulo="Consultor">
             <MultiSelect
-              ariaLabel="Etapa"
-              rotuloTodos="Todas"
-              opcoes={[
-                ...etapas.filter((e) => e.ativa !== false && e.id).map((e) => ({ valor: e.id!, rotulo: e.nome })),
-                { valor: "00000000-0000-0000-0000-000000000000", rotulo: "Sem etapa" },
-              ]}
-              valores={etapaIds}
-              onChange={comPagina1(setEtapaIds)}
+              ariaLabel="Consultor"
+              rotuloTodos="Todos"
+              opcoes={consultores.map((c) => ({ valor: c.id, rotulo: c.ativo === false ? `${c.nome} (inativo)` : c.nome }))}
+              valores={consultorIds}
+              onChange={comPagina1(setConsultorIds)}
             />
-          </div>
-          {podeGerir && (
-            <div className="w-52">
-              <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Consultor</label>
+          </CampoDeFiltro>
+        )}
+        {podeVerOrigem && (
+          <CampoDeFiltro rotulo="Origem">
+            <MultiSelect ariaLabel="Origem" rotuloTodos="Todas" opcoes={listaOrigens.map((o) => ({ valor: o, rotulo: o }))} valores={origens} onChange={comPagina1(setOrigens)} />
+          </CampoDeFiltro>
+        )}
+        {podeGerir && (
+          <>
+            <CampoDeFiltro rotulo="Regional">
+              <MultiSelect ariaLabel="Regional" rotuloTodos="Todas" opcoes={listaRegionais.map((r) => ({ valor: r.nome, rotulo: r.nome }))} valores={regionais} onChange={comPagina1(setRegionais)} />
+            </CampoDeFiltro>
+            <CampoDeFiltro rotulo="Grupo">
               <MultiSelect
-                ariaLabel="Consultor"
+                ariaLabel="Grupo"
                 rotuloTodos="Todos"
-                opcoes={consultores.map((c) => ({ valor: c.id, rotulo: c.ativo === false ? `${c.nome} (inativo)` : c.nome }))}
-                valores={consultorIds}
-                onChange={comPagina1(setConsultorIds)}
+                opcoes={listaGrupos
+                  .filter((g) => regionais.length === 0 || regionais.includes(g.regionalNome))
+                  .map((g) => ({ valor: g.id, rotulo: `${g.regionalNome} · ${g.nome}` }))}
+                valores={grupoIds}
+                onChange={comPagina1(setGrupoIds)}
               />
-            </div>
-          )}
-          {podeVerOrigem && (
-            <div className="w-52">
-              <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Origem</label>
-              <MultiSelect
-                ariaLabel="Origem"
-                rotuloTodos="Todas"
-                opcoes={listaOrigens.map((o) => ({ valor: o, rotulo: o }))}
-                valores={origens}
-                onChange={comPagina1(setOrigens)}
-              />
-            </div>
-          )}
-          {podeGerir && (
-            <>
-              <div className="w-44">
-                <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Regional</label>
-                <MultiSelect
-                  ariaLabel="Regional"
-                  rotuloTodos="Todas"
-                  opcoes={listaRegionais.map((r) => ({ valor: r.nome, rotulo: r.nome }))}
-                  valores={regionais}
-                  onChange={comPagina1(setRegionais)}
-                />
-              </div>
-              <div className="w-56">
-                <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Grupo</label>
-                <MultiSelect
-                  ariaLabel="Grupo"
-                  rotuloTodos="Todos"
-                  opcoes={listaGrupos
-                    .filter((g) => regionais.length === 0 || regionais.includes(g.regionalNome))
-                    .map((g) => ({ valor: g.id, rotulo: `${g.regionalNome} · ${g.nome}` }))}
-                  valores={grupoIds}
-                  onChange={comPagina1(setGrupoIds)}
-                />
-              </div>
-            </>
-          )}
-        </div>
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Chegada de</label>
-            <Input type="date" className="w-40" value={chegadaDe} max={chegadaAte || undefined} onChange={(e) => comPagina1(setChegadaDe)(e.target.value)} />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">até</label>
-            <Input type="date" className="w-40" value={chegadaAte} min={chegadaDe || undefined} onChange={(e) => comPagina1(setChegadaAte)(e.target.value)} />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Ativação de</label>
-            <Input type="date" className="w-40" value={vendaDe} max={vendaAte || undefined} onChange={(e) => comPagina1(setVendaDe)(e.target.value)} />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">até</label>
-            <Input type="date" className="w-40" value={vendaAte} min={vendaDe || undefined} onChange={(e) => comPagina1(setVendaAte)(e.target.value)} />
-          </div>
-          {filtrosAtivos && (
-            <Button variant="ghost" size="sm" onClick={limparFiltros}>
-              <X className="size-4" /> Limpar filtros
-            </Button>
-          )}
-        </div>
-      </div>
+            </CampoDeFiltro>
+          </>
+        )}
+        <CampoDeFiltro rotulo="Chegada" className="sm:col-span-2">
+          <PeriodoInput ariaLabel="Chegada" de={chegadaDe} ate={chegadaAte} onChange={(a, b) => { comPagina1(setChegadaDe)(a); comPagina1(setChegadaAte)(b); }} />
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Ativação" className="sm:col-span-2">
+          <PeriodoInput ariaLabel="Ativação" de={vendaDe} ate={vendaAte} onChange={(a, b) => { comPagina1(setVendaDe)(a); comPagina1(setVendaAte)(b); }} />
+        </CampoDeFiltro>
+      </BarraDeFiltros>
 
       {podeGerir && selecionados.size > 0 && (
         <div className="flex items-center justify-between rounded-lg bg-[var(--brand-soft)] px-4 py-2 text-sm text-[var(--brand)]">
@@ -356,97 +329,101 @@ export function LeadsPage() {
         <EmptyState title="Nenhum lead encontrado" description="Ajuste os filtros ou cadastre um novo lead." />
       ) : (
         <>
-          <div className="hidden overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] lg:block">
-            <table className="w-full text-sm">
-              <thead>
+          <div className="ui-surface hidden max-h-[calc(100vh-15rem)] overflow-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)] lg:block">
+            <table className="w-full text-[13px]">
+              <thead className="sticky top-0 z-10 [&_th]:bg-[var(--surface-solid)]">
                 <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--fg-muted)]">
-                  {podeGerir && <th className="w-10 px-4 py-3" />}
-                  <th className="px-2 py-3 font-medium">Nome</th>
-                  <th className="px-2 py-3 font-medium">Contato</th>
-                  <th className="px-2 py-3 font-medium">Responsável</th>
-                  <th className="px-2 py-3 font-medium">Etapa</th>
-                  <th className="px-2 py-3 font-medium">Oportunidade</th>
-                  <th className="px-2 py-3 text-right font-medium">Adesão</th>
-                  <th className="px-2 py-3 text-right font-medium">FIPE</th>
-                  <th className="px-2 py-3 text-right font-medium">Mensalidade</th>
-                  <th className="px-2 py-3 text-right font-medium" title="Mensalidade com desconto">Mens. c/ desconto</th>
-                  <th className="px-2 py-3 text-right font-medium">%</th>
-                  <th className="px-2 py-3 text-right font-medium">Rastreador</th>
-                  <th className="px-2 py-3 text-right font-medium">Indicação</th>
-                  <th className="px-2 py-3 text-right font-medium">Vistoria</th>
-                  <th className="px-2 py-3 text-right font-medium">Total</th>
-                  <th className="px-2 py-3 font-medium">Criado em</th>
+                  <th className="px-2.5 py-2 font-medium">Lead</th>
+                  <th className="px-2.5 py-2 font-medium">Responsável</th>
+                  <th className="px-2.5 py-2 font-medium">Etapa</th>
+                  <th className="px-2.5 py-2 font-medium">Oportunidade</th>
+                  <th className="px-2.5 py-2 text-right font-medium">Adesão</th>
+                  <th className="px-2.5 py-2 text-right font-medium">FIPE</th>
+                  <th className="px-2.5 py-2 text-right font-medium">Mensalidade</th>
+                  <th className="px-2.5 py-2 text-right font-medium" title="Mensalidade com desconto">Mens. c/ desconto</th>
+                  <th className="px-2.5 py-2 text-right font-medium">%</th>
+                  <th className="px-2.5 py-2 text-right font-medium">Rastreador</th>
+                  <th className="px-2.5 py-2 text-right font-medium">Indicação</th>
+                  <th className="px-2.5 py-2 text-right font-medium">Vistoria</th>
+                  <th className="px-2.5 py-2 text-right font-medium">Total</th>
+                  <th className="px-2.5 py-2 font-medium">Criado em</th>
                 </tr>
               </thead>
               <tbody>
                 {dados.itens.map((lead) => (
-                  <tr key={lead.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)]">
-                    {podeGerir && (
-                      <td className="px-4 py-3">
-                        <Checkbox label="" checked={selecionados.has(lead.id)} onChange={() => alternarSelecao(lead.id)} />
-                      </td>
-                    )}
-                    <td className="px-2 py-3">
-                      <Link to={`/app/crm/leads/${lead.id}`} className="focus-ring font-medium text-[var(--fg)] hover:text-[var(--brand)]">
-                        {lead.nomeOuRazaoSocial}
-                      </Link>
-                      {lead.semContato && (
-                        <Badge variant="warning">
-                          <span className="ml-1">sem contato</span>
-                        </Badge>
+                  <tr
+                    key={lead.id}
+                    // Sem marcador de seleção: Ctrl/⌘ + clique na linha seleciona o lead (para "Atribuir" em lote).
+                    onClick={podeGerir ? (e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); alternarSelecao(lead.id); } } : undefined}
+                    className={`border-b border-[var(--border)] last:border-0 ${selecionados.has(lead.id) ? "bg-[var(--brand-soft)]" : "hover:bg-[var(--surface-hover)]"}`}
+                  >
+                    <td className="px-2.5 py-0.5">
+                      <div className="flex items-center gap-1.5 leading-tight">
+                        <Link to={`/app/crm/leads/${lead.id}`} className="focus-ring truncate font-medium text-[var(--fg)] hover:text-[var(--brand)]">
+                          {lead.nomeOuRazaoSocial}
+                        </Link>
+                        {lead.semContato && <Badge variant="warning">sem contato</Badge>}
+                      </div>
+                      <div className="truncate text-[11px] leading-tight text-[var(--fg-muted)]">
+                        {[formatarTelefone(lead.telefone), lead.email].filter(Boolean).join(" · ") || "—"}
+                      </div>
+                    </td>
+                    <td className="px-2.5 py-0.5">
+                      {lead.responsavelNome ? (
+                        <div className="flex items-center gap-2" title={lead.responsavelNome}>
+                          <Avatar nome={lead.responsavelNome} fotoUrl={lead.responsavelFotoUrl} className="size-6 text-[10px]" />
+                          <span className="max-w-32 truncate text-[var(--fg)]">{lead.responsavelNome}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[var(--fg-muted)]">—</span>
                       )}
                     </td>
-                    <td className="px-2 py-3 text-[var(--fg-muted)]">
-                      <div>{formatarTelefone(lead.telefone)}</div>
-                      <div className="text-xs">{lead.email}</div>
-                    </td>
-                    <td className="px-2 py-3 text-[var(--fg-muted)]">{lead.responsavelNome ?? "—"}</td>
-                    <td className="px-2 py-3">
+                    <td className="px-2.5 py-0.5">
                       <Badge variant="neutral">
                         <span className="mr-1 inline-block size-2 rounded-full" style={{ backgroundColor: lead.etapaCor ?? "#94a3b8" }} />
-                        {lead.etapaNome ?? "Sem etapa"}
+                        {lead.etapaNome ? rotuloEtapa(lead.etapaNome) : "Sem etapa"}
                       </Badge>
                     </td>
-                    <td className="px-2 py-3 text-[var(--fg-muted)]">{lead.etapaAtual ?? "—"}</td>
-                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.adesao)}</td>
-                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.fipe)}</td>
-                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.mensalidade)}</td>
-                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.mensalidadeComDesconto)}</td>
-                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg-muted)]">
+                    <td className="px-2.5 py-0.5 text-[var(--fg-muted)]">{lead.etapaAtual ?? "—"}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.adesao)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.fipe)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.mensalidade)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.mensalidadeComDesconto)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg-muted)]">
                       {lead.venda?.porcentagem == null ? "—" : formatarPercentual(lead.venda.porcentagem)}
                     </td>
-                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.rastreador)}</td>
-                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.indicacao)}</td>
-                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.vistoria)}</td>
-                    <td className="whitespace-nowrap px-2 py-3 text-right font-medium text-[var(--fg)]">{dinheiro(lead.venda?.total)}</td>
-                    <td className="px-2 py-3 text-[var(--fg-muted)]">{formatarData(lead.criadoEm)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.rastreador)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.indicacao)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.vistoria)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right font-medium text-[var(--fg)]">{dinheiro(lead.venda?.total)}</td>
+                    <td className="px-2.5 py-0.5 text-[var(--fg-muted)]">{formatarData(lead.criadoEm)}</td>
                   </tr>
                 ))}
               </tbody>
               {totais && (
                 <tfoot>
-                  <tr className="border-t-2 border-[var(--border)] bg-[var(--surface-hover)]/60 text-xs">
-                    <td colSpan={(podeGerir ? 1 : 0) + 5} className="px-2 py-3 font-medium text-[var(--fg)]">
+                  <tr className="sticky bottom-0 border-t border-[var(--border)] text-xs [&_td]:bg-[var(--surface-solid)]">
+                    <td colSpan={4} className="px-2.5 py-0.5 font-medium text-[var(--fg)]">
                       <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Contagem</span>
                       {totais.contagem.toLocaleString("pt-BR")}
                     </td>
                     {[totais.adesao, totais.fipe, totais.mensalidade, totais.mensalidadeComDesconto].map((v, i) => (
-                      <td key={i} className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg)]">
+                      <td key={i} className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg)]">
                         <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Soma</span>
                         {formatarMoeda(v)}
                       </td>
                     ))}
-                    <td className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg)]" title="Média da porcentagem das vendas">
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg)]" title="Média da porcentagem das vendas">
                       <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Média</span>
                       {formatarPercentual(totais.mediaPorcentagem ?? 0)}
                     </td>
                     {[totais.rastreador, totais.indicacao, totais.vistoria, totais.total].map((v, i) => (
-                      <td key={i} className="whitespace-nowrap px-2 py-3 text-right text-[var(--fg)]">
+                      <td key={i} className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg)]">
                         <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Soma</span>
                         {formatarMoeda(v)}
                       </td>
                     ))}
-                    <td className="px-2 py-3" />
+                    <td className="px-2.5 py-0.5" />
                   </tr>
                 </tfoot>
               )}
@@ -458,15 +435,21 @@ export function LeadsPage() {
               <Link
                 key={lead.id}
                 to={`/app/crm/leads/${lead.id}`}
-                className="focus-ring block rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3"
+                className="focus-ring block rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 shadow-[var(--shadow-card)]"
               >
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-[var(--fg)]">{lead.nomeOuRazaoSocial}</span>
-                  <Badge variant="neutral">{lead.etapaNome ?? "Sem etapa"}</Badge>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate font-medium text-[var(--fg)]">{lead.nomeOuRazaoSocial}</span>
+                  <Badge variant="neutral">
+                    <span className="mr-1 inline-block size-2 rounded-full" style={{ backgroundColor: lead.etapaCor ?? "#94a3b8" }} />
+                    {lead.etapaNome ? rotuloEtapa(lead.etapaNome) : "Sem etapa"}
+                  </Badge>
                 </div>
-                <p className="mt-1 text-xs text-[var(--fg-muted)]">
-                  {lead.responsavelNome ?? "Sem responsável"} · {formatarTelefone(lead.telefone)}
-                </p>
+                <div className="mt-1.5 flex items-center gap-2 text-xs text-[var(--fg-muted)]">
+                  {lead.responsavelNome && <Avatar nome={lead.responsavelNome} fotoUrl={lead.responsavelFotoUrl} className="size-5 text-[9px]" />}
+                  <span className="truncate">
+                    {lead.responsavelNome ?? "Sem responsável"} · {formatarTelefone(lead.telefone)}
+                  </span>
+                </div>
               </Link>
             ))}
           </div>

@@ -4,6 +4,7 @@ import { ArrowLeft, Eye, EyeOff, KeyRound, Lock, Mail, MailCheck, ShieldCheck } 
 import { api, isUnauthorized } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Button, Checkbox } from "../components/ui";
+import { SeletorDeTema } from "../components/Shell";
 
 export function LoginPage() {
   const { sessao, login, loginDoisFatores } = useAuth();
@@ -93,9 +94,10 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen items-center justify-center p-0 lg:p-8">
+    <div className="ui-surface flex w-full max-w-6xl overflow-hidden bg-[var(--surface)] lg:min-h-[640px] lg:rounded-[2rem] lg:border lg:border-[var(--border)] lg:p-3 lg:shadow-[var(--shadow-card)]">
       {/* Painel esquerdo: marca, com fundo animado */}
-      <div className="login-aurora relative hidden w-1/2 flex-col justify-between overflow-hidden p-12 lg:flex">
+      <div className="login-aurora relative hidden w-1/2 flex-col justify-between overflow-hidden rounded-3xl p-10 lg:flex">
         <div className="relative z-10 flex items-center gap-2.5">
           <img src="/logo-css-white.png" alt="CSS Brasil" className="size-10 shrink-0 object-contain" />
           <div className="leading-tight">
@@ -104,8 +106,51 @@ export function LoginPage() {
           </div>
         </div>
 
+        {/* Ilustração: janela de vidro com indicadores e gráfico, sobre um degradê nas cores da marca. */}
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <div className="absolute -right-24 -top-24 size-96 rounded-full bg-[#a6c3e0]/30 blur-3xl" />
+          <div className="absolute -bottom-32 -left-20 size-96 rounded-full bg-[#467fc5]/40 blur-3xl" />
+          <div className="absolute left-10 right-[-3rem] top-28 overflow-hidden rounded-2xl border border-white/25 bg-white/10 shadow-[0_30px_80px_-20px_rgb(0_0_0/0.5)] backdrop-blur-xl">
+            <div className="flex items-center gap-1.5 border-b border-white/15 px-4 py-3">
+              <span className="size-2.5 rounded-full bg-white/35" />
+              <span className="size-2.5 rounded-full bg-white/25" />
+              <span className="size-2.5 rounded-full bg-white/15" />
+            </div>
+            <div className="flex">
+              <div className="w-28 shrink-0 space-y-2 border-r border-white/15 p-3">
+                {[0, 1, 2, 3, 4].map((n) => (
+                  <div key={n} className={`h-6 rounded-md ${n === 1 ? "bg-white/30" : "bg-white/10"}`} />
+                ))}
+              </div>
+              <div className="flex-1 space-y-3 p-4">
+                <div className="grid grid-cols-3 gap-2.5">
+                  {["128", "34", "20"].map((v, n) => (
+                    <div key={v} className="rounded-xl border border-white/15 bg-white/10 p-3">
+                      <div className="h-1.5 w-8 rounded-full bg-white/30" />
+                      <p className="mt-2 text-lg font-semibold leading-none text-white/90">{v}</p>
+                      <div className={`mt-2 h-1 rounded-full bg-white/20 ${n === 1 ? "w-2/3" : "w-full"}`} />
+                    </div>
+                  ))}
+                </div>
+                <div className="rounded-xl border border-white/15 bg-white/10 p-3">
+                  <svg viewBox="0 0 300 90" className="h-24 w-full" fill="none">
+                    <defs>
+                      <linearGradient id="lg-area" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0" stopColor="#fff" stopOpacity="0.38" />
+                        <stop offset="1" stopColor="#fff" stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <path d="M0 70 C30 60 45 40 75 46 S125 78 160 50 S215 14 250 28 S285 30 300 18 V90 H0 Z" fill="url(#lg-area)" />
+                    <path d="M0 70 C30 60 45 40 75 46 S125 78 160 50 S215 14 250 28 S285 30 300 18" stroke="#fff" strokeOpacity="0.9" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="relative z-10 max-w-md">
-          <h1 className="text-3xl font-extrabold leading-tight text-white">
+          <h1 className="text-3xl font-semibold leading-tight tracking-tight text-white">
             Gestão comercial completa para sua consultoria.
           </h1>
           <p className="mt-4 text-sm text-white/70">
@@ -115,7 +160,8 @@ export function LoginPage() {
       </div>
 
       {/* Painel direito: formulário */}
-      <div className="flex w-full flex-col items-center justify-center bg-[var(--surface)] px-6 py-12 lg:w-1/2">
+      <div className="relative flex w-full flex-col items-center justify-center px-6 py-12 lg:w-1/2">
+        <div className="absolute right-4 top-4"><SeletorDeTema /></div>
         <div className="w-full max-w-sm">
           <div className="mb-8 flex items-center gap-2.5 lg:hidden">
             <img src="/logo-css.svg" alt="CSS Brasil" className="size-9 shrink-0 object-contain" />
@@ -172,7 +218,7 @@ export function LoginPage() {
                           required
                           value={emailRecuperacao}
                           onChange={(e) => setEmailRecuperacao(e.target.value)}
-                          className="focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                          className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--field)] py-2.5 pl-10 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                           placeholder="voce@empresa.com"
                         />
                       </div>
@@ -228,7 +274,7 @@ export function LoginPage() {
                       required
                       value={codigo2fa}
                       onChange={(e) => setCodigo2fa(e.target.value)}
-                      className="focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-3 text-sm tracking-widest text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                      className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--field)] py-2.5 pl-10 pr-3 text-sm tracking-widest text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                       placeholder={usarCodigoRecuperacao ? "xxxxx-xxxxx" : "000000"}
                     />
                   </div>
@@ -276,7 +322,7 @@ export function LoginPage() {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                      className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--field)] py-2.5 pl-10 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                       placeholder="voce@empresa.com"
                     />
                   </div>
@@ -295,7 +341,7 @@ export function LoginPage() {
                       required
                       value={senha}
                       onChange={(e) => setSenha(e.target.value)}
-                      className="focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-10 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                      className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--field)] py-2.5 pl-10 pr-10 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                       placeholder="••••••••"
                     />
                     <button
@@ -338,6 +384,7 @@ export function LoginPage() {
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }

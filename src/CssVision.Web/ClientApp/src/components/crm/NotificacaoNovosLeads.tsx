@@ -97,7 +97,7 @@ export function NotificacaoNovosLeads({ usuarioId }: { usuarioId: string }) {
   return (
     <div className="fixed right-4 top-20 z-[95] w-[calc(100vw-2rem)] max-w-sm space-y-2" role="alert">
       {novos.map((l) => (
-        <div key={l.leadId} className="rounded-lg border border-[var(--brand)] bg-[var(--surface)] p-3 text-sm shadow-lg">
+        <div key={l.leadId} className="rounded-lg border border-[var(--brand)] bg-[var(--surface-solid)] p-3 text-sm shadow-lg">
           <div className="flex items-start gap-2">
             <UserPlus className="mt-0.5 size-4 shrink-0 text-[var(--brand)]" aria-hidden />
             <div className="min-w-0 flex-1">

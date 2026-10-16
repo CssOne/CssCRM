@@ -85,7 +85,7 @@ export function MultiSelect({
         <div
           role="listbox"
           aria-multiselectable
-          className="absolute left-0 z-30 mt-1 max-h-72 min-w-full overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg"
+          className="absolute left-0 z-30 mt-1 max-h-72 min-w-full overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface-solid)] p-1 shadow-lg"
         >
           <input
             ref={buscaRef}

@@ -5,8 +5,8 @@ namespace CssVision.Web.Api.Contracts.Crm;
 
 public record ActivityDto(
     Guid Id,
-    Guid LeadId,
-    string LeadNome,
+    Guid? LeadId,
+    string? LeadNome,
     Guid? OpportunityId,
     string? OpportunityTitulo,
     Guid ResponsavelId,
@@ -46,7 +46,7 @@ public record ActivityFilterRequest : PagedRequest
 }
 
 public record ActivityCreateRequest(
-    Guid LeadId,
+    Guid? LeadId,
     Guid? OpportunityId,
     Guid? ResponsavelId,
     TipoAtividade Tipo,

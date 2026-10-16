@@ -63,7 +63,7 @@ namespace CssVision.Web.Data.Migrations
                     b.Property<string>("Descricao")
                         .HasColumnType("text");
 
-                    b.Property<Guid>("LeadId")
+                    b.Property<Guid?>("LeadId")
                         .HasColumnType("uuid");
 
                     b.Property<int?>("LembreteMinutosAntes")
@@ -2235,8 +2235,7 @@ namespace CssVision.Web.Data.Migrations
                     b.HasOne("CssVision.Web.Domain.Crm.CrmLead", "Lead")
                         .WithMany("Atividades")
                         .HasForeignKey("LeadId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("CssVision.Web.Domain.Crm.CrmOpportunity", "Opportunity")
                         .WithMany("Atividades")

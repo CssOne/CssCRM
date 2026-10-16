@@ -4,8 +4,9 @@ namespace CssVision.Web.Domain.Crm;
 
 public class CrmActivity : CrmArchivableEntity
 {
-    public Guid LeadId { get; set; }
-    public CrmLead Lead { get; set; } = null!;
+    /// <summary>Nulo = atividade pessoal (não ligada a um lead).</summary>
+    public Guid? LeadId { get; set; }
+    public CrmLead? Lead { get; set; }
 
     public Guid? OpportunityId { get; set; }
     public CrmOpportunity? Opportunity { get; set; }

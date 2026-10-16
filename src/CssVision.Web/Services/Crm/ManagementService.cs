@@ -50,7 +50,8 @@ public sealed class ManagementService(
             oportunidadesQuery = oportunidadesQuery.Where(o => visiveis.Contains(o.ResponsavelId));
         }
 
-        var (tempoMedioContatoHoras, leadsComContato, contatoPorVendedor) = await ObterTempoMedioPrimeiroContatoAsync(leadsQuery, inicio, fim, ct);
+        // Tempo até o 1º contato: janela móvel das últimas 24 horas, não o período do filtro (nem o mês).
+        var (tempoMedioContatoHoras, leadsComContato, contatoPorVendedor) = await ObterTempoMedioPrimeiroContatoAsync(leadsQuery, agora.AddHours(-24), agora, ct);
         var tempoMedioPorEtapa = await ObterTempoMedioPorEtapaAsync(oportunidadesQuery, ct);
         var oportunidadesSemMovimentacao = await ObterOportunidadesSemMovimentacaoAsync(oportunidadesQuery, agora, ct);
         var ranking = await ObterRankingAsync(visiveis, inicio, fim, ct);
@@ -408,7 +409,7 @@ public sealed class ManagementService(
     /// Tempo entre o lead chegar para o vendedor e o primeiro contato dele: a primeira vez que o
     /// vendedor move o lead de etapa no quadro (registro de auditoria "LeadMudouEtapa") ou conclui
     /// uma atividade — o que vier antes. Considera os leads do CRM (tráfego pago e cadastros; os do
-    /// Notion foram trabalhados lá) que chegaram no período.
+    /// Notion foram trabalhados lá) que chegaram no intervalo informado (a tela usa as últimas 24 horas).
     /// </summary>
     private async Task<(double Horas, int Leads, IReadOnlyList<PrimeiroContatoVendedorDto> PorVendedor)> ObterTempoMedioPrimeiroContatoAsync(
         IQueryable<CrmLead> leadsQuery, DateTimeOffset inicio, DateTimeOffset fim, CancellationToken ct)
@@ -431,8 +432,8 @@ public sealed class ManagementService(
             .Select(a => new { LeadId = a.EntidadeId!.Value, a.OcorridoEm })
             .ToListAsync(ct);
         var atividades = await db.CrmActivities.AsNoTracking()
-            .Where(a => ids.Contains(a.LeadId) && a.Status == StatusAtividade.Concluida && a.DataHoraConclusao != null)
-            .Select(a => new { a.LeadId, OcorridoEm = a.DataHoraConclusao!.Value })
+            .Where(a => ids.Contains(a.LeadId!.Value) && a.Status == StatusAtividade.Concluida && a.DataHoraConclusao != null)
+            .Select(a => new { LeadId = a.LeadId!.Value, OcorridoEm = a.DataHoraConclusao!.Value })
             .ToListAsync(ct);
 
         var contatos = movimentos.Concat(atividades)

@@ -120,7 +120,7 @@ export function CidadeInput({
         <ul
           id={listaId}
           role="listbox"
-          className="absolute left-0 z-40 mt-1 max-h-64 w-full min-w-48 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg"
+          className="absolute left-0 z-40 mt-1 max-h-64 w-full min-w-48 overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface-solid)] p-1 shadow-lg"
         >
           {sugestoes.map((c, i) => (
             <li key={`${c.uf}-${c.nome}`} role="option" aria-selected={i === destaque}>

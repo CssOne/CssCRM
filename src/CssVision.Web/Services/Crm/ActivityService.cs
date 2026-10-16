@@ -18,7 +18,7 @@ public sealed class ActivityService(
             .Include(a => a.Lead)
             .Include(a => a.Opportunity)
             .Include(a => a.Responsavel)
-            .Where(a => !a.Arquivado && !a.Lead.Arquivado) // atividade de lead excluído (lixeira) não aparece
+            .Where(a => !a.Arquivado && (a.Lead == null || !a.Lead.Arquivado)) // atividade de lead excluído (lixeira) não aparece
             .AsQueryable();
 
         if (filtro.ResponsavelId.HasValue)
@@ -78,8 +78,12 @@ public sealed class ActivityService(
 
     public async Task<ActivityDto> CriarAsync(ActivityCreateRequest request, CancellationToken ct)
     {
-        var lead = await db.CrmLeads.FirstOrDefaultAsync(l => l.Id == request.LeadId, ct)
-            ?? throw new CrmNotFoundException("Lead", request.LeadId);
+        CrmLead? lead = null; // sem lead = atividade pessoal
+        if (request.LeadId.HasValue)
+        {
+            lead = await db.CrmLeads.FirstOrDefaultAsync(l => l.Id == request.LeadId, ct)
+                ?? throw new CrmNotFoundException("Lead", request.LeadId.Value);
+        }
 
         var responsavelId = request.ResponsavelId ?? currentUser.UserId;
         if (!await equipe.PodeAcessarVendedorAsync(responsavelId, ct))
@@ -87,20 +91,20 @@ public sealed class ActivityService(
             throw new CrmForbiddenException("Você não pode criar atividades para este vendedor.");
         }
 
-        if (!await equipe.PodeAcessarVendedorAsync(lead.ResponsavelId ?? Guid.Empty, ct))
+        if (lead is not null && !await equipe.PodeAcessarVendedorAsync(lead.ResponsavelId ?? Guid.Empty, ct))
         {
             throw new CrmForbiddenException();
         }
 
         if (request.OpportunityId.HasValue)
         {
-            var pertence = await db.CrmOpportunities.AnyAsync(o => o.Id == request.OpportunityId && o.LeadId == lead.Id, ct);
+            var pertence = lead is not null && await db.CrmOpportunities.AnyAsync(o => o.Id == request.OpportunityId && o.LeadId == lead.Id, ct);
             if (!pertence) throw new CrmBusinessException("A oportunidade informada não pertence a este lead.", "oportunidade_invalida");
         }
 
         var atividade = new CrmActivity
         {
-            LeadId = lead.Id,
+            LeadId = lead?.Id,
             OpportunityId = request.OpportunityId,
             ResponsavelId = responsavelId,
             Tipo = request.Tipo,
@@ -112,7 +116,7 @@ public sealed class ActivityService(
 
         db.CrmActivities.Add(atividade);
         await db.SaveChangesAsync(ct);
-        await RecalcularDatasContatoAsync(lead.Id, ct);
+        await RecalcularDatasContatoAsync(lead?.Id, ct);
         await audit.RegistrarAsync("AtividadeCriada", nameof(CrmActivity), atividade.Id, new { atividade.Tipo, atividade.Assunto }, ct);
 
         return await ObterDtoAsync(atividade.Id, ct);
@@ -210,8 +214,9 @@ public sealed class ActivityService(
         return ParaDto(atividade, DateTimeOffset.UtcNow);
     }
 
-    private async Task RecalcularDatasContatoAsync(Guid leadId, CancellationToken ct)
+    private async Task RecalcularDatasContatoAsync(Guid? leadId, CancellationToken ct)
     {
+        if (leadId is null) return; // atividade pessoal não mexe em datas de contato
         var lead = await db.CrmLeads.FirstAsync(l => l.Id == leadId, ct);
 
         lead.UltimoContatoEm = await db.CrmActivities.AsNoTracking()
@@ -237,7 +242,7 @@ public sealed class ActivityService(
     }
 
     private static ActivityDto ParaDto(CrmActivity a, DateTimeOffset agora) => new(
-        a.Id, a.LeadId, a.Lead.NomeOuRazaoSocial, a.OpportunityId, a.Opportunity?.Titulo,
+        a.Id, a.LeadId, a.Lead?.NomeOuRazaoSocial, a.OpportunityId, a.Opportunity?.Titulo,
         a.ResponsavelId, a.Responsavel.NomeCompleto, a.Tipo, a.Assunto, a.Descricao,
         a.DataHoraPrevista, a.DataHoraConclusao, a.Resultado, a.Status, a.LembreteMinutosAntes,
         a.Status == StatusAtividade.Pendente && a.DataHoraPrevista < agora, a.RowVersion);

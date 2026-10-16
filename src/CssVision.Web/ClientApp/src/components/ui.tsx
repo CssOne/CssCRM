@@ -17,24 +17,32 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
+import { createPortal } from "react-dom";
 import { paraBusca } from "../lib/busca";
 
 // --- Botões ---
 
-type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "dangerSoft";
 type ButtonSize = "sm" | "md";
 
+// Botões em pílula: o principal ganha degradê, brilho interno e sombra na própria cor (sobe um pouco no hover); o secundário é
+// um contorno claro que ganha a cor da marca; o fantasma só aparece no hover. Todos encolhem levemente ao clicar.
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: "bg-[var(--brand)] text-[var(--brand-fg)] hover:opacity-90 disabled:opacity-50",
+  primary:
+    "bg-gradient-to-b from-[color-mix(in_srgb,var(--brand)_88%,white)] to-[var(--brand)] text-[var(--brand-fg)] shadow-[inset_0_1px_0_rgb(255_255_255/0.22),0_1px_2px_rgb(0_0_0/0.14),0_6px_14px_-7px_var(--brand)] hover:-translate-y-px hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.26),0_1px_2px_rgb(0_0_0/0.14),0_10px_20px_-8px_var(--brand)] disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none",
   secondary:
-    "bg-[var(--surface)] text-[var(--fg)] border border-[var(--border)] hover:bg-[var(--surface-hover)] disabled:opacity-50",
-  ghost: "text-[var(--fg)] hover:bg-[var(--surface-hover)] disabled:opacity-50",
-  danger: "bg-[var(--danger)] text-white hover:opacity-90 disabled:opacity-50",
+    "border border-[var(--border)] bg-[var(--surface)] text-[var(--fg)] shadow-[0_1px_2px_rgb(0_0_0/0.05)] hover:border-[color-mix(in_srgb,var(--brand)_45%,var(--border))] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)] disabled:opacity-50 disabled:hover:border-[var(--border)] disabled:hover:bg-[var(--surface)] disabled:hover:text-[var(--fg)]",
+  ghost: "text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)] disabled:opacity-50 disabled:hover:bg-transparent",
+  danger:
+    "bg-gradient-to-b from-[color-mix(in_srgb,var(--danger)_88%,white)] to-[var(--danger)] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.22),0_1px_2px_rgb(0_0_0/0.14),0_6px_14px_-7px_var(--danger)] hover:-translate-y-px disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none",
+  /** Ação destrutiva que só abre uma confirmação (listas): fundo suave em vez do vermelho cheio. */
+  dangerSoft:
+    "border border-[color-mix(in_srgb,var(--danger)_25%,transparent)] bg-[var(--danger-soft)] text-[var(--danger)] hover:border-[var(--danger)] hover:bg-[var(--danger)] hover:text-white disabled:opacity-50",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "h-8 px-3 text-sm gap-1.5",
-  md: "h-10 px-4 text-sm gap-2",
+  sm: "h-8 px-3.5 text-[13px] gap-1.5",
+  md: "h-10 px-5 text-sm gap-2",
 };
 
 export const Button = forwardRef<
@@ -44,7 +52,7 @@ export const Button = forwardRef<
   <button
     ref={ref}
     disabled={disabled || loading}
-    className={`focus-ring inline-flex items-center justify-center rounded-lg font-medium transition-colors cursor-pointer disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+    className={`focus-ring inline-flex items-center justify-center whitespace-nowrap rounded-full font-semibold transition-all duration-200 active:scale-[0.97] cursor-pointer disabled:cursor-not-allowed disabled:active:scale-100 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
     {...props}
   >
     {loading && <Loader2 className="size-4 animate-spin" aria-hidden />}
@@ -62,7 +70,7 @@ export function IconButton({
     <button
       aria-label={label}
       title={label}
-      className={`focus-ring inline-flex size-9 items-center justify-center rounded-lg text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)] cursor-pointer ${className}`}
+      className={`focus-ring inline-flex size-9 items-center justify-center rounded-full text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)] cursor-pointer ${className}`}
       {...props}
     />
   );
@@ -94,7 +102,7 @@ export function Avatar({ nome, fotoUrl, className = "size-9 text-sm" }: { nome: 
 
 export function Card({ className = "", children }: { className?: string; children: ReactNode }) {
   return (
-    <div className={`rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm ${className}`}>{children}</div>
+    <div className={`ui-surface rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)] ${className}`}>{children}</div>
   );
 }
 
@@ -113,7 +121,7 @@ const badgeClasses: Record<BadgeVariant, string> = {
 
 export function Badge({ variant = "neutral", children }: { variant?: BadgeVariant; children: ReactNode }) {
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${badgeClasses[variant]}`}>
+    <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${badgeClasses[variant]}`}>
       {children}
     </span>
   );
@@ -135,7 +143,7 @@ export function FieldError({ children }: { children?: ReactNode }) {
 }
 
 const fieldBase =
-  "focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 h-10 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)] disabled:opacity-50";
+  "focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--field)] px-3 h-9 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)] disabled:opacity-50";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className = "", ...props }, ref) => (
   <input ref={ref} className={`${fieldBase} ${className}`} {...props} />
@@ -429,11 +437,11 @@ export function Select({
         <span className={`truncate ${escolhida && escolhida.valor !== "" ? "" : "text-[var(--fg-muted)]"}`}>{escolhida?.rotulo || " "}</span>
         <ChevronDown className="size-4 shrink-0 text-[var(--fg-muted)]" aria-hidden />
       </button>
-      {aberto && posicao && (
+      {aberto && posicao && createPortal(
         <div
           ref={painelRef}
           style={{ position: "fixed", left: posicao.left, width: posicao.width, top: posicao.top, bottom: posicao.bottom, maxHeight: posicao.maxHeight }}
-          className="z-[70] flex flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-lg"
+          className="ui-surface z-[70] flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-solid)] shadow-xl"
           onKeyDown={teclado}
         >
           <div className="border-b border-[var(--border)] p-1.5">
@@ -448,7 +456,7 @@ export function Select({
               aria-label="Pesquisar nas opções"
               aria-controls={listaId}
               autoComplete="off"
-              className="focus-ring h-8 w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+              className="focus-ring h-8 w-full rounded-md border border-[var(--border)] bg-[var(--field)] px-2 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
             />
           </div>
           <div id={listaId} role="listbox" className="overflow-y-auto p-1">
@@ -471,7 +479,8 @@ export function Select({
               </button>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
@@ -571,12 +580,12 @@ export function Modal({
   const widths = { sm: "max-w-sm", md: "max-w-lg", lg: "max-w-2xl", xl: "max-w-[min(96vw,80rem)]" };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" {...fundo}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay)] p-4 backdrop-blur-[2px]" role="presentation" {...fundo}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`max-h-[85vh] w-full ${widths[size]} overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl flex flex-col`}
+        className={`ui-surface max-h-[85vh] w-full ${widths[size]} overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-solid)] shadow-2xl flex flex-col`}
       >
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
           <h2 className="text-base font-semibold text-[var(--fg)]">{title}</h2>
@@ -605,12 +614,12 @@ export function Drawer({ open, onClose, title, children }: { open: boolean; onCl
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" role="presentation" {...fundo}>
+    <div className="fixed inset-0 z-50 flex justify-end bg-[var(--overlay)]" role="presentation" {...fundo}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="flex h-full w-full max-w-md flex-col border-l border-[var(--border)] bg-[var(--surface)] shadow-2xl"
+        className="ui-surface flex h-full w-full max-w-md flex-col border-l border-[var(--border)] bg-[var(--surface-solid)] shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
           <h2 className="text-base font-semibold text-[var(--fg)]">{title}</h2>
@@ -768,7 +777,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div
               key={toast.id}
               role="status"
-              className={`flex items-center gap-2 rounded-lg border px-4 py-3 text-sm shadow-lg ${toastClasses[toast.tipo]}`}
+              className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur ${toastClasses[toast.tipo]}`}
             >
               <Icon className="size-4 shrink-0" aria-hidden />
               {toast.mensagem}

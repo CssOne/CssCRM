@@ -75,7 +75,7 @@ export function NotificacaoAvisosPagamento({ usuarioId }: { usuarioId: string })
   return (
     <div className="fixed right-4 top-36 z-[95] w-[calc(100vw-2rem)] max-w-sm space-y-2" role="alert">
       {novos.map((a) => (
-        <div key={a.id} className="rounded-lg border border-[var(--warning)] bg-[var(--surface)] p-3 text-sm shadow-lg">
+        <div key={a.id} className="rounded-lg border border-[var(--warning)] bg-[var(--surface-solid)] p-3 text-sm shadow-lg">
           <div className="flex items-start gap-2">
             <Wallet className="mt-0.5 size-4 shrink-0 text-[var(--warning)]" aria-hidden />
             <div className="min-w-0 flex-1">

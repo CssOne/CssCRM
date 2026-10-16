@@ -17,7 +17,7 @@ export function DesempenhoChart({ dados, metaAtual }: { dados: EvolucaoVendas[];
     chart: { toolbar: { show: false }, foreColor: modoEscuro ? "#9aa4b2" : "#5b6472", fontFamily: "inherit", background: "transparent" },
     grid: { borderColor: modoEscuro ? "#2a2f3a" : "#e2e5e9" },
     theme: { mode: modoEscuro ? "dark" : "light" },
-    colors: ["#2f6fed", "#94a3b8"],
+    colors: ["#467fc5", "#a6c3e0"],
     stroke: { curve: "smooth", width: [3, 2], dashArray: [0, 6] },
     dataLabels: { enabled: false },
     markers: { size: 4 },

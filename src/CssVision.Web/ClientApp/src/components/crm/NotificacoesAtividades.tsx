@@ -121,12 +121,12 @@ export function NotificacoesAtividades() {
         className="min-w-0 flex-1 cursor-pointer text-left"
         onClick={() => {
           setAberto(false);
-          abrirLead(a.leadId);
+          if (a.leadId) abrirLead(a.leadId);
         }}
       >
         <p className="truncate text-sm font-medium text-[var(--fg)]">{a.assunto}</p>
         <p className="truncate text-xs text-[var(--fg-muted)]">
-          {tipoLabel[a.tipo]} · {a.leadNome}
+          {tipoLabel[a.tipo]} · {a.leadNome ?? "Pessoal"}
         </p>
         <p className={`flex items-center gap-1 text-xs ${a.atrasada ? "text-[var(--danger)]" : "text-[var(--fg-muted)]"}`}>
           <Clock className="size-3" /> {formatarDataHora(a.dataHoraPrevista)}
@@ -147,7 +147,7 @@ export function NotificacoesAtividades() {
       )}
 
       {aberto && (
-        <div className="absolute right-0 top-11 z-30 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-[var(--border)] bg-[var(--surface)] p-2 shadow-xl">
+        <div className="absolute right-0 top-11 z-30 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-[var(--border)] bg-[var(--surface-solid)] p-2 shadow-xl">
           <p className="px-2 pb-1 pt-1 text-sm font-semibold text-[var(--fg)]">Notificações</p>
           {atrasadas.length === 0 && hoje.length === 0 ? (
             <p className="px-2 py-6 text-center text-sm text-[var(--fg-muted)]">Nenhuma atividade atrasada ou para hoje. 🎉</p>

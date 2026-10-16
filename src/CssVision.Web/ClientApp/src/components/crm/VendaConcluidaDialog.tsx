@@ -10,6 +10,7 @@ import { leadFormVazio, paraLeadCreateRequest } from "./LeadForm";
 import { CidadeInput } from "../CidadeInput";
 import { erroDocumento, erroTelefone } from "../../lib/validacao";
 import { useAuth } from "../../context/AuthContext";
+import { DataInput } from "../PeriodoInput";
 
 export type DadosVendaConcluida = Omit<ChangeStageRequest, "novaEtapaId" | "motivoPerdaId">;
 
@@ -819,14 +820,7 @@ export function VendaConcluidaDialog({
                 <Label htmlFor="venda-data" required={ehVenda}>
                   Data da venda
                 </Label>
-                <Input
-                  id="venda-data"
-                  type="date"
-                  max={hojeBrasilia()}
-                  aria-invalid={dataDaVendaFutura}
-                  value={valores.dataEfetivaFechamento ?? ""}
-                  onChange={(e) => set("dataEfetivaFechamento", e.target.value)}
-                />
+                <DataInput id="venda-data" max={hojeBrasilia()} invalid={dataDaVendaFutura} value={valores.dataEfetivaFechamento ?? ""} onChange={(v) => set("dataEfetivaFechamento", v)} />
                 {dataDaVendaFutura && (
                   <p role="alert" className="mt-1 text-xs text-[var(--danger)]">
                     A data da venda não pode ser futura. Informe o dia em que a venda foi fechada.
@@ -836,7 +830,7 @@ export function VendaConcluidaDialog({
             ) : (
               <div>
                 <Label htmlFor="venda-previsao">Previsão de fechamento</Label>
-                <Input id="venda-previsao" type="date" value={previsaoFechamento} onChange={(e) => setPrevisaoFechamento(e.target.value)} />
+                <DataInput id="venda-previsao" value={previsaoFechamento} onChange={setPrevisaoFechamento} />
               </div>
             )}
             {!ehVenda && (
@@ -1097,13 +1091,7 @@ export function VendaConcluidaDialog({
             {ehVenda && !temComprovantePagamento && (
               <div className="sm:col-start-2">
                 <Label htmlFor="venda-data-pagamento-adesao">Adesão será paga em</Label>
-                <Input
-                  id="venda-data-pagamento-adesao"
-                  type="date"
-                  min={oportunidadeEditar ? undefined : hojeLocal()}
-                  value={valores.dataPagamentoAdesaoPrevista ?? ""}
-                  onChange={(e) => set("dataPagamentoAdesaoPrevista", e.target.value || null)}
-                />
+                <DataInput id="venda-data-pagamento-adesao" min={oportunidadeEditar ? undefined : hojeLocal()} value={valores.dataPagamentoAdesaoPrevista ?? ""} onChange={(v) => set("dataPagamentoAdesaoPrevista", v || null)} />
                 <p className="mt-1 text-xs text-[var(--fg-muted)]">
                   Se a adesão não foi paga hoje, marque a data: o comprovante fica dispensado e você recebe um lembrete nesse dia.
                 </p>

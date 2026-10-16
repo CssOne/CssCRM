@@ -1,5 +1,4 @@
 import {
-  Bot,
   Calendar,
   CalendarClock,
   Coins,
@@ -22,7 +21,7 @@ import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarDataHora, formatarMoeda } from "../../lib/format";
 import { TipoAnuncio, TipoAtividade, type Activity, type Announcement, type Dashboard, type MeuAviso, type TvRanking } from "../../lib/types";
 import { useAuth } from "../../context/AuthContext";
-import { Badge, Card, ErrorState, Skeleton, useToast } from "../../components/ui";
+import { Avatar, Badge, Card, ErrorState, Modal, Skeleton } from "../../components/ui";
 import { PortalStatCard } from "../../components/portal/PortalStatCard";
 import { DesempenhoChart } from "../../components/portal/DesempenhoChart";
 import { tipoLabel } from "../../components/crm/ActivityForm";
@@ -37,13 +36,13 @@ function saudacao(): string {
 
 export function PortalDashboardPage() {
   const { sessao } = useAuth();
-  const { notificar } = useToast();
 
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [proximas, setProximas] = useState<Activity[]>([]);
   const [avisos, setAvisos] = useState<Announcement[]>([]);
   const [pagamentos, setPagamentos] = useState<MeuAviso[]>([]);
   // Ranking do mês igual ao do painel da TV (todas as regionais, por vendas).
+  const [rankingAberto, setRankingAberto] = useState(false);
   const [rankingTv, setRankingTv] = useState<TvRanking[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -157,10 +156,10 @@ export function PortalDashboardPage() {
             <ul className="space-y-3">
               {pendencias.map((a) => (
                 <li key={a.id}>
-                  <Link to={`/app/crm/leads/${a.leadId}`} className="focus-ring flex items-start justify-between gap-2 hover:opacity-80">
+                  <Link to={a.leadId ? `/app/crm/leads/${a.leadId}` : "/app/crm/agenda"} className="focus-ring flex items-start justify-between gap-2 hover:opacity-80">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-[var(--fg)]">{a.assunto}</p>
-                      <p className="truncate text-xs text-[var(--fg-muted)]">Cliente: {a.leadNome}</p>
+                      <p className="truncate text-xs text-[var(--fg-muted)]">{a.leadId ? `Cliente: ${a.leadNome}` : "Atividade pessoal"}</p>
                     </div>
                     <span className={`shrink-0 text-xs font-medium ${a.atrasada ? "text-[var(--danger)]" : "text-[var(--warning)]"}`}>
                       {formatarDataHora(a.dataHoraPrevista).split(" ")[0]}
@@ -170,7 +169,7 @@ export function PortalDashboardPage() {
               ))}
             </ul>
           )}
-          <Link to="/app/crm/activities" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[var(--brand)] hover:underline">
+          <Link to="/app/crm/agenda" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[var(--brand)] hover:underline">
             Ver todas pendências →
           </Link>
         </Card>
@@ -180,9 +179,9 @@ export function PortalDashboardPage() {
         <Card className="p-5 lg:col-span-2">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[var(--fg)]">Ranking de consultores</h2>
-            <Link to="/app/crm/gestao" className="text-sm font-medium text-[var(--brand)] hover:underline">
+            <button type="button" onClick={() => setRankingAberto(true)} className="focus-ring cursor-pointer rounded text-sm font-medium text-[var(--brand)] hover:underline">
               Ver ranking completo →
-            </Link>
+            </button>
           </div>
           {ranking.length === 0 ? (
             <p className="text-sm text-[var(--fg-muted)]">Ainda não há vendas registradas neste período.</p>
@@ -327,13 +326,34 @@ export function PortalDashboardPage() {
         </Card>
       </div>
 
-      <button
-        onClick={() => notificar("info", "Assistente IA chegando em breve.")}
-        className="focus-ring fixed bottom-6 right-6 z-10 flex items-center gap-2 rounded-full bg-[var(--brand)] px-5 py-3 text-sm font-semibold text-white shadow-lg hover:opacity-90"
-      >
-        <Bot className="size-5" />
-        Assistente IA
-      </button>
+      <Modal open={rankingAberto} onClose={() => setRankingAberto(false)} title="Ranking de consultores" size="lg">
+        {rankingTv.length === 0 ? (
+          <p className="text-sm text-[var(--fg-muted)]">Ainda não há vendas registradas neste período.</p>
+        ) : (
+          <ul className="max-h-[65vh] space-y-1.5 overflow-y-auto pr-1">
+            {rankingTv.map((v, i) => {
+              const destaque = !!sessao && v.consultorId === sessao.id;
+              const maiorValor = Math.max(...rankingTv.map((r) => r.valorVendido), 1);
+              return (
+                <li key={v.consultorId} className={`flex items-center gap-3 rounded-xl px-2.5 py-2 ${destaque ? "bg-[var(--brand-soft)]" : i < 3 ? "bg-[var(--surface-hover)]" : ""}`}>
+                  <span className="w-6 shrink-0 text-center text-sm font-bold text-[var(--fg-muted)]">{i + 1}</span>
+                  <Avatar nome={v.nome} fotoUrl={v.fotoUrl} className="size-8 text-xs" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-[var(--fg)]">{destaque ? `${v.nome} (você)` : v.nome}</p>
+                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[var(--surface-hover)]">
+                      <div className="h-full rounded-full bg-[var(--brand)]" style={{ width: `${(v.valorVendido / maiorValor) * 100}%` }} />
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-right text-xs text-[var(--fg-muted)]">
+                    <strong className="block text-sm text-[var(--fg)]">{formatarMoeda(v.valorVendido)}</strong>
+                    {v.quantidadeVendas} {v.quantidadeVendas === 1 ? "venda" : "vendas"}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Modal>
     </div>
   );
 }

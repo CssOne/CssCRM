@@ -5,7 +5,7 @@ import { api, isAbortError, toQueryString } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { Dashboard } from "../../lib/types";
-import { Badge, Card, ErrorState, Input, Skeleton } from "../../components/ui";
+import { Badge, Card, ErrorState, Skeleton } from "../../components/ui";
 import { BarrasHorizontaisChart } from "../../components/marketing/GraficosTrafego";
 import { mesAtualIso, useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { StatCard } from "../../components/crm/StatCard";
@@ -13,6 +13,7 @@ import { PagamentosEmAberto } from "../../components/crm/PagamentosEmAberto";
 import { EvolucaoChart, OrigemChart } from "../../components/crm/Charts";
 import { FiltroRegionalDoPainel, useRegionalDoPainel } from "../../components/crm/FiltroRegionalDoPainel";
 import { DetalheDoCardModal } from "../../components/crm/DetalheDoCardModal";
+import { MesInput } from "../../components/PeriodoInput";
 
 export function OverviewPage() {
   const { temPapel } = useAuth();
@@ -74,21 +75,23 @@ export function OverviewPage() {
   const rotuloMes = `${numMes}/${anoMes}`;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-[var(--fg)]">Visão geral</h1>
-        <p className="text-sm text-[var(--fg-muted)]">Indicadores comerciais de {rotuloMes}.</p>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-[var(--fg)]">Visão geral</h1>
+          <p className="text-sm text-[var(--fg-muted)]">Indicadores comerciais de {rotuloMes}.</p>
+        </div>
+        <div className="ui-surface flex flex-wrap items-end gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2.5 shadow-[var(--shadow-card)]">
+          <div className="w-44">
+            <label className="mb-1 block px-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">Mês</label>
+            <MesInput value={mes} onChange={(v) => v && setMes(v)} />
+          </div>
+          {podeFiltrar && <FiltroRegionalDoPainel regionais={regionais} valor={regionalId} aoEscolher={escolherRegional} />}
+        </div>
       </div>
       <PagamentosEmAberto />
-      <div className="flex flex-wrap gap-4">
-        <div className="w-44">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Mês</label>
-          <Input type="month" value={mes} onChange={(e) => e.target.value && setMes(e.target.value)} />
-        </div>
-        {podeFiltrar && <FiltroRegionalDoPainel regionais={regionais} valor={regionalId} aoEscolher={escolherRegional} />}
-      </div>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
         <StatCard titulo="Novos leads" valor={(indicadores.novosLeadsTrafegoSemEtapa ?? 0).toLocaleString("pt-BR")} subtitulo={`do tráfego pago em Sem etapa — ${rotuloMes}`} icone={UserPlus} tom="brand" />
         <StatCard titulo="Leads sem contato" valor={indicadores.leadsSemContato.toLocaleString("pt-BR")} subtitulo="do mês, ainda em Sem etapa" icone={PhoneMissed} tom="warning" />
         <StatCard titulo="Atividades atrasadas" valor={String(indicadores.atividadesAtrasadas)} icone={AlertTriangle} tom="danger" />
@@ -105,25 +108,32 @@ export function OverviewPage() {
         />
       </div>
 
-      <Card className="p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[var(--fg)]">Meta comercial do mês</h2>
-          <span className="text-sm text-[var(--fg-muted)]">
-            {meta.realizadoQuantidade} de {meta.metaQuantidade} vendas
-          </span>
+      <Card className="!rounded-2xl p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <span className="flex size-8 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]">
+              <Target className="size-4" aria-hidden />
+            </span>
+            <div>
+              <h2 className="text-sm font-bold text-[var(--fg)]">Meta comercial do mês</h2>
+              <p className="text-xs text-[var(--fg-muted)]">
+                {meta.realizadoQuantidade} de {meta.metaQuantidade} vendas
+              </p>
+            </div>
+          </div>
+          <span className="text-2xl font-bold tracking-tight text-[var(--brand)] [font-variant-numeric:tabular-nums]">{formatarPercentual(meta.percentualAtingido)}</span>
         </div>
-        <div className="h-2.5 w-full overflow-hidden rounded-full bg-[var(--surface-hover)]">
+        <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-hover)]">
           <div
-            className="h-full rounded-full bg-[var(--brand)] transition-all"
+            className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[color-mix(in_srgb,var(--brand)_55%,#A6C3E0)] shadow-[0_0_12px_var(--brand)] transition-all duration-700"
             style={{ width: `${Math.min(100, meta.percentualAtingido)}%` }}
           />
         </div>
-        <p className="mt-1 text-xs text-[var(--fg-muted)]">{formatarPercentual(meta.percentualAtingido)} atingido</p>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="p-4 lg:col-span-2">
-          <h2 className="text-sm font-semibold text-[var(--fg)]">Funil por etapa — resumo do quadro de leads</h2>
+      <div className="grid gap-3 lg:grid-cols-3">
+        <Card className="!rounded-2xl p-4 lg:col-span-2">
+          <h2 className="text-sm font-bold text-[var(--fg)]">Funil por etapa — resumo do quadro de leads</h2>
           <p className="mb-2 text-xs text-[var(--fg-muted)]">Leads que chegaram em {rotuloMes}, na coluna em que estão hoje no quadro.</p>
           <BarrasHorizontaisChart
             categorias={funilLeads.map((e) => e.etapa)}
@@ -131,31 +141,31 @@ export function OverviewPage() {
             coresPorBarra={funilLeads.map((e, i) => e.cor ?? ["#2563eb", "#0ea5e9", "#8b5cf6", "#22c55e", "#f59e0b", "#f97316", "#ef4444", "#64748b"][i % 8])}
           />
         </Card>
-        <Card className="p-4">
-          <h2 className="mb-3 text-sm font-semibold text-[var(--fg)]">Origem das vendas</h2>
+        <Card className="!rounded-2xl p-4">
+          <h2 className="mb-3 text-sm font-bold text-[var(--fg)]">Origem das vendas</h2>
           <OrigemChart dados={origemVendas} onSelecionar={setOrigemAberta} />
         </Card>
       </div>
 
-      <Card className="p-4">
-        <h2 className="text-sm font-semibold text-[var(--fg)]">Evolução de vendas (6 meses)</h2>
+      <Card className="!rounded-2xl p-4">
+        <h2 className="text-sm font-bold text-[var(--fg)]">Evolução de vendas (6 meses)</h2>
         <p className="mb-3 text-xs text-[var(--fg-muted)]">Rendimento de cada mês: valor ganho (total das vendas) e adesão recebida, pela data da venda.</p>
         <EvolucaoChart dados={evolucaoVendas} />
       </Card>
 
-      <Card className="overflow-x-auto p-4">
-        <h2 className="text-sm font-semibold text-[var(--fg)]">Resumo por mês</h2>
+      <Card className="overflow-x-auto !rounded-2xl p-4">
+        <h2 className="text-sm font-bold text-[var(--fg)]">Resumo por mês</h2>
         <p className="mb-3 text-xs text-[var(--fg-muted)]">Últimos 12 meses. Clique em um mês para ver o painel dele.</p>
         <table className="w-full min-w-[640px] text-sm">
           <thead>
-            <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--fg-muted)]">
-              <th className="pb-2 font-medium">Mês</th>
-              <th className="pb-2 text-right font-medium">Leads</th>
-              <th className="pb-2 text-right font-medium">Perdidos</th>
-              <th className="pb-2 text-right font-medium">Vendas</th>
-              <th className="pb-2 text-right font-medium">Valor ganho</th>
-              {!ehConsultor && <th className="pb-2 text-right font-medium">Adesão</th>}
-              <th className="pb-2 text-right font-medium">Conversão</th>
+            <tr className="border-b border-[var(--border)] text-left text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">
+              <th className="pb-2 font-semibold">Mês</th>
+              <th className="pb-2 text-right font-semibold">Leads</th>
+              <th className="pb-2 text-right font-semibold">Perdidos</th>
+              <th className="pb-2 text-right font-semibold">Vendas</th>
+              <th className="pb-2 text-right font-semibold">Valor ganho</th>
+              {!ehConsultor && <th className="pb-2 text-right font-semibold">Adesão</th>}
+              <th className="pb-2 text-right font-semibold">Conversão</th>
             </tr>
           </thead>
           <tbody>
@@ -182,10 +192,10 @@ export function OverviewPage() {
         </table>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="p-4">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--fg)]">
-            <CalendarClock className="size-4" /> Atividades de hoje
+      <div className="grid gap-3 lg:grid-cols-2">
+        <Card className="!rounded-2xl p-4">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--fg)]">
+            <span className="flex size-7 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]"><CalendarClock className="size-3.5" /></span> Atividades de hoje
           </h2>
           {atividadesDoDia.length === 0 ? (
             <p className="text-sm text-[var(--fg-muted)]">Nenhuma atividade prevista para hoje.</p>
@@ -195,7 +205,7 @@ export function OverviewPage() {
                 <li key={a.id}>
                   <Link
                     to={`/app/crm/leads/${a.leadId}`}
-                    className="focus-ring flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm hover:opacity-80"
+                    className="focus-ring flex items-center justify-between gap-2 rounded-xl bg-[var(--surface-hover)] px-3 py-2 text-sm transition hover:bg-[var(--brand-soft)]"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-medium text-[var(--fg)]">{a.assunto}</p>
@@ -209,9 +219,9 @@ export function OverviewPage() {
           )}
         </Card>
 
-        <Card className="p-4">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[var(--fg)]">
-            <Target className="size-4" /> Leads parados{leadsParadosTotal > 0 ? ` (${leadsParadosTotal.toLocaleString("pt-BR")})` : ""}
+        <Card className="!rounded-2xl p-4">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--fg)]">
+            <span className="flex size-7 items-center justify-center rounded-lg bg-[var(--warning-soft)] text-[var(--warning)]"><PhoneMissed className="size-3.5" /></span> Leads parados{leadsParadosTotal > 0 ? ` (${leadsParadosTotal.toLocaleString("pt-BR")})` : ""}
           </h2>
           <p className="mb-2 text-xs text-[var(--fg-muted)]">
             Leads do tráfego pago (não os do Notion) dos últimos 60 dias, em coluna aberta e com consultor ativo, sem contato nem movimento há mais de 5 dias.
@@ -224,7 +234,7 @@ export function OverviewPage() {
                 <li key={l.leadId}>
                   <Link
                     to={`/app/crm/leads/${l.leadId}`}
-                    className="focus-ring flex items-center justify-between gap-2 rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm hover:opacity-80"
+                    className="focus-ring flex items-center justify-between gap-2 rounded-xl bg-[var(--surface-hover)] px-3 py-2 text-sm transition hover:bg-[var(--brand-soft)]"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-medium text-[var(--fg)]">{l.leadNome}</p>

@@ -157,7 +157,7 @@ export function ConviteNotificacoesPush() {
   }
 
   return (
-    <div className="fixed bottom-4 left-4 z-[90] w-[calc(100vw-2rem)] max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-2xl lg:left-[17rem]">
+    <div className="fixed bottom-4 left-4 z-[90] w-[calc(100vw-2rem)] max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--surface-solid)] p-4 shadow-2xl lg:left-[17rem]">
       <div className="flex items-start gap-3">
         <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]">
           <BellRing className="size-5" />

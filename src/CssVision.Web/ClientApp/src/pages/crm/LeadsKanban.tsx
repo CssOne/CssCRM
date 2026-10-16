@@ -1,4 +1,4 @@
-import { ArrowRightLeft, List, Plus, RotateCcw, Save, Trash2, X, Car } from "lucide-react";
+import { ArrowRightLeft, Bookmark, List, Plus, RotateCcw, Trash2, X, Car } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
@@ -16,7 +16,7 @@ import {
   type GrupoFiltro,
   type VendedorResumo,
 } from "../../lib/types";
-import { Button, ConfirmDialog, EmptyState, ErrorState, Input, Modal, Select, Skeleton, useToast } from "../../components/ui";
+import { Button, ConfirmDialog, EmptyState, ErrorState, Modal, Select, Skeleton, useToast } from "../../components/ui";
 import { LeadForm, leadFormVazio, paraLeadCreateRequest, type LeadFormValues } from "../../components/crm/LeadForm";
 import { VendaConcluidaDialog, type ResultadoVendaConcluida } from "../../components/crm/VendaConcluidaDialog";
 import { StageChangeDialog } from "../../components/crm/StageChangeDialog";
@@ -25,6 +25,8 @@ import { AdesaoCotacaoDialog } from "../../components/crm/AdesaoCotacaoDialog";
 import { AlterarResponsavelDialog } from "../../components/crm/AlterarResponsavelDialog";
 import { CartaoLead, classificarCartao } from "../../components/crm/CartaoLead";
 import { MultiSelect } from "../../components/MultiSelect";
+import { PeriodoInput } from "../../components/PeriodoInput";
+import { BarraDeFiltros, CampoDeFiltro, type ChipDeFiltro } from "../../components/Filtros";
 import { useAbrirLead } from "../../lib/painelLead";
 import { OPCOES_FILTRO_TIPO_INDICACAO } from "../../lib/opcoesLead";
 import { useAuth } from "../../context/AuthContext";
@@ -354,13 +356,13 @@ export function LeadsKanbanPage() {
     notificar("success", `Filtro "${nome}" salvo.`);
   }
 
-  function excluirFiltroSalvo() {
-    if (!filtroSalvoAtual) return;
-    const lista = filtrosSalvos.filter((f) => f.nome !== filtroSalvoAtual);
+  function excluirFiltroSalvo(nome = filtroSalvoAtual) {
+    if (!nome) return;
+    const lista = filtrosSalvos.filter((f) => f.nome !== nome);
     setFiltrosSalvos(lista);
     gravarJson(chaveFiltrosSalvos, lista);
-    notificar("success", `Filtro "${filtroSalvoAtual}" excluído.`);
-    setFiltroSalvoAtual("");
+    notificar("success", `Filtro "${nome}" excluído.`);
+    if (nome === filtroSalvoAtual) setFiltroSalvoAtual("");
   }
 
   const carregar = useCallback(
@@ -661,6 +663,21 @@ export function LeadsKanbanPage() {
     [colunasExibidas]
   );
 
+  // Filtros ativos como chips removíveis (mostrados abaixo da busca).
+  const dataCurta = (d: string) => (d ? d.split("-").reverse().slice(0, 2).join("/") : "…");
+  const chipsDeFiltro: ChipDeFiltro[] = [];
+  const addChip = (rotulo: string, valor: string, limpar: () => void) => chipsDeFiltro.push({ rotulo, valor, limpar });
+  if (origem.length) addChip("Origem", origem.join(", "), () => setOrigem([]));
+  if (categoria.length) addChip("Categoria", categoria.join(", "), () => setCategoria([]));
+  if (tipoIndicacao.length) addChip("Canal", tipoIndicacao.join(", "), () => setTipoIndicacao([]));
+  if (fonte.length) addChip("Fonte", fonte.map((f) => (f === "TrafegoPago" ? "Tráfego pago" : f)).join(", "), () => setFonte([]));
+  if (dataChegadaInicio || dataChegadaFim) addChip("Chegada", `${dataCurta(dataChegadaInicio)} → ${dataCurta(dataChegadaFim)}`, () => { setDataChegadaInicio(""); setDataChegadaFim(""); });
+  if (dataVendaInicio || dataVendaFim) addChip("Ativação", `${dataCurta(dataVendaInicio)} → ${dataCurta(dataVendaFim)}`, () => { setDataVendaInicio(""); setDataVendaFim(""); });
+  if (responsavelId.length) addChip("Vendedor", vendedores.filter((v) => responsavelId.includes(v.id)).map((v) => v.nome).join(", ") || `${responsavelId.length} selecionado(s)`, () => setResponsavelId([]));
+  if (regional.length) addChip("Regional", regional.join(", "), () => setRegional([]));
+  if (grupoId.length) addChip("Grupo", grupos.filter((g) => grupoId.includes(g.id)).map((g) => g.nome).join(", ") || `${grupoId.length} selecionado(s)`, () => setGrupoId([]));
+  if (incluirArquivados) addChip("Status", "Inclui arquivados", () => setIncluirArquivados(false));
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -668,40 +685,120 @@ export function LeadsKanbanPage() {
           <h1 className="text-xl font-semibold text-[var(--fg)]">Quadro de leads</h1>
           <p className="text-sm text-[var(--fg-muted)]">Arraste os cartões entre as etapas, ou toque no ícone <ArrowRightLeft className="inline size-3.5 align-text-bottom" /> do cartão pra mover.</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setModalNovo(true)}>
-            <Plus className="size-4" /> Novo cliente
-          </Button>
-          <Button variant="secondary" type="button" onClick={() => setLixeiraAberta(true)}>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setModalNovo(true)}
+            className="focus-ring group inline-flex h-10 cursor-pointer items-center gap-2.5 rounded-full border border-[color-mix(in_srgb,var(--brand)_35%,transparent)] bg-[var(--brand-soft)] pl-1.5 pr-4 text-sm font-semibold text-[var(--brand)] transition-all duration-200 hover:border-[var(--brand)] hover:bg-[var(--brand)] hover:text-[var(--brand-fg)] active:scale-[0.97]"
+          >
+            <span className="flex size-7 items-center justify-center rounded-full bg-[var(--brand)] text-[var(--brand-fg)] transition-colors duration-200 group-hover:bg-white group-hover:text-[var(--brand)]">
+              <Plus className="size-4 transition-transform duration-200 group-hover:rotate-90" />
+            </span>
+            Novo cliente
+          </button>
+          <Button variant="secondary" type="button" className="h-10 rounded-full px-4" onClick={() => setLixeiraAberta(true)}>
             <Trash2 className="size-4" /> Lixeira
           </Button>
           <Link to="/app/crm/leads">
-            <Button variant="secondary" type="button">
+            <Button variant="secondary" type="button" className="h-10 rounded-full px-4">
               <List className="size-4" /> Lista
             </Button>
           </Link>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-        <div className="w-56">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Buscar</label>
-          <Input placeholder="Nome, placa, telefone ou e-mail" value={busca} onChange={(e) => setBusca(e.target.value)} />
-        </div>
+      <BarraDeFiltros
+        busca={busca}
+        onBusca={setBusca}
+        placeholder="Buscar por nome, placa, telefone ou e-mail"
+        chips={chipsDeFiltro}
+        onLimparTudo={limparFiltros}
+        rodape={
+          <>
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-[var(--fg-muted)]">
+              <Bookmark className="size-3.5" aria-hidden /> Filtros salvos
+            </span>
+            {filtrosSalvos.length === 0 && !salvandoFiltro && <span className="text-xs text-[var(--fg-muted)]">nenhum ainda</span>}
+            {filtrosSalvos.map((f) => {
+              const ativo = f.nome === filtroSalvoAtual;
+              return (
+                <span
+                  key={f.nome}
+                  className={`inline-flex h-8 items-center overflow-hidden rounded-full border text-sm transition-colors ${
+                    ativo ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--fg)] hover:border-[color-mix(in_srgb,var(--brand)_45%,var(--border))]"
+                  }`}
+                >
+                  <button type="button" onClick={() => escolherFiltroSalvo(f.nome)} aria-pressed={ativo} className="focus-ring h-full cursor-pointer pl-3 pr-2 font-medium">
+                    {f.nome}
+                  </button>
+                  <button
+                    type="button"
+                    title={`Excluir "${f.nome}"`}
+                    aria-label={`Excluir filtro ${f.nome}`}
+                    onClick={() => excluirFiltroSalvo(f.nome)}
+                    className="focus-ring flex h-full cursor-pointer items-center pl-1 pr-2.5 text-[var(--fg-muted)] hover:text-[var(--danger)]"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </span>
+              );
+            })}
+            {salvandoFiltro ? (
+              <form
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--brand)] bg-[var(--surface)] p-0.5 pl-3"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  salvarFiltro();
+                }}
+              >
+                <input
+                  aria-label="Nome do filtro"
+                  autoFocus
+                  value={nomeFiltro}
+                  onChange={(e) => setNomeFiltro(e.target.value)}
+                  onKeyDown={(e) => e.key === "Escape" && setSalvandoFiltro(false)}
+                  placeholder="Nome do filtro…"
+                  className="w-44 bg-transparent text-sm text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)]"
+                />
+                <button
+                  type="submit"
+                  disabled={!nomeFiltro.trim()}
+                  className="focus-ring h-7 cursor-pointer rounded-full bg-[var(--brand)] px-3 text-xs font-semibold text-[var(--brand-fg)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Salvar
+                </button>
+                <button
+                  type="button"
+                  aria-label="Cancelar"
+                  onClick={() => setSalvandoFiltro(false)}
+                  className="focus-ring flex size-7 cursor-pointer items-center justify-center rounded-full text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </form>
+            ) : (
+              <button
+                type="button"
+                disabled={!filtrosAtivos}
+                title={filtrosAtivos ? "Guardar os filtros atuais com um nome" : "Escolha algum filtro para salvar"}
+                onClick={() => {
+                  setNomeFiltro(filtroSalvoAtual);
+                  setSalvandoFiltro(true);
+                }}
+                className="focus-ring inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-[color-mix(in_srgb,var(--brand)_55%,var(--border))] px-3 text-sm font-medium text-[var(--brand)] transition-colors hover:bg-[var(--brand-soft)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-[var(--fg-muted)] disabled:opacity-60 disabled:hover:bg-transparent"
+              >
+                <Plus className="size-3.5" /> Salvar filtro atual
+              </button>
+            )}
+          </>
+        }
+      >
         {podeVerOrigem && (
-          <div className="w-44">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Origem</label>
-            <MultiSelect
-              ariaLabel="Origem"
-              rotuloTodos="Todas"
-              opcoes={origens.map((o) => ({ valor: o, rotulo: o }))}
-              valores={origem}
-              onChange={setOrigem}
-            />
-          </div>
+          <CampoDeFiltro rotulo="Origem">
+            <MultiSelect ariaLabel="Origem" rotuloTodos="Todas" opcoes={origens.map((o) => ({ valor: o, rotulo: o }))} valores={origem} onChange={setOrigem} />
+          </CampoDeFiltro>
         )}
-        <div className="w-44">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Categoria</label>
+        <CampoDeFiltro rotulo="Categoria">
           <MultiSelect
             ariaLabel="Categoria"
             rotuloTodos="Todas"
@@ -709,18 +806,11 @@ export function LeadsKanbanPage() {
             valores={categoria}
             onChange={setCategoria}
           />
-        </div>
-        <div className="w-48">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Canal de Aquisição</label>
-          <MultiSelect
-            ariaLabel="Canal de Aquisição"
-            opcoes={OPCOES_FILTRO_TIPO_INDICACAO.map((t) => ({ valor: t, rotulo: t }))}
-            valores={tipoIndicacao}
-            onChange={setTipoIndicacao}
-          />
-        </div>
-        <div className="w-44">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Fonte</label>
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Canal de aquisição">
+          <MultiSelect ariaLabel="Canal de Aquisição" opcoes={OPCOES_FILTRO_TIPO_INDICACAO.map((t) => ({ valor: t, rotulo: t }))} valores={tipoIndicacao} onChange={setTipoIndicacao} />
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Fonte">
           <MultiSelect
             ariaLabel="Fonte"
             rotuloTodos="Todas"
@@ -731,32 +821,18 @@ export function LeadsKanbanPage() {
             valores={fonte}
             onChange={setFonte}
           />
-        </div>
-        <div className="flex items-end gap-1">
-          <div className="w-36">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Chegada de</label>
-            <Input type="date" value={dataChegadaInicio} onChange={(e) => setDataChegadaInicio(e.target.value)} />
-          </div>
-          <div className="w-36">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">até</label>
-            <Input type="date" value={dataChegadaFim} onChange={(e) => setDataChegadaFim(e.target.value)} />
-          </div>
-        </div>
-        <div className="flex items-end gap-1">
-          <div className="w-36">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Ativação de</label>
-            <Input type="date" value={dataVendaInicio} onChange={(e) => setDataVendaInicio(e.target.value)} />
-          </div>
-          <div className="w-36">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">até</label>
-            <Input type="date" value={dataVendaFim} onChange={(e) => setDataVendaFim(e.target.value)} />
-          </div>
-        </div>
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Chegada" className="sm:col-span-2">
+          <PeriodoInput ariaLabel="Chegada" de={dataChegadaInicio} ate={dataChegadaFim} onChange={(a, b) => { setDataChegadaInicio(a); setDataChegadaFim(b); }} />
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Ativação" className="sm:col-span-2">
+          <PeriodoInput ariaLabel="Ativação" de={dataVendaInicio} ate={dataVendaFim} onChange={(a, b) => { setDataVendaInicio(a); setDataVendaFim(b); }} />
+        </CampoDeFiltro>
         {podeGerir && (
           <>
-            <div className="w-48">
-              <div className="mb-1 flex items-center justify-between gap-2">
-                <label className="block text-xs font-medium text-[var(--fg-muted)]">Vendedor</label>
+            <CampoDeFiltro
+              rotulo="Vendedor"
+              extra={
                 <select
                   aria-label="Quais vendedores listar"
                   value={vendedoresInativos ? "todos" : "ativos"}
@@ -766,7 +842,8 @@ export function LeadsKanbanPage() {
                   <option value="ativos">Só ativos</option>
                   <option value="todos">Todos (inclui inativos)</option>
                 </select>
-              </div>
+              }
+            >
               <MultiSelect
                 ariaLabel="Vendedor"
                 opcoes={vendedores
@@ -776,19 +853,11 @@ export function LeadsKanbanPage() {
                 valores={responsavelId}
                 onChange={setResponsavelId}
               />
-            </div>
-            <div className="w-44">
-              <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Regional</label>
-              <MultiSelect
-                ariaLabel="Regional"
-                rotuloTodos="Todas"
-                opcoes={regionais.map((r) => ({ valor: r.nome, rotulo: r.nome }))}
-                valores={regional}
-                onChange={setRegional}
-              />
-            </div>
-            <div className="w-52">
-              <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Grupo</label>
+            </CampoDeFiltro>
+            <CampoDeFiltro rotulo="Regional">
+              <MultiSelect ariaLabel="Regional" rotuloTodos="Todas" opcoes={regionais.map((r) => ({ valor: r.nome, rotulo: r.nome }))} valores={regional} onChange={setRegional} />
+            </CampoDeFiltro>
+            <CampoDeFiltro rotulo="Grupo">
               <MultiSelect
                 ariaLabel="Grupo"
                 rotuloTodos="Todos"
@@ -799,78 +868,21 @@ export function LeadsKanbanPage() {
                 valores={grupoId}
                 onChange={setGrupoId}
               />
-            </div>
-            <div className="w-40">
-              <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Status</label>
+            </CampoDeFiltro>
+            <CampoDeFiltro rotulo="Status">
               <Select value={incluirArquivados ? "todos" : "ativos"} onChange={(e) => setIncluirArquivados(e.target.value === "todos")}>
                 <option value="ativos">Ativos</option>
                 <option value="todos">Todos (inclui arquivados)</option>
               </Select>
-            </div>
+            </CampoDeFiltro>
           </>
         )}
-        {filtrosAtivos && (
-          <Button variant="ghost" size="sm" onClick={limparFiltros}>
-            <X className="size-4" /> Limpar filtros
-          </Button>
-        )}
-        <div className="flex w-full flex-wrap items-end gap-2 border-t border-[var(--border)] pt-3">
-          <div className="w-56">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Filtros salvos</label>
-            <Select value={filtroSalvoAtual} onChange={(e) => escolherFiltroSalvo(e.target.value)} disabled={filtrosSalvos.length === 0}>
-              <option value="">{filtrosSalvos.length === 0 ? "Nenhum filtro salvo" : "Escolha um filtro..."}</option>
-              {filtrosSalvos.map((f) => (
-                <option key={f.nome} value={f.nome}>
-                  {f.nome}
-                </option>
-              ))}
-            </Select>
-          </div>
-          {filtroSalvoAtual && (
-            <Button variant="ghost" size="sm" onClick={excluirFiltroSalvo}>
-              <Trash2 className="size-4" /> Excluir filtro
-            </Button>
-          )}
-          {salvandoFiltro ? (
-            <form
-              className="flex items-end gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                salvarFiltro();
-              }}
-            >
-              <div className="w-56">
-                <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Nome do filtro</label>
-                <Input autoFocus value={nomeFiltro} onChange={(e) => setNomeFiltro(e.target.value)} placeholder="Ex.: Tráfego pago da semana" />
-              </div>
-              <Button size="sm" type="submit" disabled={!nomeFiltro.trim()}>
-                Salvar
-              </Button>
-              <Button variant="ghost" size="sm" type="button" onClick={() => setSalvandoFiltro(false)}>
-                Cancelar
-              </Button>
-            </form>
-          ) : (
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={!filtrosAtivos}
-              title={filtrosAtivos ? undefined : "Escolha algum filtro para salvar"}
-              onClick={() => {
-                setNomeFiltro(filtroSalvoAtual);
-                setSalvandoFiltro(true);
-              }}
-            >
-              <Save className="size-4" /> Salvar filtro atual
-            </Button>
-          )}
-        </div>
-      </div>
+      </BarraDeFiltros>
 
       {carregando ? (
         <div className="flex gap-4 overflow-x-auto">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-96 w-80 shrink-0 rounded-2xl" />
+            <Skeleton key={i} className="h-96 w-[clamp(15rem,calc((100vw-var(--menu-w)-7.9rem)/4),20rem)] shrink-0 rounded-2xl" />
           ))}
         </div>
       ) : erro || !board || !colunasExibidas ? (
@@ -881,7 +893,7 @@ export function LeadsKanbanPage() {
           description={filtrosAtivos ? "Ajuste os filtros ou cadastre um novo lead." : "Cadastre um novo lead para começar."}
         />
       ) : (
-        <div className="barra-quadro flex gap-4 overflow-x-auto pb-2">
+        <div className="-mx-4 flex items-stretch gap-4 overflow-x-auto px-4 pb-3 lg:ml-0 lg:-mr-8 lg:pl-0 lg:pr-8">
           {colunasExibidas.map((coluna) => {
             const chaveColuna = coluna.etapa.id ?? "sem-etapa";
             const restantes = Math.max(0, coluna.total - coluna.cartoes.length);
@@ -902,26 +914,40 @@ export function LeadsKanbanPage() {
                   setColunaSobre(null);
                   handleDrop(coluna.etapa.id);
                 }}
-                className={`flex w-80 shrink-0 flex-col overflow-hidden rounded-2xl border bg-[var(--surface-hover)]/60 transition-colors ${
-                  alvo ? "border-[var(--brand)] bg-[var(--brand-soft)]/60" : "border-[var(--border)]"
+                // Coluna "tingida": o fundo e a borda levam um toque da cor da etapa. Ao arrastar um cartão por cima, ela vira o destaque da marca.
+                style={
+                  alvo
+                    ? undefined
+                    : {
+                        backgroundColor: `color-mix(in srgb, ${cor} 7%, var(--surface-hover))`,
+                        borderColor: `color-mix(in srgb, ${cor} 24%, var(--border))`,
+                      }
+                }
+                className={`ui-surface flex h-[max(28rem,calc(100vh-15rem))] w-[clamp(15rem,calc((100vw-var(--menu-w)-7.9rem)/4),20rem)] shrink-0 flex-col overflow-hidden rounded-3xl border transition-colors ${
+                  alvo ? "border-[var(--brand)] bg-[var(--brand-soft)]" : ""
                 }`}
               >
-                <header className="bg-[var(--surface)]">
-                  <div className="h-1" style={{ backgroundColor: cor }} />
-                  <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2.5">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: cor }} />
-                      <h2 className="truncate text-sm font-semibold text-[var(--fg)]" title={coluna.etapa.nome}>
+                <header>
+                  {/* Título "marcado": uma faixa na cor da etapa que vai do nome até a contagem de cartões. */}
+                  <div className="px-2.5 pb-1 pt-2.5">
+                    <div
+                      className="flex items-center justify-between gap-2 rounded-full py-1 pl-3.5 pr-1"
+                      style={{
+                        color: `color-mix(in srgb, ${cor} 72%, var(--fg))`,
+                        backgroundColor: `color-mix(in srgb, ${cor} 20%, transparent)`,
+                        boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${cor} 22%, transparent)`,
+                      }}
+                    >
+                      <h2 className="min-w-0 truncate text-[13px] font-bold uppercase tracking-wide" title={coluna.etapa.nome}>
                         {coluna.etapa.nome}
                       </h2>
+                      <span
+                        className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-[var(--surface)] px-2 text-xs font-bold shadow-sm [font-variant-numeric:tabular-nums]"
+                        title="Leads nesta coluna"
+                      >
+                        {coluna.total.toLocaleString("pt-BR")}
+                      </span>
                     </div>
-                    <span
-                      className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold"
-                      style={{ backgroundColor: `${cor}1f`, color: cor }}
-                      title="Leads nesta coluna"
-                    >
-                      {coluna.total.toLocaleString("pt-BR")}
-                    </span>
                   </div>
                   {coluna.etapa.nome === `${ETAPA_VENDA_CONCLUIDA} (Indicação)` && coluna.etapa.id && (
                     <div className="border-b border-[var(--border)] px-3 py-2">
@@ -944,7 +970,7 @@ export function LeadsKanbanPage() {
                   )}
                 </header>
 
-                <div className="max-h-[calc(100vh-17rem)] min-h-24 space-y-2.5 overflow-y-auto p-2.5">
+                <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-2.5">
                   {coluna.cartoes.length === 0 && (
                     <p className="rounded-xl border border-dashed border-[var(--border)] px-3 py-6 text-center text-xs text-[var(--fg-muted)]">
                       Nenhum lead aqui
@@ -955,6 +981,7 @@ export function LeadsKanbanPage() {
                       key={cartao.leadId}
                       cartao={cartao}
                       corColuna={cor}
+                      nomeColuna={coluna.etapa.nome}
                       podeGerir={podeGerir}
                       podeExcluir={podeExcluirCartao(cartao)}
                       podeVerOrigem={podeVerOrigem}

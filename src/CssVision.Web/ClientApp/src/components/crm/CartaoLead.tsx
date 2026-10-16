@@ -41,6 +41,7 @@ function BotaoAcao({ titulo, perigo, onClick, children }: { titulo: string; peri
 export function CartaoLead({
   cartao,
   corColuna,
+  nomeColuna,
   podeGerir,
   podeExcluir,
   podeVerOrigem,
@@ -54,7 +55,9 @@ export function CartaoLead({
   onDragEnd,
 }: {
   cartao: LeadKanbanCard;
+  /** Cor e nome da coluna onde o cartão está: a cor vira um ponto ao lado do nome; o nome aparece ao passar o mouse. */
   corColuna: string;
+  nomeColuna: string;
   podeGerir: boolean;
   podeExcluir: boolean;
   podeVerOrigem: boolean;
@@ -80,26 +83,28 @@ export function CartaoLead({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onAbrir}
-      style={{ borderLeftColor: corColuna }}
-      className="group cursor-grab rounded-xl border border-l-[3px] border-[var(--border)] bg-[var(--surface)] p-3 text-sm shadow-sm transition hover:-translate-y-px hover:shadow-md active:cursor-grabbing"
+      className="group relative cursor-grab rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 text-sm shadow-[var(--shadow-card)] transition-[box-shadow,transform] hover:-translate-y-px hover:shadow-[0_8px_24px_-10px_rgb(0_0_0/0.22)] active:cursor-grabbing"
     >
       {/* Nome e ações */}
       <div className="flex items-start justify-between gap-2">
-        <Link
-          to={`/app/crm/leads/${cartao.leadId}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            // Clique normal abre no painel lateral; Ctrl/⌘+clique continua abrindo numa aba nova.
-            if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
-              e.preventDefault();
-              onAbrir();
-            }
-          }}
-          className="line-clamp-2 font-semibold leading-snug text-[var(--fg)] hover:text-[var(--brand)]"
-        >
-          {cartao.nomeOuRazaoSocial}
-        </Link>
-        <div className="-mr-1 -mt-0.5 flex shrink-0 items-center transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+        <div className="flex min-w-0 flex-1 items-start gap-2">
+          <span className="mt-[7px] size-2 shrink-0 rounded-full" style={{ backgroundColor: corColuna }} title={nomeColuna} aria-label={`Etapa: ${nomeColuna}`} />
+          <Link
+            to={`/app/crm/leads/${cartao.leadId}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              // Clique normal abre no painel lateral; Ctrl/⌘+clique continua abrindo numa aba nova.
+              if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
+                e.preventDefault();
+                onAbrir();
+              }
+            }}
+            className="line-clamp-2 min-w-0 flex-1 text-[14px] font-semibold leading-snug tracking-tight text-[var(--fg)] hover:text-[var(--brand)]"
+          >
+            {cartao.nomeOuRazaoSocial}
+          </Link>
+        </div>
+        <div className="-mr-1 flex shrink-0 items-center transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
           <BotaoAcao titulo="Mover para outra etapa" onClick={onMover}>
             <ArrowRightLeft className="size-3.5" />
           </BotaoAcao>
@@ -144,10 +149,10 @@ export function CartaoLead({
       )}
 
       {/* Contato */}
-      <div className="mt-2 space-y-0.5 text-xs text-[var(--fg-muted)]">
+      <div className="mt-2.5 space-y-1 text-xs text-[var(--fg-muted)]">
         {(cartao.telefone || cartao.telefone2) && (
           <p className="flex items-center gap-1.5 truncate">
-            <Phone className="size-3 shrink-0" aria-hidden />
+            <Phone className="size-3.5 shrink-0" aria-hidden />
             <span className="truncate">
               {[cartao.telefone, cartao.telefone2].filter(Boolean).map((t) => formatarTelefone(t)).join(" · ")}
             </span>
@@ -155,7 +160,7 @@ export function CartaoLead({
         )}
         {cartao.email && (
           <p className="flex items-center gap-1.5">
-            <Mail className="size-3 shrink-0" aria-hidden />
+            <Mail className="size-3.5 shrink-0" aria-hidden />
             <span className="truncate">{cartao.email}</span>
           </p>
         )}
@@ -167,7 +172,7 @@ export function CartaoLead({
           {cartao.placa && (
             <span
               title="Placa do veículo"
-              className="rounded-md border border-[var(--border)] bg-[var(--surface-hover)] px-1.5 py-px font-mono font-semibold tracking-wider text-[var(--fg)]"
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface-hover)] px-2 py-0.5 font-mono font-semibold tracking-wider text-[var(--fg)]"
             >
               {cartao.placa}
             </span>
@@ -214,11 +219,11 @@ export function CartaoLead({
       )}
 
       {/* Responsável e chegada */}
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2">
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
         {cartao.responsavelNome ? (
           <div className="flex min-w-0 items-center gap-1.5" title={`Responsável: ${cartao.responsavelNome}`}>
-            <Avatar nome={cartao.responsavelNome} fotoUrl={cartao.responsavelFotoUrl} className="size-6 text-[10px] ring-2 ring-[var(--brand-soft)]" />
-            <span className="truncate text-xs font-semibold text-[var(--brand)]">{cartao.responsavelNome}</span>
+            <Avatar nome={cartao.responsavelNome} fotoUrl={cartao.responsavelFotoUrl} className="size-6 text-[10px]" />
+            <span className="truncate text-xs font-medium text-[var(--fg)]">{cartao.responsavelNome}</span>
           </div>
         ) : (
           <span className="text-xs italic text-[var(--fg-muted)]">Sem responsável</span>
