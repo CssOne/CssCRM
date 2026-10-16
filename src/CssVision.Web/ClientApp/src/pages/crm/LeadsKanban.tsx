@@ -134,9 +134,6 @@ function gravarJson(chave: string, valor: unknown) {
   }
 }
 
-/** Nome da coluna sem o complemento entre parênteses ("Em atendimento (Leads)" → "Em atendimento"). */
-const rotuloEtapa = (nome: string) => nome.replace(/\s*\([^)]*\)\s*$/, "");
-
 export function LeadsKanbanPage() {
   const { notificar } = useToast();
   const { temPapel, sessao } = useAuth();
@@ -942,7 +939,7 @@ export function LeadsKanbanPage() {
                       }}
                     >
                       <h2 className="min-w-0 truncate text-[13px] font-bold uppercase tracking-wide" title={coluna.etapa.nome}>
-                        {rotuloEtapa(coluna.etapa.nome)}
+                        {coluna.etapa.nome}
                       </h2>
                       <span
                         className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-[var(--surface)] px-2 text-xs font-bold shadow-sm [font-variant-numeric:tabular-nums]"
@@ -984,7 +981,7 @@ export function LeadsKanbanPage() {
                       key={cartao.leadId}
                       cartao={cartao}
                       corColuna={cor}
-                      nomeColuna={rotuloEtapa(coluna.etapa.nome)}
+                      nomeColuna={coluna.etapa.nome}
                       podeGerir={podeGerir}
                       podeExcluir={podeExcluirCartao(cartao)}
                       podeVerOrigem={podeVerOrigem}
@@ -1063,7 +1060,7 @@ export function LeadsKanbanPage() {
                   className="focus-ring flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-[var(--surface-hover)] disabled:opacity-50"
                 >
                   <ArrowRightLeft className="size-4 text-[var(--fg-muted)]" />
-                  {rotuloEtapa(c.etapa.nome)}
+                  {c.etapa.nome}
                 </button>
               ))}
           </div>

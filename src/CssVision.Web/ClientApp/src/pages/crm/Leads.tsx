@@ -33,6 +33,9 @@ import { LeadForm, leadFormVazio, paraLeadCreateRequest, type LeadFormValues } f
 import { ImportModal } from "../../components/crm/ImportModal";
 import { AssignModal } from "../../components/crm/AssignModal";
 
+/** Nome da etapa sem o complemento entre parênteses ("Em atendimento (Leads)" → "Em atendimento"). */
+const rotuloEtapa = (nome: string) => nome.replace(/\s*\([^)]*\)\s*$/, "");
+
 export function LeadsPage() {
   const { temPapel } = useAuth();
   const podeGerir = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
@@ -378,7 +381,7 @@ export function LeadsPage() {
                     <td className="px-2.5 py-0.5">
                       <Badge variant="neutral">
                         <span className="mr-1 inline-block size-2 rounded-full" style={{ backgroundColor: lead.etapaCor ?? "#94a3b8" }} />
-                        {lead.etapaNome ?? "Sem etapa"}
+                        {lead.etapaNome ? rotuloEtapa(lead.etapaNome) : "Sem etapa"}
                       </Badge>
                     </td>
                     <td className="px-2.5 py-0.5 text-[var(--fg-muted)]">{lead.etapaAtual ?? "—"}</td>
@@ -438,7 +441,7 @@ export function LeadsPage() {
                   <span className="truncate font-medium text-[var(--fg)]">{lead.nomeOuRazaoSocial}</span>
                   <Badge variant="neutral">
                     <span className="mr-1 inline-block size-2 rounded-full" style={{ backgroundColor: lead.etapaCor ?? "#94a3b8" }} />
-                    {lead.etapaNome ?? "Sem etapa"}
+                    {lead.etapaNome ? rotuloEtapa(lead.etapaNome) : "Sem etapa"}
                   </Badge>
                 </div>
                 <div className="mt-1.5 flex items-center gap-2 text-xs text-[var(--fg-muted)]">
