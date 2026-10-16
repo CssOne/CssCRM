@@ -22,7 +22,6 @@ import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
 import { Avatar,
   Badge,
   Button,
-  Checkbox,
   EmptyState,
   ErrorState,
   Modal,
@@ -331,7 +330,6 @@ export function LeadsPage() {
             <table className="w-full text-[13px]">
               <thead className="sticky top-0 z-10 [&_th]:bg-[var(--surface-solid)]">
                 <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--fg-muted)]">
-                  {podeGerir && <th className="w-10 px-4 py-3" />}
                   <th className="px-2 py-3 font-medium">Lead</th>
                   <th className="px-2 py-3 font-medium">Responsável</th>
                   <th className="px-2 py-3 font-medium">Etapa</th>
@@ -350,13 +348,13 @@ export function LeadsPage() {
               </thead>
               <tbody>
                 {dados.itens.map((lead) => (
-                  <tr key={lead.id} className="border-b border-[var(--border)] last:border-0 hover:bg-[var(--surface-hover)]">
-                    {podeGerir && (
-                      <td className="pl-4 pr-1 py-2">
-                        <Checkbox label="" checked={selecionados.has(lead.id)} onChange={() => alternarSelecao(lead.id)} />
-                      </td>
-                    )}
-                    <td className="px-2.5 py-2">
+                  <tr
+                    key={lead.id}
+                    // Sem marcador de seleção: Ctrl/⌘ + clique na linha seleciona o lead (para "Atribuir" em lote).
+                    onClick={podeGerir ? (e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); alternarSelecao(lead.id); } } : undefined}
+                    className={`border-b border-[var(--border)] last:border-0 ${selecionados.has(lead.id) ? "bg-[var(--brand-soft)]" : "hover:bg-[var(--surface-hover)]"}`}
+                  >
+                    <td className="px-2.5 py-1.5">
                       <div className="flex items-center gap-1.5">
                         <Link to={`/app/crm/leads/${lead.id}`} className="focus-ring truncate font-medium text-[var(--fg)] hover:text-[var(--brand)]">
                           {lead.nomeOuRazaoSocial}
@@ -367,7 +365,7 @@ export function LeadsPage() {
                         {[formatarTelefone(lead.telefone), lead.email].filter(Boolean).join(" · ") || "—"}
                       </div>
                     </td>
-                    <td className="px-2.5 py-2">
+                    <td className="px-2.5 py-1.5">
                       {lead.responsavelNome ? (
                         <div className="flex items-center gap-2" title={lead.responsavelNome}>
                           <Avatar nome={lead.responsavelNome} fotoUrl={lead.responsavelFotoUrl} className="size-6 text-[10px]" />
@@ -377,52 +375,52 @@ export function LeadsPage() {
                         <span className="text-[var(--fg-muted)]">—</span>
                       )}
                     </td>
-                    <td className="px-2.5 py-2">
+                    <td className="px-2.5 py-1.5">
                       <Badge variant="neutral">
                         <span className="mr-1 inline-block size-2 rounded-full" style={{ backgroundColor: lead.etapaCor ?? "#94a3b8" }} />
                         {lead.etapaNome ?? "Sem etapa"}
                       </Badge>
                     </td>
-                    <td className="px-2.5 py-2 text-[var(--fg-muted)]">{lead.etapaAtual ?? "—"}</td>
-                    <td className="whitespace-nowrap px-2.5 py-2 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.adesao)}</td>
-                    <td className="whitespace-nowrap px-2.5 py-2 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.fipe)}</td>
-                    <td className="whitespace-nowrap px-2.5 py-2 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.mensalidade)}</td>
-                    <td className="whitespace-nowrap px-2.5 py-2 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.mensalidadeComDesconto)}</td>
-                    <td className="whitespace-nowrap px-2.5 py-2 text-right text-[var(--fg-muted)]">
+                    <td className="px-2.5 py-1.5 text-[var(--fg-muted)]">{lead.etapaAtual ?? "—"}</td>
+                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.adesao)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.fipe)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.mensalidade)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.mensalidadeComDesconto)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg-muted)]">
                       {lead.venda?.porcentagem == null ? "—" : formatarPercentual(lead.venda.porcentagem)}
                     </td>
-                    <td className="whitespace-nowrap px-2.5 py-2 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.rastreador)}</td>
-                    <td className="whitespace-nowrap px-2.5 py-2 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.indicacao)}</td>
-                    <td className="whitespace-nowrap px-2.5 py-2 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.vistoria)}</td>
-                    <td className="whitespace-nowrap px-2.5 py-2 text-right font-medium text-[var(--fg)]">{dinheiro(lead.venda?.total)}</td>
-                    <td className="px-2.5 py-2 text-[var(--fg-muted)]">{formatarData(lead.criadoEm)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.rastreador)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.indicacao)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.vistoria)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right font-medium text-[var(--fg)]">{dinheiro(lead.venda?.total)}</td>
+                    <td className="px-2.5 py-1.5 text-[var(--fg-muted)]">{formatarData(lead.criadoEm)}</td>
                   </tr>
                 ))}
               </tbody>
               {totais && (
                 <tfoot>
                   <tr className="sticky bottom-0 border-t border-[var(--border)] text-xs [&_td]:bg-[var(--surface-solid)]">
-                    <td colSpan={(podeGerir ? 1 : 0) + 4} className="px-2.5 py-2 font-medium text-[var(--fg)]">
+                    <td colSpan={4} className="px-2.5 py-1.5 font-medium text-[var(--fg)]">
                       <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Contagem</span>
                       {totais.contagem.toLocaleString("pt-BR")}
                     </td>
                     {[totais.adesao, totais.fipe, totais.mensalidade, totais.mensalidadeComDesconto].map((v, i) => (
-                      <td key={i} className="whitespace-nowrap px-2.5 py-2 text-right text-[var(--fg)]">
+                      <td key={i} className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg)]">
                         <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Soma</span>
                         {formatarMoeda(v)}
                       </td>
                     ))}
-                    <td className="whitespace-nowrap px-2.5 py-2 text-right text-[var(--fg)]" title="Média da porcentagem das vendas">
+                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg)]" title="Média da porcentagem das vendas">
                       <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Média</span>
                       {formatarPercentual(totais.mediaPorcentagem ?? 0)}
                     </td>
                     {[totais.rastreador, totais.indicacao, totais.vistoria, totais.total].map((v, i) => (
-                      <td key={i} className="whitespace-nowrap px-2.5 py-2 text-right text-[var(--fg)]">
+                      <td key={i} className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg)]">
                         <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Soma</span>
                         {formatarMoeda(v)}
                       </td>
                     ))}
-                    <td className="px-2.5 py-2" />
+                    <td className="px-2.5 py-1.5" />
                   </tr>
                 </tfoot>
               )}
