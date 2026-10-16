@@ -45,7 +45,10 @@ export function BarraDeFiltros({
       return true;
     }
   });
-  const alternar = () =>
+  // Durante a animação o conteúdo é cortado (overflow escondido); depois, volta a ficar solto para as listas dos campos abrirem por cima.
+  const [animando, setAnimando] = useState(false);
+  const alternar = () => {
+    setAnimando(true);
     setAberto((v) => {
       try {
         localStorage.setItem(chave, v ? "0" : "1");
@@ -54,6 +57,7 @@ export function BarraDeFiltros({
       }
       return !v;
     });
+  };
   const campoBusca = useRef<HTMLInputElement>(null);
 
   // "/" leva o cursor para a busca (se a pessoa não estiver digitando em outro campo).
@@ -137,22 +141,42 @@ export function BarraDeFiltros({
         </div>
       </div>
 
-      {aberto ? (
-        <div className="mt-3 border-t border-[var(--border)] pt-3">
-          <div className="filtros-painel grid gap-x-3 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-6">{children}</div>
-          {rodape && <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">{rodape}</div>}
+      {/* Campos: abrem e fecham deslizando (altura animada) com um fade suave; continuam montados para guardar o que foi digitado. */}
+      <div
+        onTransitionEnd={(e) => {
+          if (e.target === e.currentTarget && e.propertyName === "grid-template-rows") setAnimando(false);
+        }}
+        className={`grid transition-[grid-template-rows,opacity,margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+          aberto ? "mt-3 grid-rows-[1fr] opacity-100" : "mt-0 grid-rows-[0fr] opacity-0"
+        }`}
+        inert={!aberto}
+      >
+        <div className={`min-h-0 ${aberto && !animando ? "overflow-visible" : "overflow-hidden"}`}>
+          <div className="border-t border-[var(--border)] pt-3">
+            <div className="filtros-painel grid gap-x-3 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-6">{children}</div>
+            {rodape && <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">{rodape}</div>}
+          </div>
         </div>
-      ) : (
-        temAtivos && (
-          <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-[var(--border)] pt-3">
+      </div>
+
+      {/* Chips dos filtros ativos: aparecem com o mesmo deslize quando os campos estão recolhidos. */}
+      <div
+        className={`grid transition-[grid-template-rows,opacity,margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+          !aberto && temAtivos ? "mt-3 grid-rows-[1fr] opacity-100" : "mt-0 grid-rows-[0fr] opacity-0"
+        }`}
+        inert={aberto || !temAtivos}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="flex flex-wrap items-center gap-1.5 border-t border-[var(--border)] pt-3">
             {chips.map((c) => (
               <span key={c.rotulo} className="inline-flex h-7 items-center gap-1 rounded-full bg-[var(--brand-soft)] pl-1 pr-1 text-xs text-[var(--brand)]">
-                <button type="button" onClick={alternar} title="Editar filtros" className="focus-ring flex h-full max-w-72 cursor-pointer items-center gap-1 rounded-full pl-2 pr-1">
+                <button type="button" tabIndex={!aberto ? 0 : -1} onClick={alternar} title="Editar filtros" className="focus-ring flex h-full max-w-72 cursor-pointer items-center gap-1 rounded-full pl-2 pr-1">
                   <span className="text-[var(--fg-muted)]">{c.rotulo}</span>
                   <span className="truncate font-semibold">{c.valor}</span>
                 </button>
                 <button
                   type="button"
+                  tabIndex={!aberto ? 0 : -1}
                   aria-label={`Remover filtro ${c.rotulo}`}
                   onClick={c.limpar}
                   className="focus-ring flex size-5 cursor-pointer items-center justify-center rounded-full hover:bg-[var(--brand)]/15"
@@ -162,8 +186,8 @@ export function BarraDeFiltros({
               </span>
             ))}
           </div>
-        )
-      )}
+        </div>
+      </div>
     </div>
   );
 }
