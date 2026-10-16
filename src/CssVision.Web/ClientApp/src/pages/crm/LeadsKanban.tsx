@@ -879,20 +879,34 @@ export function LeadsKanbanPage() {
                   setColunaSobre(null);
                   handleDrop(coluna.etapa.id);
                 }}
-                className={`ui-surface flex w-80 shrink-0 flex-col overflow-hidden rounded-2xl border bg-[var(--surface-hover)] transition-colors ${
-                  alvo ? "border-[var(--brand)] bg-[var(--brand-soft)]/60" : "border-[var(--border)]"
+                // Coluna "tingida": o fundo e a borda levam um toque da cor da etapa. Ao arrastar um cartão por cima, ela vira o destaque da marca.
+                style={
+                  alvo
+                    ? undefined
+                    : {
+                        backgroundColor: `color-mix(in srgb, ${cor} 7%, var(--surface-hover))`,
+                        borderColor: `color-mix(in srgb, ${cor} 24%, var(--border))`,
+                      }
+                }
+                className={`ui-surface flex w-80 shrink-0 flex-col overflow-hidden rounded-3xl border transition-colors ${
+                  alvo ? "border-[var(--brand)] bg-[var(--brand-soft)]" : ""
                 }`}
               >
                 <header>
-                  {/* Cabeçalho discreto: marcador na cor da etapa, nome e contagem em cinza. */}
-                  <div className="flex items-center justify-between gap-2 px-4 pb-1 pt-3.5">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: cor }} />
-                      <h2 className="truncate text-[13px] font-semibold tracking-tight text-[var(--fg)]" title={coluna.etapa.nome}>
-                        {coluna.etapa.nome}
-                      </h2>
-                    </div>
-                    <span className="shrink-0 text-xs font-medium text-[var(--fg-muted)] [font-variant-numeric:tabular-nums]" title="Leads nesta coluna">
+                  {/* Título "marcado": pílula na cor da etapa (como um marca-texto), com a contagem ao lado. */}
+                  <div className="flex items-center justify-between gap-2 px-3 pb-1 pt-3">
+                    <h2
+                      className="min-w-0 truncate rounded-full px-3 py-1 text-[13px] font-bold tracking-tight"
+                      style={{ color: `color-mix(in srgb, ${cor} 70%, var(--fg))`, backgroundColor: `color-mix(in srgb, ${cor} 20%, transparent)` }}
+                      title={coluna.etapa.nome}
+                    >
+                      {coluna.etapa.nome}
+                    </h2>
+                    <span
+                      className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-[var(--surface)] px-1.5 text-xs font-semibold shadow-sm [font-variant-numeric:tabular-nums]"
+                      style={{ color: `color-mix(in srgb, ${cor} 70%, var(--fg))` }}
+                      title="Leads nesta coluna"
+                    >
                       {coluna.total.toLocaleString("pt-BR")}
                     </span>
                   </div>
