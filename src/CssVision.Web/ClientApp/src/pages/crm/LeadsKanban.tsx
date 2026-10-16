@@ -1,4 +1,4 @@
-import { ArrowRightLeft, List, Plus, RotateCcw, Save, Trash2, Car } from "lucide-react";
+import { ArrowRightLeft, Bookmark, List, Plus, RotateCcw, Trash2, X, Car } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
@@ -16,7 +16,7 @@ import {
   type GrupoFiltro,
   type VendedorResumo,
 } from "../../lib/types";
-import { Button, ConfirmDialog, EmptyState, ErrorState, Input, Modal, Select, Skeleton, useToast } from "../../components/ui";
+import { Button, ConfirmDialog, EmptyState, ErrorState, Modal, Select, Skeleton, useToast } from "../../components/ui";
 import { LeadForm, leadFormVazio, paraLeadCreateRequest, type LeadFormValues } from "../../components/crm/LeadForm";
 import { VendaConcluidaDialog, type ResultadoVendaConcluida } from "../../components/crm/VendaConcluidaDialog";
 import { StageChangeDialog } from "../../components/crm/StageChangeDialog";
@@ -356,13 +356,13 @@ export function LeadsKanbanPage() {
     notificar("success", `Filtro "${nome}" salvo.`);
   }
 
-  function excluirFiltroSalvo() {
-    if (!filtroSalvoAtual) return;
-    const lista = filtrosSalvos.filter((f) => f.nome !== filtroSalvoAtual);
+  function excluirFiltroSalvo(nome = filtroSalvoAtual) {
+    if (!nome) return;
+    const lista = filtrosSalvos.filter((f) => f.nome !== nome);
     setFiltrosSalvos(lista);
     gravarJson(chaveFiltrosSalvos, lista);
-    notificar("success", `Filtro "${filtroSalvoAtual}" excluído.`);
-    setFiltroSalvoAtual("");
+    notificar("success", `Filtro "${nome}" excluído.`);
+    if (nome === filtroSalvoAtual) setFiltroSalvoAtual("");
   }
 
   const carregar = useCallback(
@@ -685,15 +685,22 @@ export function LeadsKanbanPage() {
           <h1 className="text-xl font-semibold text-[var(--fg)]">Quadro de leads</h1>
           <p className="text-sm text-[var(--fg-muted)]">Arraste os cartões entre as etapas, ou toque no ícone <ArrowRightLeft className="inline size-3.5 align-text-bottom" /> do cartão pra mover.</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setModalNovo(true)}>
-            <Plus className="size-4" /> Novo cliente
-          </Button>
-          <Button variant="secondary" type="button" onClick={() => setLixeiraAberta(true)}>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setModalNovo(true)}
+            className="focus-ring group inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-gradient-to-b from-[color-mix(in_srgb,var(--brand)_86%,white)] to-[var(--brand)] pl-1.5 pr-4 text-sm font-semibold text-[var(--brand-fg)] shadow-[0_8px_20px_-8px_var(--brand)] transition-[transform,box-shadow] hover:-translate-y-px hover:shadow-[0_12px_26px_-8px_var(--brand)] active:translate-y-0"
+          >
+            <span className="flex size-7 items-center justify-center rounded-full bg-white/20 transition-transform duration-200 group-hover:rotate-90">
+              <Plus className="size-4" />
+            </span>
+            Novo cliente
+          </button>
+          <Button variant="secondary" type="button" className="h-10 rounded-full px-4" onClick={() => setLixeiraAberta(true)}>
             <Trash2 className="size-4" /> Lixeira
           </Button>
           <Link to="/app/crm/leads">
-            <Button variant="secondary" type="button">
+            <Button variant="secondary" type="button" className="h-10 rounded-full px-4">
               <List className="size-4" /> Lista
             </Button>
           </Link>
@@ -708,52 +715,80 @@ export function LeadsKanbanPage() {
         onLimparTudo={limparFiltros}
         rodape={
           <>
-            <div className="w-56">
-              <Select aria-label="Filtros salvos" value={filtroSalvoAtual} onChange={(e) => escolherFiltroSalvo(e.target.value)} disabled={filtrosSalvos.length === 0}>
-                <option value="">{filtrosSalvos.length === 0 ? "Nenhum filtro salvo" : "Filtros salvos…"}</option>
-                {filtrosSalvos.map((f) => (
-                  <option key={f.nome} value={f.nome}>
+            <span className="flex items-center gap-1.5 text-xs font-semibold text-[var(--fg-muted)]">
+              <Bookmark className="size-3.5" aria-hidden /> Filtros salvos
+            </span>
+            {filtrosSalvos.length === 0 && !salvandoFiltro && <span className="text-xs text-[var(--fg-muted)]">nenhum ainda</span>}
+            {filtrosSalvos.map((f) => {
+              const ativo = f.nome === filtroSalvoAtual;
+              return (
+                <span
+                  key={f.nome}
+                  className={`inline-flex h-8 items-center overflow-hidden rounded-full border text-sm transition-colors ${
+                    ativo ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[var(--border)] bg-[var(--surface)] text-[var(--fg)] hover:border-[color-mix(in_srgb,var(--brand)_45%,var(--border))]"
+                  }`}
+                >
+                  <button type="button" onClick={() => escolherFiltroSalvo(f.nome)} aria-pressed={ativo} className="focus-ring h-full cursor-pointer pl-3 pr-2 font-medium">
                     {f.nome}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            {filtroSalvoAtual && (
-              <Button variant="ghost" size="sm" onClick={excluirFiltroSalvo}>
-                <Trash2 className="size-4" /> Excluir filtro
-              </Button>
-            )}
+                  </button>
+                  <button
+                    type="button"
+                    title={`Excluir "${f.nome}"`}
+                    aria-label={`Excluir filtro ${f.nome}`}
+                    onClick={() => excluirFiltroSalvo(f.nome)}
+                    className="focus-ring flex h-full cursor-pointer items-center pl-1 pr-2.5 text-[var(--fg-muted)] hover:text-[var(--danger)]"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </span>
+              );
+            })}
             {salvandoFiltro ? (
               <form
-                className="flex flex-wrap items-center gap-2"
+                className="inline-flex items-center gap-1 rounded-full border border-[var(--brand)] bg-[var(--surface)] p-0.5 pl-3"
                 onSubmit={(e) => {
                   e.preventDefault();
                   salvarFiltro();
                 }}
               >
-                <div className="w-56">
-                  <Input aria-label="Nome do filtro" autoFocus value={nomeFiltro} onChange={(e) => setNomeFiltro(e.target.value)} placeholder="Nome do filtro, ex.: Tráfego pago da semana" />
-                </div>
-                <Button size="sm" type="submit" disabled={!nomeFiltro.trim()}>
+                <input
+                  aria-label="Nome do filtro"
+                  autoFocus
+                  value={nomeFiltro}
+                  onChange={(e) => setNomeFiltro(e.target.value)}
+                  onKeyDown={(e) => e.key === "Escape" && setSalvandoFiltro(false)}
+                  placeholder="Nome do filtro…"
+                  className="w-44 bg-transparent text-sm text-[var(--fg)] outline-none placeholder:text-[var(--fg-muted)]"
+                />
+                <button
+                  type="submit"
+                  disabled={!nomeFiltro.trim()}
+                  className="focus-ring h-7 cursor-pointer rounded-full bg-[var(--brand)] px-3 text-xs font-semibold text-[var(--brand-fg)] hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+                >
                   Salvar
-                </Button>
-                <Button variant="ghost" size="sm" type="button" onClick={() => setSalvandoFiltro(false)}>
-                  Cancelar
-                </Button>
+                </button>
+                <button
+                  type="button"
+                  aria-label="Cancelar"
+                  onClick={() => setSalvandoFiltro(false)}
+                  className="focus-ring flex size-7 cursor-pointer items-center justify-center rounded-full text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+                >
+                  <X className="size-3.5" />
+                </button>
               </form>
             ) : (
-              <Button
-                variant="secondary"
-                size="sm"
+              <button
+                type="button"
                 disabled={!filtrosAtivos}
-                title={filtrosAtivos ? undefined : "Escolha algum filtro para salvar"}
+                title={filtrosAtivos ? "Guardar os filtros atuais com um nome" : "Escolha algum filtro para salvar"}
                 onClick={() => {
                   setNomeFiltro(filtroSalvoAtual);
                   setSalvandoFiltro(true);
                 }}
+                className="focus-ring inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-dashed border-[color-mix(in_srgb,var(--brand)_55%,var(--border))] px-3 text-sm font-medium text-[var(--brand)] transition-colors hover:bg-[var(--brand-soft)] disabled:cursor-not-allowed disabled:border-[var(--border)] disabled:text-[var(--fg-muted)] disabled:opacity-60 disabled:hover:bg-transparent"
               >
-                <Save className="size-4" /> Salvar filtro atual
-              </Button>
+                <Plus className="size-3.5" /> Salvar filtro atual
+              </button>
             )}
           </>
         }
