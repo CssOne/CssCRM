@@ -40,6 +40,7 @@ function BotaoAcao({ titulo, perigo, onClick, children }: { titulo: string; peri
  */
 export function CartaoLead({
   cartao,
+  corColuna,
   podeGerir,
   podeExcluir,
   podeVerOrigem,
@@ -53,6 +54,8 @@ export function CartaoLead({
   onDragEnd,
 }: {
   cartao: LeadKanbanCard;
+  /** Cor da coluna onde o cartão está: aparece como um detalhe no topo do cartão. */
+  corColuna: string;
   podeGerir: boolean;
   podeExcluir: boolean;
   podeVerOrigem: boolean;
@@ -78,8 +81,9 @@ export function CartaoLead({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onAbrir}
-      className="group cursor-grab rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 text-sm shadow-[var(--shadow-card)] transition-[box-shadow,transform] hover:-translate-y-px hover:shadow-[0_8px_24px_-10px_rgb(0_0_0/0.22)] active:cursor-grabbing"
+      className="group relative cursor-grab rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 text-sm shadow-[var(--shadow-card)] transition-[box-shadow,transform] hover:-translate-y-px hover:shadow-[0_8px_24px_-10px_rgb(0_0_0/0.22)] active:cursor-grabbing"
     >
+      <span aria-hidden className="absolute left-4 top-0 h-[3px] w-10 rounded-b-full" style={{ backgroundColor: corColuna }} />
       {/* Nome e ações */}
       <div className="flex items-start justify-between gap-2">
         <Link

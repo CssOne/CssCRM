@@ -927,6 +927,7 @@ export function LeadsKanbanPage() {
                     <CartaoLead
                       key={cartao.leadId}
                       cartao={cartao}
+                      corColuna={cor}
                       podeGerir={podeGerir}
                       podeExcluir={podeExcluirCartao(cartao)}
                       podeVerOrigem={podeVerOrigem}
