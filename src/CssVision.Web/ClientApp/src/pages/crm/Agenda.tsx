@@ -401,27 +401,24 @@ export function AgendaPage() {
       {/* Cabeçalho */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex size-11 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]">
-            <CalendarDays className="size-5" />
-          </div>
           <div>
             <h1 className="text-xl font-semibold text-[var(--fg)]">{tituloPeriodo}</h1>
             <p className="text-sm text-[var(--fg-muted)]">Agenda de atividades · arraste uma atividade para outro dia para reagendar</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-            <button type="button" onClick={() => navegar(-1)} className="cursor-pointer rounded-l-lg p-2 hover:bg-[var(--surface-hover)]" aria-label="Anterior">
+          <div className="flex items-center rounded-lg bg-[var(--surface-hover)] p-0.5">
+            <button type="button" onClick={() => navegar(-1)} className="cursor-pointer rounded-md p-1.5 text-[var(--fg-muted)] hover:bg-[var(--surface)] hover:text-[var(--fg)]" aria-label="Anterior">
               <ChevronLeft className="size-4" />
             </button>
-            <button type="button" onClick={irParaHoje} className="cursor-pointer border-x border-[var(--border)] px-3 py-1.5 text-sm font-medium hover:bg-[var(--surface-hover)]">
+            <button type="button" onClick={irParaHoje} className="cursor-pointer rounded-md px-3 py-1 text-sm font-medium hover:bg-[var(--surface)]">
               Hoje
             </button>
-            <button type="button" onClick={() => navegar(1)} className="cursor-pointer rounded-r-lg p-2 hover:bg-[var(--surface-hover)]" aria-label="Próximo">
+            <button type="button" onClick={() => navegar(1)} className="cursor-pointer rounded-md p-1.5 text-[var(--fg-muted)] hover:bg-[var(--surface)] hover:text-[var(--fg)]" aria-label="Próximo">
               <ChevronRight className="size-4" />
             </button>
           </div>
-          <div className="flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5">
+          <div className="flex rounded-lg bg-[var(--surface-hover)] p-0.5">
             {(
               [
                 ["mes", "Mês", CalendarDays],
@@ -434,7 +431,7 @@ export function AgendaPage() {
                 type="button"
                 onClick={() => setVisao(v)}
                 className={`flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium transition ${
-                  visao === v ? "bg-[var(--brand)] text-white" : "text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                  visao === v ? "bg-[var(--surface)] text-[var(--fg)] shadow-[0_1px_2px_rgb(0_0_0/0.12)]" : "text-[var(--fg-muted)] hover:text-[var(--fg)]"
                 }`}
               >
                 <Icone className="size-3.5" /> {rotulo}
@@ -452,17 +449,15 @@ export function AgendaPage() {
         {[
           { rotulo: "Atrasadas", valor: atrasadas.length, cor: "var(--danger)", Icone: AlertTriangle },
           { rotulo: "Para hoje", valor: qtdHoje, cor: "var(--brand)", Icone: Clock },
-          { rotulo: "Esta semana", valor: qtdSemana, cor: "#8b5cf6", Icone: CalendarRange },
+          { rotulo: "Esta semana", valor: qtdSemana, cor: "var(--info)", Icone: CalendarRange },
           { rotulo: "Concluídas no período", valor: qtdConcluidasNoPeriodo, cor: "var(--success)", Icone: CalendarCheck },
         ].map(({ rotulo, valor, cor, Icone }) => (
-          <Card key={rotulo} className="flex items-center gap-3 p-3">
-            <div className="flex size-9 items-center justify-center rounded-lg" style={{ backgroundColor: `color-mix(in srgb, ${cor} 15%, transparent)`, color: cor }}>
-              <Icone className="size-4" />
-            </div>
-            <div>
-              <p className="text-xs text-[var(--fg-muted)]">{rotulo}</p>
-              <p className="text-lg font-semibold text-[var(--fg)]">{atividades ? valor : "—"}</p>
-            </div>
+          <Card key={rotulo} className="p-4">
+            <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--fg-muted)]">
+              <Icone className="size-3.5" style={{ color: cor }} />
+              {rotulo}
+            </p>
+            <p className="mt-1.5 text-2xl font-semibold leading-none tracking-tight text-[var(--fg)] [font-variant-numeric:tabular-nums]">{atividades ? valor : "—"}</p>
           </Card>
         ))}
       </div>

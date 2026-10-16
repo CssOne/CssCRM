@@ -165,18 +165,18 @@ export function PipelinePage() {
               key={coluna.etapa.id}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => handleDrop(coluna.etapa.id)}
-              className="flex w-72 shrink-0 flex-col rounded-xl border border-[var(--border)] bg-[var(--surface-hover)]/40"
+              className="ui-surface flex w-72 shrink-0 flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface-hover)]"
             >
-              <div className="sticky top-0 flex items-center justify-between rounded-t-xl border-b border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+              <div className="sticky top-0 flex items-center justify-between px-4 pb-1 pt-3.5">
                 <div className="flex items-center gap-2">
-                  <span className="size-2 rounded-full" style={{ backgroundColor: coluna.etapa.cor ?? "#64748b" }} />
-                  <span className="text-sm font-medium text-[var(--fg)]">{coluna.etapa.nome}</span>
-                  <span className="text-xs text-[var(--fg-muted)]">({coluna.cartoes.length})</span>
+                  <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: coluna.etapa.cor ?? "#64748b" }} />
+                  <span className="text-[13px] font-semibold tracking-tight text-[var(--fg)]">{coluna.etapa.nome}</span>
+                  <span className="text-xs font-medium text-[var(--fg-muted)] [font-variant-numeric:tabular-nums]">{coluna.cartoes.length}</span>
                 </div>
               </div>
-              <div className="px-2 py-1 text-xs text-[var(--fg-muted)]">{formatarMoeda(coluna.valorTotal)}</div>
+              <div className="px-4 pb-1 text-xs text-[var(--fg-muted)] [font-variant-numeric:tabular-nums]">{formatarMoeda(coluna.valorTotal)}</div>
 
-              <div className="flex-1 space-y-2 overflow-y-auto p-2">
+              <div className="flex-1 space-y-2.5 overflow-y-auto p-2.5">
                 {coluna.cartoes.map((cartao) => (
                   <div
                     key={cartao.opportunityId}
@@ -184,7 +184,7 @@ export function PipelinePage() {
                     onDragStart={() => setCartaoArrastando(cartao)}
                     onDragEnd={() => setCartaoArrastando(null)}
                     onClick={() => setModalMobile(cartao)}
-                    className="focus-ring cursor-grab rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3 text-sm shadow-sm active:cursor-grabbing"
+                    className="focus-ring cursor-grab rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 text-sm shadow-[var(--shadow-card)] transition-[box-shadow,transform] hover:-translate-y-px hover:shadow-[0_8px_24px_-10px_rgb(0_0_0/0.22)] active:cursor-grabbing"
                   >
                     <div className="mb-1 flex items-start justify-between gap-2">
                       <Link
