@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, Eye, EyeOff, ImagePlus, KeyRound, Moon, ShieldCheck, ShieldOff, Sun, Trash2 } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, ImagePlus, KeyRound, Moon, ShieldCheck, ShieldOff, Sparkles, Sun, Trash2 } from "lucide-react";
 import * as QRCode from "qrcode";
 import { api, ApiRequestError, isAbortError, uploadFile } from "../../lib/api";
 import type { Profile, TwoFactorEnableResult, TwoFactorSetup } from "../../lib/types";
@@ -458,29 +458,29 @@ function ModalDesativarDoisFatores({ open, onClose, onDesativado }: { open: bool
 
 function Aparencia() {
   const { tema, definir } = useTheme();
+  const opcoes: { valor: "light" | "dark" | "glass"; rotulo: string; icone: typeof Sun }[] = [
+    { valor: "light", rotulo: "Claro", icone: Sun },
+    { valor: "dark", rotulo: "Escuro", icone: Moon },
+    { valor: "glass", rotulo: "Translúcido", icone: Sparkles },
+  ];
 
   return (
     <Card className="p-5">
       <h2 className="mb-4 text-sm font-semibold text-[var(--fg)]">Aparência</h2>
-      <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={() => definir("light")}
-          className={`focus-ring flex flex-1 items-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium cursor-pointer ${
-            tema === "light" ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[var(--border)] text-[var(--fg)] hover:bg-[var(--surface-hover)]"
-          }`}
-        >
-          <Sun className="size-4" /> Claro
-        </button>
-        <button
-          type="button"
-          onClick={() => definir("dark")}
-          className={`focus-ring flex flex-1 items-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium cursor-pointer ${
-            tema === "dark" ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[var(--border)] text-[var(--fg)] hover:bg-[var(--surface-hover)]"
-          }`}
-        >
-          <Moon className="size-4" /> Escuro
-        </button>
+      <div className="grid gap-3 sm:grid-cols-3">
+        {opcoes.map(({ valor, rotulo, icone: Icone }) => (
+          <button
+            key={valor}
+            type="button"
+            onClick={() => definir(valor)}
+            aria-pressed={tema === valor}
+            className={`focus-ring flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium cursor-pointer ${
+              tema === valor ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[var(--border)] text-[var(--fg)] hover:bg-[var(--surface-hover)]"
+            }`}
+          >
+            <Icone className="size-4" /> {rotulo}
+          </button>
+        ))}
       </div>
     </Card>
   );

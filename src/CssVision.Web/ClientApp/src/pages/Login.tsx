@@ -4,6 +4,7 @@ import { ArrowLeft, Eye, EyeOff, KeyRound, Lock, Mail, MailCheck, ShieldCheck } 
 import { api, isUnauthorized } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Button, Checkbox } from "../components/ui";
+import { SeletorDeTema } from "../components/Shell";
 
 export function LoginPage() {
   const { sessao, login, loginDoisFatores } = useAuth();
@@ -93,14 +94,43 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen items-center justify-center p-0 lg:p-8">
+    <div className="ui-surface flex w-full max-w-6xl overflow-hidden bg-[var(--surface)] lg:min-h-[640px] lg:rounded-[2rem] lg:border lg:border-[var(--border)] lg:p-3 lg:shadow-[var(--shadow-card)]">
       {/* Painel esquerdo: marca, com fundo animado */}
-      <div className="login-aurora relative hidden w-1/2 flex-col justify-between overflow-hidden p-12 lg:flex">
+      <div className="login-aurora relative hidden w-1/2 flex-col justify-between overflow-hidden rounded-3xl p-10 lg:flex">
         <div className="relative z-10 flex items-center gap-2.5">
           <img src="/logo-css-white.png" alt="CSS Brasil" className="size-10 shrink-0 object-contain" />
           <div className="leading-tight">
             <p className="text-base font-extrabold tracking-tight text-white">CSS Brasil</p>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-white/60">CRM Comercial</p>
+          </div>
+        </div>
+
+        {/* Ilustração em vidro: cartões translúcidos sobre uma grade, como no Figma. */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 opacity-90">
+          <div className="absolute inset-0 [background-image:linear-gradient(rgb(255_255_255/0.12)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.12)_1px,transparent_1px)] [background-size:48px_48px]" />
+          <div className="absolute left-12 top-36 w-[78%] rounded-2xl border border-white/30 bg-white/15 p-4 backdrop-blur-md">
+            <div className="mb-4 flex items-center gap-2">
+              <div className="size-8 rounded-full bg-white/50" />
+              <div className="h-2.5 w-20 rounded-full bg-white/60" />
+              <div className="h-2.5 w-14 rounded-full bg-white/30" />
+              <div className="h-2.5 w-14 rounded-full bg-white/30" />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="space-y-2 rounded-xl border border-white/30 bg-white/20 p-3">
+                  <div className="h-2 w-3/4 rounded-full bg-white/70" />
+                  <div className="h-2 w-1/2 rounded-full bg-white/40" />
+                  <div className="mt-3 h-8 rounded-lg bg-white/30" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="absolute right-10 top-80 w-48 rotate-[-4deg] rounded-xl border border-white/40 bg-white/25 p-3 backdrop-blur-md">
+            <div className="flex items-center gap-2">
+              <div className="size-2.5 rounded-full bg-white" />
+              <div className="h-2 w-24 rounded-full bg-white/80" />
+            </div>
           </div>
         </div>
 
@@ -115,7 +145,8 @@ export function LoginPage() {
       </div>
 
       {/* Painel direito: formulário */}
-      <div className="flex w-full flex-col items-center justify-center bg-[var(--surface)] px-6 py-12 lg:w-1/2">
+      <div className="relative flex w-full flex-col items-center justify-center px-6 py-12 lg:w-1/2">
+        <div className="absolute right-4 top-4"><SeletorDeTema /></div>
         <div className="w-full max-w-sm">
           <div className="mb-8 flex items-center gap-2.5 lg:hidden">
             <img src="/logo-css.svg" alt="CSS Brasil" className="size-9 shrink-0 object-contain" />
@@ -172,7 +203,7 @@ export function LoginPage() {
                           required
                           value={emailRecuperacao}
                           onChange={(e) => setEmailRecuperacao(e.target.value)}
-                          className="focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                          className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                           placeholder="voce@empresa.com"
                         />
                       </div>
@@ -228,7 +259,7 @@ export function LoginPage() {
                       required
                       value={codigo2fa}
                       onChange={(e) => setCodigo2fa(e.target.value)}
-                      className="focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-3 text-sm tracking-widest text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                      className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-3 text-sm tracking-widest text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                       placeholder={usarCodigoRecuperacao ? "xxxxx-xxxxx" : "000000"}
                     />
                   </div>
@@ -276,7 +307,7 @@ export function LoginPage() {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                      className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                       placeholder="voce@empresa.com"
                     />
                   </div>
@@ -295,7 +326,7 @@ export function LoginPage() {
                       required
                       value={senha}
                       onChange={(e) => setSenha(e.target.value)}
-                      className="focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-10 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                      className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-10 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                       placeholder="••••••••"
                     />
                     <button
@@ -338,6 +369,7 @@ export function LoginPage() {
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }

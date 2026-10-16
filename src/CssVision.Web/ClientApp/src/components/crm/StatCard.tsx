@@ -23,13 +23,13 @@ export function StatCard({
   };
 
   return (
-    <Card className="flex items-start gap-3 p-4">
-      <div className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${tons[tom]}`}>
+    <Card className="flex items-start gap-3.5 p-5">
+      <div className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${tons[tom]}`}>
         <Icone className="size-5" aria-hidden />
       </div>
       <div className="min-w-0">
         <p className="truncate text-xs font-medium text-[var(--fg-muted)]">{titulo}</p>
-        <p className="text-xl font-semibold text-[var(--fg)]">{valor}</p>
+        <p className="text-2xl font-bold tracking-tight text-[var(--fg)]">{valor}</p>
         {subtitulo && <p className="truncate text-xs text-[var(--fg-muted)]">{subtitulo}</p>}
       </div>
     </Card>

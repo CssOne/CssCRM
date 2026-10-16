@@ -1,9 +1,12 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
-type Tema = "light" | "dark";
+export type Tema = "light" | "dark" | "glass";
+
+export const TEMAS: Tema[] = ["light", "dark", "glass"];
 
 interface ThemeContextValue {
   tema: Tema;
+  /** Passa para o próximo tema (claro → escuro → translúcido). */
   alternar: () => void;
   definir: (tema: Tema) => void;
 }
@@ -13,7 +16,7 @@ const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 function temaInicial(): Tema {
   try {
     const salvo = localStorage.getItem("crm-tema");
-    if (salvo === "light" || salvo === "dark") return salvo;
+    if (salvo === "light" || salvo === "dark" || salvo === "glass") return salvo;
   } catch {
     /* localStorage indisponível — segue com o padrão do sistema */
   }
@@ -24,7 +27,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [tema, setTema] = useState<Tema>(temaInicial);
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", tema === "dark");
+    document.documentElement.dataset.theme = tema;
     try {
       localStorage.setItem("crm-tema", tema);
     } catch {
@@ -33,7 +36,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [tema]);
 
   return (
-    <ThemeContext.Provider value={{ tema, alternar: () => setTema((t) => (t === "dark" ? "light" : "dark")), definir: setTema }}>
+    <ThemeContext.Provider value={{ tema, alternar: () => setTema((t) => TEMAS[(TEMAS.indexOf(t) + 1) % TEMAS.length]), definir: setTema }}>
       {children}
     </ThemeContext.Provider>
   );

@@ -21,6 +21,7 @@ import {
   Monitor,
   Moon,
   Search,
+  Sparkles,
   Settings,
   Sun,
   Target,
@@ -36,7 +37,7 @@ import { useAuth } from "../context/AuthContext";
 import { mostrarNotificacao, somLigado, tocarPlim } from "../lib/avisosDoChat";
 import { usePresenca } from "../lib/usePresenca";
 import { rotuloNaoLidas, useChatNaoLidas } from "../lib/useChatNaoLidas";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme, type Tema } from "../context/ThemeContext";
 import { Avatar, IconButton, useToast } from "./ui";
 import { LembretesAdesao } from "./crm/LembretesAdesao";
 import { NotificacaoNovosLeads } from "./crm/NotificacaoNovosLeads";
@@ -93,7 +94,7 @@ function Logo({ subtitulo, colapsado = false }: { subtitulo: string; colapsado?:
       <img src="/logo-css.svg" alt="CSS Brasil" className="size-9 shrink-0 object-contain" />
       {!colapsado && (
         <div className="min-w-0 leading-tight">
-          <p className="truncate text-sm font-extrabold tracking-tight text-white">CSS Brasil</p>
+          <p className="truncate text-base font-extrabold tracking-tight text-[var(--sidebar-fg)]">CSS Brasil</p>
           <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-[var(--sidebar-fg-muted)]">{subtitulo}</p>
         </div>
       )}
@@ -101,9 +102,38 @@ function Logo({ subtitulo, colapsado = false }: { subtitulo: string; colapsado?:
   );
 }
 
+const OPCOES_TEMA: { valor: Tema; rotulo: string; icone: typeof Sun }[] = [
+  { valor: "light", rotulo: "Tema claro", icone: Sun },
+  { valor: "dark", rotulo: "Tema escuro", icone: Moon },
+  { valor: "glass", rotulo: "Tema translúcido", icone: Sparkles },
+];
+
+export function SeletorDeTema() {
+  const { tema, definir } = useTheme();
+  return (
+    <div role="radiogroup" aria-label="Tema" className="ui-surface flex items-center gap-0.5 rounded-xl border border-[var(--border)] bg-[var(--surface-hover)] p-0.5">
+      {OPCOES_TEMA.map(({ valor, rotulo, icone: Icone }) => (
+        <button
+          key={valor}
+          type="button"
+          role="radio"
+          aria-checked={tema === valor}
+          aria-label={rotulo}
+          title={rotulo}
+          onClick={() => definir(valor)}
+          className={`focus-ring flex size-8 cursor-pointer items-center justify-center rounded-[10px] transition-colors ${
+            tema === valor ? "bg-[var(--brand)] text-[var(--brand-fg)] shadow-sm" : "text-[var(--fg-muted)] hover:text-[var(--fg)]"
+          }`}
+        >
+          <Icone className="size-4" aria-hidden />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Shell({ children }: { children: ReactNode }) {
   const { sessao, logout, temPapel } = useAuth();
-  const { tema, alternar } = useTheme();
   const { notificar } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -147,6 +177,11 @@ export function Shell({ children }: { children: ReactNode }) {
   const itensNav = emPortal ? PORTAL_NAV : sessao?.menu.map((m) => ({ ...m, icone: iconesPorChave[m.icone] ?? Gauge, divisor: false }));
 
 
+  // Só o item mais específico fica marcado (ex.: "Quadro de leads" não acende junto com "Leads").
+  const rotaAtiva = [...(itensNav ?? [])]
+    .filter((i) => !i.rota.startsWith("/tv/") && (location.pathname === i.rota || location.pathname.startsWith(`${i.rota}/`)))
+    .sort((x, y) => y.rota.length - x.rota.length)[0]?.rota;
+
   async function handleLogout() {
     await logout();
     navigate("/login");
@@ -165,13 +200,13 @@ export function Shell({ children }: { children: ReactNode }) {
       {menuAberto && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setMenuAberto(false)} />}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-[var(--sidebar-bg)] transition-[transform,width] lg:translate-x-0 ${
+        className={`ui-surface fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] transition-[transform,width] lg:translate-x-0 ${
           menuAberto ? "translate-x-0" : "-translate-x-full"
         } ${colapsado ? "lg:w-20" : "lg:w-64"}`}
       >
         <div className={`flex h-16 items-center justify-between px-4 ${colapsado ? "lg:justify-center lg:px-0" : ""}`}>
           <Logo subtitulo={emPortal ? "Portal do consultor" : "CRM comercial"} colapsado={colapsado} />
-          <IconButton label="Fechar menu" className="text-white lg:hidden" onClick={() => setMenuAberto(false)}>
+          <IconButton label="Fechar menu" className="lg:hidden" onClick={() => setMenuAberto(false)}>
             <X className="size-4" />
           </IconButton>
         </div>
@@ -180,12 +215,12 @@ export function Shell({ children }: { children: ReactNode }) {
           aria-label={colapsado ? "Expandir menu" : "Recolher menu"}
           title={colapsado ? "Expandir menu" : "Recolher menu"}
           onClick={() => setColapsado((v) => !v)}
-          className="focus-ring absolute -right-3 top-14 z-10 hidden size-6 cursor-pointer items-center justify-center rounded-full border border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] text-[var(--sidebar-fg-muted)] shadow-sm hover:text-white lg:flex"
+          className="focus-ring absolute -right-3 top-14 z-10 hidden size-6 cursor-pointer items-center justify-center rounded-full border border-[var(--sidebar-border)] bg-[var(--surface)] text-[var(--sidebar-fg-muted)] shadow-sm hover:text-[var(--brand)] lg:flex"
         >
           {colapsado ? <ChevronRight className="size-3.5" /> : <ChevronLeft className="size-3.5" />}
         </button>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-3" aria-label="Navegação principal">
+        <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 pb-3 pt-2" aria-label="Navegação principal">
           {itensNav?.map((item) => (
             <div key={item.chave}>
               {item.rota.startsWith("/tv/") ? (
@@ -194,7 +229,7 @@ export function Shell({ children }: { children: ReactNode }) {
                   target="_blank"
                   rel="noopener"
                   title={colapsado ? `${item.rotulo} (abre em outra aba)` : "Abre em outra aba"}
-                  className={`focus-ring flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-[var(--sidebar-fg-muted)] transition-colors hover:bg-[var(--sidebar-bg-active)]/60 hover:text-[var(--sidebar-fg)] ${
+                  className={`focus-ring flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[var(--sidebar-fg-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--sidebar-fg)] ${
                     colapsado ? "lg:justify-center lg:px-2" : ""
                   }`}
                 >
@@ -207,21 +242,22 @@ export function Shell({ children }: { children: ReactNode }) {
                 end={item.rota === "/app" || item.rota === "/app/crm" || item.rota === "/app/portal"}
                 onClick={() => setMenuAberto(false)}
                 title={colapsado ? item.rotulo : undefined}
-                className={({ isActive }) =>
-                  `focus-ring relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                className={({ isActive: ativoPelaRota }) => {
+                  const isActive = ativoPelaRota && item.rota === rotaAtiva;
+                  return `focus-ring relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
                     colapsado ? "lg:justify-center lg:px-2" : ""
                   } ${
                     isActive
-                      ? "bg-[var(--sidebar-bg-active)] text-white"
-                      : "text-[var(--sidebar-fg-muted)] hover:bg-[var(--sidebar-bg-active)]/60 hover:text-[var(--sidebar-fg)]"
-                  }`
-                }
+                      ? "bg-[var(--sidebar-bg-active)] font-semibold text-[var(--sidebar-active-fg)] ring-1 ring-inset ring-[var(--sidebar-active-ring)]"
+                      : "text-[var(--sidebar-fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--sidebar-fg)]"
+                  }`;
+                }}
               >
                 <item.icone className="size-4 shrink-0" aria-hidden />
                 <span className={colapsado ? "lg:hidden" : undefined}>{item.rotulo}</span>
                 {item.chave === "chat" && chatNaoLidas.total > 0 && (
                   <span
-                    className={`ml-auto rounded-full bg-[var(--brand)] px-1.5 text-xs font-semibold text-white ${colapsado ? "lg:absolute lg:right-1 lg:top-1 lg:ml-0 lg:px-1 lg:text-[10px]" : ""}`}
+                    className={`ml-auto rounded-full bg-[var(--brand)] px-1.5 text-xs font-semibold text-[var(--brand-fg)] ${colapsado ? "lg:absolute lg:right-1 lg:top-1 lg:ml-0 lg:px-1 lg:text-[10px]" : ""}`}
                     aria-label={`${chatNaoLidas.total} mensagens não lidas`}
                   >
                     {rotuloNaoLidas(chatNaoLidas.total)}
@@ -238,14 +274,14 @@ export function Shell({ children }: { children: ReactNode }) {
           <div className={`mb-2 flex items-center gap-3 px-2 py-1 ${colapsado ? "lg:justify-center lg:px-0" : ""}`}>
             <Avatar nome={sessao.nomeCompleto} fotoUrl={sessao.fotoUrl} />
             <div className={`min-w-0 ${colapsado ? "lg:hidden" : ""}`}>
-              <p className="truncate text-sm font-medium text-white">{sessao.nomeCompleto}</p>
+              <p className="truncate text-sm font-semibold text-[var(--sidebar-fg)]">{sessao.nomeCompleto}</p>
               <p className="truncate text-xs text-[var(--sidebar-fg-muted)]">{PAPEL_LABEL[sessao.papeis[0]] ?? sessao.papeis[0]}</p>
             </div>
           </div>
           <button
             onClick={handleLogout}
             title={colapsado ? "Sair" : undefined}
-            className={`focus-ring flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-[var(--sidebar-fg-muted)] hover:bg-[var(--sidebar-bg-active)]/60 hover:text-white cursor-pointer ${
+            className={`focus-ring flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--sidebar-fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--sidebar-fg)] cursor-pointer ${
               colapsado ? "lg:justify-center lg:px-2" : ""
             }`}
           >
@@ -256,7 +292,7 @@ export function Shell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className={`flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] ${colapsado ? "lg:pl-20" : "lg:pl-64"}`}>
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--surface)] px-4">
+        <header className="ui-surface sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--header-bg)] px-4 lg:px-6">
           <div className="flex items-center gap-2">
             <IconButton label="Abrir menu" className="lg:hidden" onClick={() => setMenuAberto(true)}>
               <MenuIcon className="size-5" />
@@ -268,7 +304,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
                 placeholder="Buscar clientes..."
-                className="focus-ring w-72 rounded-lg border border-[var(--border)] bg-[var(--bg)] py-2 pl-9 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                className="focus-ring ui-surface w-72 rounded-xl border border-[var(--border)] bg-[var(--surface-hover)] py-2 pl-9 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
               />
             </form>
             )}
@@ -279,9 +315,14 @@ export function Shell({ children }: { children: ReactNode }) {
             <IconButton label="Mensagens (em breve)" onClick={() => notificar("info", "Chat interno chegando em breve.")}>
               <MessageCircle className="size-4" />
             </IconButton>
-            <IconButton label={tema === "dark" ? "Usar tema claro" : "Usar tema escuro"} onClick={alternar}>
-              {tema === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
-            </IconButton>
+            <SeletorDeTema />
+            <div className="ml-1.5 hidden items-center gap-2.5 border-l border-[var(--border)] pl-3 sm:flex">
+              <Avatar nome={sessao.nomeCompleto} fotoUrl={sessao.fotoUrl} className="size-9 text-sm" />
+              <div className="hidden min-w-0 leading-tight xl:block">
+                <p className="max-w-40 truncate text-sm font-semibold text-[var(--fg)]">{sessao.nomeCompleto}</p>
+                <p className="text-xs text-[var(--fg-muted)]">{PAPEL_LABEL[sessao.papeis[0]] ?? sessao.papeis[0]}</p>
+              </div>
+            </div>
           </div>
         </header>
 

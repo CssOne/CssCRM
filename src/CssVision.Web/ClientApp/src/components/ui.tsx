@@ -25,9 +25,9 @@ type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 type ButtonSize = "sm" | "md";
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: "bg-[var(--brand)] text-[var(--brand-fg)] hover:opacity-90 disabled:opacity-50",
+  primary: "bg-[var(--brand)] text-[var(--brand-fg)] shadow-[0_4px_14px_-4px_var(--brand)] hover:brightness-110 disabled:opacity-50 disabled:shadow-none",
   secondary:
-    "bg-[var(--surface)] text-[var(--fg)] border border-[var(--border)] hover:bg-[var(--surface-hover)] disabled:opacity-50",
+    "ui-surface bg-[var(--surface)] text-[var(--fg)] border border-[var(--border)] hover:bg-[var(--surface-hover)] disabled:opacity-50",
   ghost: "text-[var(--fg)] hover:bg-[var(--surface-hover)] disabled:opacity-50",
   danger: "bg-[var(--danger)] text-white hover:opacity-90 disabled:opacity-50",
 };
@@ -44,7 +44,7 @@ export const Button = forwardRef<
   <button
     ref={ref}
     disabled={disabled || loading}
-    className={`focus-ring inline-flex items-center justify-center rounded-lg font-medium transition-colors cursor-pointer disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+    className={`focus-ring inline-flex items-center justify-center rounded-xl font-semibold transition-[background,filter,box-shadow] cursor-pointer disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
     {...props}
   >
     {loading && <Loader2 className="size-4 animate-spin" aria-hidden />}
@@ -62,7 +62,7 @@ export function IconButton({
     <button
       aria-label={label}
       title={label}
-      className={`focus-ring inline-flex size-9 items-center justify-center rounded-lg text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)] cursor-pointer ${className}`}
+      className={`focus-ring inline-flex size-9 items-center justify-center rounded-xl text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)] cursor-pointer ${className}`}
       {...props}
     />
   );
@@ -94,7 +94,7 @@ export function Avatar({ nome, fotoUrl, className = "size-9 text-sm" }: { nome: 
 
 export function Card({ className = "", children }: { className?: string; children: ReactNode }) {
   return (
-    <div className={`rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm ${className}`}>{children}</div>
+    <div className={`ui-surface rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)] ${className}`}>{children}</div>
   );
 }
 
@@ -135,7 +135,7 @@ export function FieldError({ children }: { children?: ReactNode }) {
 }
 
 const fieldBase =
-  "focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 h-10 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)] disabled:opacity-50";
+  "focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3.5 h-10 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)] disabled:opacity-50";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className = "", ...props }, ref) => (
   <input ref={ref} className={`${fieldBase} ${className}`} {...props} />
@@ -433,7 +433,7 @@ export function Select({
         <div
           ref={painelRef}
           style={{ position: "fixed", left: posicao.left, width: posicao.width, top: posicao.top, bottom: posicao.bottom, maxHeight: posicao.maxHeight }}
-          className="z-[70] flex flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-lg"
+          className="ui-surface z-[70] flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] [background-color:color-mix(in_srgb,var(--surface)_92%,var(--bg))] shadow-xl"
           onKeyDown={teclado}
         >
           <div className="border-b border-[var(--border)] p-1.5">
@@ -571,12 +571,12 @@ export function Modal({
   const widths = { sm: "max-w-sm", md: "max-w-lg", lg: "max-w-2xl", xl: "max-w-[min(96vw,80rem)]" };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" {...fundo}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay)] p-4 backdrop-blur-[2px]" role="presentation" {...fundo}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`max-h-[85vh] w-full ${widths[size]} overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl flex flex-col`}
+        className={`ui-surface max-h-[85vh] w-full ${widths[size]} overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)] [background-color:color-mix(in_srgb,var(--surface)_94%,var(--bg))] shadow-2xl flex flex-col`}
       >
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
           <h2 className="text-base font-semibold text-[var(--fg)]">{title}</h2>
@@ -605,12 +605,12 @@ export function Drawer({ open, onClose, title, children }: { open: boolean; onCl
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" role="presentation" {...fundo}>
+    <div className="fixed inset-0 z-50 flex justify-end bg-[var(--overlay)]" role="presentation" {...fundo}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="flex h-full w-full max-w-md flex-col border-l border-[var(--border)] bg-[var(--surface)] shadow-2xl"
+        className="ui-surface flex h-full w-full max-w-md flex-col border-l border-[var(--border)] bg-[var(--surface)] [background-color:color-mix(in_srgb,var(--surface)_94%,var(--bg))] shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
           <h2 className="text-base font-semibold text-[var(--fg)]">{title}</h2>
@@ -768,7 +768,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div
               key={toast.id}
               role="status"
-              className={`flex items-center gap-2 rounded-lg border px-4 py-3 text-sm shadow-lg ${toastClasses[toast.tipo]}`}
+              className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur ${toastClasses[toast.tipo]}`}
             >
               <Icon className="size-4 shrink-0" aria-hidden />
               {toast.mensagem}

@@ -902,26 +902,31 @@ export function LeadsKanbanPage() {
                   setColunaSobre(null);
                   handleDrop(coluna.etapa.id);
                 }}
-                className={`flex w-80 shrink-0 flex-col overflow-hidden rounded-2xl border bg-[var(--surface-hover)]/60 transition-colors ${
+                className={`flex w-80 shrink-0 flex-col overflow-hidden rounded-3xl border bg-[var(--surface-hover)]/60 transition-colors ${
                   alvo ? "border-[var(--brand)] bg-[var(--brand-soft)]/60" : "border-[var(--border)]"
                 }`}
               >
-                <header className="bg-[var(--surface)]">
-                  <div className="h-1" style={{ backgroundColor: cor }} />
-                  <div className="flex items-center justify-between gap-2 border-b border-[var(--border)] px-3 py-2.5">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: cor }} />
-                      <h2 className="truncate text-sm font-semibold text-[var(--fg)]" title={coluna.etapa.nome}>
-                        {coluna.etapa.nome}
-                      </h2>
-                    </div>
-                    <span
-                      className="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold"
-                      style={{ backgroundColor: `${cor}1f`, color: cor }}
-                      title="Leads nesta coluna"
+                <header>
+                  {/* Cabeçalho em "pílula" com a cor da coluna (como no Figma): fundo suave, texto na cor e contagem em destaque. */}
+                  <div className="p-2.5 pb-0">
+                    <div
+                      className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5"
+                      style={{ backgroundColor: `color-mix(in srgb, ${cor} 16%, transparent)` }}
                     >
-                      {coluna.total.toLocaleString("pt-BR")}
-                    </span>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="h-4 w-1 shrink-0 rounded-full" style={{ backgroundColor: cor }} />
+                        <h2 className="truncate text-sm font-semibold text-[var(--fg)]" title={coluna.etapa.nome}>
+                          {coluna.etapa.nome}
+                        </h2>
+                      </div>
+                      <span
+                        className="shrink-0 rounded-full bg-[var(--surface)] px-2.5 py-0.5 text-xs font-bold"
+                        style={{ color: cor }}
+                        title="Leads nesta coluna"
+                      >
+                        {coluna.total.toLocaleString("pt-BR")}
+                      </span>
+                    </div>
                   </div>
                   {coluna.etapa.nome === `${ETAPA_VENDA_CONCLUIDA} (Indicação)` && coluna.etapa.id && (
                     <div className="border-b border-[var(--border)] px-3 py-2">
