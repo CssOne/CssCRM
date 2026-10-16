@@ -1,5 +1,4 @@
 import {
-  Bot,
   Calendar,
   CalendarClock,
   Coins,
@@ -22,7 +21,7 @@ import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarDataHora, formatarMoeda } from "../../lib/format";
 import { TipoAnuncio, TipoAtividade, type Activity, type Announcement, type Dashboard, type MeuAviso, type TvRanking } from "../../lib/types";
 import { useAuth } from "../../context/AuthContext";
-import { Badge, Card, ErrorState, Skeleton, useToast } from "../../components/ui";
+import { Badge, Card, ErrorState, Skeleton } from "../../components/ui";
 import { PortalStatCard } from "../../components/portal/PortalStatCard";
 import { DesempenhoChart } from "../../components/portal/DesempenhoChart";
 import { tipoLabel } from "../../components/crm/ActivityForm";
@@ -37,7 +36,6 @@ function saudacao(): string {
 
 export function PortalDashboardPage() {
   const { sessao } = useAuth();
-  const { notificar } = useToast();
 
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [proximas, setProximas] = useState<Activity[]>([]);
@@ -326,14 +324,6 @@ export function PortalDashboardPage() {
           </div>
         </Card>
       </div>
-
-      <button
-        onClick={() => notificar("info", "Assistente IA chegando em breve.")}
-        className="focus-ring fixed bottom-6 right-6 z-10 flex items-center gap-2 rounded-full bg-[var(--brand)] px-5 py-3 text-sm font-semibold text-white shadow-lg hover:opacity-90"
-      >
-        <Bot className="size-5" />
-        Assistente IA
-      </button>
     </div>
   );
 }
