@@ -15,7 +15,7 @@ public sealed class CardsOriginaisDeAnuncioVoltamParaLeadBackgroundService(
     IServiceScopeFactory scopeFactory,
     ILogger<CardsOriginaisDeAnuncioVoltamParaLeadBackgroundService> logger) : BackgroundService
 {
-    public const string ChaveExecutado = "crm:cards-de-anuncio-voltam-para-lead-em";
+    public const string ChaveExecutado = "crm:cards-de-anuncio-voltam-para-lead-v2-em";
     public const string ChaveStatus = "notion:cards-de-anuncio-voltam-para-lead";
 
     private static readonly TimeSpan EsperaInicial = TimeSpan.FromMinutes(5);
@@ -41,7 +41,7 @@ public sealed class CardsOriginaisDeAnuncioVoltamParaLeadBackgroundService(
     /// </summary>
     public static readonly (Guid Card, Guid LeadDoAnuncio)[] Duplicados =
     [
-        (Guid.Parse("3bdfc22d-412b-45e6-badb-c544aecce9be"), Guid.Parse("7ff71c78-7d62-4811-b8eb-0e1a350e9eca")), // Alexandre Patrício STL1H88
+        // (vazio: o STL1H88 foi acertado à mão pelo time — a carga não mexe nele)
     ];
 
     private static readonly Guid AndreiaId = Guid.Parse("044d370d-7d9b-46d3-8732-6ce9ccbacbce");
@@ -113,11 +113,12 @@ public sealed class CardsOriginaisDeAnuncioVoltamParaLeadBackgroundService(
         var unidos = 0;
         foreach (var (cardId, anuncioId) in pares)
         {
-            var card = await db.CrmLeads.FirstOrDefaultAsync(l => l.Id == cardId && !l.Arquivado, ct);
+            // O card pode já ter sido arquivado pela união automática de duplicados (que guarda a venda arquivada junto): a venda volta para o lead do anúncio.
+            var card = await db.CrmLeads.FirstOrDefaultAsync(l => l.Id == cardId, ct);
             var anuncio = await db.CrmLeads.FirstOrDefaultAsync(l => l.Id == anuncioId && !l.Arquivado && l.MetaLeadId != null, ct);
             if (card is null || anuncio is null || card.ResponsavelId != anuncio.ResponsavelId) continue;
 
-            var vendasDoCard = await db.CrmOpportunities.Where(o => o.LeadId == card.Id && !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho).ToListAsync(ct);
+            var vendasDoCard = await db.CrmOpportunities.Where(o => o.LeadId == card.Id && o.Etapa.Tipo == TipoEtapaPipeline.Ganho && (!o.Arquivado || o.ArquivadoPorId == null)).ToListAsync(ct);
             if (vendasDoCard.Count != 1) continue;
 
             // A venda vazia do lead do anúncio (sem valor) dá lugar à venda real do card.
@@ -131,6 +132,9 @@ public sealed class CardsOriginaisDeAnuncioVoltamParaLeadBackgroundService(
             }
 
             vendasDoCard[0].LeadId = anuncio.Id;
+            vendasDoCard[0].Arquivado = false;
+            vendasDoCard[0].ArquivadoEm = null;
+            vendasDoCard[0].ArquivadoPorId = null;
             anuncio.EtapaId = leads;
             card.Arquivado = true;
             card.ArquivadoEm = agora;

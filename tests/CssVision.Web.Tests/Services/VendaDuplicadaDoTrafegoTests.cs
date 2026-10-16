@@ -43,7 +43,7 @@ public class VendaDuplicadaDoTrafegoTests
 
         void Venda(CrmLead l, Guid responsavel, DateTimeOffset data) => db.CrmOpportunities.Add(new CrmOpportunity
         {
-            LeadId = l.Id, Titulo = l.NomeOuRazaoSocial, ResponsavelId = responsavel, EtapaId = ganho.Id, DataEfetivaFechamento = data, AtivoEm = data,
+            LeadId = l.Id, Titulo = l.NomeOuRazaoSocial, ResponsavelId = responsavel, EtapaId = ganho.Id, DataEfetivaFechamento = data, AtivoEm = data, PagamentoAdesao = 200m,
         });
         Venda(trafego, ricianne.Id, venda); Venda(duplicado, ricianne.Id, venda);
         Venda(trafegoB, ricianne.Id, venda); Venda(outroConsultor, outra.Id, venda);
@@ -64,5 +64,29 @@ public class VendaDuplicadaDoTrafegoTests
         var vendas = await db.CrmOpportunities.AsNoTracking().ToDictionaryAsync(o => o.Titulo);
         Assert.True(vendas["ROBSON CARDOSO"].Arquivado);   // a venda duplicada deixa de contar
         Assert.False(vendas["Robson Cardoso Januario"].Arquivado);
+    }
+
+    [Fact]
+    public async Task VendaVaziaDoLeadDeTrafego_NaoArquivaOCardDoNotionQueTemOsDadosReais()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var ricianne = await factory.CriarUsuarioAsync(db, "Ricianne");
+        var ganho = await factory.CriarEtapaAsync(db, "Ganho", 9, TipoEtapaPipeline.Ganho);
+        var venda = new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero);
+        var trafego = new CrmLead { NomeOuRazaoSocial = "Meta", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ricianne.Id, MetaLeadId = "m1", Placa = "STL1H88", TipoIndicacao = "Lead" };
+        var card = new CrmLead
+        {
+            NomeOuRazaoSocial = "Notion", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ricianne.Id, Placa = "STL1H88", TipoIndicacao = "Indicação", CriadoManualmente = true,
+            ConsentimentoOrigem = OrigemLead.MarcadorSincronizacaoNotion,
+        };
+        db.CrmLeads.AddRange(trafego, card);
+        await db.SaveChangesAsync();
+        db.CrmOpportunities.Add(new CrmOpportunity { LeadId = trafego.Id, Titulo = "vazia", ResponsavelId = ricianne.Id, EtapaId = ganho.Id, DataEfetivaFechamento = venda });
+        db.CrmOpportunities.Add(new CrmOpportunity { LeadId = card.Id, Titulo = "real", ResponsavelId = ricianne.Id, EtapaId = ganho.Id, DataEfetivaFechamento = venda, PagamentoAdesao = 550m });
+        await db.SaveChangesAsync();
+
+        Assert.False(await DuplicidadeDeVendaDoNotion.ArquivarSeDuplicadoDeTrafegoAsync(db, card, CancellationToken.None));
+        Assert.False((await db.CrmLeads.FirstAsync(l => l.Id == card.Id)).Arquivado);
     }
 }
