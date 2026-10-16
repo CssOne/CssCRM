@@ -41,7 +41,7 @@ public sealed class CardsOriginaisDeAnuncioVoltamParaLeadBackgroundService(
     /// </summary>
     public static readonly (Guid Card, Guid LeadDoAnuncio)[] Duplicados =
     [
-        (Guid.Parse("3bdfc22d-412b-45e6-badb-c544aecce9be"), Guid.Parse("7ff71c78-7d62-4811-b8eb-0e1a350e9eca")), // Alexandre Patrício STL1H88
+        // (vazio: o STL1H88 foi acertado à mão pelo time — a carga não mexe nele)
     ];
 
     private static readonly Guid AndreiaId = Guid.Parse("044d370d-7d9b-46d3-8732-6ce9ccbacbce");
