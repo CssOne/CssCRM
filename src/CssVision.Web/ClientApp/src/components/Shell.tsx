@@ -349,7 +349,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
 
         <nav className={`sidebar-nav min-h-0 flex-1 overflow-y-auto px-3 pb-3 ${colapsado ? "lg:px-2" : ""}`} aria-label="Navegação principal">
-          {agruparNav(itensNav ?? []).map((grupo, gi) => (
+          {agruparNav((itensNav ?? []).filter((i) => i.chave !== "suporte")).map((grupo, gi) => (
             <div key={grupo.rotulo} className={gi === 0 ? "" : colapsado ? "mt-4 lg:mt-3" : "mt-4"}>
               {!emPortal && (
                 <p className={`mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--sidebar-fg-muted)]/70 ${colapsado ? "lg:hidden" : ""}`}>{grupo.rotulo}</p>
