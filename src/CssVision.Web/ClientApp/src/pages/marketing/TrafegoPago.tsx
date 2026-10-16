@@ -1,7 +1,6 @@
 import {
   CalendarClock,
   Clock,
-  Filter,
   Handshake,
   Megaphone,
   PhoneMissed,
@@ -15,7 +14,6 @@ import {
   UserPlus,
   Users,
   Wallet,
-  X,
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -27,6 +25,7 @@ import { Badge, Button, Card, ErrorState, Input, Pagination, Select, Skeleton } 
 import { PeriodoInput } from "../../components/PeriodoInput";
 import { StatCard } from "../../components/crm/StatCard";
 import { MultiSelect } from "../../components/MultiSelect";
+import { BarraDeFiltros, CampoDeFiltro, type ChipDeFiltro } from "../../components/Filtros";
 import { useCrmEventos } from "../../lib/useCrmEventos";
 import { BarrasHorizontaisChart, corOQue, DonutChart, HorarioChart, LeadsPorDiaChart } from "../../components/marketing/GraficosTrafego";
 
@@ -167,15 +166,6 @@ function Secao({ titulo, icone, acao, children, className = "" }: { titulo: stri
       </div>
       {children}
     </Card>
-  );
-}
-
-function Campo({ rotulo, children, largura = "w-48" }: { rotulo: string; children: ReactNode; largura?: string }) {
-  return (
-    <div className={largura}>
-      <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">{rotulo}</label>
-      {children}
-    </div>
   );
 }
 
@@ -321,6 +311,19 @@ export function TrafegoPagoPage() {
     return linha ? linha[metricaMensal] : 0;
   };
 
+  // Filtros ativos como chips removíveis (o "O que?" fica nos botões ao lado do botão Filtros).
+  const chipsDeFiltro: ChipDeFiltro[] = [];
+  const addChip = (rotulo: string, valor: string, limpar: () => void) => chipsDeFiltro.push({ rotulo, valor, limpar });
+  if (filtros.fonte !== "trafego") addChip("Leads", filtros.fonte === "novo" ? "Só sistema novo" : "Todos", () => set("fonte", "trafego"));
+  if (filtros.regional.length) addChip("Regional", filtros.regional.join(", "), () => set("regional", []));
+  if (filtros.canal.length) addChip("Canal", filtros.canal.join(", "), () => set("canal", []));
+  if (filtros.origem.length) addChip("Origem", filtros.origem.join(", "), () => set("origem", []));
+  if (filtros.campanha.length) addChip("Campanha", filtros.campanha.join(", "), () => set("campanha", []));
+  if (filtros.responsavelId.length) addChip("Consultor", opcoes.consultores.filter((c) => filtros.responsavelId.includes(c.id)).map((c) => c.nome).join(", ") || `${filtros.responsavelId.length} selecionado(s)`, () => set("responsavelId", []));
+  if (filtros.estado.length) addChip("Estado", filtros.estado.join(", "), () => set("estado", []));
+  if (filtros.etapa.length) addChip("Etapa", filtros.etapa.join(", "), () => set("etapa", []));
+  const limparFiltrosTrafego = () => setFiltros((f) => ({ ...FILTROS_PADRAO, periodo: f.periodo, dataInicio: f.dataInicio, dataFim: f.dataFim }));
+
   return (
     <div className={`space-y-5 transition-opacity ${carregando ? "opacity-60" : ""}`}>
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -331,14 +334,14 @@ export function TrafegoPagoPage() {
             {qtdFiltros > 0 && ` · ${qtdFiltros} filtro(s) ativo(s)`}
           </p>
         </div>
-        <div className="flex flex-wrap gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1">
+        <div className="flex flex-wrap gap-0.5 rounded-lg bg-[var(--surface-hover)] p-0.5">
           {(Object.keys(ROTULO_PERIODO) as Periodo[]).map((p) => (
             <button
               key={p}
               type="button"
               onClick={() => set("periodo", p)}
-              className={`cursor-pointer rounded-md px-2.5 py-1 text-xs font-medium transition ${
-                filtros.periodo === p ? "bg-[var(--brand)] text-white" : "text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+              className={`cursor-pointer rounded-md px-3 py-1 text-xs font-medium transition ${
+                filtros.periodo === p ? "bg-[var(--surface)] text-[var(--fg)] shadow-[0_1px_2px_rgb(0_0_0/0.12)]" : "text-[var(--fg-muted)] hover:text-[var(--fg)]"
               }`}
             >
               {ROTULO_PERIODO[p]}
@@ -348,130 +351,116 @@ export function TrafegoPagoPage() {
       </div>
 
       {/* Filtros */}
-      <Card className="space-y-3 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="flex items-center gap-1 text-xs font-medium text-[var(--fg-muted)]">
-            <Filter className="size-3.5" /> O que?
-          </span>
-          {oQueTags.map((tag, i) => {
-            const ativo = filtros.oQue.includes(tag);
-            const cor = corOQue(tag, i);
-            return (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => alternarOQue(tag)}
-                style={ativo ? { backgroundColor: cor, borderColor: cor } : { borderColor: cor, color: cor }}
-                className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold transition ${ativo ? "text-white shadow-sm" : "bg-transparent hover:opacity-80"}`}
-              >
-                {tag}
-              </button>
-            );
-          })}
-          {filtros.oQue.length > 0 && (
-            <button type="button" onClick={() => set("oQue", [])} className="cursor-pointer text-xs text-[var(--fg-muted)] hover:text-[var(--fg)]">
-              Todos
-            </button>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-end gap-3">
-          {filtros.periodo === "personalizado" && (
-            <>
-              <Campo rotulo="Chegada" largura="w-72">
-                <PeriodoInput ariaLabel="Chegada" de={filtros.dataInicio} ate={filtros.dataFim} onChange={(a, b) => { set("dataInicio", a); set("dataFim", b); }} />
-              </Campo>
-            </>
-          )}
-          <Campo rotulo="Leads considerados" largura="w-56">
-            <Select value={filtros.fonte} onChange={(e) => set("fonte", e.target.value as Filtros["fonte"])}>
-              <option value="trafego">Tráfego pago (sistema + Notion)</option>
-              <option value="novo">Só tráfego do sistema novo</option>
-              <option value="todos">Todos os leads</option>
-            </Select>
-          </Campo>
-          {(opcoes.regionais?.length ?? 0) > 0 && (
-            <Campo rotulo="Regional" largura="w-40">
-              <MultiSelect ariaLabel="Regional" rotuloTodos="Todas" opcoes={(opcoes.regionais ?? []).map((r) => ({ valor: r, rotulo: r }))} valores={filtros.regional} onChange={(v) => set("regional", v)} />
-            </Campo>
-          )}
-          <Campo rotulo="Canal">
-            <MultiSelect ariaLabel="Canal" opcoes={opcoes.canais.map((c) => ({ valor: c, rotulo: c }))} valores={filtros.canal} onChange={(v) => set("canal", v)} />
-          </Campo>
-          <Campo rotulo="Origem">
-            <MultiSelect ariaLabel="Origem" rotuloTodos="Todas" opcoes={opcoes.origens.map((o) => ({ valor: o, rotulo: o }))} valores={filtros.origem} onChange={(v) => set("origem", v)} />
-          </Campo>
-          <Campo rotulo="Campanha" largura="w-56">
-            <MultiSelect ariaLabel="Campanha" rotuloTodos="Todas" opcoes={opcoes.campanhas.map((c) => ({ valor: c, rotulo: c }))} valores={filtros.campanha} onChange={(v) => set("campanha", v)} />
-          </Campo>
-          <Campo rotulo="Consultor">
-            <MultiSelect
-              ariaLabel="Consultor"
-              opcoes={opcoes.consultores.map((c) => ({ valor: c.id, rotulo: c.nome }))}
-              valores={filtros.responsavelId}
-              onChange={(v) => set("responsavelId", v)}
-            />
-          </Campo>
-          <Campo rotulo="Estado" largura="w-36">
-            <MultiSelect ariaLabel="Estado" opcoes={opcoes.estados.map((e) => ({ valor: e, rotulo: e }))} valores={filtros.estado} onChange={(v) => set("estado", v)} />
-          </Campo>
-          <Campo rotulo="Etapa">
-            <MultiSelect ariaLabel="Etapa" rotuloTodos="Todas" opcoes={opcoes.etapas.map((e) => ({ valor: e, rotulo: e }))} valores={filtros.etapa} onChange={(v) => set("etapa", v)} />
-          </Campo>
-          {qtdFiltros > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => setFiltros((f) => ({ ...FILTROS_PADRAO, periodo: f.periodo, dataInicio: f.dataInicio, dataFim: f.dataFim }))}>
-              <X className="size-4" /> Limpar filtros
-            </Button>
-          )}
-        </div>
-
-        {/* Filtros salvos */}
-        <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">
-          <span className="text-xs font-medium text-[var(--fg-muted)]">Filtros salvos:</span>
-          {salvos.length === 0 && <span className="text-xs text-[var(--fg-muted)]">nenhum ainda</span>}
-          {salvos.map((s) => (
-            <span key={s.nome} className="inline-flex items-center overflow-hidden rounded-full border border-[var(--border)] text-xs">
-              <button type="button" onClick={() => setFiltros(normalizar(s.filtros))} className="cursor-pointer px-2.5 py-1 font-medium text-[var(--fg)] hover:bg-[var(--surface-hover)]">
-                {s.nome}
-              </button>
-              <button
-                type="button"
-                title={`Excluir "${s.nome}"`}
-                aria-label={`Excluir filtro ${s.nome}`}
-                onClick={() => excluirFiltro(s.nome)}
-                className="cursor-pointer border-l border-[var(--border)] px-1.5 py-1 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--danger)]"
-              >
-                <Trash2 className="size-3" />
-              </button>
-            </span>
-          ))}
-          {salvando ? (
-            <span className="inline-flex items-center gap-1">
-              <Input
-                autoFocus
-                placeholder="Nome do filtro (ex.: AGV TRUCK – MG)"
-                className="h-8 w-60 text-xs"
-                value={nomeNovoFiltro}
-                onChange={(e) => setNomeNovoFiltro(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") salvarFiltro();
-                  if (e.key === "Escape") setSalvando(false);
-                }}
-              />
-              <Button size="sm" onClick={salvarFiltro} disabled={!nomeNovoFiltro.trim()}>
-                Salvar
+      <BarraDeFiltros
+        chips={chipsDeFiltro}
+        onLimparTudo={limparFiltrosTrafego}
+        acoes={
+          <div className="flex flex-wrap items-center gap-1.5">
+            {oQueTags.map((tag, i) => {
+              const ativo = filtros.oQue.includes(tag);
+              const cor = corOQue(tag, i);
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  aria-pressed={ativo}
+                  onClick={() => alternarOQue(tag)}
+                  className={`focus-ring inline-flex h-9 cursor-pointer items-center gap-2 rounded-full px-3.5 text-sm font-medium transition-colors ${
+                    ativo ? "text-white" : "bg-[var(--surface-hover)] text-[var(--fg)] hover:brightness-95"
+                  }`}
+                  style={ativo ? { backgroundColor: cor } : undefined}
+                >
+                  <span className="size-2 rounded-full" style={{ backgroundColor: ativo ? "#fff" : cor }} />
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+        }
+        rodape={
+          <>
+            <span className="text-xs font-medium text-[var(--fg-muted)]">Filtros salvos</span>
+            {salvos.length === 0 && <span className="text-xs text-[var(--fg-muted)]">nenhum ainda</span>}
+            {salvos.map((s) => (
+              <span key={s.nome} className="inline-flex h-7 items-center overflow-hidden rounded-full bg-[var(--surface-hover)] text-xs">
+                <button type="button" onClick={() => setFiltros(normalizar(s.filtros))} className="h-full cursor-pointer px-3 font-medium text-[var(--fg)] hover:brightness-95">
+                  {s.nome}
+                </button>
+                <button
+                  type="button"
+                  title={`Excluir "${s.nome}"`}
+                  aria-label={`Excluir filtro ${s.nome}`}
+                  onClick={() => excluirFiltro(s.nome)}
+                  className="flex h-full cursor-pointer items-center px-2 text-[var(--fg-muted)] hover:text-[var(--danger)]"
+                >
+                  <Trash2 className="size-3" />
+                </button>
+              </span>
+            ))}
+            {salvando ? (
+              <span className="inline-flex items-center gap-1">
+                <Input
+                  autoFocus
+                  placeholder="Nome do filtro (ex.: AGV TRUCK – MG)"
+                  className="h-8 w-60 text-xs"
+                  value={nomeNovoFiltro}
+                  onChange={(e) => setNomeNovoFiltro(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") salvarFiltro();
+                    if (e.key === "Escape") setSalvando(false);
+                  }}
+                />
+                <Button size="sm" onClick={salvarFiltro} disabled={!nomeNovoFiltro.trim()}>
+                  Salvar
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setSalvando(false)}>
+                  Cancelar
+                </Button>
+              </span>
+            ) : (
+              <Button size="sm" variant="secondary" onClick={() => setSalvando(true)}>
+                <Save className="size-3.5" /> Salvar filtro atual
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => setSalvando(false)}>
-                Cancelar
-              </Button>
-            </span>
-          ) : (
-            <Button size="sm" variant="secondary" onClick={() => setSalvando(true)}>
-              <Save className="size-3.5" /> Salvar filtro atual
-            </Button>
-          )}
-        </div>
-      </Card>
+            )}
+          </>
+        }
+      >
+        {filtros.periodo === "personalizado" && (
+          <CampoDeFiltro rotulo="Chegada" className="sm:col-span-2">
+            <PeriodoInput ariaLabel="Chegada" de={filtros.dataInicio} ate={filtros.dataFim} onChange={(a, b) => { set("dataInicio", a); set("dataFim", b); }} />
+          </CampoDeFiltro>
+        )}
+        <CampoDeFiltro rotulo="Leads considerados">
+          <Select value={filtros.fonte} onChange={(e) => set("fonte", e.target.value as Filtros["fonte"])}>
+            <option value="trafego">Tráfego pago (sistema + Notion)</option>
+            <option value="novo">Só tráfego do sistema novo</option>
+            <option value="todos">Todos os leads</option>
+          </Select>
+        </CampoDeFiltro>
+        {(opcoes.regionais?.length ?? 0) > 0 && (
+          <CampoDeFiltro rotulo="Regional">
+            <MultiSelect ariaLabel="Regional" rotuloTodos="Todas" opcoes={(opcoes.regionais ?? []).map((r) => ({ valor: r, rotulo: r }))} valores={filtros.regional} onChange={(v) => set("regional", v)} />
+          </CampoDeFiltro>
+        )}
+        <CampoDeFiltro rotulo="Canal">
+          <MultiSelect ariaLabel="Canal" opcoes={opcoes.canais.map((c) => ({ valor: c, rotulo: c }))} valores={filtros.canal} onChange={(v) => set("canal", v)} />
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Origem">
+          <MultiSelect ariaLabel="Origem" rotuloTodos="Todas" opcoes={opcoes.origens.map((o) => ({ valor: o, rotulo: o }))} valores={filtros.origem} onChange={(v) => set("origem", v)} />
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Campanha">
+          <MultiSelect ariaLabel="Campanha" rotuloTodos="Todas" opcoes={opcoes.campanhas.map((c) => ({ valor: c, rotulo: c }))} valores={filtros.campanha} onChange={(v) => set("campanha", v)} />
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Consultor">
+          <MultiSelect ariaLabel="Consultor" opcoes={opcoes.consultores.map((c) => ({ valor: c.id, rotulo: c.nome }))} valores={filtros.responsavelId} onChange={(v) => set("responsavelId", v)} />
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Estado">
+          <MultiSelect ariaLabel="Estado" opcoes={opcoes.estados.map((e) => ({ valor: e, rotulo: e }))} valores={filtros.estado} onChange={(v) => set("estado", v)} />
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Etapa">
+          <MultiSelect ariaLabel="Etapa" rotuloTodos="Todas" opcoes={opcoes.etapas.map((e) => ({ valor: e, rotulo: e }))} valores={filtros.etapa} onChange={(v) => set("etapa", v)} />
+        </CampoDeFiltro>
+      </BarraDeFiltros>
 
       {/* Indicadores */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
