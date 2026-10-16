@@ -84,8 +84,8 @@ export function BarraDeFiltros({
     <div className="ui-surface rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[var(--shadow-card)]">
       <div className="flex flex-wrap items-center gap-2">
         {onBusca && (
-          <div className="relative min-w-56 flex-1 sm:max-w-md">
-            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--fg-muted)]" aria-hidden />
+          <div className="relative min-w-44 flex-1 sm:max-w-64">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[var(--fg-muted)]" aria-hidden />
             <input
               ref={campoBusca}
               type="search"
@@ -99,7 +99,7 @@ export function BarraDeFiltros({
               }}
               placeholder={placeholder}
               aria-label={placeholder}
-              className="focus-ring h-9 w-full rounded-full border-0 bg-[var(--surface-hover)] pl-10 pr-10 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)] [&::-webkit-search-cancel-button]:hidden"
+              className="focus-ring h-8 w-full rounded-full border-0 bg-[var(--surface-hover)] pl-8 pr-8 text-[13px] text-[var(--fg)] placeholder:text-[var(--fg-muted)] [&::-webkit-search-cancel-button]:hidden"
             />
             {busca ? (
               <button
@@ -109,12 +109,12 @@ export function BarraDeFiltros({
                   onBusca("");
                   campoBusca.current?.focus();
                 }}
-                className="focus-ring absolute right-2.5 top-1/2 flex size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-[var(--fg-muted)]/30 text-[var(--fg)] hover:bg-[var(--fg-muted)]/50"
+                className="focus-ring absolute right-2 top-1/2 flex size-4 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-[var(--fg-muted)]/30 text-[var(--fg)] hover:bg-[var(--fg-muted)]/50"
               >
-                <X className="size-3" />
+                <X className="size-2.5" />
               </button>
             ) : (
-              <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-1.5 text-[10px] font-medium text-[var(--fg-muted)] lg:block" aria-hidden>
+              <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-1.5 text-[10px] font-medium text-[var(--fg-muted)] lg:block" aria-hidden>
                 /
               </kbd>
             )}
