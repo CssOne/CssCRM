@@ -415,7 +415,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
       </aside>
 
-      <div className={`flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] [--menu-w:0px] lg:pl-[var(--menu-w)] ${colapsado ? "lg:[--menu-w:6rem]" : "lg:[--menu-w:16.5rem]"}`}>
+      <div className={`flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] [--menu-w:0px] lg:pl-[var(--menu-w)] ${colapsado ? "lg:[--menu-w:6rem]" : "lg:[--menu-w:16.5rem]"}`}>
         {/* Cabeçalho flutuante: cartão arredondado (combina com o menu), trilha da seção, busca, ações e o usuário. */}
         <header className="ui-bar sticky top-3 z-20 mx-4 mt-3 flex h-14 items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] px-2.5 shadow-[var(--shadow-card)] lg:mx-8">
           <div className="flex min-w-0 items-center gap-2">
