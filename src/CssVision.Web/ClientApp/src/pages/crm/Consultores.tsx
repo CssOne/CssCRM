@@ -7,6 +7,7 @@ import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarMoeda, formatarPercentual, formatarTelefone } from "../../lib/format";
 import type { ConsultorDesempenho } from "../../lib/types";
 import { Badge, Card, EmptyState, ErrorState, Input, Skeleton, Pagination } from "../../components/ui";
+import { MesInput } from "../../components/PeriodoInput";
 
 function mesAtualIso(): string {
   const hoje = new Date();
@@ -91,7 +92,7 @@ export function ConsultoresPage() {
           <h1 className="text-xl font-semibold text-[var(--fg)]">Consultores</h1>
           <p className="text-sm text-[var(--fg-muted)]">Gerencie todos os consultores e acompanhe o rendimento individual de cada um.</p>
         </div>
-        <Input type="month" value={mesReferencia.slice(0, 7)} onChange={(e) => setMesReferencia(`${e.target.value}-01`)} />
+        <MesInput value={mesReferencia.slice(0, 7)} onChange={(v) => setMesReferencia(`${v}-01`)} />
       </div>
 
       {consultores && consultores.length > 0 && (

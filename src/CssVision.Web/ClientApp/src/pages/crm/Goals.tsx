@@ -7,6 +7,7 @@ import { formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { RegionalGoal, SalesGoal, VendedorResumo } from "../../lib/types";
 import { useAuth } from "../../context/AuthContext";
 import { Badge, Button, Card, EmptyState, ErrorState, Input, Label, Modal, MoneyInput, Select, Skeleton, useToast, Pagination } from "../../components/ui";
+import { MesInput } from "../../components/PeriodoInput";
 
 function mesAtualIso(): string {
   const hoje = new Date();
@@ -233,7 +234,7 @@ export function GoalsPage() {
           <p className="text-sm text-[var(--fg-muted)]">Acompanhamento de meta versus realizado por vendedor.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Input type="month" value={mesReferencia.slice(0, 7)} onChange={(e) => setMesReferencia(`${e.target.value}-01`)} />
+          <MesInput value={mesReferencia.slice(0, 7)} onChange={(v) => setMesReferencia(`${v}-01`)} />
           {podeGerir && (
             <Button onClick={abrirModalNovaMeta}>
               <Plus className="size-4" /> Definir meta

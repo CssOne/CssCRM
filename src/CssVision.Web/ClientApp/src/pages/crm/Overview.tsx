@@ -5,7 +5,7 @@ import { api, isAbortError, toQueryString } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { Dashboard } from "../../lib/types";
-import { Badge, Card, ErrorState, Input, Skeleton } from "../../components/ui";
+import { Badge, Card, ErrorState, Skeleton } from "../../components/ui";
 import { BarrasHorizontaisChart } from "../../components/marketing/GraficosTrafego";
 import { mesAtualIso, useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { StatCard } from "../../components/crm/StatCard";
@@ -13,6 +13,7 @@ import { PagamentosEmAberto } from "../../components/crm/PagamentosEmAberto";
 import { EvolucaoChart, OrigemChart } from "../../components/crm/Charts";
 import { FiltroRegionalDoPainel, useRegionalDoPainel } from "../../components/crm/FiltroRegionalDoPainel";
 import { DetalheDoCardModal } from "../../components/crm/DetalheDoCardModal";
+import { MesInput } from "../../components/PeriodoInput";
 
 export function OverviewPage() {
   const { temPapel } = useAuth();
@@ -83,7 +84,7 @@ export function OverviewPage() {
       <div className="flex flex-wrap gap-4">
         <div className="w-44">
           <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Mês</label>
-          <Input type="month" value={mes} onChange={(e) => e.target.value && setMes(e.target.value)} />
+          <MesInput value={mes} onChange={(v) => v && setMes(v)} />
         </div>
         {podeFiltrar && <FiltroRegionalDoPainel regionais={regionais} valor={regionalId} aoEscolher={escolherRegional} />}
       </div>

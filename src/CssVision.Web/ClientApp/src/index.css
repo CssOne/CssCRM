@@ -116,6 +116,7 @@
   --header-bg: rgb(255 255 255 / 0.38);
   --overlay: rgb(30 45 80 / 0.28);
   --glass-blur: 30px;
+  --surface-filter: blur(30px) saturate(1.8);
   --bar-blur: 30px;
   --page-bg:
     radial-gradient(60rem 42rem at 4% -4%, #b9d0ea 0%, transparent 62%),
@@ -152,10 +153,10 @@ main table tbody tr:hover {
   background: var(--surface-hover);
 }
 
-/* Superfície "vidro": só o tema glass desfoca o que está atrás. */
+/* Superfície "vidro": só o tema glass desfoca o que está atrás (nos outros o filtro fica desligado). */
 .ui-surface {
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.8);
-  backdrop-filter: blur(var(--glass-blur)) saturate(1.8);
+  -webkit-backdrop-filter: var(--surface-filter, none);
+  backdrop-filter: var(--surface-filter, none);
 }
 /* Barras (menu lateral e cabeçalho): material translúcido em todos os temas. */
 .ui-bar {

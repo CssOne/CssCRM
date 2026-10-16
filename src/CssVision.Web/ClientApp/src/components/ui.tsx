@@ -17,6 +17,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
+import { createPortal } from "react-dom";
 import { paraBusca } from "../lib/busca";
 
 // --- Botões ---
@@ -429,7 +430,7 @@ export function Select({
         <span className={`truncate ${escolhida && escolhida.valor !== "" ? "" : "text-[var(--fg-muted)]"}`}>{escolhida?.rotulo || " "}</span>
         <ChevronDown className="size-4 shrink-0 text-[var(--fg-muted)]" aria-hidden />
       </button>
-      {aberto && posicao && (
+      {aberto && posicao && createPortal(
         <div
           ref={painelRef}
           style={{ position: "fixed", left: posicao.left, width: posicao.width, top: posicao.top, bottom: posicao.bottom, maxHeight: posicao.maxHeight }}
@@ -471,7 +472,8 @@ export function Select({
               </button>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
