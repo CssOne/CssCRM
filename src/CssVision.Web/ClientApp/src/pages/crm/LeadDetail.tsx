@@ -312,10 +312,15 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
         </Button>
       )}
 
-      <Card className="p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-[var(--fg)]">{lead.nomeOuRazaoSocial}</h1>
+      <Card className="overflow-hidden !rounded-3xl p-0">
+        <div aria-hidden className="h-16 bg-gradient-to-r from-[var(--brand)] via-[color-mix(in_srgb,var(--brand)_70%,#467FC5)] to-[color-mix(in_srgb,var(--brand)_40%,#A6C3E0)]" />
+        <div className="px-5 pb-5">
+        <div className="-mt-8 flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <span className="flex size-16 items-center justify-center rounded-2xl border-4 border-[var(--surface-solid)] bg-[var(--brand-soft)] text-xl font-bold text-[var(--brand)] shadow-[var(--shadow-card)]">
+              {lead.nomeOuRazaoSocial.split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join("").toUpperCase()}
+            </span>
+            <h1 className="mt-2 text-xl font-bold tracking-tight text-[var(--fg)]">{lead.nomeOuRazaoSocial}</h1>
             <p className="text-sm text-[var(--fg-muted)]">
               {lead.tipoPessoa === TipoPessoa.Fisica ? "Pessoa física" : "Pessoa jurídica"} · {formatarDocumento(lead.documento)}
             </p>
@@ -355,7 +360,7 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
             </div>
             <EtapaDoLead lead={lead} onMudou={() => carregar()} />
           </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
+          <div className="mt-9 flex shrink-0 flex-wrap gap-2">
             {sessao?.menu.some((m) => m.chave === "chat") && (
               <Button variant="secondary" onClick={() => setModalConversar(true)} title="Publica este lead numa conversa do chat para a equipe conversar sobre ele">
                 <MessagesSquare className="size-4" /> Conversar
@@ -375,7 +380,7 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 border-t border-[var(--border)] pt-4 @md:grid-cols-2 @4xl:grid-cols-4">
+        <div className="mt-4 grid gap-2 border-t border-[var(--border)] pt-4 @md:grid-cols-2 @4xl:grid-cols-4">
           <InfoItem icone={Phone} label="Telefone" valor={formatarTelefone(lead.telefone)} />
           {lead.telefone2 && <InfoItem icone={Phone} label="Telefone 2" valor={formatarTelefone(lead.telefone2)} />}
           <InfoItem icone={Mail} label="E-mail" valor={lead.email || "-"} />
@@ -405,13 +410,14 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
             </>
           )}
         </div>
+        </div>
       </Card>
 
       <div className="grid gap-4 @3xl:grid-cols-3">
         <div className="space-y-4 @3xl:col-span-2">
-          <Card className="p-5">
+          <Card className="!rounded-3xl p-5">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[var(--fg)]">Oportunidades</h2>
+              <h2 className="text-[15px] font-bold tracking-tight text-[var(--fg)]">Oportunidades</h2>
               <Button size="sm" variant="secondary" onClick={() => setModalOportunidade(true)}>
                 <Plus className="size-4" /> Nova
               </Button>
@@ -425,7 +431,7 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
                     op.cpf || op.estado || op.ativoEm || op.porcentagem != null || op.mensalidade != null ||
                     op.total != null || op.veiculo?.descricao || op.veiculo?.placa || op.veiculo?.chassi;
                   return (
-                    <li key={op.id} className="rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm">
+                    <li key={op.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface-hover)] px-3.5 py-3 text-sm">
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="font-medium text-[var(--fg)]">{op.titulo}</p>
@@ -497,24 +503,24 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
             )}
           </Card>
 
-          <Card className="p-5">
-            <h2 className="mb-3 text-sm font-semibold text-[var(--fg)]">Linha do tempo</h2>
+          <Card className="!rounded-3xl p-5">
+            <h2 className="mb-3 text-[15px] font-bold tracking-tight text-[var(--fg)]">Linha do tempo</h2>
             <Timeline itens={timeline} />
           </Card>
         </div>
 
         <div className="space-y-4">
-          <Card className="p-5">
+          <Card className="!rounded-3xl p-5">
             <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[var(--fg)]">Próximo contato</h2>
+              <h2 className="text-[15px] font-bold tracking-tight text-[var(--fg)]">Próximo contato</h2>
               <Button size="sm" variant="secondary" onClick={() => setModalAtividade(true)}>
                 <Plus className="size-4" /> Agendar
               </Button>
             </div>
           </Card>
 
-          <Card className="p-5">
-            <h2 className="mb-3 text-sm font-semibold text-[var(--fg)]">Nova anotação</h2>
+          <Card className="!rounded-3xl p-5">
+            <h2 className="mb-3 text-[15px] font-bold tracking-tight text-[var(--fg)]">Nova anotação</h2>
             <Textarea value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Escreva uma anotação sobre o lead..." />
             <div className="mt-2 flex justify-end">
               <Button size="sm" onClick={adicionarNota} loading={salvando} disabled={!nota.trim()}>
@@ -678,11 +684,13 @@ function AnexosDaVenda({ op }: { op: LeadOpportunitySummary }) {
 
 function InfoItem({ icone: Icone, label, valor }: { icone: typeof Phone; label: string; valor: string }) {
   return (
-    <div className="flex items-start gap-2">
-      <Icone className="mt-0.5 size-4 shrink-0 text-[var(--fg-muted)]" aria-hidden />
+    <div className="flex min-w-0 items-center gap-2.5 rounded-xl bg-[var(--surface-hover)] px-2.5 py-2">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]">
+        <Icone className="size-4" aria-hidden />
+      </span>
       <div className="min-w-0">
-        <p className="text-xs text-[var(--fg-muted)]">{label}</p>
-        <p className="truncate text-sm text-[var(--fg)]">{valor}</p>
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">{label}</p>
+        <p className="truncate text-sm font-medium text-[var(--fg)]" title={valor}>{valor}</p>
       </div>
     </div>
   );
