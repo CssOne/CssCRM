@@ -83,8 +83,8 @@ export function BarraDeFiltros({
       </div>
 
       {aberto && (
-        <div className="ui-surface relative z-30 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-card)]">
-          <div className="grid gap-x-4 gap-y-3.5 sm:grid-cols-2 lg:grid-cols-4">{children}</div>
+        <div className="ui-surface relative z-30 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-3.5 shadow-[var(--shadow-card)]">
+          <div className="filtros-painel grid gap-x-3 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-6">{children}</div>
           {rodape && <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">{rodape}</div>}
         </div>
       )}
@@ -118,8 +118,8 @@ export function BarraDeFiltros({
 export function CampoDeFiltro({ rotulo, extra, className = "", children }: { rotulo: string; extra?: ReactNode; className?: string; children: ReactNode }) {
   return (
     <div className={`min-w-0 ${className}`}>
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">{rotulo}</span>
+      <div className="mb-1 flex items-center justify-between gap-2 px-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">{rotulo}</span>
         {extra}
       </div>
       {children}

@@ -357,3 +357,16 @@ body {
 .sidebar-nav::-webkit-scrollbar-thumb:hover {
   background-color: rgb(255 255 255 / 0.5);
 }
+
+/* Painel de filtros: campos menores e em formato de pílula, para caber em duas linhas. */
+.filtros-painel :is(button, input)[class*="h-9"],
+.filtros-painel :is(button, input)[class*="h-10"] {
+  height: 2rem;
+  border-radius: 9999px;
+  padding-inline: 0.875rem;
+  font-size: 0.8125rem;
+}
+.filtros-painel input[type="checkbox"] {
+  height: auto;
+  border-radius: 0.25rem;
+}
