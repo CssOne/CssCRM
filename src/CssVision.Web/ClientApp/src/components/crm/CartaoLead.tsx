@@ -1,5 +1,5 @@
 import { ArrowRightLeft, Car, Clock, Mail, Phone, Trash2, UserCog, XCircle } from "lucide-react";
-import type { CSSProperties, DragEvent, MouseEvent, ReactNode } from "react";
+import type { DragEvent, MouseEvent, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { diasRelativos, formatarData, formatarDataHora, formatarMoeda, formatarTelefone } from "../../lib/format";
 import type { LeadKanbanCard } from "../../lib/types";
@@ -41,6 +41,7 @@ function BotaoAcao({ titulo, perigo, onClick, children }: { titulo: string; peri
 export function CartaoLead({
   cartao,
   corColuna,
+  nomeColuna,
   podeGerir,
   podeExcluir,
   podeVerOrigem,
@@ -54,8 +55,9 @@ export function CartaoLead({
   onDragEnd,
 }: {
   cartao: LeadKanbanCard;
-  /** Cor da coluna onde o cartão está: dá ao cartão um brilho suave no canto superior esquerdo e tinge a borda. */
+  /** Cor e nome da coluna onde o cartão está: viram uma etiqueta da etapa no topo do cartão. */
   corColuna: string;
+  nomeColuna: string;
   podeGerir: boolean;
   podeExcluir: boolean;
   podeVerOrigem: boolean;
@@ -81,10 +83,22 @@ export function CartaoLead({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onAbrir}
-      // A cor da coluna vira uma variável: o brilho, a borda, a sombra do hover e o anel do avatar usam todos a mesma cor.
-      style={{ "--cor-coluna": corColuna } as CSSProperties}
-      className="group relative cursor-grab rounded-xl border border-[color-mix(in_srgb,var(--cor-coluna)_30%,var(--border))] bg-[var(--surface)] bg-[image:radial-gradient(130%_95%_at_0%_0%,color-mix(in_srgb,var(--cor-coluna)_17%,transparent),transparent_64%)] p-3.5 text-sm shadow-[var(--shadow-card)] transition-[box-shadow,transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--cor-coluna)_65%,var(--border))] hover:bg-[image:radial-gradient(130%_95%_at_0%_0%,color-mix(in_srgb,var(--cor-coluna)_27%,transparent),transparent_72%)] hover:shadow-[0_14px_30px_-14px_var(--cor-coluna)] active:translate-y-0 active:cursor-grabbing"
+      className="group relative cursor-grab rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 text-sm shadow-[var(--shadow-card)] transition-[box-shadow,transform] hover:-translate-y-px hover:shadow-[0_8px_24px_-10px_rgb(0_0_0/0.22)] active:cursor-grabbing"
     >
+      {/* Etiqueta da etapa (cor da coluna) e há quanto tempo o lead chegou */}
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span
+          className="inline-flex max-w-[70%] items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+          style={{ color: `color-mix(in srgb, ${corColuna} 62%, var(--fg))`, backgroundColor: `color-mix(in srgb, ${corColuna} 15%, transparent)` }}
+        >
+          <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: corColuna }} />
+          <span className="truncate">{nomeColuna}</span>
+        </span>
+        <span className="shrink-0 text-[10px] text-[var(--fg-muted)]" title={`Chegou ${diasRelativos(cartao.criadoEm)}`}>
+          {diasRelativos(cartao.criadoEm)}
+        </span>
+      </div>
+
       {/* Nome e ações */}
       <div className="flex items-start justify-between gap-2">
         <Link
@@ -216,10 +230,10 @@ export function CartaoLead({
       )}
 
       {/* Responsável e chegada */}
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[color-mix(in_srgb,var(--cor-coluna)_22%,var(--border))] pt-2.5">
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
         {cartao.responsavelNome ? (
           <div className="flex min-w-0 items-center gap-1.5" title={`Responsável: ${cartao.responsavelNome}`}>
-            <Avatar nome={cartao.responsavelNome} fotoUrl={cartao.responsavelFotoUrl} className="size-6 text-[10px] ring-2 ring-[color-mix(in_srgb,var(--cor-coluna)_50%,transparent)]" />
+            <Avatar nome={cartao.responsavelNome} fotoUrl={cartao.responsavelFotoUrl} className="size-6 text-[10px]" />
             <span className="truncate text-xs font-medium text-[var(--fg)]">{cartao.responsavelNome}</span>
           </div>
         ) : (
