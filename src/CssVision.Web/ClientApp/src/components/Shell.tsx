@@ -199,99 +199,111 @@ export function Shell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen bg-[var(--bg)]">
       {menuAberto && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setMenuAberto(false)} />}
 
+      {/* Barra lateral flutuante: painel arredondado solto das bordas (no celular vira gaveta). Item ativo com "azulejo" de ícone na cor da marca. */}
       <aside
-        className={`ui-surface fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] transition-[transform,width] lg:translate-x-0 ${
+        className={`ui-surface fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] transition-[transform,width] max-lg:border-r lg:inset-y-3 lg:left-3 lg:translate-x-0 lg:rounded-[1.75rem] lg:border lg:shadow-[var(--shadow-card)] ${
           menuAberto ? "translate-x-0" : "-translate-x-full"
-        } ${colapsado ? "lg:w-20" : "lg:w-64"}`}
+        } ${colapsado ? "lg:w-[4.75rem]" : "lg:w-64"}`}
       >
-        <div className={`flex h-16 items-center justify-between px-4 ${colapsado ? "lg:justify-center lg:px-0" : ""}`}>
+        <div className={`flex items-center justify-between gap-2 p-4 ${colapsado ? "lg:flex-col lg:px-2" : ""}`}>
           <Logo subtitulo={emPortal ? "Portal do consultor" : "CRM comercial"} colapsado={colapsado} />
           <IconButton label="Fechar menu" className="lg:hidden" onClick={() => setMenuAberto(false)}>
             <X className="size-4" />
           </IconButton>
+          <button
+            aria-label={colapsado ? "Expandir menu" : "Recolher menu"}
+            title={colapsado ? "Expandir menu" : "Recolher menu"}
+            onClick={() => setColapsado((v) => !v)}
+            className="focus-ring hidden size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-[var(--sidebar-fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--brand)] lg:flex"
+          >
+            {colapsado ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
+          </button>
         </div>
 
-        <button
-          aria-label={colapsado ? "Expandir menu" : "Recolher menu"}
-          title={colapsado ? "Expandir menu" : "Recolher menu"}
-          onClick={() => setColapsado((v) => !v)}
-          className="focus-ring absolute -right-3 top-14 z-10 hidden size-6 cursor-pointer items-center justify-center rounded-full border border-[var(--sidebar-border)] bg-[var(--surface)] text-[var(--sidebar-fg-muted)] shadow-sm hover:text-[var(--brand)] lg:flex"
-        >
-          {colapsado ? <ChevronRight className="size-3.5" /> : <ChevronLeft className="size-3.5" />}
-        </button>
-
-        <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 pb-3 pt-2" aria-label="Navegação principal">
-          {itensNav?.map((item) => (
-            <div key={item.chave}>
-              {item.rota.startsWith("/tv/") ? (
-                <a
-                  href={item.rota}
-                  target="_blank"
-                  rel="noopener"
-                  title={colapsado ? `${item.rotulo} (abre em outra aba)` : "Abre em outra aba"}
-                  className={`focus-ring flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[var(--sidebar-fg-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--sidebar-fg)] ${
-                    colapsado ? "lg:justify-center lg:px-2" : ""
-                  }`}
-                >
-                  <item.icone className="size-4 shrink-0" aria-hidden />
-                  <span className={colapsado ? "lg:hidden" : undefined}>{item.rotulo}</span>
-                </a>
-              ) : (
-              <NavLink
-                to={item.rota}
-                end={item.rota === "/app" || item.rota === "/app/crm" || item.rota === "/app/portal"}
-                onClick={() => setMenuAberto(false)}
-                title={colapsado ? item.rotulo : undefined}
-                className={({ isActive: ativoPelaRota }) => {
-                  const isActive = ativoPelaRota && item.rota === rotaAtiva;
-                  return `focus-ring relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-                    colapsado ? "lg:justify-center lg:px-2" : ""
-                  } ${
-                    isActive
-                      ? "bg-[var(--sidebar-bg-active)] font-semibold text-[var(--sidebar-active-fg)] ring-1 ring-inset ring-[var(--sidebar-active-ring)]"
-                      : "text-[var(--sidebar-fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--sidebar-fg)]"
-                  }`;
-                }}
-              >
-                <item.icone className="size-4 shrink-0" aria-hidden />
-                <span className={colapsado ? "lg:hidden" : undefined}>{item.rotulo}</span>
-                {item.chave === "chat" && chatNaoLidas.total > 0 && (
-                  <span
-                    className={`ml-auto rounded-full bg-[var(--brand)] px-1.5 text-xs font-semibold text-[var(--brand-fg)] ${colapsado ? "lg:absolute lg:right-1 lg:top-1 lg:ml-0 lg:px-1 lg:text-[10px]" : ""}`}
-                    aria-label={`${chatNaoLidas.total} mensagens não lidas`}
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-3" aria-label="Navegação principal">
+          {itensNav?.map((item) => {
+            const linhaBase = `focus-ring group relative flex items-center gap-3 rounded-2xl p-1.5 pr-3 text-sm font-medium transition-colors ${colapsado ? "lg:justify-center lg:pr-1.5" : ""}`;
+            const azulejo = (ativo: boolean) =>
+              `flex size-9 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                ativo
+                  ? "bg-[var(--brand)] text-[var(--brand-fg)] shadow-[0_6px_14px_-6px_var(--brand)]"
+                  : "bg-[var(--surface-hover)] text-[var(--sidebar-fg-muted)] group-hover:text-[var(--brand)]"
+              }`;
+            return (
+              <div key={item.chave}>
+                {item.rota.startsWith("/tv/") ? (
+                  <a
+                    href={item.rota}
+                    target="_blank"
+                    rel="noopener"
+                    title={colapsado ? `${item.rotulo} (abre em outra aba)` : "Abre em outra aba"}
+                    className={`${linhaBase} text-[var(--sidebar-fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--sidebar-fg)]`}
                   >
-                    {rotuloNaoLidas(chatNaoLidas.total)}
-                  </span>
+                    <span className={azulejo(false)}>
+                      <item.icone className="size-[18px]" aria-hidden />
+                    </span>
+                    <span className={colapsado ? "lg:hidden" : undefined}>{item.rotulo}</span>
+                  </a>
+                ) : (
+                  <NavLink
+                    to={item.rota}
+                    end={item.rota === "/app" || item.rota === "/app/crm" || item.rota === "/app/portal"}
+                    onClick={() => setMenuAberto(false)}
+                    title={colapsado ? item.rotulo : undefined}
+                    className={({ isActive: ativoPelaRota }) => {
+                      const isActive = ativoPelaRota && item.rota === rotaAtiva;
+                      return `${linhaBase} ${
+                        isActive
+                          ? "bg-[var(--brand-soft)] font-semibold text-[var(--brand)]"
+                          : "text-[var(--sidebar-fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--sidebar-fg)]"
+                      }`;
+                    }}
+                  >
+                    {({ isActive: ativoPelaRota }) => (
+                      <>
+                        <span className={azulejo(ativoPelaRota && item.rota === rotaAtiva)}>
+                          <item.icone className="size-[18px]" aria-hidden />
+                        </span>
+                        <span className={`truncate ${colapsado ? "lg:hidden" : ""}`}>{item.rotulo}</span>
+                        {item.chave === "chat" && chatNaoLidas.total > 0 && (
+                          <span
+                            className={`ml-auto rounded-full bg-[var(--danger)] px-1.5 text-xs font-bold text-white ${colapsado ? "lg:absolute lg:right-0.5 lg:top-0.5 lg:ml-0 lg:px-1 lg:text-[10px]" : ""}`}
+                            aria-label={`${chatNaoLidas.total} mensagens não lidas`}
+                          >
+                            {rotuloNaoLidas(chatNaoLidas.total)}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </NavLink>
                 )}
-              </NavLink>
-              )}
-              {item.divisor && <div className="my-2 border-t border-[var(--sidebar-border)]" />}
-            </div>
-          ))}
+                {item.divisor && <div className="my-2 border-t border-[var(--sidebar-border)]" />}
+              </div>
+            );
+          })}
         </nav>
 
-        <div className="border-t border-[var(--sidebar-border)] p-3">
-          <div className={`mb-2 flex items-center gap-3 px-2 py-1 ${colapsado ? "lg:justify-center lg:px-0" : ""}`}>
-            <Avatar nome={sessao.nomeCompleto} fotoUrl={sessao.fotoUrl} />
-            <div className={`min-w-0 ${colapsado ? "lg:hidden" : ""}`}>
+        {/* Cartão do usuário no rodapé, com o botão de sair. */}
+        <div className="p-3">
+          <div className={`flex items-center gap-2.5 rounded-2xl bg-[var(--surface-hover)] p-2 ${colapsado ? "lg:flex-col lg:p-1.5" : ""}`}>
+            <Avatar nome={sessao.nomeCompleto} fotoUrl={sessao.fotoUrl} className="size-9 text-sm" />
+            <div className={`min-w-0 flex-1 leading-tight ${colapsado ? "lg:hidden" : ""}`}>
               <p className="truncate text-sm font-semibold text-[var(--sidebar-fg)]">{sessao.nomeCompleto}</p>
               <p className="truncate text-xs text-[var(--sidebar-fg-muted)]">{PAPEL_LABEL[sessao.papeis[0]] ?? sessao.papeis[0]}</p>
             </div>
+            <button
+              onClick={handleLogout}
+              aria-label="Sair"
+              title="Sair"
+              className="focus-ring flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-[var(--sidebar-fg-muted)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
+            >
+              <LogOut className="size-4" aria-hidden />
+            </button>
           </div>
-          <button
-            onClick={handleLogout}
-            title={colapsado ? "Sair" : undefined}
-            className={`focus-ring flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-[var(--sidebar-fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--sidebar-fg)] cursor-pointer ${
-              colapsado ? "lg:justify-center lg:px-2" : ""
-            }`}
-          >
-            <LogOut className="size-4 shrink-0" aria-hidden />
-            <span className={colapsado ? "lg:hidden" : undefined}>Sair</span>
-          </button>
         </div>
       </aside>
 
-      <div className={`flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] ${colapsado ? "lg:pl-20" : "lg:pl-64"}`}>
+      <div className={`flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] ${colapsado ? "lg:pl-[6.25rem]" : "lg:pl-[17.5rem]"}`}>
         <header className="ui-surface sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--header-bg)] px-4 lg:px-6">
           <div className="flex items-center gap-2">
             <IconButton label="Abrir menu" className="lg:hidden" onClick={() => setMenuAberto(true)}>
