@@ -412,56 +412,75 @@ export function AgendaPage() {
     }
   }
 
-  const Cartao = ({ a }: { a: Activity }) => (
-    <div
-      draggable={a.status === StatusAtividade.Pendente}
-      onDragStart={() => setArrastando(a)}
-      onDragEnd={() => setArrastando(null)}
-      className={`group flex items-start gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-sm shadow-[var(--shadow-card)] transition hover:-translate-y-px hover:shadow-md ${
-        a.status === StatusAtividade.Concluida ? "opacity-60" : ""
-      }`}
-    >
-      <CheckBotao a={a} />
-      <button type="button" onClick={() => abrirLead(a.leadId)} className="min-w-0 flex-1 cursor-pointer text-left">
-        <div className="flex items-center justify-between gap-2">
-          <span
-            className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-            style={{ backgroundColor: `color-mix(in srgb, ${COR_TIPO[a.tipo]} 16%, transparent)`, color: `color-mix(in srgb, ${COR_TIPO[a.tipo]} 72%, var(--fg))` }}
-          >
-            {tipoLabel[a.tipo]}
-          </span>
-          <span className={`flex items-center gap-1 text-xs ${a.atrasada ? "font-semibold text-[var(--danger)]" : "text-[var(--fg-muted)]"}`}>
-            <Clock className="size-3" /> {hora(a.dataHoraPrevista)}
-          </span>
+  const Cartao = ({ a }: { a: Activity }) => {
+    const cor = COR_TIPO[a.tipo];
+    const concluida = a.status === StatusAtividade.Concluida;
+    return (
+      <div
+        draggable={a.status === StatusAtividade.Pendente}
+        onDragStart={() => setArrastando(a)}
+        onDragEnd={() => setArrastando(null)}
+        className={`group relative flex items-stretch gap-3 overflow-hidden rounded-2xl border bg-[var(--surface)] p-2.5 text-sm shadow-[var(--shadow-card)] transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_26px_-14px_var(--cor-tipo)] ${
+          a.atrasada && !concluida ? "border-[color-mix(in_srgb,var(--danger)_45%,var(--border))]" : "border-[var(--border)] hover:border-[color-mix(in_srgb,var(--cor-tipo)_55%,var(--border))]"
+        } ${concluida ? "opacity-60" : ""}`}
+        style={{ "--cor-tipo": cor } as React.CSSProperties}
+      >
+        {/* Bloco do horário, na cor do tipo da atividade */}
+        <div
+          className="flex w-14 shrink-0 flex-col items-center justify-center rounded-xl py-1.5 text-center"
+          style={{ backgroundColor: `color-mix(in srgb, ${cor} 15%, transparent)`, color: `color-mix(in srgb, ${cor} 72%, var(--fg))` }}
+        >
+          <Clock className="mb-0.5 size-3 opacity-70" aria-hidden />
+          <span className="text-[13px] font-bold leading-none [font-variant-numeric:tabular-nums]">{hora(a.dataHoraPrevista)}</span>
         </div>
-        <p className={`mt-0.5 truncate font-medium text-[var(--fg)] ${a.status === StatusAtividade.Concluida ? "line-through" : ""}`}>{a.assunto}</p>
-        <p className="truncate text-xs text-[var(--fg-muted)]">
-          {a.leadNome}
-          {ehGestao && ` · ${a.responsavelNome}`}
-        </p>
-      </button>
-      <div className="flex shrink-0 flex-col gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
-        <button
-          type="button"
-          title="Editar atividade"
-          aria-label="Editar atividade"
-          onClick={() => setAtividadeEditando(a)}
-          className="focus-ring cursor-pointer rounded-md p-1 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
-        >
-          <Pencil className="size-3.5" />
+
+        <button type="button" onClick={() => abrirLead(a.leadId)} className="min-w-0 flex-1 cursor-pointer text-left">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: `color-mix(in srgb, ${cor} 72%, var(--fg))` }}>
+              {tipoLabel[a.tipo]}
+            </span>
+            {a.atrasada && !concluida && (
+              <span className="rounded-full bg-[var(--danger-soft)] px-1.5 py-px text-[10px] font-semibold text-[var(--danger)]">atrasada</span>
+            )}
+          </div>
+          <p className={`mt-0.5 line-clamp-2 font-semibold leading-snug text-[var(--fg)] ${concluida ? "line-through" : ""}`}>{a.assunto}</p>
+          <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-[var(--fg-muted)]">
+            <span className="truncate">{a.leadNome}</span>
+            {ehGestao && a.responsavelNome && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="truncate">{a.responsavelNome}</span>
+              </>
+            )}
+          </p>
         </button>
-        <button
-          type="button"
-          title="Excluir atividade"
-          aria-label="Excluir atividade"
-          onClick={() => setAtividadeExcluindo(a)}
-          className="focus-ring cursor-pointer rounded-md p-1 text-[var(--fg-muted)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
-        >
-          <Trash2 className="size-3.5" />
-        </button>
+
+        <div className="flex shrink-0 flex-col items-end justify-between">
+          <CheckBotao a={a} />
+          <div className="flex gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+            <button
+              type="button"
+              title="Editar atividade"
+              aria-label="Editar atividade"
+              onClick={() => setAtividadeEditando(a)}
+              className="focus-ring cursor-pointer rounded-full p-1 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+            >
+              <Pencil className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              title="Excluir atividade"
+              aria-label="Excluir atividade"
+              onClick={() => setAtividadeExcluindo(a)}
+              className="focus-ring cursor-pointer rounded-full p-1 text-[var(--fg-muted)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </div>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const selecionadoChave = chaveDia(diaSelecionado);
   const doDiaSelecionado = porDia.get(selecionadoChave) ?? [];
@@ -521,15 +540,29 @@ export function AgendaPage() {
           { rotulo: "Para hoje", valor: qtdHoje, cor: "var(--brand)", Icone: Clock },
           { rotulo: "Esta semana", valor: qtdSemana, cor: "var(--info)", Icone: CalendarRange },
           { rotulo: "Concluídas no período", valor: qtdConcluidasNoPeriodo, cor: "var(--success)", Icone: CalendarCheck },
-        ].map(({ rotulo, valor, cor, Icone }) => (
-          <Card key={rotulo} className="p-4">
-            <p className="flex items-center gap-1.5 text-xs font-medium text-[var(--fg-muted)]">
-              <Icone className="size-3.5" style={{ color: cor }} />
-              {rotulo}
-            </p>
-            <p className="mt-1.5 text-2xl font-semibold leading-none tracking-tight text-[var(--fg)] [font-variant-numeric:tabular-nums]">{atividades ? valor : "—"}</p>
-          </Card>
-        ))}
+        ].map(({ rotulo, valor, cor, Icone }) => {
+          const alerta = rotulo === "Atrasadas" && valor > 0;
+          return (
+            <Card key={rotulo} className="group relative overflow-hidden p-4 transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-md">
+              {/* Brilho suave da cor do indicador no canto */}
+              <span aria-hidden className="pointer-events-none absolute -right-6 -top-6 size-24 rounded-full opacity-60 blur-2xl" style={{ backgroundColor: `color-mix(in srgb, ${cor} 22%, transparent)` }} />
+              <div className="relative flex items-center gap-3">
+                <span
+                  className="flex size-11 shrink-0 items-center justify-center rounded-2xl"
+                  style={{ backgroundColor: `color-mix(in srgb, ${cor} 15%, transparent)`, color: cor }}
+                >
+                  <Icone className="size-5" aria-hidden />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-medium text-[var(--fg-muted)]">{rotulo}</p>
+                  <p className={`text-2xl font-bold leading-tight tracking-tight [font-variant-numeric:tabular-nums] ${alerta ? "text-[var(--danger)]" : "text-[var(--fg)]"}`}>
+                    {atividades ? valor : "—"}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
       {/* Filtros e legenda */}
