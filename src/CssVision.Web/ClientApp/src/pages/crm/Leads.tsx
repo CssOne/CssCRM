@@ -330,20 +330,20 @@ export function LeadsPage() {
             <table className="w-full text-[13px]">
               <thead className="sticky top-0 z-10 [&_th]:bg-[var(--surface-solid)]">
                 <tr className="border-b border-[var(--border)] text-left text-xs text-[var(--fg-muted)]">
-                  <th className="px-2 py-3 font-medium">Lead</th>
-                  <th className="px-2 py-3 font-medium">Responsável</th>
-                  <th className="px-2 py-3 font-medium">Etapa</th>
-                  <th className="px-2 py-3 font-medium">Oportunidade</th>
-                  <th className="px-2 py-3 text-right font-medium">Adesão</th>
-                  <th className="px-2 py-3 text-right font-medium">FIPE</th>
-                  <th className="px-2 py-3 text-right font-medium">Mensalidade</th>
-                  <th className="px-2 py-3 text-right font-medium" title="Mensalidade com desconto">Mens. c/ desconto</th>
-                  <th className="px-2 py-3 text-right font-medium">%</th>
-                  <th className="px-2 py-3 text-right font-medium">Rastreador</th>
-                  <th className="px-2 py-3 text-right font-medium">Indicação</th>
-                  <th className="px-2 py-3 text-right font-medium">Vistoria</th>
-                  <th className="px-2 py-3 text-right font-medium">Total</th>
-                  <th className="px-2 py-3 font-medium">Criado em</th>
+                  <th className="px-2.5 py-2 font-medium">Lead</th>
+                  <th className="px-2.5 py-2 font-medium">Responsável</th>
+                  <th className="px-2.5 py-2 font-medium">Etapa</th>
+                  <th className="px-2.5 py-2 font-medium">Oportunidade</th>
+                  <th className="px-2.5 py-2 text-right font-medium">Adesão</th>
+                  <th className="px-2.5 py-2 text-right font-medium">FIPE</th>
+                  <th className="px-2.5 py-2 text-right font-medium">Mensalidade</th>
+                  <th className="px-2.5 py-2 text-right font-medium" title="Mensalidade com desconto">Mens. c/ desconto</th>
+                  <th className="px-2.5 py-2 text-right font-medium">%</th>
+                  <th className="px-2.5 py-2 text-right font-medium">Rastreador</th>
+                  <th className="px-2.5 py-2 text-right font-medium">Indicação</th>
+                  <th className="px-2.5 py-2 text-right font-medium">Vistoria</th>
+                  <th className="px-2.5 py-2 text-right font-medium">Total</th>
+                  <th className="px-2.5 py-2 font-medium">Criado em</th>
                 </tr>
               </thead>
               <tbody>
@@ -354,18 +354,18 @@ export function LeadsPage() {
                     onClick={podeGerir ? (e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); alternarSelecao(lead.id); } } : undefined}
                     className={`border-b border-[var(--border)] last:border-0 ${selecionados.has(lead.id) ? "bg-[var(--brand-soft)]" : "hover:bg-[var(--surface-hover)]"}`}
                   >
-                    <td className="px-2.5 py-1.5">
-                      <div className="flex items-center gap-1.5">
+                    <td className="px-2.5 py-0.5">
+                      <div className="flex items-center gap-1.5 leading-tight">
                         <Link to={`/app/crm/leads/${lead.id}`} className="focus-ring truncate font-medium text-[var(--fg)] hover:text-[var(--brand)]">
                           {lead.nomeOuRazaoSocial}
                         </Link>
                         {lead.semContato && <Badge variant="warning">sem contato</Badge>}
                       </div>
-                      <div className="mt-px truncate text-xs text-[var(--fg-muted)]">
+                      <div className="truncate text-[11px] leading-tight text-[var(--fg-muted)]">
                         {[formatarTelefone(lead.telefone), lead.email].filter(Boolean).join(" · ") || "—"}
                       </div>
                     </td>
-                    <td className="px-2.5 py-1.5">
+                    <td className="px-2.5 py-0.5">
                       {lead.responsavelNome ? (
                         <div className="flex items-center gap-2" title={lead.responsavelNome}>
                           <Avatar nome={lead.responsavelNome} fotoUrl={lead.responsavelFotoUrl} className="size-6 text-[10px]" />
@@ -375,52 +375,52 @@ export function LeadsPage() {
                         <span className="text-[var(--fg-muted)]">—</span>
                       )}
                     </td>
-                    <td className="px-2.5 py-1.5">
+                    <td className="px-2.5 py-0.5">
                       <Badge variant="neutral">
                         <span className="mr-1 inline-block size-2 rounded-full" style={{ backgroundColor: lead.etapaCor ?? "#94a3b8" }} />
                         {lead.etapaNome ?? "Sem etapa"}
                       </Badge>
                     </td>
-                    <td className="px-2.5 py-1.5 text-[var(--fg-muted)]">{lead.etapaAtual ?? "—"}</td>
-                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.adesao)}</td>
-                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.fipe)}</td>
-                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.mensalidade)}</td>
-                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.mensalidadeComDesconto)}</td>
-                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg-muted)]">
+                    <td className="px-2.5 py-0.5 text-[var(--fg-muted)]">{lead.etapaAtual ?? "—"}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.adesao)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.fipe)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.mensalidade)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.mensalidadeComDesconto)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg-muted)]">
                       {lead.venda?.porcentagem == null ? "—" : formatarPercentual(lead.venda.porcentagem)}
                     </td>
-                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.rastreador)}</td>
-                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.indicacao)}</td>
-                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.vistoria)}</td>
-                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right font-medium text-[var(--fg)]">{dinheiro(lead.venda?.total)}</td>
-                    <td className="px-2.5 py-1.5 text-[var(--fg-muted)]">{formatarData(lead.criadoEm)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.rastreador)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.indicacao)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg-muted)]">{dinheiro(lead.venda?.vistoria)}</td>
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right font-medium text-[var(--fg)]">{dinheiro(lead.venda?.total)}</td>
+                    <td className="px-2.5 py-0.5 text-[var(--fg-muted)]">{formatarData(lead.criadoEm)}</td>
                   </tr>
                 ))}
               </tbody>
               {totais && (
                 <tfoot>
                   <tr className="sticky bottom-0 border-t border-[var(--border)] text-xs [&_td]:bg-[var(--surface-solid)]">
-                    <td colSpan={4} className="px-2.5 py-1.5 font-medium text-[var(--fg)]">
+                    <td colSpan={4} className="px-2.5 py-0.5 font-medium text-[var(--fg)]">
                       <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Contagem</span>
                       {totais.contagem.toLocaleString("pt-BR")}
                     </td>
                     {[totais.adesao, totais.fipe, totais.mensalidade, totais.mensalidadeComDesconto].map((v, i) => (
-                      <td key={i} className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg)]">
+                      <td key={i} className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg)]">
                         <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Soma</span>
                         {formatarMoeda(v)}
                       </td>
                     ))}
-                    <td className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg)]" title="Média da porcentagem das vendas">
+                    <td className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg)]" title="Média da porcentagem das vendas">
                       <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Média</span>
                       {formatarPercentual(totais.mediaPorcentagem ?? 0)}
                     </td>
                     {[totais.rastreador, totais.indicacao, totais.vistoria, totais.total].map((v, i) => (
-                      <td key={i} className="whitespace-nowrap px-2.5 py-1.5 text-right text-[var(--fg)]">
+                      <td key={i} className="whitespace-nowrap px-2.5 py-0.5 text-right text-[var(--fg)]">
                         <span className="mr-1 text-[10px] uppercase tracking-wide text-[var(--fg-muted)]">Soma</span>
                         {formatarMoeda(v)}
                       </td>
                     ))}
-                    <td className="px-2.5 py-1.5" />
+                    <td className="px-2.5 py-0.5" />
                   </tr>
                 </tfoot>
               )}
