@@ -54,7 +54,7 @@ export function CartaoLead({
   onDragEnd,
 }: {
   cartao: LeadKanbanCard;
-  /** Cor da coluna onde o cartão está: aparece como um detalhe no topo do cartão. */
+  /** Cor da coluna onde o cartão está: aparece como uma barra fina na lateral esquerda do cartão. */
   corColuna: string;
   podeGerir: boolean;
   podeExcluir: boolean;
@@ -83,7 +83,7 @@ export function CartaoLead({
       onClick={onAbrir}
       className="group relative cursor-grab rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 text-sm shadow-[var(--shadow-card)] transition-[box-shadow,transform] hover:-translate-y-px hover:shadow-[0_8px_24px_-10px_rgb(0_0_0/0.22)] active:cursor-grabbing"
     >
-      <span aria-hidden className="absolute left-4 top-0 h-[3px] w-10 rounded-b-full" style={{ backgroundColor: corColuna }} />
+      <span aria-hidden className="absolute bottom-3 left-0 top-3 w-[3px] rounded-r-full" style={{ backgroundColor: corColuna }} />
       {/* Nome e ações */}
       <div className="flex items-start justify-between gap-2">
         <Link
