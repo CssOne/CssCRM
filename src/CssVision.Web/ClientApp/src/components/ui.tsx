@@ -22,7 +22,7 @@ import { paraBusca } from "../lib/busca";
 
 // --- Botões ---
 
-type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "dangerSoft";
 type ButtonSize = "sm" | "md";
 
 const variantClasses: Record<ButtonVariant, string> = {
@@ -31,6 +31,8 @@ const variantClasses: Record<ButtonVariant, string> = {
     "bg-[var(--surface-hover)] text-[var(--fg)] hover:brightness-95 active:brightness-90 disabled:opacity-50",
   ghost: "text-[var(--fg)] hover:bg-[var(--surface-hover)] disabled:opacity-50",
   danger: "bg-[var(--danger)] text-white hover:opacity-90 disabled:opacity-50",
+  /** Ação destrutiva que só abre uma confirmação (listas): fundo suave em vez do vermelho cheio. */
+  dangerSoft: "bg-[var(--danger-soft)] text-[var(--danger)] hover:brightness-95 disabled:opacity-50",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

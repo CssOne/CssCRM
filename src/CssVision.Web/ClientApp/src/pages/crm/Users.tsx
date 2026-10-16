@@ -305,7 +305,7 @@ function UsuariosTab({
                     <Pencil className="size-4" /> Editar
                   </Button>
                   {(podeGerenciarTudo || ehSupervisor) && usuario.id !== sessao?.id && (
-                    <Button size="sm" variant="danger" onClick={() => setUsuarioExcluindo(usuario)}>
+                    <Button size="sm" variant="dangerSoft" onClick={() => setUsuarioExcluindo(usuario)}>
                       <Trash2 className="size-4" /> Excluir
                     </Button>
                   )}

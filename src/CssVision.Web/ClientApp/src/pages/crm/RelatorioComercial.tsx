@@ -10,6 +10,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
 import { Button, Card, ErrorState, Pagination, Select, Skeleton } from "../../components/ui";
 import { PeriodoInput } from "../../components/PeriodoInput";
+import { BarraDeFiltros, CampoDeFiltro, type ChipDeFiltro } from "../../components/Filtros";
 import { OPCOES_FILTRO_TIPO_INDICACAO } from "../../lib/opcoesLead";
 import { MultiSelect } from "../../components/MultiSelect";
 import { useCrmEventos } from "../../lib/useCrmEventos";
@@ -264,48 +265,64 @@ export function RelatorioComercialPage() {
   const paginaOrigens = usePaginacao(dados?.porOrigem, 8);
   const paginaProdutos = usePaginacao(dados?.porProduto, 8);
 
+  // Filtros ativos do painel como chips removíveis (período e regional ficam fora: têm controle próprio na tela).
+  const dataCurta = (d: string) => (d ? d.split("-").reverse().slice(0, 2).join("/") : "…");
+  const chipsDeFiltro: ChipDeFiltro[] = [];
+  const addChip = (rotulo: string, valor: string, limpar: () => void) => chipsDeFiltro.push({ rotulo, valor, limpar });
+  if (podeGerir && consultorId) addChip("Consultor", consultores.find((c) => c.id === consultorId)?.nome ?? "—", () => setConsultorId(""));
+  if (etapaIds.length) addChip("Etapas", etapaIds.map((id) => etapas.find((e) => (e.id ?? EMPTY_GUID) === id)?.nome ?? "Sem etapa").join(", "), () => setEtapaIds([]));
+  if (tiposIndicacao.length) addChip("Tipo de indicação", tiposIndicacao.join(", "), () => setTiposIndicacao([]));
+  if (indicacao) addChip("Indicação", indicacao === "sim" ? "Sim" : "Não", () => setIndicacao(""));
+  if (chegadaInicio || chegadaFim) addChip("Chegada", `${dataCurta(chegadaInicio)} → ${dataCurta(chegadaFim)}`, () => { setChegadaInicio(""); setChegadaFim(""); });
+  if (vendaInicio || vendaFim) addChip("Ativação", `${dataCurta(vendaInicio)} → ${dataCurta(vendaFim)}`, () => { setVendaInicio(""); setVendaFim(""); });
+
   const filtro = (
-    <form
-      onSubmit={(e) => { e.preventDefault(); pesquisar(); }}
-      className="flex w-full flex-wrap items-end gap-2"
-    >
-      <div className="flex flex-wrap gap-1.5">
-        {atalhos.map((a) => (
-          <button
-            key={a.rotulo}
-            type="button"
-            onClick={() => { setInicio(a.inicio); setFim(a.fim); pesquisar({ inicio: a.inicio, fim: a.fim }); }}
-            className={`focus-ring cursor-pointer rounded-full border px-3 py-1 text-xs font-medium ${
-              inicio === a.inicio && fim === a.fim ? "border-[var(--brand)] bg-[var(--brand)] text-white" : "border-[var(--border)] text-[var(--fg-muted)] hover:text-[var(--fg)]"
-            }`}
-          >
-            {a.rotulo}
-          </button>
-        ))}
-      </div>
-      <div className="text-xs text-[var(--fg-muted)]">
-        Período
-        <div className="mt-0.5 w-72">
-          <PeriodoInput ariaLabel="Período" de={inicio} ate={fim} onChange={(a, b) => { setInicio(a); setFim(b); }} />
-        </div>
-      </div>
-      {podeGerir && (
-      <label className="text-xs text-[var(--fg-muted)]">
-        Consultor
-        <Select className="mt-0.5 h-8 w-52" value={consultorId} onChange={(e) => setConsultorId(e.target.value)} aria-label="Consultor">
-          <option value="">Todos</option>
-          {consultores.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.nome}
-              {c.ativo === false ? " (inativo)" : ""}
-            </option>
-          ))}
-        </Select>
-      </label>
-      )}
-      <div className="w-52 text-xs text-[var(--fg-muted)]">
-        Etapas
-        <div className="mt-0.5">
+    <form onSubmit={(e) => { e.preventDefault(); pesquisar(); }} className="w-full space-y-2">
+      <BarraDeFiltros
+        chips={chipsDeFiltro}
+        onLimparTudo={limparFiltros}
+        acoes={
+          <>
+            <div className="flex flex-wrap gap-0.5 rounded-lg bg-[var(--surface-hover)] p-0.5">
+              {atalhos.map((a) => (
+                <button
+                  key={a.rotulo}
+                  type="button"
+                  onClick={() => { setInicio(a.inicio); setFim(a.fim); pesquisar({ inicio: a.inicio, fim: a.fim }); }}
+                  className={`focus-ring cursor-pointer rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    inicio === a.inicio && fim === a.fim ? "bg-[var(--surface)] text-[var(--fg)] shadow-[0_1px_2px_rgb(0_0_0/0.12)]" : "text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                  }`}
+                >
+                  {a.rotulo}
+                </button>
+              ))}
+            </div>
+            <div className="w-72">
+              <PeriodoInput ariaLabel="Período" de={inicio} ate={fim} onChange={(a, b) => { setInicio(a); setFim(b); }} />
+            </div>
+            <Button type="submit">Pesquisar</Button>
+            {chipsDeFiltro.length === 0 && temFiltro && (
+              <Button type="button" variant="ghost" onClick={limparFiltros}>
+                Restaurar período
+              </Button>
+            )}
+          </>
+        }
+      >
+        {podeGerir && (
+          <CampoDeFiltro rotulo="Consultor">
+            <Select value={consultorId} onChange={(e) => setConsultorId(e.target.value)} aria-label="Consultor">
+              <option value="">Todos</option>
+              {consultores.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome}
+                  {c.ativo === false ? " (inativo)" : ""}
+                </option>
+              ))}
+            </Select>
+          </CampoDeFiltro>
+        )}
+        <CampoDeFiltro rotulo="Etapas">
           <MultiSelect
             ariaLabel="Etapas do quadro de leads"
             rotuloTodos="Todas"
@@ -316,50 +333,30 @@ export function RelatorioComercialPage() {
             valores={etapaIds}
             onChange={setEtapaIds}
           />
-        </div>
-      </div>
-      <div className="w-52 text-xs text-[var(--fg-muted)]">
-        Tipo de indicação
-        <div className="mt-0.5">
-          <MultiSelect
-            ariaLabel="Tipo de indicação"
-            rotuloTodos="Todos"
-            opcoes={OPCOES_FILTRO_TIPO_INDICACAO.map((t) => ({ valor: t, rotulo: t }))}
-            valores={tiposIndicacao}
-            onChange={setTiposIndicacao}
-          />
-        </div>
-      </div>
-      <label className="text-xs text-[var(--fg-muted)]">
-        Indicação?
-        <Select className="mt-0.5 h-8 w-28" value={indicacao} onChange={(e) => setIndicacao(e.target.value as typeof indicacao)} aria-label="Indicação?">
-          <option value="">Todos</option>
-          <option value="sim">Sim</option>
-          <option value="nao">Não</option>
-        </Select>
-      </label>
-      <div className="flex items-end gap-1" title="Vazio = usa o período acima. Escolhendo, as vendas passam a ser só dos leads que chegaram nessas datas.">
-        <div className="text-xs text-[var(--fg-muted)]">
-          Chegada
-          <div className="mt-0.5 w-72">
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Tipo de indicação">
+          <MultiSelect ariaLabel="Tipo de indicação" rotuloTodos="Todos" opcoes={OPCOES_FILTRO_TIPO_INDICACAO.map((t) => ({ valor: t, rotulo: t }))} valores={tiposIndicacao} onChange={setTiposIndicacao} />
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Indicação?">
+          <Select value={indicacao} onChange={(e) => setIndicacao(e.target.value as typeof indicacao)} aria-label="Indicação?">
+            <option value="">Todos</option>
+            <option value="sim">Sim</option>
+            <option value="nao">Não</option>
+          </Select>
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Chegada" className="sm:col-span-2">
+          <div title="Vazio = usa o período acima. Escolhendo, as vendas passam a ser só dos leads que chegaram nessas datas.">
             <PeriodoInput ariaLabel="Chegada" de={chegadaInicio} ate={chegadaFim} onChange={(a, b) => { setChegadaInicio(a); setChegadaFim(b); }} />
           </div>
-        </div>
-      </div>
-      <div className="flex items-end gap-1" title="Vazio = usa o período acima.">
-        <div className="text-xs text-[var(--fg-muted)]">
-          Ativação
-          <div className="mt-0.5 w-72">
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Ativação" className="sm:col-span-2">
+          <div title="Vazio = usa o período acima.">
             <PeriodoInput ariaLabel="Ativação" de={vendaInicio} ate={vendaFim} onChange={(a, b) => { setVendaInicio(a); setVendaFim(b); }} />
           </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <Button type="submit" size="sm">Pesquisar</Button>
-        <Button type="button" size="sm" variant="ghost" onClick={limparFiltros} disabled={!temFiltro && !pendente}>Limpar filtros</Button>
-      </div>
-      {pendente && !avisoFiltro && <p className="w-full text-xs text-[var(--fg-muted)]">Você mudou filtros: clique em <strong>Pesquisar</strong> para aplicá-los.</p>}
-      {avisoFiltro && <p role="alert" className="w-full text-xs text-[var(--danger)]">{avisoFiltro}</p>}
+        </CampoDeFiltro>
+      </BarraDeFiltros>
+      {pendente && !avisoFiltro && <p className="text-xs text-[var(--fg-muted)]">Você mudou filtros: clique em <strong>Pesquisar</strong> para aplicá-los.</p>}
+      {avisoFiltro && <p role="alert" className="text-xs text-[var(--danger)]">{avisoFiltro}</p>}
     </form>
   );
 

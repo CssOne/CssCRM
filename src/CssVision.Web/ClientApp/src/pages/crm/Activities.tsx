@@ -293,7 +293,7 @@ export function ActivitiesPage() {
                   <Button size="sm" variant="secondary" onClick={() => setAtividadeEditando(atividade)}>
                     <Pencil className="size-4" />
                   </Button>
-                  <Button size="sm" variant="danger" onClick={() => setAtividadeExcluindo(atividade)}>
+                  <Button size="sm" variant="dangerSoft" onClick={() => setAtividadeExcluindo(atividade)}>
                     <Trash2 className="size-4" />
                   </Button>
                 </div>

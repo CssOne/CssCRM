@@ -513,7 +513,7 @@ function ZonaDeRisco({ onExcluido }: { onExcluido: () => void }) {
         Excluir sua conta é uma ação permanente e não pode ser desfeita. Só é possível se não houver leads, oportunidades ou
         consultores vinculados a você.
       </p>
-      <Button variant="danger" onClick={() => setModalAberto(true)}>
+      <Button variant="dangerSoft" onClick={() => setModalAberto(true)}>
         <Trash2 className="size-4" /> Excluir minha conta
       </Button>
 
