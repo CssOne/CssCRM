@@ -440,7 +440,7 @@ export function RelatorioComercialPage() {
   const vendasEAdesao: ApexOptions = {
     ...base,
     chart: { ...base.chart, type: "line" },
-    colors: ["#2563eb", "#22c55e"],
+    colors: ["#467fc5", "#22c55e"],
     stroke: { width: [0, 3], curve: "smooth" },
     plotOptions: { bar: { borderRadius: 3, columnWidth: "55%" } },
     dataLabels: { enabled: false },
@@ -456,7 +456,7 @@ export function RelatorioComercialPage() {
   const valoresPorMes: ApexOptions = {
     ...base,
     chart: { ...base.chart, type: "bar", stacked: true },
-    colors: ["#2563eb", "#0ea5e9", "#f59e0b", "#8b5cf6"],
+    colors: ["#467fc5", "#7fb0e6", "#f59e0b", "#a6c3e0"],
     plotOptions: { bar: { borderRadius: 2, columnWidth: "55%" } },
     dataLabels: { enabled: false },
     legend: { position: "top", horizontalAlign: "left" },
@@ -468,7 +468,7 @@ export function RelatorioComercialPage() {
   const leadsPorSemana: ApexOptions = {
     ...base,
     chart: { ...base.chart, type: "line" },
-    colors: ["#2563eb", "#ef4444", "#22c55e"],
+    colors: ["#467fc5", "#ef4444", "#22c55e"],
     stroke: { width: [0, 3, 3], curve: "smooth" },
     plotOptions: { bar: { borderRadius: 2, columnWidth: "65%" } },
     dataLabels: { enabled: false },

@@ -4,7 +4,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { formatarMoeda } from "../../lib/format";
 import type { EvolucaoVendas, FunilEtapa, MarketingEvolucao, OrigemVenda } from "../../lib/types";
 
-export const paleta = ["#2563eb", "#0ea5e9", "#8b5cf6", "#22c55e", "#f59e0b", "#f97316", "#ef4444", "#64748b"];
+export const paleta = ["#467fc5", "#7fb0e6", "#a6c3e0", "#22c55e", "#f59e0b", "#f97316", "#ef4444", "#64748b"];
 
 export function baseOptions(modoEscuro: boolean): ApexOptions {
   return {
