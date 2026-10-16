@@ -941,6 +941,4 @@
 .tvx .rank-row.top-1 { background: linear-gradient(90deg, var(--gold-soft), transparent 70%); }
 .tvx .live, .tvx .goals-button { box-shadow: none; }
 /* O estilo de título do CRM (barra de destaque) não vale no painel da TV. */
-.tvx h1 { display: block; gap: 0; }
-.tvx h1::before { display: none; }
-.tvx h1 + p { padding-left: 0; margin-top: 0; }
+.tvx h1::after { display: none; }

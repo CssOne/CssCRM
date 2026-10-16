@@ -413,26 +413,23 @@ html.tema-trocando *::after {
   transition: background-color 400ms ease, border-color 400ms ease, color 400ms ease, fill 400ms ease, stroke 400ms ease, box-shadow 400ms ease !important;
 }
 
-/* Títulos das telas: mais presença, com uma barra de destaque na cor da marca; o subtítulo alinha com o texto. */
+/* Títulos das telas: negrito com um sublinhado curto na cor da marca; o subtítulo vem logo abaixo. */
 main h1 {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.025em;
   line-height: 1.15;
   color: var(--fg);
 }
-main h1::before {
+main h1::after {
   content: "";
-  flex: none;
-  width: 4px;
-  height: 1.25em;
+  display: block;
+  width: 2.25rem;
+  height: 3px;
+  margin: 0.5rem 0 0.35rem;
   border-radius: 999px;
-  background: linear-gradient(180deg, var(--brand), color-mix(in srgb, var(--brand) 35%, #a6c3e0));
+  background: var(--brand);
 }
 main h1 + p {
-  margin-top: 0.2rem;
-  padding-left: calc(4px + 0.6rem);
+  margin-top: 0;
 }
