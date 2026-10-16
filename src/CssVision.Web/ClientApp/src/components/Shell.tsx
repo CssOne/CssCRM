@@ -5,6 +5,8 @@ import {
   CheckSquare,
   Database,
   ChevronRight,
+  Pin,
+  PinOff,
   FileText,
   Gauge,
   IdCard,
@@ -255,8 +257,9 @@ export function Shell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuAberto, setMenuAberto] = useState(false);
-  // A barra lateral fica sempre recolhida (cápsula de ícones) e abre sozinha ao passar o mouse.
-  const colapsado = true;
+  // A barra lateral fica recolhida (cápsula de ícones) e abre sozinha ao passar o mouse; o alfinete ao lado da logo a deixa fixada aberta.
+  const [fixada, setFixada] = useState(() => localStorage.getItem("crm-sidebar-fixada") === "1");
+  const colapsado = !fixada;
   const [busca, setBusca] = useState("");
   // Número de mensagens não lidas do chat no menu e no título da aba (só consulta quem tem o Chat no menu).
   const temChat = !!sessao?.menu.some((m) => m.chave === "chat");
@@ -308,6 +311,9 @@ export function Shell({ children }: { children: ReactNode }) {
 
   let indiceItem = 0; // ordem do item no menu, para a entrada em sequência
   // Com a barra recolhida, passar o mouse por cima abre ela temporariamente (por cima do conteúdo, sem empurrá-lo).
+  useEffect(() => {
+    localStorage.setItem("crm-sidebar-fixada", fixada ? "1" : "0");
+  }, [fixada]);
   const [aoPassar, setAoPassar] = useState(false);
   const tempoHover = useRef<number | undefined>(undefined);
   const recolhida = colapsado && !aoPassar;
@@ -320,7 +326,10 @@ export function Shell({ children }: { children: ReactNode }) {
     window.clearTimeout(tempoHover.current);
     tempoHover.current = window.setTimeout(() => setAoPassar(false), 160);
   };
-  useEffect(() => () => window.clearTimeout(tempoHover.current), []);
+  useEffect(() => {
+    if (!colapsado) setAoPassar(false);
+    return () => window.clearTimeout(tempoHover.current);
+  }, [colapsado]);
 
   async function handleLogout() {
     await logout();
@@ -357,6 +366,18 @@ export function Shell({ children }: { children: ReactNode }) {
           <IconButton label="Fechar menu" className="text-white/70 hover:bg-[var(--sidebar-hover)] hover:text-white lg:hidden" onClick={() => setMenuAberto(false)}>
             <X className="size-4" />
           </IconButton>
+          <button
+            type="button"
+            aria-pressed={fixada}
+            aria-label={fixada ? "Desafixar menu" : "Fixar menu"}
+            title={fixada ? "Desafixar menu (volta a abrir só ao passar o mouse)" : "Fixar menu aberto"}
+            onClick={() => setFixada((v) => !v)}
+            className={`focus-ring hidden size-7 shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors hover:bg-[var(--sidebar-hover)] ${recolhida ? "" : "lg:flex"} ${
+              fixada ? "text-white" : "text-[var(--sidebar-fg-muted)] hover:text-white"
+            }`}
+          >
+            {fixada ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+          </button>
         </div>
 
         <nav className={`sidebar-nav min-h-0 flex-1 overflow-y-auto px-3 pb-3 ${recolhida ? "lg:px-2" : ""}`} aria-label="Navegação principal">
