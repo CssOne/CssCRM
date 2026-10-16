@@ -157,7 +157,7 @@ function MenuDoUsuario({
   }, [aberto]);
 
   return (
-    <div ref={raiz} className="relative ml-2 hidden sm:block">
+    <div ref={raiz} className="relative ml-2">
       <button
         type="button"
         aria-haspopup="menu"
@@ -458,7 +458,6 @@ export function Shell({ children }: { children: ReactNode }) {
               </div>
             )}
             <div className="mx-1.5 hidden h-6 w-px bg-[var(--border)] sm:block" />
-            <SeletorDeTema />
             <MenuDoUsuario
               nome={sessao.nomeCompleto}
               email={sessao.email}
