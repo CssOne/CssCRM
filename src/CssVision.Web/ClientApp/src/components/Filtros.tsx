@@ -113,11 +113,7 @@ export function BarraDeFiltros({
               >
                 <X className="size-2.5" />
               </button>
-            ) : (
-              <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded-md border border-[var(--border)] bg-[var(--surface)] px-1.5 text-[10px] font-medium text-[var(--fg-muted)] lg:block" aria-hidden>
-                /
-              </kbd>
-            )}
+            ) : null}
           </div>
         )}
 
