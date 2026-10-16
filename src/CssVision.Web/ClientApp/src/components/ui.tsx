@@ -135,7 +135,7 @@ export function FieldError({ children }: { children?: ReactNode }) {
 }
 
 const fieldBase =
-  "focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 h-9 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)] disabled:opacity-50";
+  "focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--field)] px-3 h-9 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)] disabled:opacity-50";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className = "", ...props }, ref) => (
   <input ref={ref} className={`${fieldBase} ${className}`} {...props} />
@@ -433,7 +433,7 @@ export function Select({
         <div
           ref={painelRef}
           style={{ position: "fixed", left: posicao.left, width: posicao.width, top: posicao.top, bottom: posicao.bottom, maxHeight: posicao.maxHeight }}
-          className="ui-surface z-[70] flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] [background-color:color-mix(in_srgb,var(--surface)_92%,var(--bg))] shadow-xl"
+          className="ui-surface z-[70] flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-solid)] shadow-xl"
           onKeyDown={teclado}
         >
           <div className="border-b border-[var(--border)] p-1.5">
@@ -448,7 +448,7 @@ export function Select({
               aria-label="Pesquisar nas opções"
               aria-controls={listaId}
               autoComplete="off"
-              className="focus-ring h-8 w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+              className="focus-ring h-8 w-full rounded-md border border-[var(--border)] bg-[var(--field)] px-2 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
             />
           </div>
           <div id={listaId} role="listbox" className="overflow-y-auto p-1">
@@ -576,7 +576,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`ui-surface max-h-[85vh] w-full ${widths[size]} overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] [background-color:color-mix(in_srgb,var(--surface)_94%,var(--bg))] shadow-2xl flex flex-col`}
+        className={`ui-surface max-h-[85vh] w-full ${widths[size]} overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-solid)] shadow-2xl flex flex-col`}
       >
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
           <h2 className="text-base font-semibold text-[var(--fg)]">{title}</h2>
@@ -610,7 +610,7 @@ export function Drawer({ open, onClose, title, children }: { open: boolean; onCl
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="ui-surface flex h-full w-full max-w-md flex-col border-l border-[var(--border)] bg-[var(--surface)] [background-color:color-mix(in_srgb,var(--surface)_94%,var(--bg))] shadow-2xl"
+        className="ui-surface flex h-full w-full max-w-md flex-col border-l border-[var(--border)] bg-[var(--surface-solid)] shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
           <h2 className="text-base font-semibold text-[var(--fg)]">{title}</h2>

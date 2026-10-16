@@ -118,7 +118,7 @@ export function LembretesAdesao() {
         return (
           <div
             key={l.opportunityId}
-            className="rounded-lg border border-[var(--warning)] bg-[var(--surface)] p-3 text-sm shadow-lg"
+            className="rounded-lg border border-[var(--warning)] bg-[var(--surface-solid)] p-3 text-sm shadow-lg"
           >
             <div className="flex items-start gap-2">
               <BellRing className="mt-0.5 size-4 shrink-0 text-[var(--warning)]" aria-hidden />

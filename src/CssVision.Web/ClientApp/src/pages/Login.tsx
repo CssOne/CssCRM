@@ -218,7 +218,7 @@ export function LoginPage() {
                           required
                           value={emailRecuperacao}
                           onChange={(e) => setEmailRecuperacao(e.target.value)}
-                          className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                          className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--field)] py-2.5 pl-10 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                           placeholder="voce@empresa.com"
                         />
                       </div>
@@ -274,7 +274,7 @@ export function LoginPage() {
                       required
                       value={codigo2fa}
                       onChange={(e) => setCodigo2fa(e.target.value)}
-                      className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-3 text-sm tracking-widest text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                      className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--field)] py-2.5 pl-10 pr-3 text-sm tracking-widest text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                       placeholder={usarCodigoRecuperacao ? "xxxxx-xxxxx" : "000000"}
                     />
                   </div>
@@ -322,7 +322,7 @@ export function LoginPage() {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                      className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--field)] py-2.5 pl-10 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                       placeholder="voce@empresa.com"
                     />
                   </div>
@@ -341,7 +341,7 @@ export function LoginPage() {
                       required
                       value={senha}
                       onChange={(e) => setSenha(e.target.value)}
-                      className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-10 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                      className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--field)] py-2.5 pl-10 pr-10 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                       placeholder="••••••••"
                     />
                     <button
