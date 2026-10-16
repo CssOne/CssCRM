@@ -40,7 +40,8 @@ public static class DuplicidadeDeVendaDoNotion
             .Where(l => l.Id != leadDoNotion.Id && !l.Arquivado && l.VeiculoAdicionalDeLeadId == null && l.Placa == placa && l.ResponsavelId == responsavelId
                 && l.ConsentimentoOrigem != OrigemLead.MarcadorMigracaoNotion && l.ConsentimentoOrigem != OrigemLead.MarcadorSincronizacaoNotion
                 && (l.MetaLeadId != null || l.ConsentimentoOrigem == OrigemLead.MarcadorFormularioSite))
-            .Select(l => new { Lead = l, Vendas = l.Oportunidades.Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho).ToList() })
+            // A venda do lead do tráfego precisa ter valor: com a venda dele vazia (sem adesão nem mensalidade), quem tem os dados reais é o card do Notion, e arquivá-lo perderia a venda.
+            .Select(l => new { Lead = l, Vendas = l.Oportunidades.Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho && ((o.PagamentoAdesao ?? 0) > 0 || (o.Mensalidade ?? 0) > 0)).ToList() })
             .ToListAsync(ct);
         var mesmaVenda = candidatos
             .Where(c => c.Vendas.Any(v => vendasDoNotion.Any(n => DataDaVenda(n) is { } dn && DataDaVenda(v) is { } dv && (dn - dv).Duration() <= JanelaEntreAsVendas)))
