@@ -25,16 +25,16 @@ type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 type ButtonSize = "sm" | "md";
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: "bg-[var(--brand)] text-[var(--brand-fg)] shadow-[0_4px_14px_-4px_var(--brand)] hover:brightness-110 disabled:opacity-50 disabled:shadow-none",
+  primary: "bg-[var(--brand)] text-[var(--brand-fg)] hover:brightness-110 active:brightness-95 disabled:opacity-50",
   secondary:
-    "ui-surface bg-[var(--surface)] text-[var(--fg)] border border-[var(--border)] hover:bg-[var(--surface-hover)] disabled:opacity-50",
+    "bg-[var(--surface-hover)] text-[var(--fg)] hover:brightness-95 active:brightness-90 disabled:opacity-50",
   ghost: "text-[var(--fg)] hover:bg-[var(--surface-hover)] disabled:opacity-50",
   danger: "bg-[var(--danger)] text-white hover:opacity-90 disabled:opacity-50",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "h-8 px-3 text-sm gap-1.5",
-  md: "h-10 px-4 text-sm gap-2",
+  sm: "h-7 px-2.5 text-[13px] gap-1.5",
+  md: "h-9 px-3.5 text-sm gap-2",
 };
 
 export const Button = forwardRef<
@@ -44,7 +44,7 @@ export const Button = forwardRef<
   <button
     ref={ref}
     disabled={disabled || loading}
-    className={`focus-ring inline-flex items-center justify-center rounded-xl font-semibold transition-[background,filter,box-shadow] cursor-pointer disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+    className={`focus-ring inline-flex items-center justify-center rounded-lg font-medium transition-[background,filter] cursor-pointer disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
     {...props}
   >
     {loading && <Loader2 className="size-4 animate-spin" aria-hidden />}
@@ -62,7 +62,7 @@ export function IconButton({
     <button
       aria-label={label}
       title={label}
-      className={`focus-ring inline-flex size-9 items-center justify-center rounded-xl text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)] cursor-pointer ${className}`}
+      className={`focus-ring inline-flex size-9 items-center justify-center rounded-lg text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)] cursor-pointer ${className}`}
       {...props}
     />
   );
@@ -113,7 +113,7 @@ const badgeClasses: Record<BadgeVariant, string> = {
 
 export function Badge({ variant = "neutral", children }: { variant?: BadgeVariant; children: ReactNode }) {
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${badgeClasses[variant]}`}>
+    <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${badgeClasses[variant]}`}>
       {children}
     </span>
   );
@@ -135,7 +135,7 @@ export function FieldError({ children }: { children?: ReactNode }) {
 }
 
 const fieldBase =
-  "focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3.5 h-10 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)] disabled:opacity-50";
+  "focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 h-9 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)] disabled:opacity-50";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className = "", ...props }, ref) => (
   <input ref={ref} className={`${fieldBase} ${className}`} {...props} />
@@ -576,7 +576,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`ui-surface max-h-[85vh] w-full ${widths[size]} overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)] [background-color:color-mix(in_srgb,var(--surface)_94%,var(--bg))] shadow-2xl flex flex-col`}
+        className={`ui-surface max-h-[85vh] w-full ${widths[size]} overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] [background-color:color-mix(in_srgb,var(--surface)_94%,var(--bg))] shadow-2xl flex flex-col`}
       >
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
           <h2 className="text-base font-semibold text-[var(--fg)]">{title}</h2>

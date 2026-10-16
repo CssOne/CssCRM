@@ -40,7 +40,6 @@ function BotaoAcao({ titulo, perigo, onClick, children }: { titulo: string; peri
  */
 export function CartaoLead({
   cartao,
-  corColuna,
   podeGerir,
   podeExcluir,
   podeVerOrigem,
@@ -54,7 +53,6 @@ export function CartaoLead({
   onDragEnd,
 }: {
   cartao: LeadKanbanCard;
-  corColuna: string;
   podeGerir: boolean;
   podeExcluir: boolean;
   podeVerOrigem: boolean;
@@ -80,22 +78,10 @@ export function CartaoLead({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onAbrir}
-      className="group cursor-grab rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 text-sm shadow-[var(--shadow-card)] transition hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--brand)_35%,var(--border))] active:cursor-grabbing"
+      className="group cursor-grab rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 text-sm shadow-[var(--shadow-card)] transition-[box-shadow,transform] hover:-translate-y-px hover:shadow-[0_8px_24px_-10px_rgb(0_0_0/0.22)] active:cursor-grabbing"
     >
       {/* Nome e ações */}
-      <div className="flex items-start gap-2.5">
-        <span
-          aria-hidden
-          className="flex size-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold"
-          style={{ backgroundColor: `color-mix(in srgb, ${corColuna} 16%, transparent)`, color: corColuna }}
-        >
-          {cartao.nomeOuRazaoSocial
-            .split(" ")
-            .filter(Boolean)
-            .slice(0, 2)
-            .map((p) => p[0]?.toUpperCase())
-            .join("")}
-        </span>
+      <div className="flex items-start justify-between gap-2">
         <Link
           to={`/app/crm/leads/${cartao.leadId}`}
           onClick={(e) => {
@@ -106,7 +92,7 @@ export function CartaoLead({
               onAbrir();
             }
           }}
-          className="line-clamp-2 min-w-0 flex-1 pt-1.5 font-semibold leading-snug text-[var(--fg)] hover:text-[var(--brand)]"
+          className="line-clamp-2 min-w-0 flex-1 text-[14px] font-semibold leading-snug tracking-tight text-[var(--fg)] hover:text-[var(--brand)]"
         >
           {cartao.nomeOuRazaoSocial}
         </Link>
@@ -158,7 +144,7 @@ export function CartaoLead({
       <div className="mt-2.5 space-y-1 text-xs text-[var(--fg-muted)]">
         {(cartao.telefone || cartao.telefone2) && (
           <p className="flex items-center gap-1.5 truncate">
-            <Phone className="size-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
+            <Phone className="size-3.5 shrink-0" aria-hidden />
             <span className="truncate">
               {[cartao.telefone, cartao.telefone2].filter(Boolean).map((t) => formatarTelefone(t)).join(" · ")}
             </span>
@@ -166,7 +152,7 @@ export function CartaoLead({
         )}
         {cartao.email && (
           <p className="flex items-center gap-1.5">
-            <Mail className="size-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
+            <Mail className="size-3.5 shrink-0" aria-hidden />
             <span className="truncate">{cartao.email}</span>
           </p>
         )}
@@ -225,11 +211,11 @@ export function CartaoLead({
       )}
 
       {/* Responsável e chegada */}
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-dashed border-[var(--border)] pt-2.5">
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
         {cartao.responsavelNome ? (
           <div className="flex min-w-0 items-center gap-1.5" title={`Responsável: ${cartao.responsavelNome}`}>
-            <Avatar nome={cartao.responsavelNome} fotoUrl={cartao.responsavelFotoUrl} className="size-6 text-[10px] ring-2 ring-[var(--brand-soft)]" />
-            <span className="truncate text-xs font-semibold text-[var(--brand)]">{cartao.responsavelNome}</span>
+            <Avatar nome={cartao.responsavelNome} fotoUrl={cartao.responsavelFotoUrl} className="size-6 text-[10px]" />
+            <span className="truncate text-xs font-medium text-[var(--fg)]">{cartao.responsavelNome}</span>
           </div>
         ) : (
           <span className="text-xs italic text-[var(--fg-muted)]">Sem responsável</span>

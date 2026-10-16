@@ -106,36 +106,51 @@ export function LoginPage() {
           </div>
         </div>
 
-        {/* Ilustração em vidro: cartões translúcidos sobre uma grade, como no Figma. */}
-        <div aria-hidden className="pointer-events-none absolute inset-0 opacity-90">
-          <div className="absolute inset-0 [background-image:linear-gradient(rgb(255_255_255/0.12)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.12)_1px,transparent_1px)] [background-size:48px_48px]" />
-          <div className="absolute left-12 top-36 w-[78%] rounded-2xl border border-white/30 bg-white/15 p-4 backdrop-blur-md">
-            <div className="mb-4 flex items-center gap-2">
-              <div className="size-8 rounded-full bg-white/50" />
-              <div className="h-2.5 w-20 rounded-full bg-white/60" />
-              <div className="h-2.5 w-14 rounded-full bg-white/30" />
-              <div className="h-2.5 w-14 rounded-full bg-white/30" />
+        {/* Ilustração: janela de vidro com indicadores e gráfico, sobre um degradê nas cores da marca. */}
+        <div aria-hidden className="pointer-events-none absolute inset-0">
+          <div className="absolute -right-24 -top-24 size-96 rounded-full bg-[#a6c3e0]/30 blur-3xl" />
+          <div className="absolute -bottom-32 -left-20 size-96 rounded-full bg-[#467fc5]/40 blur-3xl" />
+          <div className="absolute left-10 right-[-3rem] top-28 overflow-hidden rounded-2xl border border-white/25 bg-white/10 shadow-[0_30px_80px_-20px_rgb(0_0_0/0.5)] backdrop-blur-xl">
+            <div className="flex items-center gap-1.5 border-b border-white/15 px-4 py-3">
+              <span className="size-2.5 rounded-full bg-white/35" />
+              <span className="size-2.5 rounded-full bg-white/25" />
+              <span className="size-2.5 rounded-full bg-white/15" />
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="space-y-2 rounded-xl border border-white/30 bg-white/20 p-3">
-                  <div className="h-2 w-3/4 rounded-full bg-white/70" />
-                  <div className="h-2 w-1/2 rounded-full bg-white/40" />
-                  <div className="mt-3 h-8 rounded-lg bg-white/30" />
+            <div className="flex">
+              <div className="w-28 shrink-0 space-y-2 border-r border-white/15 p-3">
+                {[0, 1, 2, 3, 4].map((n) => (
+                  <div key={n} className={`h-6 rounded-md ${n === 1 ? "bg-white/30" : "bg-white/10"}`} />
+                ))}
+              </div>
+              <div className="flex-1 space-y-3 p-4">
+                <div className="grid grid-cols-3 gap-2.5">
+                  {["128", "34", "20"].map((v, n) => (
+                    <div key={v} className="rounded-xl border border-white/15 bg-white/10 p-3">
+                      <div className="h-1.5 w-8 rounded-full bg-white/30" />
+                      <p className="mt-2 text-lg font-semibold leading-none text-white/90">{v}</p>
+                      <div className={`mt-2 h-1 rounded-full bg-white/20 ${n === 1 ? "w-2/3" : "w-full"}`} />
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-          <div className="absolute right-10 top-80 w-48 rotate-[-4deg] rounded-xl border border-white/40 bg-white/25 p-3 backdrop-blur-md">
-            <div className="flex items-center gap-2">
-              <div className="size-2.5 rounded-full bg-white" />
-              <div className="h-2 w-24 rounded-full bg-white/80" />
+                <div className="rounded-xl border border-white/15 bg-white/10 p-3">
+                  <svg viewBox="0 0 300 90" className="h-24 w-full" fill="none">
+                    <defs>
+                      <linearGradient id="lg-area" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0" stopColor="#fff" stopOpacity="0.38" />
+                        <stop offset="1" stopColor="#fff" stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <path d="M0 70 C30 60 45 40 75 46 S125 78 160 50 S215 14 250 28 S285 30 300 18 V90 H0 Z" fill="url(#lg-area)" />
+                    <path d="M0 70 C30 60 45 40 75 46 S125 78 160 50 S215 14 250 28 S285 30 300 18" stroke="#fff" strokeOpacity="0.9" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <div className="relative z-10 max-w-md">
-          <h1 className="text-3xl font-extrabold leading-tight text-white">
+          <h1 className="text-3xl font-semibold leading-tight tracking-tight text-white">
             Gestão comercial completa para sua consultoria.
           </h1>
           <p className="mt-4 text-sm text-white/70">

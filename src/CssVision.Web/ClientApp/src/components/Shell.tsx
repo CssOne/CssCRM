@@ -91,11 +91,11 @@ const PORTAL_NAV = [
 function Logo({ subtitulo, colapsado = false }: { subtitulo: string; colapsado?: boolean }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      <img src="/logo-css.svg" alt="CSS Brasil" className="size-8 shrink-0 object-contain" />
+      <img src="/logo-css.svg" alt="CSS Brasil" className="size-7 shrink-0 object-contain" />
       {!colapsado && (
         <div className="min-w-0 leading-tight">
-          <p className="truncate text-sm font-extrabold tracking-tight text-[var(--sidebar-fg)]">CSS Brasil</p>
-          <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-[var(--sidebar-fg-muted)]">{subtitulo}</p>
+          <p className="truncate text-sm font-semibold tracking-tight text-[var(--sidebar-fg)]">CSS Brasil</p>
+          <p className="truncate text-[10px] font-medium text-[var(--sidebar-fg-muted)]">{subtitulo}</p>
         </div>
       )}
     </div>
@@ -111,7 +111,7 @@ const OPCOES_TEMA: { valor: Tema; rotulo: string; icone: typeof Sun }[] = [
 export function SeletorDeTema() {
   const { tema, definir } = useTheme();
   return (
-    <div role="radiogroup" aria-label="Tema" className="ui-surface flex items-center gap-0.5 rounded-xl border border-[var(--border)] bg-[var(--surface-hover)] p-0.5">
+    <div role="radiogroup" aria-label="Tema" className="flex items-center gap-0.5 rounded-lg bg-[var(--surface-hover)] p-0.5">
       {OPCOES_TEMA.map(({ valor, rotulo, icone: Icone }) => (
         <button
           key={valor}
@@ -121,8 +121,8 @@ export function SeletorDeTema() {
           aria-label={rotulo}
           title={rotulo}
           onClick={() => definir(valor)}
-          className={`focus-ring flex size-8 cursor-pointer items-center justify-center rounded-[10px] transition-colors ${
-            tema === valor ? "bg-[var(--brand)] text-[var(--brand-fg)] shadow-sm" : "text-[var(--fg-muted)] hover:text-[var(--fg)]"
+          className={`focus-ring flex size-7 cursor-pointer items-center justify-center rounded-md transition-colors ${
+            tema === valor ? "bg-[var(--surface)] text-[var(--fg)] shadow-[0_1px_2px_rgb(0_0_0/0.12)]" : "text-[var(--fg-muted)] hover:text-[var(--fg)]"
           }`}
         >
           <Icone className="size-4" aria-hidden />
@@ -199,13 +199,13 @@ export function Shell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen bg-[var(--bg)]">
       {menuAberto && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setMenuAberto(false)} />}
 
-      {/* Barra lateral flutuante: painel arredondado solto das bordas (no celular vira gaveta). Item ativo com "azulejo" de ícone na cor da marca. */}
+      {/* Barra lateral no estilo macOS: painel translúcido colado na borda, itens simples e seleção em tom suave da marca. */}
       <aside
-        className={`ui-surface fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] transition-[transform,width] max-lg:border-r lg:inset-y-3 lg:left-3 lg:translate-x-0 lg:rounded-[1.75rem] lg:border lg:shadow-[var(--shadow-card)] ${
+        className={`ui-bar fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] transition-[transform,width] lg:translate-x-0 ${
           menuAberto ? "translate-x-0" : "-translate-x-full"
         } ${colapsado ? "lg:w-16" : "lg:w-56"}`}
       >
-        <div className={`flex items-center justify-between gap-2 px-3 py-3 ${colapsado ? "lg:flex-col lg:px-2" : ""}`}>
+        <div className={`flex h-14 shrink-0 items-center justify-between gap-2 px-3.5 ${colapsado ? "lg:flex-col lg:justify-center lg:gap-1 lg:px-2" : ""}`}>
           <Logo subtitulo={emPortal ? "Portal do consultor" : "CRM comercial"} colapsado={colapsado} />
           <IconButton label="Fechar menu" className="lg:hidden" onClick={() => setMenuAberto(false)}>
             <X className="size-4" />
@@ -214,21 +214,16 @@ export function Shell({ children }: { children: ReactNode }) {
             aria-label={colapsado ? "Expandir menu" : "Recolher menu"}
             title={colapsado ? "Expandir menu" : "Recolher menu"}
             onClick={() => setColapsado((v) => !v)}
-            className="focus-ring hidden size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-[var(--sidebar-fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--brand)] lg:flex"
+            className="focus-ring hidden size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-[var(--sidebar-fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--sidebar-fg)] lg:flex"
           >
             {colapsado ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
           </button>
         </div>
 
-        <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-2" aria-label="Navegação principal">
+        <nav className="flex-1 space-y-px overflow-y-auto px-2 pb-2 pt-1" aria-label="Navegação principal">
           {itensNav?.map((item) => {
-            const linhaBase = `focus-ring group relative flex items-center gap-2.5 rounded-xl p-1 pr-2.5 text-[13px] font-medium transition-colors ${colapsado ? "lg:justify-center lg:pr-1" : ""}`;
-            const azulejo = (ativo: boolean) =>
-              `flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors ${
-                ativo
-                  ? "bg-[var(--brand)] text-[var(--brand-fg)] shadow-[0_6px_14px_-6px_var(--brand)]"
-                  : "bg-[var(--surface-hover)] text-[var(--sidebar-fg-muted)] group-hover:text-[var(--brand)]"
-              }`;
+            const linhaBase = `focus-ring group relative flex h-8 items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors ${colapsado ? "lg:justify-center lg:px-0" : ""}`;
+            const inativa = "text-[var(--sidebar-fg)] hover:bg-[var(--surface-hover)]";
             return (
               <div key={item.chave}>
                 {item.rota.startsWith("/tv/") ? (
@@ -237,11 +232,9 @@ export function Shell({ children }: { children: ReactNode }) {
                     target="_blank"
                     rel="noopener"
                     title={colapsado ? `${item.rotulo} (abre em outra aba)` : "Abre em outra aba"}
-                    className={`${linhaBase} text-[var(--sidebar-fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--sidebar-fg)]`}
+                    className={`${linhaBase} ${inativa}`}
                   >
-                    <span className={azulejo(false)}>
-                      <item.icone className="size-4" aria-hidden />
-                    </span>
+                    <item.icone className="size-[17px] shrink-0 text-[var(--sidebar-fg-muted)]" aria-hidden />
                     <span className={colapsado ? "lg:hidden" : undefined}>{item.rotulo}</span>
                   </a>
                 ) : (
@@ -252,22 +245,19 @@ export function Shell({ children }: { children: ReactNode }) {
                     title={colapsado ? item.rotulo : undefined}
                     className={({ isActive: ativoPelaRota }) => {
                       const isActive = ativoPelaRota && item.rota === rotaAtiva;
-                      return `${linhaBase} ${
-                        isActive
-                          ? "bg-[var(--brand-soft)] font-semibold text-[var(--brand)]"
-                          : "text-[var(--sidebar-fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--sidebar-fg)]"
-                      }`;
+                      return `${linhaBase} ${isActive ? "bg-[var(--sidebar-bg-active)] font-semibold text-[var(--sidebar-active-fg)]" : inativa}`;
                     }}
                   >
                     {({ isActive: ativoPelaRota }) => (
                       <>
-                        <span className={azulejo(ativoPelaRota && item.rota === rotaAtiva)}>
-                          <item.icone className="size-4" aria-hidden />
-                        </span>
+                        <item.icone
+                          className={`size-[17px] shrink-0 ${ativoPelaRota && item.rota === rotaAtiva ? "text-[var(--brand)]" : "text-[var(--sidebar-fg-muted)]"}`}
+                          aria-hidden
+                        />
                         <span className={`truncate ${colapsado ? "lg:hidden" : ""}`}>{item.rotulo}</span>
                         {item.chave === "chat" && chatNaoLidas.total > 0 && (
                           <span
-                            className={`ml-auto rounded-full bg-[var(--danger)] px-1.5 text-xs font-bold text-white ${colapsado ? "lg:absolute lg:right-0.5 lg:top-0.5 lg:ml-0 lg:px-1 lg:text-[10px]" : ""}`}
+                            className={`ml-auto rounded-full bg-[var(--danger)] px-1.5 text-[11px] font-semibold text-white ${colapsado ? "lg:absolute lg:right-1 lg:top-0.5 lg:ml-0 lg:px-1 lg:text-[10px]" : ""}`}
                             aria-label={`${chatNaoLidas.total} mensagens não lidas`}
                           >
                             {rotuloNaoLidas(chatNaoLidas.total)}
@@ -283,19 +273,18 @@ export function Shell({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        {/* Cartão do usuário no rodapé, com o botão de sair. */}
-        <div className="p-2">
-          <div className={`flex items-center gap-2 rounded-xl bg-[var(--surface-hover)] p-1.5 ${colapsado ? "lg:flex-col lg:p-1.5" : ""}`}>
+        <div className="border-t border-[var(--sidebar-border)] p-2.5">
+          <div className={`flex items-center gap-2.5 ${colapsado ? "lg:flex-col" : ""}`}>
             <Avatar nome={sessao.nomeCompleto} fotoUrl={sessao.fotoUrl} className="size-8 text-xs" />
             <div className={`min-w-0 flex-1 leading-tight ${colapsado ? "lg:hidden" : ""}`}>
-              <p className="truncate text-[13px] font-semibold text-[var(--sidebar-fg)]">{sessao.nomeCompleto}</p>
+              <p className="truncate text-[13px] font-medium text-[var(--sidebar-fg)]">{sessao.nomeCompleto}</p>
               <p className="truncate text-[11px] text-[var(--sidebar-fg-muted)]">{PAPEL_LABEL[sessao.papeis[0]] ?? sessao.papeis[0]}</p>
             </div>
             <button
               onClick={handleLogout}
               aria-label="Sair"
               title="Sair"
-              className="focus-ring flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-[var(--sidebar-fg-muted)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
+              className="focus-ring flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-[var(--sidebar-fg-muted)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
             >
               <LogOut className="size-4" aria-hidden />
             </button>
@@ -303,8 +292,8 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       </aside>
 
-      <div className={`flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] ${colapsado ? "lg:pl-[5.5rem]" : "lg:pl-[15.5rem]"}`}>
-        <header className="ui-surface sticky top-0 z-20 flex h-16 items-center justify-between gap-3 border-b border-[var(--border)] bg-[var(--header-bg)] px-4 lg:px-6">
+      <div className={`flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] ${colapsado ? "lg:pl-16" : "lg:pl-56"}`}>
+        <header className="ui-bar sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-[var(--sidebar-border)] bg-[var(--header-bg)] px-4 lg:px-8">
           <div className="flex items-center gap-2">
             <IconButton label="Abrir menu" className="lg:hidden" onClick={() => setMenuAberto(true)}>
               <MenuIcon className="size-5" />
@@ -316,7 +305,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
                 placeholder="Buscar clientes..."
-                className="focus-ring ui-surface w-72 rounded-xl border border-[var(--border)] bg-[var(--surface-hover)] py-2 pl-9 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                className="focus-ring h-8 w-72 rounded-lg border-0 bg-[var(--surface-hover)] pl-9 pr-3 text-[13px] text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
               />
             </form>
             )}
@@ -338,7 +327,7 @@ export function Shell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <main className="min-w-0 flex-1 p-4 lg:p-6">
+        <main className="min-w-0 flex-1 p-4 lg:px-8 lg:py-7">
           {!emPortal && temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial") && <AlertaDistribuicaoLimites />}
           {children}
         </main>

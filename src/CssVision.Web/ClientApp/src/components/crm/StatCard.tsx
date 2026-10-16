@@ -15,23 +15,21 @@ export function StatCard({
   subtitulo?: string;
 }) {
   const tons: Record<string, string> = {
-    neutral: "bg-[var(--surface-hover)] text-[var(--fg-muted)]",
-    success: "bg-[var(--success-soft)] text-[var(--success)]",
-    warning: "bg-[var(--warning-soft)] text-[var(--warning)]",
-    danger: "bg-[var(--danger-soft)] text-[var(--danger)]",
-    brand: "bg-[var(--brand-soft)] text-[var(--brand)]",
+    neutral: "text-[var(--fg-muted)]",
+    success: "text-[var(--success)]",
+    warning: "text-[var(--warning)]",
+    danger: "text-[var(--danger)]",
+    brand: "text-[var(--brand)]",
   };
 
   return (
-    <Card className="flex items-start gap-3.5 p-5">
-      <div className={`flex size-11 shrink-0 items-center justify-center rounded-xl ${tons[tom]}`}>
-        <Icone className="size-5" aria-hidden />
-      </div>
-      <div className="min-w-0">
-        <p className="truncate text-xs font-medium text-[var(--fg-muted)]">{titulo}</p>
-        <p className="text-2xl font-bold tracking-tight text-[var(--fg)]">{valor}</p>
-        {subtitulo && <p className="truncate text-xs text-[var(--fg-muted)]">{subtitulo}</p>}
-      </div>
+    <Card className="p-5">
+      <p className="flex items-center gap-1.5 truncate text-xs font-medium text-[var(--fg-muted)]">
+        <Icone className={`size-3.5 shrink-0 ${tons[tom]}`} aria-hidden />
+        {titulo}
+      </p>
+      <p className="mt-2 text-[1.75rem] font-semibold leading-none tracking-tight text-[var(--fg)] [font-variant-numeric:tabular-nums]">{valor}</p>
+      {subtitulo && <p className="mt-2 truncate text-xs text-[var(--fg-muted)]">{subtitulo}</p>}
     </Card>
   );
 }
