@@ -683,7 +683,7 @@ export function LeadsKanbanPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+      <div className="ui-surface flex flex-wrap items-end gap-3 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-card)]">
         <div className="w-56">
           <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Buscar</label>
           <Input placeholder="Nome, placa, telefone ou e-mail" value={busca} onChange={(e) => setBusca(e.target.value)} />
@@ -881,7 +881,7 @@ export function LeadsKanbanPage() {
           description={filtrosAtivos ? "Ajuste os filtros ou cadastre um novo lead." : "Cadastre um novo lead para começar."}
         />
       ) : (
-        <div className="barra-quadro flex gap-4 overflow-x-auto pb-2">
+        <div className="barra-quadro flex gap-4 overflow-x-auto pb-3">
           {colunasExibidas.map((coluna) => {
             const chaveColuna = coluna.etapa.id ?? "sem-etapa";
             const restantes = Math.max(0, coluna.total - coluna.cartoes.length);
@@ -902,7 +902,7 @@ export function LeadsKanbanPage() {
                   setColunaSobre(null);
                   handleDrop(coluna.etapa.id);
                 }}
-                className={`flex w-80 shrink-0 flex-col overflow-hidden rounded-3xl border bg-[var(--surface-hover)]/60 transition-colors ${
+                className={`ui-surface flex w-80 shrink-0 flex-col overflow-hidden rounded-3xl border bg-[var(--surface-hover)]/50 transition-colors ${
                   alvo ? "border-[var(--brand)] bg-[var(--brand-soft)]/60" : "border-[var(--border)]"
                 }`}
               >

@@ -80,11 +80,22 @@ export function CartaoLead({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onAbrir}
-      style={{ borderLeftColor: corColuna }}
-      className="group cursor-grab rounded-xl border border-l-[3px] border-[var(--border)] bg-[var(--surface)] p-3 text-sm shadow-sm transition hover:-translate-y-px hover:shadow-md active:cursor-grabbing"
+      className="group cursor-grab rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3.5 text-sm shadow-[var(--shadow-card)] transition hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--brand)_35%,var(--border))] active:cursor-grabbing"
     >
       {/* Nome e ações */}
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start gap-2.5">
+        <span
+          aria-hidden
+          className="flex size-9 shrink-0 items-center justify-center rounded-xl text-xs font-bold"
+          style={{ backgroundColor: `color-mix(in srgb, ${corColuna} 16%, transparent)`, color: corColuna }}
+        >
+          {cartao.nomeOuRazaoSocial
+            .split(" ")
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((p) => p[0]?.toUpperCase())
+            .join("")}
+        </span>
         <Link
           to={`/app/crm/leads/${cartao.leadId}`}
           onClick={(e) => {
@@ -95,11 +106,11 @@ export function CartaoLead({
               onAbrir();
             }
           }}
-          className="line-clamp-2 font-semibold leading-snug text-[var(--fg)] hover:text-[var(--brand)]"
+          className="line-clamp-2 min-w-0 flex-1 pt-1.5 font-semibold leading-snug text-[var(--fg)] hover:text-[var(--brand)]"
         >
           {cartao.nomeOuRazaoSocial}
         </Link>
-        <div className="-mr-1 -mt-0.5 flex shrink-0 items-center transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+        <div className="-mr-1 flex shrink-0 items-center transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
           <BotaoAcao titulo="Mover para outra etapa" onClick={onMover}>
             <ArrowRightLeft className="size-3.5" />
           </BotaoAcao>
@@ -144,10 +155,10 @@ export function CartaoLead({
       )}
 
       {/* Contato */}
-      <div className="mt-2 space-y-0.5 text-xs text-[var(--fg-muted)]">
+      <div className="mt-2.5 space-y-1 text-xs text-[var(--fg-muted)]">
         {(cartao.telefone || cartao.telefone2) && (
           <p className="flex items-center gap-1.5 truncate">
-            <Phone className="size-3 shrink-0" aria-hidden />
+            <Phone className="size-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
             <span className="truncate">
               {[cartao.telefone, cartao.telefone2].filter(Boolean).map((t) => formatarTelefone(t)).join(" · ")}
             </span>
@@ -155,7 +166,7 @@ export function CartaoLead({
         )}
         {cartao.email && (
           <p className="flex items-center gap-1.5">
-            <Mail className="size-3 shrink-0" aria-hidden />
+            <Mail className="size-3.5 shrink-0 text-[var(--brand)]" aria-hidden />
             <span className="truncate">{cartao.email}</span>
           </p>
         )}
@@ -167,7 +178,7 @@ export function CartaoLead({
           {cartao.placa && (
             <span
               title="Placa do veículo"
-              className="rounded-md border border-[var(--border)] bg-[var(--surface-hover)] px-1.5 py-px font-mono font-semibold tracking-wider text-[var(--fg)]"
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface-hover)] px-2 py-0.5 font-mono font-semibold tracking-wider text-[var(--fg)]"
             >
               {cartao.placa}
             </span>
@@ -214,7 +225,7 @@ export function CartaoLead({
       )}
 
       {/* Responsável e chegada */}
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2">
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-dashed border-[var(--border)] pt-2.5">
         {cartao.responsavelNome ? (
           <div className="flex min-w-0 items-center gap-1.5" title={`Responsável: ${cartao.responsavelNome}`}>
             <Avatar nome={cartao.responsavelNome} fotoUrl={cartao.responsavelFotoUrl} className="size-6 text-[10px] ring-2 ring-[var(--brand-soft)]" />
