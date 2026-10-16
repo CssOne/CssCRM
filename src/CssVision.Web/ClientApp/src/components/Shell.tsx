@@ -3,7 +3,6 @@ import {
   CalendarDays,
   ChartColumn,
   CheckSquare,
-  ChevronLeft,
   Database,
   ChevronRight,
   FileText,
@@ -256,16 +255,13 @@ export function Shell({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuAberto, setMenuAberto] = useState(false);
-  const [colapsado, setColapsado] = useState(() => localStorage.getItem("crm-sidebar-colapsado") === "1");
+  // A barra lateral fica sempre recolhida (cápsula de ícones) e abre sozinha ao passar o mouse.
+  const colapsado = true;
   const [busca, setBusca] = useState("");
   // Número de mensagens não lidas do chat no menu e no título da aba (só consulta quem tem o Chat no menu).
   const temChat = !!sessao?.menu.some((m) => m.chave === "chat");
   const chatNaoLidas = useChatNaoLidas(temChat, 30000);
   usePresenca(!!sessao); // "online" no chat: o CRM aberto avisa a cada minuto
-
-  useEffect(() => {
-    localStorage.setItem("crm-sidebar-colapsado", colapsado ? "1" : "0");
-  }, [colapsado]);
 
   // Mensagem nova (o total subiu desde a consulta anterior): "plim" e, com a aba em segundo plano, notificação do navegador. A 1ª consulta
   // só registra o ponto de partida (abrir o CRM com mensagens antigas não deve tocar).
@@ -311,8 +307,6 @@ export function Shell({ children }: { children: ReactNode }) {
       : null;
 
   let indiceItem = 0; // ordem do item no menu, para a entrada em sequência
-  const alternarMenu = () => setColapsado((v) => !v);
-
   // Com a barra recolhida, passar o mouse por cima abre ela temporariamente (por cima do conteúdo, sem empurrá-lo).
   const [aoPassar, setAoPassar] = useState(false);
   const tempoHover = useRef<number | undefined>(undefined);
@@ -326,10 +320,7 @@ export function Shell({ children }: { children: ReactNode }) {
     window.clearTimeout(tempoHover.current);
     tempoHover.current = window.setTimeout(() => setAoPassar(false), 160);
   };
-  useEffect(() => {
-    if (!colapsado) setAoPassar(false);
-    return () => window.clearTimeout(tempoHover.current);
-  }, [colapsado]);
+  useEffect(() => () => window.clearTimeout(tempoHover.current), []);
 
   async function handleLogout() {
     await logout();
@@ -366,14 +357,6 @@ export function Shell({ children }: { children: ReactNode }) {
           <IconButton label="Fechar menu" className="text-white/70 hover:bg-[var(--sidebar-hover)] hover:text-white lg:hidden" onClick={() => setMenuAberto(false)}>
             <X className="size-4" />
           </IconButton>
-          <button
-            aria-label={colapsado ? "Expandir menu" : "Recolher menu"}
-            title={colapsado ? "Expandir menu" : "Recolher menu"}
-            onClick={alternarMenu}
-            className="focus-ring hidden size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-[var(--sidebar-fg-muted)] hover:bg-[var(--sidebar-hover)] hover:text-white lg:flex"
-          >
-            {colapsado ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
-          </button>
         </div>
 
         <nav className={`sidebar-nav min-h-0 flex-1 overflow-y-auto px-3 pb-3 ${recolhida ? "lg:px-2" : ""}`} aria-label="Navegação principal">
