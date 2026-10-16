@@ -138,6 +138,8 @@ export interface LeadListItem {
   etapaAtual?: string | null;
   responsavelId?: string | null;
   responsavelNome?: string | null;
+  /** Foto do consultor responsável. */
+  responsavelFotoUrl?: string | null;
   tags: string[];
   criadoEm: string;
   ultimoContatoEm?: string | null;

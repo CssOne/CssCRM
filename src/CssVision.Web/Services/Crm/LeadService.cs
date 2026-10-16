@@ -98,7 +98,8 @@ public sealed class LeadService(
                 l.ProximoContatoEm,
                 string.IsNullOrWhiteSpace(l.Telefone) && string.IsNullOrWhiteSpace(l.Telefone2),
                 l.Arquivado,
-                null
+                null,
+                l.Responsavel != null ? l.Responsavel.FotoUrl : null
             ))
             .ToListAsync(ct);
 
