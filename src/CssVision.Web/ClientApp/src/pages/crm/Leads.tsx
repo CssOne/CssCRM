@@ -1,4 +1,4 @@
-import { Download, LayoutGrid, Plus, Upload, X } from "lucide-react";
+import { Download, LayoutGrid, Plus, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiRequestError, downloadUrl, isAbortError, toQueryString } from "../../lib/api";
@@ -15,6 +15,7 @@ import {
   type VendedorResumo,
 } from "../../lib/types";
 import { MultiSelect } from "../../components/MultiSelect";
+import { BarraDeFiltros, CampoDeFiltro, type ChipDeFiltro } from "../../components/Filtros";
 import { useAuth } from "../../context/AuthContext";
 import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
 import {
@@ -160,10 +161,6 @@ export function LeadsPage() {
     };
   }
 
-  const filtrosAtivos = !!(
-    busca || etapaIds.length || origens.length || consultorIds.length || regionais.length || grupoIds.length ||
-    chegadaDe || chegadaAte || vendaDe || vendaAte
-  );
   const dinheiro = (n?: number | null) => (n == null ? "—" : formatarMoeda(n));
 
   function alternarSelecao(id: string) {
@@ -204,6 +201,18 @@ export function LeadsPage() {
     }
   }
 
+  // Filtros ativos como chips removíveis (mostrados abaixo da busca).
+  const dataCurta = (d: string) => (d ? d.split("-").reverse().slice(0, 2).join("/") : "…");
+  const chipsDeFiltro: ChipDeFiltro[] = [];
+  const addChip = (rotulo: string, valor: string, limpar: () => void) => chipsDeFiltro.push({ rotulo, valor, limpar });
+  if (etapaIds.length) addChip("Etapa", etapaIds.map((id) => etapas.find((e) => e.id === id)?.nome ?? "Sem etapa").join(", "), () => comPagina1(setEtapaIds)([]));
+  if (consultorIds.length) addChip("Consultor", consultores.filter((c) => consultorIds.includes(c.id)).map((c) => c.nome).join(", ") || `${consultorIds.length} selecionado(s)`, () => comPagina1(setConsultorIds)([]));
+  if (origens.length) addChip("Origem", origens.join(", "), () => comPagina1(setOrigens)([]));
+  if (regionais.length) addChip("Regional", regionais.join(", "), () => comPagina1(setRegionais)([]));
+  if (grupoIds.length) addChip("Grupo", listaGrupos.filter((g) => grupoIds.includes(g.id)).map((g) => g.nome).join(", ") || `${grupoIds.length} selecionado(s)`, () => comPagina1(setGrupoIds)([]));
+  if (chegadaDe || chegadaAte) addChip("Chegada", `${dataCurta(chegadaDe)} → ${dataCurta(chegadaAte)}`, () => { comPagina1(setChegadaDe)(""); comPagina1(setChegadaAte)(""); });
+  if (vendaDe || vendaAte) addChip("Ativação", `${dataCurta(vendaDe)} → ${dataCurta(vendaAte)}`, () => { comPagina1(setVendaDe)(""); comPagina1(setVendaAte)(""); });
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -233,107 +242,75 @@ export function LeadsPage() {
         </div>
       </div>
 
-      <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-48 flex-1">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Buscar</label>
-            <Input
-              placeholder="Nome, documento, telefone ou e-mail"
-              value={busca}
-              onChange={(e) => {
-                setBusca(e.target.value);
-                setPagina(1);
-              }}
-            />
-          </div>
-          <div className="w-52">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Etapa</label>
+      <BarraDeFiltros
+        busca={busca}
+        onBusca={(v) => {
+          setBusca(v);
+          setPagina(1);
+        }}
+        placeholder="Buscar por nome, documento, telefone ou e-mail"
+        chips={chipsDeFiltro}
+        onLimparTudo={limparFiltros}
+      >
+        <CampoDeFiltro rotulo="Etapa">
+          <MultiSelect
+            ariaLabel="Etapa"
+            rotuloTodos="Todas"
+            opcoes={[
+              ...etapas.filter((e) => e.ativa !== false && e.id).map((e) => ({ valor: e.id!, rotulo: e.nome })),
+              { valor: "00000000-0000-0000-0000-000000000000", rotulo: "Sem etapa" },
+            ]}
+            valores={etapaIds}
+            onChange={comPagina1(setEtapaIds)}
+          />
+        </CampoDeFiltro>
+        {podeGerir && (
+          <CampoDeFiltro rotulo="Consultor">
             <MultiSelect
-              ariaLabel="Etapa"
-              rotuloTodos="Todas"
-              opcoes={[
-                ...etapas.filter((e) => e.ativa !== false && e.id).map((e) => ({ valor: e.id!, rotulo: e.nome })),
-                { valor: "00000000-0000-0000-0000-000000000000", rotulo: "Sem etapa" },
-              ]}
-              valores={etapaIds}
-              onChange={comPagina1(setEtapaIds)}
+              ariaLabel="Consultor"
+              rotuloTodos="Todos"
+              opcoes={consultores.map((c) => ({ valor: c.id, rotulo: c.ativo === false ? `${c.nome} (inativo)` : c.nome }))}
+              valores={consultorIds}
+              onChange={comPagina1(setConsultorIds)}
             />
-          </div>
-          {podeGerir && (
-            <div className="w-52">
-              <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Consultor</label>
+          </CampoDeFiltro>
+        )}
+        {podeVerOrigem && (
+          <CampoDeFiltro rotulo="Origem">
+            <MultiSelect ariaLabel="Origem" rotuloTodos="Todas" opcoes={listaOrigens.map((o) => ({ valor: o, rotulo: o }))} valores={origens} onChange={comPagina1(setOrigens)} />
+          </CampoDeFiltro>
+        )}
+        {podeGerir && (
+          <>
+            <CampoDeFiltro rotulo="Regional">
+              <MultiSelect ariaLabel="Regional" rotuloTodos="Todas" opcoes={listaRegionais.map((r) => ({ valor: r.nome, rotulo: r.nome }))} valores={regionais} onChange={comPagina1(setRegionais)} />
+            </CampoDeFiltro>
+            <CampoDeFiltro rotulo="Grupo">
               <MultiSelect
-                ariaLabel="Consultor"
+                ariaLabel="Grupo"
                 rotuloTodos="Todos"
-                opcoes={consultores.map((c) => ({ valor: c.id, rotulo: c.ativo === false ? `${c.nome} (inativo)` : c.nome }))}
-                valores={consultorIds}
-                onChange={comPagina1(setConsultorIds)}
+                opcoes={listaGrupos
+                  .filter((g) => regionais.length === 0 || regionais.includes(g.regionalNome))
+                  .map((g) => ({ valor: g.id, rotulo: `${g.regionalNome} · ${g.nome}` }))}
+                valores={grupoIds}
+                onChange={comPagina1(setGrupoIds)}
               />
-            </div>
-          )}
-          {podeVerOrigem && (
-            <div className="w-52">
-              <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Origem</label>
-              <MultiSelect
-                ariaLabel="Origem"
-                rotuloTodos="Todas"
-                opcoes={listaOrigens.map((o) => ({ valor: o, rotulo: o }))}
-                valores={origens}
-                onChange={comPagina1(setOrigens)}
-              />
-            </div>
-          )}
-          {podeGerir && (
-            <>
-              <div className="w-44">
-                <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Regional</label>
-                <MultiSelect
-                  ariaLabel="Regional"
-                  rotuloTodos="Todas"
-                  opcoes={listaRegionais.map((r) => ({ valor: r.nome, rotulo: r.nome }))}
-                  valores={regionais}
-                  onChange={comPagina1(setRegionais)}
-                />
-              </div>
-              <div className="w-56">
-                <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Grupo</label>
-                <MultiSelect
-                  ariaLabel="Grupo"
-                  rotuloTodos="Todos"
-                  opcoes={listaGrupos
-                    .filter((g) => regionais.length === 0 || regionais.includes(g.regionalNome))
-                    .map((g) => ({ valor: g.id, rotulo: `${g.regionalNome} · ${g.nome}` }))}
-                  valores={grupoIds}
-                  onChange={comPagina1(setGrupoIds)}
-                />
-              </div>
-            </>
-          )}
-        </div>
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Chegada de</label>
-            <Input type="date" className="w-40" value={chegadaDe} max={chegadaAte || undefined} onChange={(e) => comPagina1(setChegadaDe)(e.target.value)} />
+            </CampoDeFiltro>
+          </>
+        )}
+        <CampoDeFiltro rotulo="Chegada" className="sm:col-span-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Input type="date" aria-label="Chegada de" value={chegadaDe} max={chegadaAte || undefined} onChange={(e) => comPagina1(setChegadaDe)(e.target.value)} />
+            <Input type="date" aria-label="Chegada até" value={chegadaAte} min={chegadaDe || undefined} onChange={(e) => comPagina1(setChegadaAte)(e.target.value)} />
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">até</label>
-            <Input type="date" className="w-40" value={chegadaAte} min={chegadaDe || undefined} onChange={(e) => comPagina1(setChegadaAte)(e.target.value)} />
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Ativação" className="sm:col-span-2">
+          <div className="grid grid-cols-2 gap-2">
+            <Input type="date" aria-label="Ativação de" value={vendaDe} max={vendaAte || undefined} onChange={(e) => comPagina1(setVendaDe)(e.target.value)} />
+            <Input type="date" aria-label="Ativação até" value={vendaAte} min={vendaDe || undefined} onChange={(e) => comPagina1(setVendaAte)(e.target.value)} />
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Ativação de</label>
-            <Input type="date" className="w-40" value={vendaDe} max={vendaAte || undefined} onChange={(e) => comPagina1(setVendaDe)(e.target.value)} />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">até</label>
-            <Input type="date" className="w-40" value={vendaAte} min={vendaDe || undefined} onChange={(e) => comPagina1(setVendaAte)(e.target.value)} />
-          </div>
-          {filtrosAtivos && (
-            <Button variant="ghost" size="sm" onClick={limparFiltros}>
-              <X className="size-4" /> Limpar filtros
-            </Button>
-          )}
-        </div>
-      </div>
+        </CampoDeFiltro>
+      </BarraDeFiltros>
 
       {podeGerir && selecionados.size > 0 && (
         <div className="flex items-center justify-between rounded-lg bg-[var(--brand-soft)] px-4 py-2 text-sm text-[var(--brand)]">
