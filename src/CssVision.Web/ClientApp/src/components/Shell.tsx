@@ -33,7 +33,6 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { flushSync } from "react-dom";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { mostrarNotificacao, somLigado, tocarPlim } from "../lib/avisosDoChat";
@@ -307,22 +306,8 @@ export function Shell({ children }: { children: ReactNode }) {
     ? { secao: emPortal ? "Portal do consultor" : SECOES.find((sec) => sec.chaves.includes(itemAtivo.chave))?.rotulo, titulo: itemAtivo.rotulo }
     : null;
 
-  /**
-   * Recolhe/expande a barra lateral com uma transição de forma: a barra (nomeada "sidebar") se transforma de painel em cápsula
-   * e o conteúdo desliza com um fade curto (View Transitions). Sem suporte ou com "reduzir movimento", troca direto.
-   */
-  function alternarMenu() {
-    const raiz = document.documentElement;
-    const vt = (document as Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void> } }).startViewTransition;
-    if (!vt || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || !window.matchMedia("(min-width: 1024px)").matches) {
-      setColapsado((v) => !v);
-      return;
-    }
-    raiz.dataset.vt = "menu";
-    vt.call(document, () => flushSync(() => setColapsado((v) => !v))).finished.finally(() => {
-      delete raiz.dataset.vt;
-    });
-  }
+  let indiceItem = 0; // ordem do item no menu, para a entrada em sequência
+  const alternarMenu = () => setColapsado((v) => !v);
 
   async function handleLogout() {
     await logout();
@@ -343,7 +328,8 @@ export function Shell({ children }: { children: ReactNode }) {
 
       {/* Barra lateral nas cores da empresa: azul-marinho cheio, menu em seções e marcador claro no item ativo. */}
       <aside
-        className={`ui-bar fixed inset-y-0 left-0 z-40 flex w-64 lg:[view-transition-name:sidebar] flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] text-[var(--sidebar-fg)] transition-[transform,width] lg:translate-x-0 ${
+        key={colapsado ? "recolhida" : "expandida"}
+        className={`ui-bar barra-anim fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] text-[var(--sidebar-fg)] transition-[transform,width] lg:translate-x-0 ${
           menuAberto ? "translate-x-0" : "-translate-x-full"
         } ${
           colapsado
@@ -377,7 +363,7 @@ export function Shell({ children }: { children: ReactNode }) {
                   const linhaBase = `focus-ring group relative flex h-9 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium transition-colors ${colapsado ? "lg:mx-auto lg:size-10 lg:justify-center lg:rounded-full lg:px-0" : ""}`;
                   const inativa = "text-[var(--sidebar-fg-muted)] hover:bg-[var(--sidebar-hover)] hover:text-white";
                   return (
-                    <div key={item.chave}>
+                    <div key={item.chave} className="menu-item-anim" style={{ "--i": indiceItem++ } as React.CSSProperties}>
                       {item.rota.startsWith("/tv/") ? (
                         <a
                           href={item.rota}
