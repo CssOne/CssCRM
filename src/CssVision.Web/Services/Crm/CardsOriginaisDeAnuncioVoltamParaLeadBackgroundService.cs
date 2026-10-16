@@ -131,15 +131,23 @@ public sealed class CardsOriginaisDeAnuncioVoltamParaLeadBackgroundService(
             }
 
             vendasDoCard[0].LeadId = anuncio.Id;
-            if (string.IsNullOrWhiteSpace(anuncio.DocumentoNormalizado)) anuncio.DocumentoNormalizado = card.DocumentoNormalizado;
             anuncio.EtapaId = leads;
             card.Arquivado = true;
             card.ArquivadoEm = agora;
             card.ArquivadoPorId = null; // pelo sistema: a sincronização respeita e não recria
+            // O CPF/CNPJ é único no cadastro: o card arquivado solta o documento antes de o lead do anúncio ficar com ele (duas gravações, nesta ordem).
+            var documento = card.DocumentoNormalizado;
+            var anuncioPrecisaDoDocumento = string.IsNullOrWhiteSpace(anuncio.DocumentoNormalizado) && !string.IsNullOrWhiteSpace(documento);
+            if (anuncioPrecisaDoDocumento) card.DocumentoNormalizado = null;
+            await db.SaveChangesAsync(ct);
+            if (anuncioPrecisaDoDocumento)
+            {
+                anuncio.DocumentoNormalizado = documento;
+                await db.SaveChangesAsync(ct);
+            }
             unidos++;
         }
 
-        await db.SaveChangesAsync(ct);
         return unidos;
     }
 
