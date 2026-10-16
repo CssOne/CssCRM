@@ -1,5 +1,8 @@
 import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+
+/** Rótulos dos filtros ativos: os campos do painel que combinam com algum deles ganham destaque. */
+const AtivosContext = createContext<string[]>([]);
 
 export interface ChipDeFiltro {
   rotulo: string;
@@ -77,6 +80,7 @@ export function BarraDeFiltros({
   const temAtivos = chips.length > 0;
 
   return (
+    <AtivosContext.Provider value={chips.map((c) => c.rotulo.toLowerCase())}>
     <div className="ui-surface rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[var(--shadow-card)]">
       <div className="flex flex-wrap items-center gap-2">
         {onBusca && (
@@ -189,15 +193,23 @@ export function BarraDeFiltros({
         </div>
       </div>
     </div>
+    </AtivosContext.Provider>
   );
 }
 
 /** Um campo do painel de filtros: rótulo pequeno em cima e o controle ocupando toda a coluna. */
 export function CampoDeFiltro({ rotulo, extra, className = "", children }: { rotulo: string; extra?: ReactNode; className?: string; children: ReactNode }) {
+  const ativos = useContext(AtivosContext);
+  const nome = rotulo.toLowerCase();
+  // O rótulo do chip pode ser uma versão curta do rótulo do campo (ex.: "Canal" x "Canal de aquisição").
+  const ativo = ativos.some((a) => nome.startsWith(a) || a.startsWith(nome));
   return (
-    <div className={`min-w-0 ${className}`}>
+    <div className={`filtro-campo min-w-0 ${className}`} data-ativo={ativo}>
       <div className="mb-1 flex items-center justify-between gap-2 px-1">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">{rotulo}</span>
+        <span className={`flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide transition-colors ${ativo ? "text-[var(--brand)]" : "text-[var(--fg-muted)]"}`}>
+          {ativo && <span className="size-1.5 rounded-full bg-[var(--brand)]" aria-hidden />}
+          {rotulo}
+        </span>
         {extra}
       </div>
       {children}

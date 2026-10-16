@@ -370,3 +370,20 @@ body {
   height: auto;
   border-radius: 0.25rem;
 }
+
+/* Campos do painel de filtros: hover/foco suaves e destaque quando o campo está filtrando. */
+.filtros-painel :is(button, input)[class*="h-9"],
+.filtros-painel :is(button, input)[class*="h-10"] {
+  transition: border-color 150ms, background-color 150ms, box-shadow 150ms;
+}
+.filtros-painel :is(button, input)[class*="h-9"]:hover,
+.filtros-painel :is(button, input)[class*="h-10"]:hover {
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--border));
+}
+.filtro-campo[data-ativo="true"] :is(button, input)[class*="h-9"],
+.filtro-campo[data-ativo="true"] :is(button, input)[class*="h-10"] {
+  border-color: color-mix(in srgb, var(--brand) 55%, transparent);
+  background-color: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 500;
+}
