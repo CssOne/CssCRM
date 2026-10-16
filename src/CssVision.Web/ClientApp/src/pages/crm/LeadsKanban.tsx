@@ -893,22 +893,26 @@ export function LeadsKanbanPage() {
                 }`}
               >
                 <header>
-                  {/* Título "marcado": pílula na cor da etapa (como um marca-texto), com a contagem ao lado. */}
-                  <div className="flex items-center justify-between gap-2 px-3 pb-1 pt-3">
-                    <h2
-                      className="min-w-0 truncate rounded-full px-3 py-1 text-[13px] font-bold tracking-tight"
-                      style={{ color: `color-mix(in srgb, ${cor} 70%, var(--fg))`, backgroundColor: `color-mix(in srgb, ${cor} 20%, transparent)` }}
-                      title={coluna.etapa.nome}
+                  {/* Título "marcado": uma faixa na cor da etapa que vai do nome até a contagem de cartões. */}
+                  <div className="px-2.5 pb-1 pt-2.5">
+                    <div
+                      className="flex items-center justify-between gap-2 rounded-full py-1 pl-3.5 pr-1"
+                      style={{
+                        color: `color-mix(in srgb, ${cor} 72%, var(--fg))`,
+                        backgroundColor: `color-mix(in srgb, ${cor} 20%, transparent)`,
+                        boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${cor} 22%, transparent)`,
+                      }}
                     >
-                      {coluna.etapa.nome}
-                    </h2>
-                    <span
-                      className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-[var(--surface)] px-1.5 text-xs font-semibold shadow-sm [font-variant-numeric:tabular-nums]"
-                      style={{ color: `color-mix(in srgb, ${cor} 70%, var(--fg))` }}
-                      title="Leads nesta coluna"
-                    >
-                      {coluna.total.toLocaleString("pt-BR")}
-                    </span>
+                      <h2 className="min-w-0 truncate text-[13px] font-bold uppercase tracking-wide" title={coluna.etapa.nome}>
+                        {coluna.etapa.nome}
+                      </h2>
+                      <span
+                        className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-[var(--surface)] px-2 text-xs font-bold shadow-sm [font-variant-numeric:tabular-nums]"
+                        title="Leads nesta coluna"
+                      >
+                        {coluna.total.toLocaleString("pt-BR")}
+                      </span>
+                    </div>
                   </div>
                   {coluna.etapa.nome === `${ETAPA_VENDA_CONCLUIDA} (Indicação)` && coluna.etapa.id && (
                     <div className="border-b border-[var(--border)] px-3 py-2">
