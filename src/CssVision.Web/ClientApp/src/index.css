@@ -392,3 +392,23 @@ body {
   color: var(--brand);
   font-weight: 500;
 }
+
+/* Troca de tema: a tela nova é revelada em círculo a partir do botão (animada em ThemeContext). */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) {
+  z-index: 0;
+}
+::view-transition-new(root) {
+  z-index: 1;
+}
+
+/* Alternativa sem View Transitions: as cores se misturam suavemente por um instante. */
+html.tema-trocando *,
+html.tema-trocando *::before,
+html.tema-trocando *::after {
+  transition: background-color 400ms ease, border-color 400ms ease, color 400ms ease, fill 400ms ease, stroke 400ms ease, box-shadow 400ms ease !important;
+}
