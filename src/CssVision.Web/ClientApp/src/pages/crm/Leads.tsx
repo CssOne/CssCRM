@@ -436,7 +436,10 @@ export function LeadsPage() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate font-medium text-[var(--fg)]">{lead.nomeOuRazaoSocial}</span>
-                  <Badge variant="neutral">{lead.etapaNome ?? "Sem etapa"}</Badge>
+                  <Badge variant="neutral">
+                    <span className="mr-1 inline-block size-2 rounded-full" style={{ backgroundColor: lead.etapaCor ?? "#94a3b8" }} />
+                    {lead.etapaNome ?? "Sem etapa"}
+                  </Badge>
                 </div>
                 <div className="mt-1.5 flex items-center gap-2 text-xs text-[var(--fg-muted)]">
                   {lead.responsavelNome && <Avatar nome={lead.responsavelNome} fotoUrl={lead.responsavelFotoUrl} className="size-5 text-[9px]" />}

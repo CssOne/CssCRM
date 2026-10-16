@@ -55,7 +55,7 @@ export function CartaoLead({
   onDragEnd,
 }: {
   cartao: LeadKanbanCard;
-  /** Cor e nome da coluna onde o cartão está: viram uma etiqueta da etapa no topo do cartão. */
+  /** Cor e nome da coluna onde o cartão está: a cor vira um ponto ao lado do nome; o nome aparece ao passar o mouse. */
   corColuna: string;
   nomeColuna: string;
   podeGerir: boolean;
@@ -85,36 +85,25 @@ export function CartaoLead({
       onClick={onAbrir}
       className="group relative cursor-grab rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 text-sm shadow-[var(--shadow-card)] transition-[box-shadow,transform] hover:-translate-y-px hover:shadow-[0_8px_24px_-10px_rgb(0_0_0/0.22)] active:cursor-grabbing"
     >
-      {/* Etiqueta da etapa (cor da coluna) e há quanto tempo o lead chegou */}
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span
-          className="inline-flex max-w-[70%] items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-          style={{ color: `color-mix(in srgb, ${corColuna} 62%, var(--fg))`, backgroundColor: `color-mix(in srgb, ${corColuna} 15%, transparent)` }}
-        >
-          <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: corColuna }} />
-          <span className="truncate">{nomeColuna}</span>
-        </span>
-        <span className="shrink-0 text-[10px] text-[var(--fg-muted)]" title={`Chegou ${diasRelativos(cartao.criadoEm)}`}>
-          {diasRelativos(cartao.criadoEm)}
-        </span>
-      </div>
-
       {/* Nome e ações */}
       <div className="flex items-start justify-between gap-2">
-        <Link
-          to={`/app/crm/leads/${cartao.leadId}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            // Clique normal abre no painel lateral; Ctrl/⌘+clique continua abrindo numa aba nova.
-            if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
-              e.preventDefault();
-              onAbrir();
-            }
-          }}
-          className="line-clamp-2 min-w-0 flex-1 text-[14px] font-semibold leading-snug tracking-tight text-[var(--fg)] hover:text-[var(--brand)]"
-        >
-          {cartao.nomeOuRazaoSocial}
-        </Link>
+        <div className="flex min-w-0 flex-1 items-start gap-2">
+          <span className="mt-[7px] size-2 shrink-0 rounded-full" style={{ backgroundColor: corColuna }} title={nomeColuna} aria-label={`Etapa: ${nomeColuna}`} />
+          <Link
+            to={`/app/crm/leads/${cartao.leadId}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              // Clique normal abre no painel lateral; Ctrl/⌘+clique continua abrindo numa aba nova.
+              if (!e.ctrlKey && !e.metaKey && !e.shiftKey && e.button === 0) {
+                e.preventDefault();
+                onAbrir();
+              }
+            }}
+            className="line-clamp-2 min-w-0 flex-1 text-[14px] font-semibold leading-snug tracking-tight text-[var(--fg)] hover:text-[var(--brand)]"
+          >
+            {cartao.nomeOuRazaoSocial}
+          </Link>
+        </div>
         <div className="-mr-1 flex shrink-0 items-center transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
           <BotaoAcao titulo="Mover para outra etapa" onClick={onMover}>
             <ArrowRightLeft className="size-3.5" />
