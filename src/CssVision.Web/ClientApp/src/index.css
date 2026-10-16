@@ -434,35 +434,34 @@ main h1 + p {
   margin-top: 0;
 }
 
-/* Recolher/expandir a barra lateral: a barra antiga recua e some; a nova "salta" no lugar com um leve efeito de mola. */
+/* Recolher/expandir a barra lateral: a barra antiga desliza para fora e a nova desliza para dentro, com suavidade. */
 html[data-vt="menu"]::view-transition-group(sidebar) {
   animation: none;
 }
 html[data-vt="menu"]::view-transition-old(sidebar) {
-  animation: tvx-barra-sai 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation: tvx-barra-sai 240ms cubic-bezier(0.4, 0, 0.9, 0.6) both;
   mix-blend-mode: normal;
 }
 html[data-vt="menu"]::view-transition-new(sidebar) {
-  animation: tvx-barra-entra 520ms cubic-bezier(0.34, 1.45, 0.64, 1) 90ms both;
+  animation: tvx-barra-entra 460ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
   mix-blend-mode: normal;
-  transform-origin: left center;
 }
 html[data-vt="menu"]::view-transition-old(root) {
   animation: none;
 }
 html[data-vt="menu"]::view-transition-new(root) {
-  animation: tvx-menu-entra 320ms ease both;
+  animation: tvx-menu-entra 380ms ease both;
 }
 @keyframes tvx-barra-sai {
   to {
     opacity: 0;
-    transform: translateX(-14px) scale(0.96);
+    transform: translateX(-120%);
   }
 }
 @keyframes tvx-barra-entra {
   from {
     opacity: 0;
-    transform: translateX(-22px) scaleX(0.7) scaleY(0.96);
+    transform: translateX(-120%);
   }
 }
 @keyframes tvx-menu-entra {
