@@ -287,7 +287,8 @@ export function Shell({ children }: { children: ReactNode }) {
     };
   }, [chatNaoLidas.total]);
 
-  const emPortal = location.pathname.startsWith("/app/portal");
+  // Configurações (da conta) fica na barra lateral normal do CRM, não na do portal.
+  const emPortal = location.pathname.startsWith("/app/portal") && !location.pathname.startsWith("/app/portal/configuracoes");
   // O quadro de leads tem a própria busca (nome, placa, telefone, e-mail): a busca do topo sai dali.
   const noQuadroDeLeads = location.pathname.startsWith("/app/crm/leads/kanban");
   // Financeiro "puro": só gestão da carteira, usuários e avisos — nada de leads, atividades nem avisos de lead novo.
@@ -296,15 +297,18 @@ export function Shell({ children }: { children: ReactNode }) {
 
 
   // Só o item mais específico fica marcado (ex.: "Quadro de leads" não acende junto com "Leads").
+  const emConfiguracoes = location.pathname.startsWith("/app/portal/configuracoes");
   const rotaAtiva = [...(itensNav ?? [])]
-    .filter((i) => !i.rota.startsWith("/tv/") && (location.pathname === i.rota || location.pathname.startsWith(`${i.rota}/`)))
+    .filter((i) => !emConfiguracoes && !i.rota.startsWith("/tv/") && (location.pathname === i.rota || location.pathname.startsWith(`${i.rota}/`)))
     .sort((x, y) => y.rota.length - x.rota.length)[0]?.rota;
 
   // Trilha do cabeçalho: seção do menu + página atual (ex.: "Comercial › Quadro de leads").
   const itemAtivo = (itensNav ?? []).find((i) => i.rota === rotaAtiva);
   const trilha = itemAtivo
     ? { secao: emPortal ? "Portal do consultor" : SECOES.find((sec) => sec.chaves.includes(itemAtivo.chave))?.rotulo, titulo: itemAtivo.rotulo }
-    : null;
+    : emConfiguracoes
+      ? { secao: "Conta", titulo: "Configurações" }
+      : null;
 
   let indiceItem = 0; // ordem do item no menu, para a entrada em sequência
   const alternarMenu = () => setColapsado((v) => !v);

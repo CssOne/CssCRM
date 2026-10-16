@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, Eye, EyeOff, ImagePlus, KeyRound, Moon, ShieldCheck, ShieldOff, Sparkles, Sun, Trash2 } from "lucide-react";
+import { AlertTriangle, Bell, Check, Eye, EyeOff, ImagePlus, KeyRound, Lock, Moon, Palette, ShieldCheck, ShieldOff, Sparkles, Sun, Trash2, UserRound, type LucideIcon } from "lucide-react";
 import * as QRCode from "qrcode";
 import { api, ApiRequestError, isAbortError, uploadFile } from "../../lib/api";
 import type { Profile, TwoFactorEnableResult, TwoFactorSetup } from "../../lib/types";
@@ -45,31 +45,89 @@ export function ConfiguracoesPage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-5">
       <div>
         <h1 className="text-xl font-semibold text-[var(--fg)]">Configurações</h1>
         <p className="text-sm text-[var(--fg-muted)]">Seus dados, segurança e preferências de conta.</p>
       </div>
 
-      <DadosPessoais
-        perfil={perfil}
-        onSalvo={async (novo) => {
-          setPerfil(novo);
-          await refetchSessao();
-        }}
-      />
-      <Seguranca perfil={perfil} onDoisFatoresAlterado={(ativo) => setPerfil((p) => (p ? { ...p, doisFatoresAtivo: ativo } : p))} />
-      <Aparencia />
-      <CartaoNotificacoesPush />
-      {perfil.podeExcluirPropriaConta && (
-        <ZonaDeRisco
-          onExcluido={async () => {
-            await logout();
-            navigate("/login", { replace: true });
-          }}
-        />
-      )}
+      <div className="grid items-start gap-4 lg:grid-cols-[17rem_minmax(0,1fr)]">
+        <div className="space-y-4 lg:sticky lg:top-24">
+          <PerfilResumo
+            perfil={perfil}
+            onAlterada={async (novo) => {
+              setPerfil(novo);
+              await refetchSessao();
+            }}
+          />
+        </div>
+
+        <div className="space-y-4">
+          <DadosPessoais
+            perfil={perfil}
+            onSalvo={async (novo) => {
+              setPerfil(novo);
+              await refetchSessao();
+            }}
+          />
+          <Seguranca perfil={perfil} onDoisFatoresAlterado={(ativo) => setPerfil((p) => (p ? { ...p, doisFatoresAtivo: ativo } : p))} />
+          <Aparencia />
+          <Secao icone={Bell} titulo="Notificações" descricao="Avisos no navegador sobre leads e atividades.">
+            <CartaoNotificacoesPush />
+          </Secao>
+          {perfil.podeExcluirPropriaConta && (
+            <ZonaDeRisco
+              onExcluido={async () => {
+                await logout();
+                navigate("/login", { replace: true });
+              }}
+            />
+          )}
+        </div>
+      </div>
     </div>
+  );
+}
+
+/** Seção da tela: cartão com ícone em bolha, título e descrição. */
+function Secao({ icone: Icone, titulo, descricao, children, perigo = false }: { icone: LucideIcon; titulo: string; descricao?: string; children: ReactNode; perigo?: boolean }) {
+  return (
+    <Card className={`!rounded-2xl p-5 ${perigo ? "border-[var(--danger)]/30" : ""}`}>
+      <div className="mb-4 flex items-center gap-3">
+        <span
+          className={`flex size-9 shrink-0 items-center justify-center rounded-xl ${perigo ? "bg-[var(--danger-soft)] text-[var(--danger)]" : "bg-[var(--brand-soft)] text-[var(--brand)]"}`}
+        >
+          <Icone className="size-[18px]" aria-hidden />
+        </span>
+        <div className="min-w-0">
+          <h2 className={`text-[15px] font-bold leading-tight ${perigo ? "text-[var(--danger)]" : "text-[var(--fg)]"}`}>{titulo}</h2>
+          {descricao && <p className="text-xs text-[var(--fg-muted)]">{descricao}</p>}
+        </div>
+      </div>
+      {children}
+    </Card>
+  );
+}
+
+/** Cartão lateral: foto grande, nome e situação da conta. */
+function PerfilResumo({ perfil, onAlterada }: { perfil: Profile; onAlterada: (perfil: Profile) => void }) {
+  return (
+    <Card className="overflow-hidden !rounded-2xl p-0">
+      <div aria-hidden className="h-16 bg-gradient-to-r from-[var(--brand)] via-[color-mix(in_srgb,var(--brand)_65%,#467FC5)] to-[color-mix(in_srgb,var(--brand)_35%,#A6C3E0)]" />
+      <div className="px-5 pb-5">
+        <div className="-mt-10 flex justify-center">
+          <Avatar nome={perfil.nomeCompleto} fotoUrl={perfil.fotoUrl} className="size-20 border-4 border-[var(--surface-solid)] text-2xl shadow-[var(--shadow-card)]" />
+        </div>
+        <div className="mt-2 text-center">
+          <p className="text-base font-bold tracking-tight text-[var(--fg)]">{perfil.nomeCompleto}</p>
+          <p className="truncate text-xs text-[var(--fg-muted)]">{perfil.email}</p>
+          <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+            <Badge variant={perfil.doisFatoresAtivo ? "success" : "neutral"}>{perfil.doisFatoresAtivo ? "2 etapas ativa" : "2 etapas desativada"}</Badge>
+          </div>
+        </div>
+        <FotoPerfil perfil={perfil} onAlterada={onAlterada} />
+      </div>
+    </Card>
   );
 }
 
@@ -99,21 +157,21 @@ function DadosPessoais({ perfil, onSalvo }: { perfil: Profile; onSalvo: (perfil:
   }
 
   return (
-    <Card className="p-5">
-      <h2 className="mb-4 text-sm font-semibold text-[var(--fg)]">Meus dados</h2>
-      <FotoPerfil perfil={perfil} onAlterada={onSalvo} />
+    <Secao icone={UserRound} titulo="Meus dados" descricao="Como você aparece para a equipe.">
       <form onSubmit={salvar} className="space-y-4">
-        <div>
-          <Label htmlFor="perfil-nome">Nome completo</Label>
-          <Input id="perfil-nome" required value={nomeCompleto} onChange={(e) => setNomeCompleto(e.target.value)} />
-        </div>
-        <div>
-          <Label htmlFor="perfil-email">E-mail</Label>
-          <Input id="perfil-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-        </div>
-        <div>
-          <Label htmlFor="perfil-telefone">Número de telefone</Label>
-          <Input id="perfil-telefone" placeholder="(00) 00000-0000" value={telefone} onChange={(e) => setTelefone(e.target.value)} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Label htmlFor="perfil-nome">Nome completo</Label>
+            <Input id="perfil-nome" required value={nomeCompleto} onChange={(e) => setNomeCompleto(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="perfil-email">E-mail</Label>
+            <Input id="perfil-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          </div>
+          <div>
+            <Label htmlFor="perfil-telefone">Número de telefone</Label>
+            <Input id="perfil-telefone" placeholder="(00) 00000-0000" value={telefone} onChange={(e) => setTelefone(e.target.value)} />
+          </div>
         </div>
         <div className="flex justify-end">
           <Button type="submit" loading={salvando}>
@@ -121,7 +179,7 @@ function DadosPessoais({ perfil, onSalvo }: { perfil: Profile; onSalvo: (perfil:
           </Button>
         </div>
       </form>
-    </Card>
+    </Secao>
   );
 }
 
@@ -161,15 +219,14 @@ function FotoPerfil({ perfil, onAlterada }: { perfil: Profile; onAlterada: (perf
   }
 
   return (
-    <div className="mb-5 flex items-center gap-4">
-      <Avatar nome={perfil.nomeCompleto} fotoUrl={perfil.fotoUrl} className="size-16 text-xl" />
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+    <div className="mt-4">
+      <div className="flex flex-col gap-2">
         <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={selecionarArquivo} />
-        <Button type="button" variant="secondary" size="sm" loading={enviando} onClick={() => inputRef.current?.click()}>
+        <Button type="button" variant="secondary" size="sm" className="w-full" loading={enviando} onClick={() => inputRef.current?.click()}>
           <ImagePlus className="size-4" /> Alterar foto
         </Button>
         {perfil.fotoUrl && (
-          <Button type="button" variant="ghost" size="sm" disabled={enviando} onClick={removerFoto}>
+          <Button type="button" variant="ghost" size="sm" className="w-full" disabled={enviando} onClick={removerFoto}>
             Remover foto
           </Button>
         )}
@@ -210,11 +267,9 @@ function Seguranca({ perfil, onDoisFatoresAlterado }: { perfil: Profile; onDoisF
   }
 
   return (
-    <Card className="p-5">
-      <h2 className="mb-4 text-sm font-semibold text-[var(--fg)]">Segurança</h2>
-
+    <Secao icone={Lock} titulo="Segurança" descricao="Senha e verificação em duas etapas.">
       <form onSubmit={alterarSenha} className="space-y-4">
-        <p className="text-sm font-medium text-[var(--fg)]">Alterar senha</p>
+        <p className="text-sm font-semibold text-[var(--fg)]">Alterar senha</p>
         <div>
           <Label htmlFor="senha-atual">Senha atual</Label>
           <div className="relative">
@@ -274,7 +329,7 @@ function Seguranca({ perfil, onDoisFatoresAlterado }: { perfil: Profile; onDoisF
 
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-medium text-[var(--fg)]">Verificação em duas etapas</p>
+          <p className="text-sm font-semibold text-[var(--fg)]">Verificação em duas etapas</p>
           <p className="text-sm text-[var(--fg-muted)]">Exige um código do seu celular, além da senha, para entrar na conta.</p>
         </div>
         <Badge variant={perfil.doisFatoresAtivo ? "success" : "neutral"}>{perfil.doisFatoresAtivo ? "Ativada" : "Desativada"}</Badge>
@@ -307,7 +362,7 @@ function Seguranca({ perfil, onDoisFatoresAlterado }: { perfil: Profile; onDoisF
           setModal2fa(null);
         }}
       />
-    </Card>
+    </Secao>
   );
 }
 
@@ -458,31 +513,53 @@ function ModalDesativarDoisFatores({ open, onClose, onDesativado }: { open: bool
 
 function Aparencia() {
   const { tema, definir } = useTheme();
-  const opcoes: { valor: "light" | "dark" | "glass"; rotulo: string; icone: typeof Sun }[] = [
-    { valor: "light", rotulo: "Claro", icone: Sun },
-    { valor: "dark", rotulo: "Escuro", icone: Moon },
-    { valor: "glass", rotulo: "Translúcido", icone: Sparkles },
+  const opcoes: { valor: "light" | "dark" | "glass"; rotulo: string; icone: LucideIcon; fundo: string; cartao: string; barra: string; linha: string }[] = [
+    { valor: "light", rotulo: "Claro", icone: Sun, fundo: "#f5f5f7", cartao: "#ffffff", barra: "#04264c", linha: "#d9d9de" },
+    { valor: "dark", rotulo: "Escuro", icone: Moon, fundo: "#0b0b0d", cartao: "#1c1c1e", barra: "#031a33", linha: "#35353a" },
+    { valor: "glass", rotulo: "Translúcido", icone: Sparkles, fundo: "linear-gradient(135deg,#cfe0f5,#e9eef8 55%,#d6e6f7)", cartao: "rgba(255,255,255,.65)", barra: "#04264c", linha: "rgba(255,255,255,.9)" },
   ];
 
   return (
-    <Card className="p-5">
-      <h2 className="mb-4 text-sm font-semibold text-[var(--fg)]">Aparência</h2>
+    <Secao icone={Palette} titulo="Aparência" descricao="Escolha como o sistema aparece para você.">
       <div className="grid gap-3 sm:grid-cols-3">
-        {opcoes.map(({ valor, rotulo, icone: Icone }) => (
-          <button
-            key={valor}
-            type="button"
-            onClick={() => definir(valor)}
-            aria-pressed={tema === valor}
-            className={`focus-ring flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium cursor-pointer ${
-              tema === valor ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[var(--border)] text-[var(--fg)] hover:bg-[var(--surface-hover)]"
-            }`}
-          >
-            <Icone className="size-4" /> {rotulo}
-          </button>
-        ))}
+        {opcoes.map(({ valor, rotulo, icone: Icone, fundo, cartao, barra, linha }) => {
+          const ativo = tema === valor;
+          return (
+            <button
+              key={valor}
+              type="button"
+              onClick={() => definir(valor)}
+              aria-pressed={ativo}
+              className={`focus-ring group cursor-pointer rounded-2xl border p-2 text-left transition ${
+                ativo ? "border-[var(--brand)] bg-[var(--brand-soft)]" : "border-[var(--border)] hover:bg-[var(--surface-hover)]"
+              }`}
+            >
+              {/* Miniatura do tema: barra lateral, cartões e linhas */}
+              <div className="flex h-20 gap-1.5 overflow-hidden rounded-xl p-1.5" style={{ background: fundo }} aria-hidden>
+                <div className="w-3 rounded-lg" style={{ background: barra }} />
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <div className="h-3 rounded-md" style={{ background: cartao, border: `1px solid ${linha}` }} />
+                  <div className="flex flex-1 gap-1.5">
+                    <div className="flex-1 rounded-md" style={{ background: cartao, border: `1px solid ${linha}` }} />
+                    <div className="flex-1 rounded-md" style={{ background: cartao, border: `1px solid ${linha}` }} />
+                  </div>
+                </div>
+              </div>
+              <div className="mt-2 flex items-center justify-between px-1">
+                <span className={`flex items-center gap-1.5 text-sm font-semibold ${ativo ? "text-[var(--brand)]" : "text-[var(--fg)]"}`}>
+                  <Icone className="size-4" aria-hidden /> {rotulo}
+                </span>
+                {ativo && (
+                  <span className="flex size-5 items-center justify-center rounded-full bg-[var(--brand)] text-[var(--brand-fg)]">
+                    <Check className="size-3" strokeWidth={3} aria-hidden />
+                  </span>
+                )}
+              </div>
+            </button>
+          );
+        })}
       </div>
-    </Card>
+    </Secao>
   );
 }
 
@@ -507,8 +584,7 @@ function ZonaDeRisco({ onExcluido }: { onExcluido: () => void }) {
   }
 
   return (
-    <Card className="border-[var(--danger)]/30 p-5">
-      <h2 className="mb-1 text-sm font-semibold text-[var(--danger)]">Zona de risco</h2>
+    <Secao icone={AlertTriangle} titulo="Zona de risco" descricao="Ações permanentes na sua conta." perigo>
       <p className="mb-4 text-sm text-[var(--fg-muted)]">
         Excluir sua conta é uma ação permanente e não pode ser desfeita. Só é possível se não houver leads, oportunidades ou
         consultores vinculados a você.
@@ -539,6 +615,6 @@ function ZonaDeRisco({ onExcluido }: { onExcluido: () => void }) {
           </Button>
         </form>
       </Modal>
-    </Card>
+    </Secao>
   );
 }
