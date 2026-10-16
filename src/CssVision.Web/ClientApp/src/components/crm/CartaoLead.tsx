@@ -1,5 +1,5 @@
 import { ArrowRightLeft, Car, Clock, Mail, Phone, Trash2, UserCog, XCircle } from "lucide-react";
-import type { DragEvent, MouseEvent, ReactNode } from "react";
+import type { CSSProperties, DragEvent, MouseEvent, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { diasRelativos, formatarData, formatarDataHora, formatarMoeda, formatarTelefone } from "../../lib/format";
 import type { LeadKanbanCard } from "../../lib/types";
@@ -81,12 +81,9 @@ export function CartaoLead({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onClick={onAbrir}
-      style={{
-        // Brilho suave da cor da coluna saindo do canto superior esquerdo + borda levemente tingida pela mesma cor.
-        backgroundImage: `radial-gradient(130% 95% at 0% 0%, color-mix(in srgb, ${corColuna} 17%, transparent), transparent 64%)`,
-        borderColor: `color-mix(in srgb, ${corColuna} 30%, var(--border))`,
-      }}
-      className="group relative cursor-grab rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 text-sm shadow-[var(--shadow-card)] transition-[box-shadow,transform] hover:-translate-y-px hover:shadow-[0_8px_24px_-10px_rgb(0_0_0/0.22)] active:cursor-grabbing"
+      // A cor da coluna vira uma variável: o brilho, a borda, a sombra do hover e o anel do avatar usam todos a mesma cor.
+      style={{ "--cor-coluna": corColuna } as CSSProperties}
+      className="group relative cursor-grab rounded-xl border border-[color-mix(in_srgb,var(--cor-coluna)_30%,var(--border))] bg-[var(--surface)] bg-[image:radial-gradient(130%_95%_at_0%_0%,color-mix(in_srgb,var(--cor-coluna)_17%,transparent),transparent_64%)] p-3.5 text-sm shadow-[var(--shadow-card)] transition-[box-shadow,transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--cor-coluna)_65%,var(--border))] hover:bg-[image:radial-gradient(130%_95%_at_0%_0%,color-mix(in_srgb,var(--cor-coluna)_27%,transparent),transparent_72%)] hover:shadow-[0_14px_30px_-14px_var(--cor-coluna)] active:translate-y-0 active:cursor-grabbing"
     >
       {/* Nome e ações */}
       <div className="flex items-start justify-between gap-2">
@@ -219,10 +216,10 @@ export function CartaoLead({
       )}
 
       {/* Responsável e chegada */}
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5">
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-[color-mix(in_srgb,var(--cor-coluna)_22%,var(--border))] pt-2.5">
         {cartao.responsavelNome ? (
           <div className="flex min-w-0 items-center gap-1.5" title={`Responsável: ${cartao.responsavelNome}`}>
-            <Avatar nome={cartao.responsavelNome} fotoUrl={cartao.responsavelFotoUrl} className="size-6 text-[10px]" />
+            <Avatar nome={cartao.responsavelNome} fotoUrl={cartao.responsavelFotoUrl} className="size-6 text-[10px] ring-2 ring-[color-mix(in_srgb,var(--cor-coluna)_50%,transparent)]" />
             <span className="truncate text-xs font-medium text-[var(--fg)]">{cartao.responsavelNome}</span>
           </div>
         ) : (
