@@ -38,7 +38,7 @@ import { mostrarNotificacao, somLigado, tocarPlim } from "../lib/avisosDoChat";
 import { usePresenca } from "../lib/usePresenca";
 import { rotuloNaoLidas, useChatNaoLidas } from "../lib/useChatNaoLidas";
 import { useTheme, type Tema } from "../context/ThemeContext";
-import { Avatar, IconButton, useToast } from "./ui";
+import { Avatar, IconButton } from "./ui";
 import { LembretesAdesao } from "./crm/LembretesAdesao";
 import { NotificacaoNovosLeads } from "./crm/NotificacaoNovosLeads";
 import { AlertaDistribuicaoLimites } from "./crm/AlertaDistribuicaoLimites";
@@ -127,7 +127,7 @@ const OPCOES_TEMA: { valor: Tema; rotulo: string; icone: typeof Sun }[] = [
 export function SeletorDeTema() {
   const { tema, definir } = useTheme();
   return (
-    <div role="radiogroup" aria-label="Tema" className="flex items-center gap-0.5 rounded-lg bg-[var(--surface-hover)] p-0.5">
+    <div role="radiogroup" aria-label="Tema" className="flex items-center gap-0.5 rounded-full bg-[var(--surface-hover)] p-0.5">
       {OPCOES_TEMA.map(({ valor, rotulo, icone: Icone }) => (
         <button
           key={valor}
@@ -137,7 +137,7 @@ export function SeletorDeTema() {
           aria-label={rotulo}
           title={rotulo}
           onClick={() => definir(valor)}
-          className={`focus-ring flex size-7 cursor-pointer items-center justify-center rounded-md transition-colors ${
+          className={`focus-ring flex size-7 cursor-pointer items-center justify-center rounded-full transition-colors ${
             tema === valor ? "bg-[var(--surface)] text-[var(--fg)] shadow-[0_1px_2px_rgb(0_0_0/0.12)]" : "text-[var(--fg-muted)] hover:text-[var(--fg)]"
           }`}
         >
@@ -150,7 +150,6 @@ export function SeletorDeTema() {
 
 export function Shell({ children }: { children: ReactNode }) {
   const { sessao, logout, temPapel } = useAuth();
-  const { notificar } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuAberto, setMenuAberto] = useState(false);
@@ -197,6 +196,12 @@ export function Shell({ children }: { children: ReactNode }) {
   const rotaAtiva = [...(itensNav ?? [])]
     .filter((i) => !i.rota.startsWith("/tv/") && (location.pathname === i.rota || location.pathname.startsWith(`${i.rota}/`)))
     .sort((x, y) => y.rota.length - x.rota.length)[0]?.rota;
+
+  // Trilha do cabeçalho: seção do menu + página atual (ex.: "Comercial › Quadro de leads").
+  const itemAtivo = (itensNav ?? []).find((i) => i.rota === rotaAtiva);
+  const trilha = itemAtivo
+    ? { secao: emPortal ? "Portal do consultor" : SECOES.find((sec) => sec.chaves.includes(itemAtivo.chave))?.rotulo, titulo: itemAtivo.rotulo }
+    : null;
 
   async function handleLogout() {
     await logout();
@@ -324,35 +329,58 @@ export function Shell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className={`flex min-h-screen min-w-0 flex-1 flex-col transition-[padding] ${colapsado ? "lg:pl-24" : "lg:pl-[16.5rem]"}`}>
-        <header className="ui-bar sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-[var(--sidebar-border)] bg-[var(--header-bg)] px-4 lg:px-8">
-          <div className="flex items-center gap-2">
+        {/* Cabeçalho flutuante: cartão arredondado (combina com o menu), trilha da seção, busca, ações e o usuário. */}
+        <header className="ui-bar sticky top-3 z-20 mx-4 mt-3 flex h-14 items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] px-2.5 shadow-[var(--shadow-card)] lg:mx-8">
+          <div className="flex min-w-0 items-center gap-2">
             <IconButton label="Abrir menu" className="lg:hidden" onClick={() => setMenuAberto(true)}>
               <MenuIcon className="size-5" />
             </IconButton>
+            {trilha && (
+              <div className="hidden min-w-0 items-center gap-1.5 pl-2 text-sm md:flex">
+                {trilha.secao && (
+                  <>
+                    <span className="truncate text-[var(--fg-muted)]">{trilha.secao}</span>
+                    <ChevronRight className="size-3.5 shrink-0 text-[var(--fg-muted)]/60" aria-hidden />
+                  </>
+                )}
+                <span className="truncate font-semibold text-[var(--fg)]">{trilha.titulo}</span>
+              </div>
+            )}
             {!noQuadroDeLeads && (
-            <form onSubmit={handleBuscar} className="relative hidden lg:block">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--fg-muted)]" />
-              <input
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar clientes..."
-                className="focus-ring h-8 w-72 rounded-lg border-0 bg-[var(--surface-hover)] pl-9 pr-3 text-[13px] text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
-              />
-            </form>
+              <form onSubmit={handleBuscar} className="relative ml-2 hidden lg:block">
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[var(--fg-muted)]" />
+                <input
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Buscar clientes…"
+                  aria-label="Buscar clientes"
+                  className="focus-ring h-9 w-64 rounded-full border-0 bg-[var(--surface-hover)] pl-10 pr-4 text-[13px] text-[var(--fg)] transition-[width] placeholder:text-[var(--fg-muted)] focus:w-80 xl:w-72 xl:focus:w-96"
+                />
+              </form>
             )}
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1">
             <NotificacoesAtividades />
-            <IconButton label="Mensagens (em breve)" onClick={() => notificar("info", "Chat interno chegando em breve.")}>
-              <MessageCircle className="size-4" />
-            </IconButton>
+            {temChat && (
+              <div className="relative">
+                <IconButton label="Chat" onClick={() => navigate("/app/chat")}>
+                  <MessageCircle className="size-[18px]" />
+                </IconButton>
+                {chatNaoLidas.total > 0 && (
+                  <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex min-w-4 items-center justify-center rounded-full bg-[var(--danger)] px-1 text-[10px] font-bold leading-4 text-white">
+                    {rotuloNaoLidas(chatNaoLidas.total)}
+                  </span>
+                )}
+              </div>
+            )}
+            <div className="mx-1.5 hidden h-6 w-px bg-[var(--border)] sm:block" />
             <SeletorDeTema />
-            <div className="ml-1.5 hidden items-center gap-2.5 border-l border-[var(--border)] pl-3 sm:flex">
-              <Avatar nome={sessao.nomeCompleto} fotoUrl={sessao.fotoUrl} className="size-9 text-sm" />
-              <div className="hidden min-w-0 leading-tight xl:block">
-                <p className="max-w-40 truncate text-sm font-semibold text-[var(--fg)]">{sessao.nomeCompleto}</p>
-                <p className="text-xs text-[var(--fg-muted)]">{PAPEL_LABEL[sessao.papeis[0]] ?? sessao.papeis[0]}</p>
+            <div className="ml-2 hidden items-center gap-2.5 rounded-full border border-[var(--border)] bg-[var(--surface)] py-1 pl-1 pr-4 sm:flex">
+              <Avatar nome={sessao.nomeCompleto} fotoUrl={sessao.fotoUrl} className="size-8 text-xs" />
+              <div className="hidden min-w-0 leading-tight md:block">
+                <p className="max-w-36 truncate text-[13px] font-semibold text-[var(--fg)]">{sessao.nomeCompleto}</p>
+                <p className="text-[11px] text-[var(--fg-muted)]">{PAPEL_LABEL[sessao.papeis[0]] ?? sessao.papeis[0]}</p>
               </div>
             </div>
           </div>

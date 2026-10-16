@@ -65,7 +65,7 @@ export function IconButton({
     <button
       aria-label={label}
       title={label}
-      className={`focus-ring inline-flex size-9 items-center justify-center rounded-lg text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)] cursor-pointer ${className}`}
+      className={`focus-ring inline-flex size-9 items-center justify-center rounded-full text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)] cursor-pointer ${className}`}
       {...props}
     />
   );
