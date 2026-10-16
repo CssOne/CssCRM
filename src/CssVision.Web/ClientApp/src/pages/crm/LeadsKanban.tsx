@@ -689,10 +689,10 @@ export function LeadsKanbanPage() {
           <button
             type="button"
             onClick={() => setModalNovo(true)}
-            className="focus-ring group inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-gradient-to-b from-[color-mix(in_srgb,var(--brand)_86%,white)] to-[var(--brand)] pl-1.5 pr-4 text-sm font-semibold text-[var(--brand-fg)] shadow-[0_8px_20px_-8px_var(--brand)] transition-[transform,box-shadow] hover:-translate-y-px hover:shadow-[0_12px_26px_-8px_var(--brand)] active:translate-y-0"
+            className="focus-ring group inline-flex h-10 cursor-pointer items-center gap-2.5 rounded-full border border-[color-mix(in_srgb,var(--brand)_35%,transparent)] bg-[var(--brand-soft)] pl-1.5 pr-4 text-sm font-semibold text-[var(--brand)] transition-all duration-200 hover:border-[var(--brand)] hover:bg-[var(--brand)] hover:text-[var(--brand-fg)] active:scale-[0.97]"
           >
-            <span className="flex size-7 items-center justify-center rounded-full bg-white/20 transition-transform duration-200 group-hover:rotate-90">
-              <Plus className="size-4" />
+            <span className="flex size-7 items-center justify-center rounded-full bg-[var(--brand)] text-[var(--brand-fg)] transition-colors duration-200 group-hover:bg-white group-hover:text-[var(--brand)]">
+              <Plus className="size-4 transition-transform duration-200 group-hover:rotate-90" />
             </span>
             Novo cliente
           </button>
