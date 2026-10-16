@@ -15,6 +15,7 @@ import {
   type VendedorResumo,
 } from "../../lib/types";
 import { MultiSelect } from "../../components/MultiSelect";
+import { PeriodoInput } from "../../components/PeriodoInput";
 import { BarraDeFiltros, CampoDeFiltro, type ChipDeFiltro } from "../../components/Filtros";
 import { useAuth } from "../../context/AuthContext";
 import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
@@ -24,7 +25,6 @@ import {
   Checkbox,
   EmptyState,
   ErrorState,
-  Input,
   Modal,
   Pagination,
   Skeleton,
@@ -299,16 +299,10 @@ export function LeadsPage() {
           </>
         )}
         <CampoDeFiltro rotulo="Chegada" className="sm:col-span-2">
-          <div className="grid grid-cols-2 gap-2">
-            <Input type="date" aria-label="Chegada de" value={chegadaDe} max={chegadaAte || undefined} onChange={(e) => comPagina1(setChegadaDe)(e.target.value)} />
-            <Input type="date" aria-label="Chegada até" value={chegadaAte} min={chegadaDe || undefined} onChange={(e) => comPagina1(setChegadaAte)(e.target.value)} />
-          </div>
+          <PeriodoInput ariaLabel="Chegada" de={chegadaDe} ate={chegadaAte} onChange={(a, b) => { comPagina1(setChegadaDe)(a); comPagina1(setChegadaAte)(b); }} />
         </CampoDeFiltro>
         <CampoDeFiltro rotulo="Ativação" className="sm:col-span-2">
-          <div className="grid grid-cols-2 gap-2">
-            <Input type="date" aria-label="Ativação de" value={vendaDe} max={vendaAte || undefined} onChange={(e) => comPagina1(setVendaDe)(e.target.value)} />
-            <Input type="date" aria-label="Ativação até" value={vendaAte} min={vendaDe || undefined} onChange={(e) => comPagina1(setVendaAte)(e.target.value)} />
-          </div>
+          <PeriodoInput ariaLabel="Ativação" de={vendaDe} ate={vendaAte} onChange={(a, b) => { comPagina1(setVendaDe)(a); comPagina1(setVendaAte)(b); }} />
         </CampoDeFiltro>
       </BarraDeFiltros>
 

@@ -205,42 +205,49 @@ body {
   border-color: var(--border);
 }
 
+/*
+ * Barras de rolagem refinadas: finas, arredondadas e sem setas. Ficam invisíveis até o mouse passar sobre a área rolável
+ * (como no macOS) e engordam um pouco quando o mouse chega nelas.
+ */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 14px;
+  height: 14px;
 }
-::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--fg-muted) 35%, transparent);
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-
-/* Rolagem do quadro de leads: fina e na cor da marca (a da lista de cada coluna herda a mesma). */
-.barra-quadro {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--brand) 45%, transparent) transparent;
-}
-.barra-quadro::-webkit-scrollbar {
-  height: 10px;
-  width: 8px;
-}
-.barra-quadro ::-webkit-scrollbar-button,
-.barra-quadro::-webkit-scrollbar-button {
-  display: none;
-}
-.barra-quadro ::-webkit-scrollbar-track,
-.barra-quadro::-webkit-scrollbar-track {
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
   background: transparent;
 }
-.barra-quadro ::-webkit-scrollbar-thumb,
-.barra-quadro::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--brand) 45%, transparent);
-  border-radius: 999px;
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
-.barra-quadro ::-webkit-scrollbar-thumb:hover,
-.barra-quadro::-webkit-scrollbar-thumb:hover {
-  background: var(--brand);
+::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  background-clip: padding-box;
+  border: 4px solid transparent;
+  border-radius: 999px;
+  min-height: 36px;
+  min-width: 36px;
+  transition: background-color 160ms;
+}
+*:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--fg-muted) 38%, transparent);
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--fg-muted) 65%, transparent);
+  border-width: 3px;
+}
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--brand);
+  border-width: 3px;
+}
+/* Firefox não tem o pseudo-elemento acima: usa a barra fina padrão na mesma cor. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--fg-muted) 40%, transparent) transparent;
+  }
 }
 
 .focus-ring {

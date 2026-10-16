@@ -25,6 +25,7 @@ import { AdesaoCotacaoDialog } from "../../components/crm/AdesaoCotacaoDialog";
 import { AlterarResponsavelDialog } from "../../components/crm/AlterarResponsavelDialog";
 import { CartaoLead, classificarCartao } from "../../components/crm/CartaoLead";
 import { MultiSelect } from "../../components/MultiSelect";
+import { PeriodoInput } from "../../components/PeriodoInput";
 import { BarraDeFiltros, CampoDeFiltro, type ChipDeFiltro } from "../../components/Filtros";
 import { useAbrirLead } from "../../lib/painelLead";
 import { OPCOES_FILTRO_TIPO_INDICACAO } from "../../lib/opcoesLead";
@@ -787,16 +788,10 @@ export function LeadsKanbanPage() {
           />
         </CampoDeFiltro>
         <CampoDeFiltro rotulo="Chegada" className="sm:col-span-2">
-          <div className="grid grid-cols-2 gap-2">
-            <Input type="date" aria-label="Chegada de" value={dataChegadaInicio} onChange={(e) => setDataChegadaInicio(e.target.value)} />
-            <Input type="date" aria-label="Chegada até" value={dataChegadaFim} onChange={(e) => setDataChegadaFim(e.target.value)} />
-          </div>
+          <PeriodoInput ariaLabel="Chegada" de={dataChegadaInicio} ate={dataChegadaFim} onChange={(a, b) => { setDataChegadaInicio(a); setDataChegadaFim(b); }} />
         </CampoDeFiltro>
         <CampoDeFiltro rotulo="Ativação" className="sm:col-span-2">
-          <div className="grid grid-cols-2 gap-2">
-            <Input type="date" aria-label="Ativação de" value={dataVendaInicio} onChange={(e) => setDataVendaInicio(e.target.value)} />
-            <Input type="date" aria-label="Ativação até" value={dataVendaFim} onChange={(e) => setDataVendaFim(e.target.value)} />
-          </div>
+          <PeriodoInput ariaLabel="Ativação" de={dataVendaInicio} ate={dataVendaFim} onChange={(a, b) => { setDataVendaInicio(a); setDataVendaFim(b); }} />
         </CampoDeFiltro>
         {podeGerir && (
           <>
@@ -863,7 +858,7 @@ export function LeadsKanbanPage() {
           description={filtrosAtivos ? "Ajuste os filtros ou cadastre um novo lead." : "Cadastre um novo lead para começar."}
         />
       ) : (
-        <div className="barra-quadro flex gap-4 overflow-x-auto pb-3">
+        <div className="flex gap-4 overflow-x-auto pb-3">
           {colunasExibidas.map((coluna) => {
             const chaveColuna = coluna.etapa.id ?? "sem-etapa";
             const restantes = Math.max(0, coluna.total - coluna.cartoes.length);

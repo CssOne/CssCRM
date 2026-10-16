@@ -8,7 +8,8 @@ import type { LeadStage, Regional, RelatorioComercial, VendedorResumo } from "..
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
-import { Button, Card, ErrorState, Input, Pagination, Select, Skeleton } from "../../components/ui";
+import { Button, Card, ErrorState, Pagination, Select, Skeleton } from "../../components/ui";
+import { PeriodoInput } from "../../components/PeriodoInput";
 import { OPCOES_FILTRO_TIPO_INDICACAO } from "../../lib/opcoesLead";
 import { MultiSelect } from "../../components/MultiSelect";
 import { useCrmEventos } from "../../lib/useCrmEventos";
@@ -282,14 +283,12 @@ export function RelatorioComercialPage() {
           </button>
         ))}
       </div>
-      <label className="text-xs text-[var(--fg-muted)]">
-        De
-        <Input type="date" className="mt-0.5 h-8 w-36" value={inicio} max={fim} onChange={(e) => setInicio(e.target.value)} />
-      </label>
-      <label className="text-xs text-[var(--fg-muted)]">
-        Até
-        <Input type="date" className="mt-0.5 h-8 w-36" value={fim} min={inicio} onChange={(e) => setFim(e.target.value)} />
-      </label>
+      <div className="text-xs text-[var(--fg-muted)]">
+        Período
+        <div className="mt-0.5 w-72">
+          <PeriodoInput ariaLabel="Período" de={inicio} ate={fim} onChange={(a, b) => { setInicio(a); setFim(b); }} />
+        </div>
+      </div>
       {podeGerir && (
       <label className="text-xs text-[var(--fg-muted)]">
         Consultor
@@ -340,24 +339,20 @@ export function RelatorioComercialPage() {
         </Select>
       </label>
       <div className="flex items-end gap-1" title="Vazio = usa o período acima. Escolhendo, as vendas passam a ser só dos leads que chegaram nessas datas.">
-        <label className="text-xs text-[var(--fg-muted)]">
-          Chegada de
-          <Input type="date" className="mt-0.5 h-8 w-36" value={chegadaInicio} max={chegadaFim || undefined} onChange={(e) => setChegadaInicio(e.target.value)} />
-        </label>
-        <label className="text-xs text-[var(--fg-muted)]">
-          até
-          <Input type="date" className="mt-0.5 h-8 w-36" value={chegadaFim} min={chegadaInicio || undefined} onChange={(e) => setChegadaFim(e.target.value)} />
-        </label>
+        <div className="text-xs text-[var(--fg-muted)]">
+          Chegada
+          <div className="mt-0.5 w-72">
+            <PeriodoInput ariaLabel="Chegada" de={chegadaInicio} ate={chegadaFim} onChange={(a, b) => { setChegadaInicio(a); setChegadaFim(b); }} />
+          </div>
+        </div>
       </div>
       <div className="flex items-end gap-1" title="Vazio = usa o período acima.">
-        <label className="text-xs text-[var(--fg-muted)]">
-          Ativação de
-          <Input type="date" className="mt-0.5 h-8 w-36" value={vendaInicio} max={vendaFim || undefined} onChange={(e) => setVendaInicio(e.target.value)} />
-        </label>
-        <label className="text-xs text-[var(--fg-muted)]">
-          até
-          <Input type="date" className="mt-0.5 h-8 w-36" value={vendaFim} min={vendaInicio || undefined} onChange={(e) => setVendaFim(e.target.value)} />
-        </label>
+        <div className="text-xs text-[var(--fg-muted)]">
+          Ativação
+          <div className="mt-0.5 w-72">
+            <PeriodoInput ariaLabel="Ativação" de={vendaInicio} ate={vendaFim} onChange={(a, b) => { setVendaInicio(a); setVendaFim(b); }} />
+          </div>
+        </div>
       </div>
       <div className="flex items-center gap-2">
         <Button type="submit" size="sm">Pesquisar</Button>

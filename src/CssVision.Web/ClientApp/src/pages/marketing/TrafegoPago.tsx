@@ -24,6 +24,7 @@ import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarDataHora, formatarMoeda, formatarPercentual, formatarTelefone } from "../../lib/format";
 import type { MarketingDashboard, MarketingLeadItem, PagedResult } from "../../lib/types";
 import { Badge, Button, Card, ErrorState, Input, Pagination, Select, Skeleton } from "../../components/ui";
+import { PeriodoInput } from "../../components/PeriodoInput";
 import { StatCard } from "../../components/crm/StatCard";
 import { MultiSelect } from "../../components/MultiSelect";
 import { useCrmEventos } from "../../lib/useCrmEventos";
@@ -377,11 +378,8 @@ export function TrafegoPagoPage() {
         <div className="flex flex-wrap items-end gap-3">
           {filtros.periodo === "personalizado" && (
             <>
-              <Campo rotulo="Chegada de" largura="w-36">
-                <Input type="date" value={filtros.dataInicio} onChange={(e) => set("dataInicio", e.target.value)} />
-              </Campo>
-              <Campo rotulo="até" largura="w-36">
-                <Input type="date" value={filtros.dataFim} onChange={(e) => set("dataFim", e.target.value)} />
+              <Campo rotulo="Chegada" largura="w-72">
+                <PeriodoInput ariaLabel="Chegada" de={filtros.dataInicio} ate={filtros.dataFim} onChange={(a, b) => { set("dataInicio", a); set("dataFim", b); }} />
               </Campo>
             </>
           )}

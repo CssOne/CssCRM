@@ -80,7 +80,7 @@ export function BarraDeFiltros({
       </div>
 
       {aberto && (
-        <div className="ui-surface rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-card)]">
+        <div className="ui-surface relative z-30 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-card)]">
           <div className="grid gap-x-4 gap-y-3.5 sm:grid-cols-2 lg:grid-cols-4">{children}</div>
           {rodape && <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-3">{rodape}</div>}
         </div>
