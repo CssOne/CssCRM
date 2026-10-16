@@ -317,7 +317,7 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
         <div className="px-5 pb-5">
         <div className="-mt-8 flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <span className="flex size-16 items-center justify-center rounded-2xl border-4 border-[var(--surface-solid)] bg-[var(--brand-soft)] text-xl font-bold text-[var(--brand)] shadow-[var(--shadow-card)]">
+            <span className="flex size-16 items-center justify-center rounded-2xl border-4 border-[var(--surface-solid)] bg-[color-mix(in_srgb,var(--brand)_18%,var(--surface-solid))] text-xl font-bold text-[var(--brand)] shadow-[var(--shadow-card)]">
               {lead.nomeOuRazaoSocial.split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0]).join("").toUpperCase()}
             </span>
             <h1 className="mt-2 text-xl font-bold tracking-tight text-[var(--fg)]">{lead.nomeOuRazaoSocial}</h1>
@@ -360,7 +360,7 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
             </div>
             <EtapaDoLead lead={lead} onMudou={() => carregar()} />
           </div>
-          <div className="mt-9 flex shrink-0 flex-wrap gap-2">
+          <div className="flex w-full flex-wrap gap-2">
             {sessao?.menu.some((m) => m.chave === "chat") && (
               <Button variant="secondary" onClick={() => setModalConversar(true)} title="Publica este lead numa conversa do chat para a equipe conversar sobre ele">
                 <MessagesSquare className="size-4" /> Conversar
