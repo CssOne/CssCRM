@@ -20,6 +20,7 @@ import {
   useToast,
 } from "../../components/ui";
 import { PAPEL_LABEL, UserForm, paraAtualizarRequest, paraCriarRequest, paraFormValues, type UserFormValues } from "../../components/crm/UserForm";
+import { BarraDeFiltros, CampoDeFiltro } from "../../components/Filtros";
 
 function MembroAvatar({ nome, fotoUrl }: { nome: string; fotoUrl?: string | null }) {
   const [erroAoCarregar, setErroAoCarregar] = useState(false);
@@ -211,46 +212,51 @@ function UsuariosTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="w-56">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Buscar</label>
-            <Input placeholder="Nome ou e-mail" value={busca} onChange={(e) => { setBusca(e.target.value); setPagina(1); }} />
-          </div>
-          <div className="w-40">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Situação</label>
-            <Select value={ativo} onChange={(e) => { setAtivo(e.target.value); setPagina(1); }} aria-label="Situação do usuário">
-              <option value="">Todos</option>
-              <option value="true">Ativos</option>
-              <option value="false">Inativos</option>
-            </Select>
-          </div>
-          {podeGerenciarTudo && (
-            <>
-              <div className="w-44">
-                <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Papel</label>
-                <Select value={papel} onChange={(e) => { setPapel(e.target.value); setPagina(1); }}>
-                  <option value="">Todos</option>
-                  {Object.entries(PAPEL_LABEL).map(([valor, rotulo]) => (
-                    <option key={valor} value={valor}>
-                      {rotulo}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="w-44">
-                <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Regional</label>
-                <Select value={regionalId} onChange={(e) => { setRegionalId(e.target.value); setPagina(1); }}>
-                  <option value="">Todas</option>
-                  {regionais.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.nome}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            </>
-          )}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <BarraDeFiltros
+            busca={busca}
+            onBusca={(v) => { setBusca(v); setPagina(1); }}
+            placeholder="Buscar por nome ou e-mail"
+            chips={[
+              ...(ativo ? [{ rotulo: "Situação", valor: ativo === "true" ? "Ativos" : "Inativos", limpar: () => { setAtivo(""); setPagina(1); } }] : []),
+              ...(papel ? [{ rotulo: "Papel", valor: PAPEL_LABEL[papel] ?? papel, limpar: () => { setPapel(""); setPagina(1); } }] : []),
+              ...(regionalId ? [{ rotulo: "Regional", valor: regionais.find((r) => r.id === regionalId)?.nome ?? "—", limpar: () => { setRegionalId(""); setPagina(1); } }] : []),
+            ]}
+            onLimparTudo={() => { setBusca(""); setAtivo(""); setPapel(""); setRegionalId(""); setPagina(1); }}
+          >
+            <CampoDeFiltro rotulo="Situação">
+              <Select value={ativo} onChange={(e) => { setAtivo(e.target.value); setPagina(1); }} aria-label="Situação do usuário">
+                <option value="">Todos</option>
+                <option value="true">Ativos</option>
+                <option value="false">Inativos</option>
+              </Select>
+            </CampoDeFiltro>
+            {podeGerenciarTudo && (
+              <>
+                <CampoDeFiltro rotulo="Papel">
+                  <Select value={papel} onChange={(e) => { setPapel(e.target.value); setPagina(1); }}>
+                    <option value="">Todos</option>
+                    {Object.entries(PAPEL_LABEL).map(([valor, rotulo]) => (
+                      <option key={valor} value={valor}>
+                        {rotulo}
+                      </option>
+                    ))}
+                  </Select>
+                </CampoDeFiltro>
+                <CampoDeFiltro rotulo="Regional">
+                  <Select value={regionalId} onChange={(e) => { setRegionalId(e.target.value); setPagina(1); }}>
+                    <option value="">Todas</option>
+                    {regionais.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.nome}
+                      </option>
+                    ))}
+                  </Select>
+                </CampoDeFiltro>
+              </>
+            )}
+          </BarraDeFiltros>
         </div>
         <Button onClick={() => setModalNovo(true)}>
           <Plus className="size-4" /> Novo usuário

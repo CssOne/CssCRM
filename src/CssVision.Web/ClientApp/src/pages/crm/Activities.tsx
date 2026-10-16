@@ -1,4 +1,4 @@
-import { Pencil, Plus, Trash2, X } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, isAbortError, toQueryString } from "../../lib/api";
@@ -18,6 +18,7 @@ import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
 import { Badge, Button, ConfirmDialog, EmptyState, ErrorState, Modal, Pagination, Select, Skeleton, Tabs, Textarea, useToast } from "../../components/ui";
 import { ActivityForm, isoParaDatetimeLocal, tipoLabel, type ActivityFormValues } from "../../components/crm/ActivityForm";
 import { LeadPicker } from "../../components/crm/LeadPicker";
+import { BarraDeFiltros, CampoDeFiltro } from "../../components/Filtros";
 
 const abas = [
   { chave: VisaoAtividade.Minhas, rotulo: "Minhas" },
@@ -216,9 +217,15 @@ export function ActivitiesPage() {
         }}
       />
 
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-        <div className="w-44">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Tipo</label>
+      <BarraDeFiltros
+        chips={[
+          ...(tipo ? [{ rotulo: "Tipo", valor: Object.entries(tipoLabel).find(([v]) => v === tipo)?.[1] ?? tipo, limpar: () => { setTipo(""); setPagina(1); } }] : []),
+          ...(responsavelId ? [{ rotulo: "Responsável", valor: vendedores.find((v) => v.id === responsavelId)?.nome ?? "—", limpar: () => { setResponsavelId(""); setPagina(1); } }] : []),
+          ...(leadFiltro ? [{ rotulo: "Lead", valor: leadFiltro.nomeOuRazaoSocial, limpar: () => { setLeadFiltro(null); setPagina(1); } }] : []),
+        ]}
+        onLimparTudo={limparFiltros}
+      >
+        <CampoDeFiltro rotulo="Tipo">
           <Select value={tipo} onChange={(e) => { setTipo(e.target.value); setPagina(1); }}>
             <option value="">Todos</option>
             {Object.entries(tipoLabel).map(([valor, rotulo]) => (
@@ -227,10 +234,9 @@ export function ActivitiesPage() {
               </option>
             ))}
           </Select>
-        </div>
+        </CampoDeFiltro>
         {podeGerir && (
-          <div className="w-48">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Responsável</label>
+          <CampoDeFiltro rotulo="Responsável">
             <Select value={responsavelId} onChange={(e) => { setResponsavelId(e.target.value); setPagina(1); }}>
               <option value="">Todos</option>
               {vendedores.map((v) => (
@@ -239,29 +245,14 @@ export function ActivitiesPage() {
                 </option>
               ))}
             </Select>
-          </div>
+          </CampoDeFiltro>
         )}
-        <div>
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Lead</label>
-          {leadFiltro ? (
-            <Badge variant="brand">
-              {leadFiltro.nomeOuRazaoSocial}
-              <button type="button" onClick={() => { setLeadFiltro(null); setPagina(1); }} className="ml-1 align-middle">
-                <X className="size-3" />
-              </button>
-            </Badge>
-          ) : (
-            <Button variant="secondary" size="sm" onClick={() => setModalLead(true)}>
-              Filtrar por lead
-            </Button>
-          )}
-        </div>
-        {filtrosAtivos && (
-          <Button variant="ghost" size="sm" onClick={limparFiltros}>
-            <X className="size-4" /> Limpar filtros
+        <CampoDeFiltro rotulo="Lead">
+          <Button variant="secondary" size="sm" onClick={() => setModalLead(true)}>
+            {leadFiltro ? "Trocar lead" : "Filtrar por lead"}
           </Button>
-        )}
-      </div>
+        </CampoDeFiltro>
+      </BarraDeFiltros>
 
       {carregando ? (
         <div className="space-y-2">

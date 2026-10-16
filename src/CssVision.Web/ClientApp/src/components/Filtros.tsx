@@ -21,8 +21,9 @@ export function BarraDeFiltros({
   children,
   rodape,
 }: {
-  busca: string;
-  onBusca: (valor: string) => void;
+  /** Sem `onBusca` a barra não mostra o campo de busca (só o botão de filtros). */
+  busca?: string;
+  onBusca?: (valor: string) => void;
   placeholder?: string;
   chips: ChipDeFiltro[];
   onLimparTudo: () => void;
@@ -38,11 +39,12 @@ export function BarraDeFiltros({
   return (
     <div className="space-y-2.5">
       <div className="flex flex-wrap items-center gap-2">
+        {onBusca && (
         <div className="relative min-w-56 flex-1 sm:max-w-md">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--fg-muted)]" aria-hidden />
           <input
             type="search"
-            value={busca}
+            value={busca ?? ""}
             onChange={(e) => onBusca(e.target.value)}
             placeholder={placeholder}
             aria-label={placeholder}
@@ -52,13 +54,14 @@ export function BarraDeFiltros({
             <button
               type="button"
               aria-label="Limpar busca"
-              onClick={() => onBusca("")}
+              onClick={() => onBusca?.("")}
               className="focus-ring absolute right-2.5 top-1/2 flex size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-[var(--fg-muted)]/30 text-[var(--fg)] hover:bg-[var(--fg-muted)]/50"
             >
               <X className="size-3" />
             </button>
           )}
         </div>
+        )}
 
         <button
           type="button"

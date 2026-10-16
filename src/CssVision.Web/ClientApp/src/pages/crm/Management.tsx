@@ -4,10 +4,11 @@ import { Link } from "react-router-dom";
 import { api, isAbortError } from "../../lib/api";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { GestaoComercialResumo, RecebeLeadsHistorico, RedistribuicaoHistorico, VendedorResumo } from "../../lib/types";
-import { Badge, Card, ConfirmDialog, ErrorState, Input, Select, Skeleton, useToast, Pagination } from "../../components/ui";
+import { Badge, Card, ConfirmDialog, ErrorState, Select, Skeleton, useToast, Pagination } from "../../components/ui";
 import { OPCOES_O_QUE } from "../../lib/opcoesLead";
 import { useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
+import { BarraDeFiltros, CampoDeFiltro } from "../../components/Filtros";
 
 function LimiteInput({
   vendedor,
@@ -505,13 +506,18 @@ export function ManagementPage() {
         </p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
-        <div className="w-56">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Consultor</label>
-          <Input placeholder="Buscar pelo nome" value={buscaNome} onChange={(e) => setBuscaNome(e.target.value)} />
-        </div>
-        <div className="w-44">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Regional</label>
+      <BarraDeFiltros
+        busca={buscaNome}
+        onBusca={setBuscaNome}
+        placeholder="Buscar consultor pelo nome"
+        chips={[
+          ...(filtroRegional ? [{ rotulo: "Regional", valor: filtroRegional, limpar: () => setFiltroRegional("") }] : []),
+          ...(filtroSituacao ? [{ rotulo: "Situação", valor: filtroSituacao === "ativos" ? "Ativos" : "Inativos", limpar: () => setFiltroSituacao("") }] : []),
+          ...(filtroRecebe ? [{ rotulo: "Recebe leads", valor: filtroRecebe === "sim" ? "Recebe" : "Não recebe", limpar: () => setFiltroRecebe("") }] : []),
+        ]}
+        onLimparTudo={() => { setBuscaNome(""); setFiltroRegional(""); setFiltroSituacao(""); setFiltroRecebe(""); }}
+      >
+        <CampoDeFiltro rotulo="Regional">
           <Select value={filtroRegional} onChange={(e) => setFiltroRegional(e.target.value)}>
             <option value="">Todas</option>
             {regionaisDisponiveis.map((r) => (
@@ -520,33 +526,22 @@ export function ManagementPage() {
               </option>
             ))}
           </Select>
-        </div>
-        <div className="w-40">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Situação</label>
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Situação">
           <Select value={filtroSituacao} onChange={(e) => setFiltroSituacao(e.target.value as typeof filtroSituacao)}>
             <option value="">Todos</option>
             <option value="ativos">Ativos</option>
             <option value="inativos">Inativos</option>
           </Select>
-        </div>
-        <div className="w-40">
-          <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Recebe leads</label>
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Recebe leads">
           <Select value={filtroRecebe} onChange={(e) => setFiltroRecebe(e.target.value as typeof filtroRecebe)}>
             <option value="">Todos</option>
             <option value="sim">Recebe</option>
             <option value="nao">Não recebe</option>
           </Select>
-        </div>
-        {temFiltro && (
-          <button
-            type="button"
-            className="focus-ring cursor-pointer pb-2 text-sm font-medium text-[var(--brand)] hover:underline"
-            onClick={() => { setBuscaNome(""); setFiltroRegional(""); setFiltroSituacao(""); setFiltroRecebe(""); }}
-          >
-            Limpar filtros
-          </button>
-        )}
-      </div>
+        </CampoDeFiltro>
+      </BarraDeFiltros>
 
       <LeadsDoDiaCard vendedores={vendedoresFiltrados} filtrado={temFiltro} />
 
