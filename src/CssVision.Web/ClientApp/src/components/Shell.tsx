@@ -93,7 +93,7 @@ const PORTAL_NAV = [
 const SECOES: { rotulo: string; chaves: string[] }[] = [
   { rotulo: "Início", chaves: ["portal", "crm-overview", "overview"] },
   { rotulo: "Comercial", chaves: ["crm-leads", "crm-leads-kanban", "crm-pipeline", "crm-agenda", "crm-goals", "crm-relatorio"] },
-  { rotulo: "Gestão", chaves: ["crm-management", "crm-consultores", "crm-users", "avisos-pagamento", "tv-comercial"] },
+  { rotulo: "Gestão", chaves: ["crm-management", "crm-users", "avisos-pagamento", "tv-comercial"] },
   { rotulo: "Marketing e sistema", chaves: ["marketing", "admin-backups"] },
   { rotulo: "Comunicação", chaves: ["chat", "discord", "suporte"] },
 ];

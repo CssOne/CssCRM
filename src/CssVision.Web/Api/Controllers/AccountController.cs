@@ -409,7 +409,6 @@ public class AccountController(
         if (Roles.GestaoComercial.Any(papeis.Contains))
         {
             menu.Add(new MenuItemDto("crm-management", "Gestão comercial", "users-round", "/app/crm/gestao"));
-            menu.Add(new MenuItemDto("crm-consultores", "Consultores", "id-card", "/app/crm/consultores"));
             menu.Add(new MenuItemDto("crm-users", "Usuários", "user-cog", "/app/crm/usuarios"));
             menu.Add(new MenuItemDto("avisos-pagamento", "Avisos de pagamento", "wallet", "/app/crm/avisos-pagamento"));
             menu.Add(new MenuItemDto("tv-comercial", "Painel da TV", "monitor", "/tv/comercial"));

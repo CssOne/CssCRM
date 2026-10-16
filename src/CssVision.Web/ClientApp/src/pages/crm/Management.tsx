@@ -550,38 +550,71 @@ export function ManagementPage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard titulo="Recebendo leads" valor={String(vendedoresFiltrados.filter((v) => v.ativo !== false && v.recebeLeads).length)} icone={Users} tom="brand" subtitulo={`de ${vendedoresFiltrados.filter((v) => v.ativo !== false).length} consultores ativos`} />
         <StatCard titulo="Leads no mês (tráfego)" valor={vendedoresFiltrados.reduce((n, v) => n + (v.leadsTrafegoNoMes ?? 0), 0).toLocaleString("pt-BR")} icone={UserPlus} tom="success" subtitulo="atribuídos à equipe" />
-        <StatCard titulo="1º contato (média)" valor={(resumo.leadsComPrimeiroContato ?? 0) > 0 ? formatarDuracao(resumo.tempoMedioPrimeiroContatoHoras) : "—"} icone={Timer} tom="warning" subtitulo="da chegada ao contato" />
+        <StatCard titulo="1º contato (24 h)" valor={(resumo.leadsComPrimeiroContato ?? 0) > 0 ? formatarDuracao(resumo.tempoMedioPrimeiroContatoHoras) : "—"} icone={Timer} tom="warning" subtitulo="média nas últimas 24 horas" />
         <StatCard titulo="Oportunidades paradas" valor={String(resumo.oportunidadesSemMovimentacao.length)} icone={AlertTriangle} tom={resumo.oportunidadesSemMovimentacao.length > 0 ? "danger" : "neutral"} subtitulo="sem movimentação" />
       </div>
 
       <LeadsDoDiaCard vendedores={vendedoresFiltrados} filtrado={temFiltro} />
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="p-4">
-          <h2 className="mb-3 text-[15px] font-semibold tracking-tight text-[var(--fg)]">Tempo médio até 1º contato</h2>
+        <Card className="!rounded-2xl p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <span className="flex size-8 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]">
+                <Timer className="size-4" aria-hidden />
+              </span>
+              <h2 className="text-[15px] font-bold leading-tight tracking-tight text-[var(--fg)]">Tempo até o 1º contato</h2>
+            </div>
+            <span className="shrink-0 rounded-full bg-[var(--surface-hover)] px-2.5 py-1 text-[11px] font-semibold text-[var(--fg-muted)]">Últimas 24 h</span>
+          </div>
           {(resumo.leadsComPrimeiroContato ?? 0) === 0 ? (
-            <p className="text-sm text-[var(--fg-muted)]">
-              Nenhum lead do CRM teve contato neste mês. O contato conta quando o consultor move o lead de etapa no quadro ou conclui uma
-              atividade.
+            <p className="rounded-xl bg-[var(--surface-hover)] px-3 py-4 text-sm text-[var(--fg-muted)]">
+              Nenhum lead do CRM que chegou nas últimas 24 horas teve contato ainda. O contato conta quando o consultor move o lead de etapa
+              no quadro ou conclui uma atividade.
             </p>
           ) : (
             <>
-              <p className="text-4xl font-semibold tracking-tight text-[var(--brand)] [font-variant-numeric:tabular-nums]">{formatarDuracao(resumo.tempoMedioPrimeiroContatoHoras)}</p>
-              <p className="text-xs text-[var(--fg-muted)]">
-                média de {resumo.leadsComPrimeiroContato} lead(s) deste mês, da chegada até o consultor mover de etapa ou concluir uma atividade
-              </p>
+              {(() => {
+                const h = resumo.tempoMedioPrimeiroContatoHoras;
+                const nivel = h <= 1 ? { texto: "Rápido", cor: "var(--success)" } : h <= 4 ? { texto: "Atenção", cor: "var(--warning)" } : { texto: "Lento", cor: "var(--danger)" };
+                return (
+                  <div className="relative overflow-hidden rounded-2xl p-4" style={{ backgroundColor: `color-mix(in srgb, ${nivel.cor} 9%, var(--surface-hover))` }}>
+                    <span aria-hidden className="pointer-events-none absolute -right-8 -top-8 size-28 rounded-full opacity-70 blur-2xl" style={{ backgroundColor: `color-mix(in srgb, ${nivel.cor} 26%, transparent)` }} />
+                    <div className="relative flex items-end justify-between gap-3">
+                      <p className="text-4xl font-bold leading-none tracking-tight text-[var(--fg)] [font-variant-numeric:tabular-nums]">{formatarDuracao(h)}</p>
+                      <span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ backgroundColor: `color-mix(in srgb, ${nivel.cor} 16%, transparent)`, color: nivel.cor }}>
+                        {nivel.texto}
+                      </span>
+                    </div>
+                    <p className="relative mt-2 text-xs text-[var(--fg-muted)]">
+                      média de {resumo.leadsComPrimeiroContato} lead(s) das últimas 24 horas, da chegada até o consultor mover de etapa ou concluir uma atividade
+                    </p>
+                  </div>
+                );
+              })()}
               {contatoFiltrado.length > 0 && (
-                <ul className="mt-3 space-y-1.5 border-t border-[var(--border)] pt-3">
-                  {paginaContato.itensDaPagina.map((v) => (
-                    <li key={v.vendedorId} className="flex items-center justify-between gap-2 text-xs">
-                      <span className="truncate text-[var(--fg)]" title={v.vendedorNome}>
-                        {v.vendedorNome}
-                      </span>
-                      <span className="shrink-0 text-[var(--fg-muted)]">
-                        <strong className="text-[var(--fg)]">{formatarDuracao(v.horas)}</strong> · {v.leads} lead(s)
-                      </span>
-                    </li>
-                  ))}
+                <ul className="mt-3 space-y-2">
+                  {(() => {
+                    const maior = Math.max(...contatoFiltrado.map((x) => x.horas), 0.01);
+                    return paginaContato.itensDaPagina.map((v) => (
+                      <li key={v.vendedorId} className="text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="flex min-w-0 items-center gap-2">
+                            <Avatar nome={v.vendedorNome} className="size-5 text-[9px]" />
+                            <span className="truncate font-medium text-[var(--fg)]" title={v.vendedorNome}>
+                              {v.vendedorNome}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-[var(--fg-muted)]">
+                            <strong className="text-[var(--fg)]">{formatarDuracao(v.horas)}</strong> · {v.leads} lead(s)
+                          </span>
+                        </div>
+                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-[var(--surface-hover)]">
+                          <div className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[color-mix(in_srgb,var(--brand)_50%,#A6C3E0)]" style={{ width: `${Math.max(6, (v.horas / maior) * 100)}%` }} />
+                        </div>
+                      </li>
+                    ));
+                  })()}
                 </ul>
               )}
               <Pagination pagina={paginaContato.pagina} totalPaginas={paginaContato.totalPaginas} onChange={paginaContato.setPagina} />
