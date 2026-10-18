@@ -882,7 +882,7 @@ export function LeadsKanbanPage() {
       {carregando ? (
         <div className="flex gap-4 overflow-x-auto">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-96 w-[clamp(15rem,calc((100vw-var(--menu-w)-7.9rem)/4),20rem)] shrink-0 rounded-2xl" />
+            <Skeleton key={i} className="h-96 w-[clamp(14rem,calc((100vw-var(--menu-w)-7.9rem)/4.6),18rem)] shrink-0 rounded-2xl" />
           ))}
         </div>
       ) : erro || !board || !colunasExibidas ? (
@@ -923,7 +923,7 @@ export function LeadsKanbanPage() {
                         borderColor: `color-mix(in srgb, ${cor} 24%, var(--border))`,
                       }
                 }
-                className={`ui-surface flex h-[max(28rem,calc(100vh-15rem))] w-[clamp(15rem,calc((100vw-var(--menu-w)-7.9rem)/4),20rem)] shrink-0 flex-col overflow-hidden rounded-3xl border transition-colors ${
+                className={`ui-surface flex h-[max(28rem,calc(100vh-15rem))] w-[clamp(14rem,calc((100vw-var(--menu-w)-7.9rem)/4.6),18rem)] shrink-0 flex-col overflow-hidden rounded-3xl border transition-colors ${
                   alvo ? "border-[var(--brand)] bg-[var(--brand-soft)]" : ""
                 }`}
               >
