@@ -416,7 +416,7 @@ export function Shell({ children }: { children: ReactNode }) {
                             const isActive = ativoPelaRota && item.rota === rotaAtiva;
                             return `${linhaBase} ${
                               isActive
-                                ? `bg-[var(--sidebar-bg-active)] font-semibold text-white before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-full before:bg-[var(--sidebar-accent)] ${
+                                ? `item-ativo bg-[var(--sidebar-bg-active)] font-semibold text-white before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-full before:bg-[var(--sidebar-accent)] ${
                                     capsula ? "lg:bg-white lg:text-[#04264c] lg:shadow-[0_6px_16px_-6px_rgb(0_0_0/0.5)] lg:before:hidden" : ""
                                   }`
                                 : inativa
