@@ -355,6 +355,7 @@ export function Shell({ children }: { children: ReactNode }) {
         key={fixada ? "fixada" : previa ? "previa" : "recolhida"}
         onMouseEnter={abrirAoPassar}
         onMouseLeave={fecharAoSair}
+        data-capsula={capsula ? "true" : "false"}
         className={`ui-bar barra-anim fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] text-[var(--sidebar-fg)] transition-[transform,width] lg:translate-x-0 ${
           menuAberto ? "translate-x-0" : "-translate-x-full"
         } ${

@@ -86,45 +86,73 @@
 }
 
 [data-theme="glass"] {
-  --bg: #e4ebf4;
-  --surface: rgb(255 255 255 / 0.56);
-  --surface-hover: rgb(255 255 255 / 0.5);
-  --surface-solid: rgb(250 252 255 / 0.9);
-  --field: rgb(255 255 255 / 0.75);
-  --border: rgb(255 255 255 / 0.7);
-  --fg: #1d1d1f;
-  --fg-muted: #5b6573;
-  --brand: #07428b;
+  --bg: #dfe8f5;
+  --surface: rgb(255 255 255 / 0.34);
+  --surface-hover: rgb(255 255 255 / 0.3);
+  --surface-solid: rgb(246 249 255 / 0.82);
+  --field: rgb(255 255 255 / 0.52);
+  --border: rgb(255 255 255 / 0.6);
+  --fg: #14161c;
+  --fg-muted: #4a5568;
+  --brand: #0a4fa6;
   --brand-fg: #ffffff;
-  --brand-soft: rgb(7 66 139 / 0.1);
-  --success: #1f7f38;
-  --success-soft: rgb(36 138 61 / 0.14);
-  --warning: #a64b00;
-  --warning-soft: rgb(255 159 10 / 0.2);
+  --brand-soft: rgb(10 79 166 / 0.12);
+  --success: #1a7a35;
+  --success-soft: rgb(36 138 61 / 0.16);
+  --warning: #9a4700;
+  --warning-soft: rgb(255 159 10 / 0.22);
   --danger: #c4122a;
-  --danger-soft: rgb(215 0 21 / 0.1);
-  --info: #467fc5;
-  --shadow-color: 215 50% 25%;
-  --radius-card: 1.25rem;
-  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.85) inset, 0 0 0 0.5px rgb(255 255 255 / 0.5), 0 12px 40px -12px rgb(30 50 90 / 0.18);
+  --danger-soft: rgb(215 0 21 / 0.12);
+  --info: #3d78c4;
+  --shadow-color: 220 50% 30%;
+  --radius-card: 1.5rem;
+  /* Vidro à la Apple: brilho especular na borda de cima, borda interna fina e sombra longa e suave. */
+  --shadow-card:
+    inset 0 1px 0 rgb(255 255 255 / 0.95),
+    inset 0 -1px 0 rgb(255 255 255 / 0.28),
+    inset 0 0 0 0.5px rgb(255 255 255 / 0.5),
+    0 0 0 0.5px rgb(120 140 180 / 0.18),
+    0 20px 48px -20px rgb(40 60 120 / 0.34);
 
-  --sidebar-bg: rgb(4 38 76 / 0.86);
-  --sidebar-bg-active: rgb(255 255 255 / 0.13);
-  --sidebar-border: rgb(255 255 255 / 0.09);
+  --sidebar-bg: rgb(8 36 80 / 0.6);
+  --sidebar-bg-active: rgb(255 255 255 / 0.2);
+  --sidebar-border: rgb(255 255 255 / 0.16);
   --sidebar-fg: #ffffff;
-  --sidebar-fg-muted: rgb(255 255 255 / 0.62);
+  --sidebar-fg-muted: rgb(255 255 255 / 0.78);
   --sidebar-active-fg: #ffffff;
   --sidebar-active-ring: transparent;
-  --header-bg: rgb(255 255 255 / 0.38);
-  --overlay: rgb(30 45 80 / 0.28);
-  --glass-blur: 30px;
-  --surface-filter: blur(30px) saturate(1.8);
-  --bar-blur: 30px;
+  --header-bg: rgb(255 255 255 / 0.3);
+  --overlay: rgb(30 45 80 / 0.25);
+  --glass-blur: 40px;
+  --surface-filter: blur(40px) saturate(2) brightness(1.05);
+  --bar-blur: 40px;
+  /* Papel de parede colorido: o desfoque do vidro só aparece de verdade quando há cor por trás. */
   --page-bg:
-    radial-gradient(60rem 42rem at 4% -4%, #b9d0ea 0%, transparent 62%),
-    radial-gradient(52rem 40rem at 98% 6%, #d6e4f4 0%, transparent 60%),
-    radial-gradient(54rem 40rem at 72% 104%, #a6c3e0 0%, transparent 64%),
-    linear-gradient(165deg, #e2eaf5, #eef3f9);
+    radial-gradient(46rem 34rem at 6% -2%, rgb(96 160 255 / 0.95) 0%, transparent 62%),
+    radial-gradient(42rem 34rem at 96% 4%, rgb(176 146 255 / 0.85) 0%, transparent 60%),
+    radial-gradient(48rem 38rem at 78% 104%, rgb(100 222 232 / 0.9) 0%, transparent 64%),
+    radial-gradient(40rem 30rem at 4% 98%, rgb(255 176 208 / 0.7) 0%, transparent 62%),
+    linear-gradient(165deg, #dbe6f6, #eef2fa);
+}
+
+/* Tema translúcido: a cápsula recolhida (e a prévia com os nomes) fica ainda mais transparente, mostrando o fundo desfocado atrás. */
+[data-theme="glass"] .ui-bar[data-capsula="true"] {
+  background-color: rgb(8 36 80 / 0.44);
+  -webkit-backdrop-filter: blur(44px) saturate(2.2) brightness(1.08);
+  backdrop-filter: blur(44px) saturate(2.2) brightness(1.08);
+  border-color: rgb(255 255 255 / 0.38);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.55),
+    inset 0 0 0 0.5px rgb(255 255 255 / 0.3),
+    0 18px 44px -18px rgb(20 40 100 / 0.45);
+}
+[data-theme="glass"] .ui-bar[data-capsula="true"] svg,
+[data-theme="glass"] .ui-bar[data-capsula="true"] span {
+  filter: drop-shadow(0 1px 2px rgb(0 20 60 / 0.55));
+}
+/* Cabeçalho e barra fixada no vidro: borda superior luminosa. */
+[data-theme="glass"] .ui-bar {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6), 0 12px 36px -16px rgb(30 50 110 / 0.3);
 }
 
 /* Título de página (h1 do conteúdo): um padrão só para todas as telas. */
@@ -481,4 +509,12 @@ main h1 + p {
   display: none;
   width: 0;
   height: 0;
+}
+
+/* Cápsula de vidro: ícones e nomes em branco pleno para ler bem sobre o fundo claro desfocado. */
+[data-theme="glass"] .ui-bar[data-capsula="true"] nav a {
+  color: #ffffff;
+}
+[data-theme="glass"] .ui-bar[data-capsula="true"] nav a[class*="bg-white"] {
+  color: #04264c;
 }
