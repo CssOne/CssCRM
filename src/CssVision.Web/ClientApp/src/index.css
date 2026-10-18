@@ -114,11 +114,13 @@
     0 0 0 0.5px rgb(120 140 180 / 0.18),
     0 20px 48px -20px rgb(40 60 120 / 0.34);
 
-  --sidebar-bg: rgb(8 36 80 / 0.6);
-  --sidebar-bg-active: rgb(255 255 255 / 0.2);
-  --sidebar-border: rgb(255 255 255 / 0.16);
-  --sidebar-fg: #ffffff;
-  --sidebar-fg-muted: rgb(255 255 255 / 0.78);
+  --sidebar-bg: rgb(255 255 255 / 0.4);
+  --sidebar-bg-active: rgb(255 255 255 / 0.85);
+  --sidebar-border: rgb(255 255 255 / 0.7);
+  --sidebar-fg: #0b2447;
+  --sidebar-fg-muted: rgb(11 36 71 / 0.68);
+  --sidebar-hover: rgb(255 255 255 / 0.55);
+  --sidebar-accent: #0a4fa6;
   --sidebar-active-fg: #ffffff;
   --sidebar-active-ring: transparent;
   --header-bg: rgb(255 255 255 / 0.3);
@@ -133,26 +135,6 @@
     radial-gradient(48rem 38rem at 78% 104%, rgb(100 222 232 / 0.9) 0%, transparent 64%),
     radial-gradient(40rem 30rem at 4% 98%, rgb(255 176 208 / 0.7) 0%, transparent 62%),
     linear-gradient(165deg, #dbe6f6, #eef2fa);
-}
-
-/* Tema translúcido: a cápsula recolhida (e a prévia com os nomes) fica ainda mais transparente, mostrando o fundo desfocado atrás. */
-[data-theme="glass"] .ui-bar[data-capsula="true"] {
-  background-color: rgb(8 36 80 / 0.44);
-  -webkit-backdrop-filter: blur(44px) saturate(2.2) brightness(1.08);
-  backdrop-filter: blur(44px) saturate(2.2) brightness(1.08);
-  border-color: rgb(255 255 255 / 0.38);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.55),
-    inset 0 0 0 0.5px rgb(255 255 255 / 0.3),
-    0 18px 44px -18px rgb(20 40 100 / 0.45);
-}
-[data-theme="glass"] .ui-bar[data-capsula="true"] svg,
-[data-theme="glass"] .ui-bar[data-capsula="true"] span {
-  filter: drop-shadow(0 1px 2px rgb(0 20 60 / 0.55));
-}
-/* Cabeçalho e barra fixada no vidro: borda superior luminosa. */
-[data-theme="glass"] .ui-bar {
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.6), 0 12px 36px -16px rgb(30 50 110 / 0.3);
 }
 
 /* Título de página (h1 do conteúdo): um padrão só para todas as telas. */
@@ -511,14 +493,6 @@ main h1 + p {
   height: 0;
 }
 
-/* Cápsula de vidro: ícones e nomes em branco pleno para ler bem sobre o fundo claro desfocado. */
-[data-theme="glass"] .ui-bar[data-capsula="true"] nav a {
-  color: #ffffff;
-}
-[data-theme="glass"] .ui-bar[data-capsula="true"] nav a[class*="bg-white"] {
-  color: #04264c;
-}
-
 /* Tema translúcido: os campos dos filtros ganham fundo mais firme e borda visível (antes o branco quase sumia no vidro). */
 [data-theme="glass"] .filtro-campo:not([data-ativo="true"]) :is(button, input, select)[class*="h-9"],
 [data-theme="glass"] .filtro-campo:not([data-ativo="true"]) :is(button, input, select)[class*="h-10"],
@@ -537,4 +511,48 @@ main h1 + p {
 [data-theme="glass"] .filtro-campo :is(input)::placeholder,
 [data-theme="glass"] .ui-surface input[type="search"]::placeholder {
   color: #5b6677;
+}
+
+/* Tema translúcido, barra lateral: vidro claro (como o Dock/Central de Controle da Apple), com ícones e nomes em azul-marinho.
+   Sem sombra nos textos; só um brilho fino na borda e uma sombra longa e suave. */
+[data-theme="glass"] .ui-bar {
+  border-color: rgb(255 255 255 / 0.75);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.95),
+    inset 0 0 0 0.5px rgb(255 255 255 / 0.5),
+    0 18px 44px -20px rgb(30 60 120 / 0.38);
+}
+[data-theme="glass"] aside.ui-bar[data-capsula="true"] {
+  background-color: rgb(255 255 255 / 0.26);
+  -webkit-backdrop-filter: blur(44px) saturate(2.1) brightness(1.06);
+  backdrop-filter: blur(44px) saturate(2.1) brightness(1.06);
+}
+[data-theme="glass"] aside.ui-bar nav a {
+  color: var(--sidebar-fg-muted);
+}
+[data-theme="glass"] aside.ui-bar nav a:hover {
+  color: var(--sidebar-fg);
+  background-color: var(--sidebar-hover);
+}
+[data-theme="glass"] aside.ui-bar nav a[aria-current="page"] {
+  color: var(--brand);
+  background-color: var(--sidebar-bg-active);
+  box-shadow: 0 6px 16px -8px rgb(20 50 110 / 0.35);
+}
+[data-theme="glass"] aside.ui-bar nav a[aria-current="page"]::before {
+  background-color: var(--brand);
+}
+[data-theme="glass"] aside.ui-bar button {
+  color: var(--sidebar-fg-muted);
+}
+[data-theme="glass"] aside.ui-bar button:hover {
+  color: var(--sidebar-fg);
+  background-color: var(--sidebar-hover);
+}
+[data-theme="glass"] aside.ui-bar [class*="text-[var(--sidebar-fg)]"] {
+  color: var(--sidebar-fg);
+}
+/* A logo é branca: no vidro claro ela vira azul-marinho. */
+[data-theme="glass"] aside.ui-bar img {
+  filter: brightness(0) saturate(100%) invert(13%) sepia(70%) saturate(2400%) hue-rotate(198deg) brightness(92%);
 }
