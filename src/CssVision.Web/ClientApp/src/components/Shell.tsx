@@ -360,7 +360,7 @@ export function Shell({ children }: { children: ReactNode }) {
           menuAberto ? "translate-x-0" : "-translate-x-full"
         } ${
           capsula
-            ? `lg:bottom-auto lg:left-4 lg:top-1/2 lg:h-auto lg:max-h-[calc(100vh-2rem)] ${previa ? "lg:w-56" : "lg:w-16"} lg:-translate-y-1/2 lg:rounded-[2rem] lg:border lg:border-white/10 lg:shadow-[0_10px_28px_-10px_rgb(4_38_76/0.55)] lg:[background-image:linear-gradient(180deg,rgb(255_255_255/0.09),transparent_38%)]`
+            ? `lg:bottom-auto lg:left-4 lg:top-1/2 lg:h-auto lg:max-h-[calc(100vh-2rem)] ${previa ? "lg:w-60" : "lg:w-16"} lg:-translate-y-1/2 lg:rounded-[2rem] lg:border lg:border-white/10 lg:shadow-[0_10px_28px_-10px_rgb(4_38_76/0.55)] lg:[background-image:linear-gradient(180deg,rgb(255_255_255/0.09),transparent_38%)]`
             : "lg:inset-y-3 lg:left-3 lg:w-60 lg:rounded-[1.75rem] lg:border lg:border-white/10 lg:shadow-[0_10px_28px_-10px_rgb(4_38_76/0.5)] lg:[background-image:linear-gradient(180deg,rgb(255_255_255/0.07),transparent_32%)]"
         }`}
       >

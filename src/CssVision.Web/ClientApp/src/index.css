@@ -128,8 +128,13 @@
   --glass-blur: 40px;
   --surface-filter: blur(40px) saturate(2) brightness(1.05);
   --bar-blur: 40px;
-  /* Papel de parede (ondas azuis, como na referência): é o que o vidro de tudo desfoca por trás. */
-  --page-bg: url("/fundo-vidro.svg") center / cover no-repeat, #dfe8f5;
+  /* Papel de parede colorido: o desfoque do vidro só aparece de verdade quando há cor por trás. */
+  --page-bg:
+    radial-gradient(46rem 34rem at 6% -2%, rgb(96 160 255 / 0.95) 0%, transparent 62%),
+    radial-gradient(42rem 34rem at 96% 4%, rgb(176 146 255 / 0.85) 0%, transparent 60%),
+    radial-gradient(48rem 38rem at 78% 104%, rgb(100 222 232 / 0.9) 0%, transparent 64%),
+    radial-gradient(40rem 30rem at 4% 98%, rgb(255 176 208 / 0.7) 0%, transparent 62%),
+    linear-gradient(165deg, #dbe6f6, #eef2fa);
 }
 
 /* Título de página (h1 do conteúdo): um padrão só para todas as telas. */
@@ -512,7 +517,7 @@ main h1 + p {
    Sem sombra nos textos; só um brilho fino na borda e uma sombra longa e suave. */
 [data-theme="glass"] aside.ui-bar {
   /* Vidro leitoso da referência (macOS): translúcido, com o papel de parede colorido aparecendo desfocado por trás. */
-  background-color: rgb(255 255 255 / 0.22);
+  background-color: rgb(255 255 255 / 0.34);
   background-image: linear-gradient(150deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.06) 55%, rgb(255 255 255 / 0.2));
   -webkit-backdrop-filter: blur(30px) saturate(1.8) brightness(1.06);
   backdrop-filter: blur(30px) saturate(1.8) brightness(1.06);
@@ -529,7 +534,7 @@ main h1 + p {
 }
 [data-theme="glass"] aside.ui-bar nav a {
   color: #0d2f57;
-  font-size: 1.04rem;
+  font-size: 0.98rem;
   font-weight: 450;
   letter-spacing: -0.005em;
 }
@@ -613,7 +618,3 @@ main h1 + p {
   color: #5d7390;
 }
 
-/* Tema translúcido: o contêiner raiz do app não pode ter fundo sólido, senão o papel de parede (e o vidro) não aparece. */
-[data-theme="glass"] #root > div[class*="bg-[var(--bg)]"] {
-  background-color: transparent;
-}
