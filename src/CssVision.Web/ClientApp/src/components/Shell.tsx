@@ -316,7 +316,9 @@ export function Shell({ children }: { children: ReactNode }) {
   }, [fixada]);
   const [aoPassar, setAoPassar] = useState(false);
   const tempoHover = useRef<number | undefined>(undefined);
-  const recolhida = colapsado && !aoPassar;
+  const recolhida = colapsado && !aoPassar; // cápsula só de ícones
+  const previa = colapsado && aoPassar; // mesma cápsula, um pouco mais larga, com os nomes
+  const capsula = colapsado; // cápsula (recolhida ou prévia); fixada = barra oficial
   const abrirAoPassar = () => {
     if (!colapsado) return;
     window.clearTimeout(tempoHover.current);
@@ -350,18 +352,18 @@ export function Shell({ children }: { children: ReactNode }) {
 
       {/* Barra lateral nas cores da empresa: azul-marinho cheio, menu em seções e marcador claro no item ativo. */}
       <aside
-        key={recolhida ? "recolhida" : "expandida"}
+        key={fixada ? "fixada" : previa ? "previa" : "recolhida"}
         onMouseEnter={abrirAoPassar}
         onMouseLeave={fecharAoSair}
         className={`ui-bar barra-anim fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] text-[var(--sidebar-fg)] transition-[transform,width] lg:translate-x-0 ${
           menuAberto ? "translate-x-0" : "-translate-x-full"
         } ${
-          recolhida
-            ? "lg:bottom-auto lg:left-4 lg:top-1/2 lg:h-auto lg:max-h-[calc(100vh-2rem)] lg:w-16 lg:-translate-y-1/2 lg:rounded-[2rem] lg:border lg:border-white/10 lg:shadow-[0_10px_28px_-10px_rgb(4_38_76/0.55)] lg:[background-image:linear-gradient(180deg,rgb(255_255_255/0.09),transparent_38%)]"
+          capsula
+            ? `lg:bottom-auto lg:left-4 lg:top-1/2 lg:h-auto lg:max-h-[calc(100vh-2rem)] ${previa ? "lg:w-56" : "lg:w-16"} lg:-translate-y-1/2 lg:rounded-[2rem] lg:border lg:border-white/10 lg:shadow-[0_10px_28px_-10px_rgb(4_38_76/0.55)] lg:[background-image:linear-gradient(180deg,rgb(255_255_255/0.09),transparent_38%)]`
             : "lg:inset-y-3 lg:left-3 lg:w-60 lg:rounded-[1.75rem] lg:border lg:border-white/10 lg:shadow-[0_10px_28px_-10px_rgb(4_38_76/0.5)] lg:[background-image:linear-gradient(180deg,rgb(255_255_255/0.07),transparent_32%)]"
         }`}
       >
-        <div className={`flex h-16 shrink-0 items-center justify-between gap-2 px-4 ${recolhida ? "lg:h-auto lg:flex-col lg:justify-center lg:gap-2 lg:px-2 lg:pb-1 lg:pt-4" : ""}`}>
+        <div className={`flex h-16 shrink-0 items-center justify-between gap-2 px-4 ${recolhida ? "lg:h-auto lg:flex-col lg:justify-center lg:gap-2 lg:px-2 lg:pb-1 lg:pt-4" : previa ? "lg:h-auto lg:pb-1 lg:pt-4" : ""}`}>
           <Logo subtitulo={emPortal ? "Portal do consultor" : "CRM comercial"} colapsado={recolhida} />
           <IconButton label="Fechar menu" className="text-white/70 hover:bg-[var(--sidebar-hover)] hover:text-white lg:hidden" onClick={() => setMenuAberto(false)}>
             <X className="size-4" />
@@ -380,15 +382,15 @@ export function Shell({ children }: { children: ReactNode }) {
           </button>
         </div>
 
-        <nav className={`sidebar-nav min-h-0 flex-1 overflow-y-auto px-3 pb-3 ${recolhida ? "lg:px-2" : ""}`} aria-label="Navegação principal">
+        <nav className={`sidebar-nav min-h-0 flex-1 overflow-y-auto px-3 pb-3 ${capsula ? "lg:px-2" : ""}`} aria-label="Navegação principal">
           {agruparNav((itensNav ?? []).filter((i) => i.chave !== "suporte")).map((grupo, gi) => (
-            <div key={grupo.rotulo} className={gi === 0 ? "" : recolhida ? "mt-4 lg:mt-3" : "mt-4"}>
+            <div key={grupo.rotulo} className={gi === 0 ? "" : capsula ? "mt-4 lg:mt-3" : "mt-4"}>
               {!emPortal && (
-                <p className={`mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--sidebar-fg-muted)]/70 ${recolhida ? "lg:hidden" : ""}`}>{grupo.rotulo}</p>
+                <p className={`mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--sidebar-fg-muted)]/70 ${capsula ? "lg:hidden" : ""}`}>{grupo.rotulo}</p>
               )}
               <div className="space-y-0.5">
                 {grupo.itens.map((item) => {
-                  const linhaBase = `focus-ring group relative flex h-9 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium transition-colors ${recolhida ? "lg:mx-auto lg:size-10 lg:justify-center lg:rounded-full lg:px-0" : ""}`;
+                  const linhaBase = `focus-ring group relative flex h-9 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium transition-colors ${recolhida ? "lg:mx-auto lg:size-10 lg:justify-center lg:rounded-full lg:px-0" : previa ? "lg:h-10 lg:w-full lg:rounded-full lg:pl-[15px] lg:pr-4" : ""}`;
                   const inativa = "text-[var(--sidebar-fg-muted)] hover:bg-[var(--sidebar-hover)] hover:text-white";
                   return (
                     <div key={item.chave} className="menu-item-anim" style={{ "--i": indiceItem++ } as React.CSSProperties}>
@@ -414,7 +416,7 @@ export function Shell({ children }: { children: ReactNode }) {
                             return `${linhaBase} ${
                               isActive
                                 ? `bg-[var(--sidebar-bg-active)] font-semibold text-white before:absolute before:bottom-2 before:left-0 before:top-2 before:w-[3px] before:rounded-full before:bg-[var(--sidebar-accent)] ${
-                                    recolhida ? "lg:bg-white lg:text-[#04264c] lg:shadow-[0_6px_16px_-6px_rgb(0_0_0/0.5)] lg:before:hidden" : ""
+                                    capsula ? "lg:bg-white lg:text-[#04264c] lg:shadow-[0_6px_16px_-6px_rgb(0_0_0/0.5)] lg:before:hidden" : ""
                                   }`
                                 : inativa
                             }`;
@@ -432,7 +434,7 @@ export function Shell({ children }: { children: ReactNode }) {
                           )}
                         </NavLink>
                       )}
-                      {item.divisor && <div className={`my-2 border-t border-[var(--sidebar-border)] ${recolhida ? "lg:hidden" : ""}`} />}
+                      {item.divisor && <div className={`my-2 border-t border-[var(--sidebar-border)] ${capsula ? "lg:hidden" : ""}`} />}
                     </div>
                   );
                 })}
