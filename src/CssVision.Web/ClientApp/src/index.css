@@ -519,15 +519,15 @@ main h1 + p {
    Sem sombra nos textos; só um brilho fino na borda e uma sombra longa e suave. */
 [data-theme="glass"] aside.ui-bar {
   /* Vidro leitoso da referência (macOS): translúcido, com o papel de parede colorido aparecendo desfocado por trás. */
-  background-color: rgb(255 255 255 / 0.3);
-  background-image: linear-gradient(160deg, rgb(255 255 255 / 0.38), rgb(255 255 255 / 0.06) 60%, rgb(255 255 255 / 0.16));
+  background-color: rgb(255 255 255 / 0.36);
+  background-image: linear-gradient(160deg, rgb(255 255 255 / 0.42), rgb(255 255 255 / 0.06) 60%, rgb(255 255 255 / 0.16));
   -webkit-backdrop-filter: blur(30px) saturate(1.8) brightness(1.06);
   backdrop-filter: blur(30px) saturate(1.8) brightness(1.06);
   border: 1px solid var(--vidro-borda);
   box-shadow: var(--vidro-brilho), 0 26px 60px -22px rgb(20 70 150 / 0.4);
 }
 [data-theme="glass"] aside.ui-bar[data-capsula="true"] {
-  background-color: rgb(255 255 255 / 0.22);
+  background-color: rgb(255 255 255 / 0.3);
   background-image: linear-gradient(160deg, rgb(255 255 255 / 0.32), rgb(255 255 255 / 0.04) 60%, rgb(255 255 255 / 0.12));
 }
 [data-theme="glass"] header.ui-bar {
@@ -536,6 +536,9 @@ main h1 + p {
 }
 [data-theme="glass"] aside.ui-bar nav a {
   color: #0d2f57;
+  font-size: 1.04rem;
+  font-weight: 450;
+  letter-spacing: -0.005em;
 }
 [data-theme="glass"] aside.ui-bar nav a:hover {
   background-color: rgb(255 255 255 / 0.5);
@@ -543,10 +546,10 @@ main h1 + p {
 /* Ícones dentro de bolhas claras, como na referência da Apple. */
 [data-theme="glass"] aside.ui-bar nav a > svg {
   box-sizing: content-box;
-  padding: 4px;
-  margin: -4px;
+  padding: 6px;
+  margin: -6px;
   border-radius: 999px;
-  background-color: rgb(255 255 255 / 0.5);
+  background-color: rgb(255 255 255 / 0.55);
   box-shadow: inset 0 0 0 0.5px rgb(255 255 255 / 0.8);
   color: #0a4fa6;
   transition: background-color 150ms, color 150ms;
@@ -610,4 +613,13 @@ main h1 + p {
 /* Tema translúcido: o contêiner raiz do app não pode ter fundo sólido, senão o papel de parede (e o vidro das barras) não aparece. */
 [data-theme="glass"] #root > div[class*="bg-[var(--bg)]"] {
   background-color: transparent;
+}
+
+/* Cabeçalho da barra no vidro: nome em azul-marinho e subtítulo discreto, como na referência. */
+[data-theme="glass"] aside.ui-bar [class*="text-[var(--sidebar-fg)]"] {
+  color: #0b2447;
+  font-weight: 650;
+}
+[data-theme="glass"] aside.ui-bar [class*="text-[var(--sidebar-fg-muted)]"] {
+  color: #5d7390;
 }
