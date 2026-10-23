@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Eye, EyeOff, KeyRound, Lock, Mail, MailCheck, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Eye, EyeOff, KeyRound, Lock, Mail, MailCheck, ShieldCheck } from "lucide-react";
 import { ApiRequestError, api, isUnauthorized } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Button, Checkbox } from "../components/ui";
@@ -111,11 +111,43 @@ function PainelDaMarca() {
   );
 }
 
+/** Só o e-mail fica guardado (nunca a senha), para a pessoa não digitar de novo no mesmo aparelho. */
+const CHAVE_ULTIMO_EMAIL = "login:ultimo-email";
+
+function lerUltimoEmail(): string {
+  try {
+    return localStorage.getItem(CHAVE_ULTIMO_EMAIL) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function gravarUltimoEmail(email: string) {
+  try {
+    localStorage.setItem(CHAVE_ULTIMO_EMAIL, email);
+  } catch {
+    /* sem storage (aba anônima/bloqueada): só não lembra o e-mail */
+  }
+}
+
+/** Mensagem do erro de login: específica quando o servidor/rede explica, genérica nos demais casos (nunca revela se o e-mail existe). */
+export function mensagemDeErroDoLogin(e: unknown): string {
+  if (e instanceof ApiRequestError && e.codigo === "senha_inicial") return e.message;
+  if (isUnauthorized(e)) return "E-mail ou senha inválidos.";
+  if (e instanceof ApiRequestError && e.status === 0) return e.message;
+  if (e instanceof ApiRequestError && e.status === 429) return "Muitas tentativas seguidas. Aguarde um minuto e tente de novo.";
+  return "Não foi possível entrar. Tente novamente.";
+}
+
 export function LoginPage() {
   const { sessao, login, loginDoisFatores } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(lerUltimoEmail);
   const [senha, setSenha] = useState("");
+  const [capsLigado, setCapsLigado] = useState(false);
+  const [campoInvalido, setCampoInvalido] = useState<"email" | "senha" | null>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const senhaRef = useRef<HTMLInputElement>(null);
   const [manterConectado, setManterConectado] = useState(true);
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -129,42 +161,80 @@ export function LoginPage() {
   const [emailRecuperacao, setEmailRecuperacao] = useState("");
   const [emailRecuperacaoEnviado, setEmailRecuperacaoEnviado] = useState(false);
 
+  // Já com o cursor no campo certo (com e-mail lembrado, direto na senha). No celular não: o teclado abriria sozinho e cobriria a tela.
+  useEffect(() => {
+    if (window.matchMedia?.("(pointer: coarse)").matches) return;
+    (email ? senhaRef : emailRef).current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (sessao) return <Navigate to={sessao.areaInicial} replace />;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setErro(null);
+    setCampoInvalido(null);
+
+    // Conferência antes de ir ao servidor: diz o que falta e já leva o cursor para lá.
+    const emailLimpo = email.trim();
+    if (!emailLimpo || !senha) {
+      const faltaEmail = !emailLimpo;
+      setErro(faltaEmail ? "Informe o seu e-mail." : "Informe a sua senha.");
+      setCampoInvalido(faltaEmail ? "email" : "senha");
+      (faltaEmail ? emailRef : senhaRef).current?.focus();
+      return;
+    }
+
     setEnviando(true);
     try {
-      const resultado = await login(email, senha, manterConectado);
+      const resultado = await login(emailLimpo, senha, manterConectado);
+      gravarUltimoEmail(emailLimpo);
       if (resultado.requerDoisFatores) {
         setAguardando2fa(true);
       } else {
         navigate(resultado.sessao!.areaInicial, { replace: true });
       }
     } catch (e) {
-      setErro(
-        e instanceof ApiRequestError && e.codigo === "senha_inicial"
-          ? e.message
-          : isUnauthorized(e) ? "E-mail ou senha inválidos." : "Não foi possível entrar. Tente novamente.",
-      );
+      setErro(mensagemDeErroDoLogin(e));
+      // Senha errada: limpa e devolve o cursor para digitar de novo (o e-mail fica).
+      if (isUnauthorized(e) || (e instanceof ApiRequestError && e.codigo === "senha_inicial")) {
+        setSenha("");
+        senhaRef.current?.focus();
+      }
     } finally {
       setEnviando(false);
     }
   }
 
-  async function handleSubmit2fa(e: FormEvent) {
-    e.preventDefault();
+  async function enviarCodigo2fa(codigo: string) {
+    if (enviando || !codigo.trim()) return;
     setErro(null);
     setEnviando(true);
     try {
-      const resultado = await loginDoisFatores(codigo2fa.trim(), manterConectado, usarCodigoRecuperacao);
+      const resultado = await loginDoisFatores(codigo.trim(), manterConectado, usarCodigoRecuperacao);
       navigate(resultado.areaInicial, { replace: true });
     } catch (e) {
-      setErro(isUnauthorized(e) ? "Código inválido." : "Não foi possível entrar. Tente novamente.");
+      setErro(isUnauthorized(e) ? "Código inválido." : e instanceof ApiRequestError && e.status === 0 ? e.message : "Não foi possível entrar. Tente novamente.");
+      setCodigo2fa("");
     } finally {
       setEnviando(false);
     }
+  }
+
+  function handleSubmit2fa(e: FormEvent) {
+    e.preventDefault();
+    void enviarCodigo2fa(codigo2fa);
+  }
+
+  /** Código do aplicativo: só dígitos (cola "123 456" e vira 123456) e, com os 6 preenchidos, entra sem precisar clicar. */
+  function aoDigitarCodigo(valor: string) {
+    if (usarCodigoRecuperacao) {
+      setCodigo2fa(valor);
+      return;
+    }
+    const digitos = valor.replace(/\D/g, "").slice(0, 6);
+    setCodigo2fa(digitos);
+    if (digitos.length === 6) void enviarCodigo2fa(digitos);
   }
 
   function voltarParaCredenciais() {
@@ -176,7 +246,7 @@ export function LoginPage() {
 
   function abrirEsqueciSenha(e: React.MouseEvent) {
     e.preventDefault();
-    setEmailRecuperacao(email);
+    setEmailRecuperacao(email.trim());
     setEmailRecuperacaoEnviado(false);
     setErro(null);
     setMostrarEsqueciSenha(true);
@@ -266,7 +336,7 @@ export function LoginPage() {
                           required
                           value={emailRecuperacao}
                           onChange={(e) => setEmailRecuperacao(e.target.value)}
-                          className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--field)] h-12 pl-11 pr-3 text-[15px] text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                          className="focus-ring w-full rounded-xl border border-[var(--border)] aria-invalid:border-[var(--danger)] bg-[var(--field)] h-12 pl-11 pr-3 text-[15px] text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                           placeholder="voce@empresa.com"
                         />
                       </div>
@@ -321,8 +391,9 @@ export function LoginPage() {
                       autoFocus
                       required
                       value={codigo2fa}
-                      onChange={(e) => setCodigo2fa(e.target.value)}
-                      className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--field)] h-12 pl-11 pr-3 text-[15px] tracking-widest text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                      onChange={(e) => aoDigitarCodigo(e.target.value)}
+                      maxLength={usarCodigoRecuperacao ? 32 : 7}
+                      className="focus-ring w-full rounded-xl border border-[var(--border)] aria-invalid:border-[var(--danger)] bg-[var(--field)] h-12 pl-11 pr-3 text-[15px] tracking-widest text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                       placeholder={usarCodigoRecuperacao ? "xxxxx-xxxxx" : "000000"}
                     />
                   </div>
@@ -365,12 +436,18 @@ export function LoginPage() {
                     <Mail className="pointer-events-none absolute left-4 top-1/2 size-[1.125rem] -translate-y-1/2 text-[var(--fg-muted)]" aria-hidden />
                     <input
                       id="email"
+                      ref={emailRef}
                       type="email"
+                      inputMode="email"
                       autoComplete="username"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       required
+                      aria-invalid={campoInvalido === "email"}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--field)] h-12 pl-11 pr-3 text-[15px] text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                      className="focus-ring w-full rounded-xl border border-[var(--border)] aria-invalid:border-[var(--danger)] bg-[var(--field)] h-12 pl-11 pr-3 text-[15px] text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                       placeholder="voce@empresa.com"
                     />
                   </div>
@@ -384,12 +461,18 @@ export function LoginPage() {
                     <Lock className="pointer-events-none absolute left-4 top-1/2 size-[1.125rem] -translate-y-1/2 text-[var(--fg-muted)]" aria-hidden />
                     <input
                       id="senha"
+                      ref={senhaRef}
                       type={mostrarSenha ? "text" : "password"}
                       autoComplete="current-password"
                       required
+                      aria-invalid={campoInvalido === "senha"}
+                      aria-describedby={capsLigado ? "aviso-caps" : undefined}
                       value={senha}
                       onChange={(e) => setSenha(e.target.value)}
-                      className="focus-ring w-full rounded-xl border border-[var(--border)] bg-[var(--field)] h-12 pl-11 pr-11 text-[15px] text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                      onKeyDown={(e) => setCapsLigado(e.getModifierState("CapsLock"))}
+                      onKeyUp={(e) => setCapsLigado(e.getModifierState("CapsLock"))}
+                      onBlur={() => setCapsLigado(false)}
+                      className="focus-ring w-full rounded-xl border border-[var(--border)] aria-invalid:border-[var(--danger)] bg-[var(--field)] h-12 pl-11 pr-11 text-[15px] text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                       placeholder="••••••••"
                     />
                     <button
@@ -401,6 +484,11 @@ export function LoginPage() {
                       {mostrarSenha ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                     </button>
                   </div>
+                  {capsLigado && (
+                    <p id="aviso-caps" role="status" className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-[var(--warning)]">
+                      <AlertTriangle className="size-3.5 shrink-0" aria-hidden /> Caps Lock está ligado
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between">
@@ -429,6 +517,7 @@ export function LoginPage() {
                   <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden />
                 </Button>
               </form>
+              <p className="mt-6 text-center text-xs text-[var(--fg-muted)]">Problemas para entrar? Fale com o administrador do sistema.</p>
             </>
           )}
         </div>
