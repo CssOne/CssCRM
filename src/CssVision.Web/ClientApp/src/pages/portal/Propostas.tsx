@@ -142,7 +142,7 @@ export function PortalPropostasPage() {
                     </p>
                   </div>
                 </Link>
-                <BotaoWhatsApp telefone={op.leadTelefone} nome={op.leadNome} className="absolute right-3 top-1/2 size-7 -translate-y-1/2" />
+                <BotaoWhatsApp telefone={op.leadTelefone} nome={op.leadNome} leadId={op.leadId} className="absolute right-3 top-1/2 size-7 -translate-y-1/2" />
                 </div>
               );
             })}

@@ -24,6 +24,9 @@ public class CrmLead : CrmArchivableEntity
     public string? EmailNormalizado { get; set; }
     public string? Email { get; set; }
 
+    /// <summary>Quando o cliente pediu para não receber mais e-mails do disparo (link no rodapé). Vale para todos os cards com o mesmo e-mail.</summary>
+    public DateTimeOffset? EmailDescadastradoEm { get; set; }
+
     public DateOnly? DataNascimento { get; set; }
 
     public string? Cidade { get; set; }

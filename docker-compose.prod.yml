@@ -51,6 +51,9 @@ services:
       Discord__UrlPublica: https://${CADDY_DOMAIN}
       # Endereço público usado nos links de e-mail (redefinição de senha). Fixo, para não depender do cabeçalho Host de quem chama.
       App__PublicBaseUrl: https://${CADDY_DOMAIN}
+      # Chave que protege as senhas de e-mail dos consultores (disparo de e-mail), guardada FORA do banco. Vem do Secrets Manager (via .env).
+      # Vazia = as senhas ficam protegidas só pelo Data Protection (chaves no banco) e o log avisa. Mínimo 16 caracteres (openssl rand -base64 32).
+      Seguranca__ChaveSegredos: ${CRM_CHAVE_SEGREDOS:-}
     expose:
       - "8080"
     healthcheck:

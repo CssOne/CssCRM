@@ -7,6 +7,7 @@ using CssVision.Web.Services.Email;
 using CssVision.Web.Services.Marketing;
 using CssVision.Web.Services.CssOne;
 using CssVision.Web.Services.Notion;
+using CssVision.Web.Services.Security;
 using CssVision.Web.Services.Storage;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
@@ -179,6 +180,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILembreteCobrancaNotificador, LembreteCobrancaNotificador>();
         services.AddHostedService<CustoVencimentoBackgroundService>();
         services.AddScoped<IDisparoEmailService, DisparoEmailService>();
+        services.AddSingleton<ISegredoProtetor, SegredoProtetor>();
+        services.AddSingleton<IDescadastroEmailTokens, DescadastroEmailTokens>();
+        services.AddScoped<DisparoEmailProcessador>();
+        services.AddHostedService<DisparoEmailBackgroundService>();
+        services.AddHostedService<SenhaLegadaVerificador>();
         services.AddScoped<IMarketingService, MarketingService>();
 
         return services;
@@ -187,6 +193,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddCrmEmailSender(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
+        services.Configure<SuporteOptions>(configuration.GetSection(SuporteOptions.SectionName));
         services.AddScoped<IEmailSender, SmtpEmailSender>();
 
         return services;
