@@ -177,6 +177,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICustoVencimentoNotificador, CustoVencimentoNotificador>();
         services.AddScoped<ILembreteCobrancaNotificador, LembreteCobrancaNotificador>();
         services.AddHostedService<CustoVencimentoBackgroundService>();
+        services.AddScoped<IDisparoEmailService, DisparoEmailService>();
         services.AddScoped<IMarketingService, MarketingService>();
 
         return services;

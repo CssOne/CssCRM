@@ -1,4 +1,4 @@
-import { ArrowRightLeft, Bookmark, List, Plus, RotateCcw, Trash2, X, Car } from "lucide-react";
+import { ArrowRightLeft, Bookmark, List, Mail, Plus, RotateCcw, Trash2, X, Car } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
@@ -11,6 +11,7 @@ import {
   type LeadKanbanCard,
   type LeadKanbanColumn,
   type LeadLixeira,
+  type LeadStage,
   type PipelineBoard,
   type Regional,
   type GrupoFiltro,
@@ -22,6 +23,7 @@ import { VendaConcluidaDialog, type ResultadoVendaConcluida } from "../../compon
 import { StageChangeDialog } from "../../components/crm/StageChangeDialog";
 import { VeiculoNaoFazemosDialog } from "../../components/crm/VeiculoNaoFazemosDialog";
 import { AdesaoCotacaoDialog } from "../../components/crm/AdesaoCotacaoDialog";
+import { DisparoEmailDialog } from "../../components/crm/DisparoEmailDialog";
 import { AlterarResponsavelDialog } from "../../components/crm/AlterarResponsavelDialog";
 import { CartaoLead, classificarCartao } from "../../components/crm/CartaoLead";
 import { MultiSelect } from "../../components/MultiSelect";
@@ -147,6 +149,8 @@ export function LeadsKanbanPage() {
   // Excluir lead: gestão exclui qualquer um; o consultor só os cards de indicação (ver LeadService.ExcluirAsync no back-end).
   const podeExcluir = temPapel("Admin", "GestorMaster", "SupervisorComercial");
   const podeExcluirCartao = (cartao: LeadKanbanCard) => podeExcluir || (temPapel("Comercial") && classificarCartao(cartao) === "indicacao");
+  const [disparoAberto, setDisparoAberto] = useState(false);
+  const [etapasDisparo, setEtapasDisparo] = useState<LeadStage[]>([]);
   const [lixeiraAberta, setLixeiraAberta] = useState(false);
   const [lixeira, setLixeira] = useState<LeadLixeira[] | null>(null);
   const [restaurandoId, setRestaurandoId] = useState<string | null>(null);
@@ -696,6 +700,17 @@ export function LeadsKanbanPage() {
             </span>
             Novo cliente
           </button>
+          <Button
+            variant="secondary"
+            type="button"
+            className="h-10 rounded-full px-4"
+            onClick={() => {
+              api.get<LeadStage[]>("/crm/settings/lead-stages").then(setEtapasDisparo).catch(() => setEtapasDisparo([]));
+              setDisparoAberto(true);
+            }}
+          >
+            <Mail className="size-4" /> Disparar e-mail
+          </Button>
           <Button variant="secondary" type="button" className="h-10 rounded-full px-4" onClick={() => setLixeiraAberta(true)}>
             <Trash2 className="size-4" /> Lixeira
           </Button>
@@ -1134,6 +1149,8 @@ export function LeadsKanbanPage() {
           carregar(undefined, true);
         }}
       />
+
+      <DisparoEmailDialog open={disparoAberto} onClose={() => setDisparoAberto(false)} etapas={etapasDisparo} />
 
       <Modal open={lixeiraAberta} onClose={() => setLixeiraAberta(false)} title="Lixeira do quadro de leads" size="lg">
         {lixeira === null ? (
