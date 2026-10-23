@@ -170,6 +170,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAnnouncementService, AnnouncementService>();
         services.AddScoped<ISuporteService, SuporteService>();
         services.AddScoped<IAvisosPagamentoService, AvisosPagamentoService>();
+        services.AddScoped<IDisparoEmailService, DisparoEmailService>();
         services.AddScoped<IMarketingService, MarketingService>();
 
         return services;
