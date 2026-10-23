@@ -7,7 +7,13 @@ namespace CssVision.Web.Services.Email;
 
 public sealed class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpEmailSender> logger) : IEmailSender
 {
-    public async Task<bool> EnviarAsync(string destinatarioEmail, string destinatarioNome, string assunto, string corpoHtml, CancellationToken ct)
+    public Task<bool> EnviarAsync(string destinatarioEmail, string destinatarioNome, string assunto, string corpoHtml, CancellationToken ct) =>
+        EnviarInternoAsync(destinatarioEmail, destinatarioNome, assunto, corpoHtml, null, null, ct);
+
+    public Task<bool> EnviarEmNomeDeAsync(string destinatarioEmail, string destinatarioNome, string assunto, string corpoHtml, string remetenteNome, string responderParaEmail, CancellationToken ct) =>
+        EnviarInternoAsync(destinatarioEmail, destinatarioNome, assunto, corpoHtml, remetenteNome, responderParaEmail, ct);
+
+    private async Task<bool> EnviarInternoAsync(string destinatarioEmail, string destinatarioNome, string assunto, string corpoHtml, string? remetenteNome, string? responderParaEmail, CancellationToken ct)
     {
         var smtp = options.Value;
         if (string.IsNullOrWhiteSpace(smtp.Host))
@@ -19,7 +25,11 @@ public sealed class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpE
         try
         {
             var mensagem = new MimeMessage();
-            mensagem.From.Add(new MailboxAddress(smtp.FromName, smtp.FromEmail));
+            mensagem.From.Add(new MailboxAddress(string.IsNullOrWhiteSpace(remetenteNome) ? smtp.FromName : $"{remetenteNome} ({smtp.FromName})", smtp.FromEmail));
+            if (!string.IsNullOrWhiteSpace(responderParaEmail))
+            {
+                mensagem.ReplyTo.Add(new MailboxAddress(remetenteNome, responderParaEmail));
+            }
             mensagem.To.Add(new MailboxAddress(destinatarioNome, destinatarioEmail));
             mensagem.Subject = assunto;
             mensagem.Body = new BodyBuilder { HtmlBody = corpoHtml }.ToMessageBody();

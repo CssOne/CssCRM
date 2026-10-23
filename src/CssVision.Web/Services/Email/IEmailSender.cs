@@ -9,4 +9,10 @@ public interface IEmailSender
     /// deve virar um erro 500 pro usuário final numa ação como "esqueci minha senha".
     /// </summary>
     Task<bool> EnviarAsync(string destinatarioEmail, string destinatarioNome, string assunto, string corpoHtml, CancellationToken ct);
+
+    /// <summary>
+    /// Igual a <see cref="EnviarAsync"/>, mas o e-mail sai com o nome do consultor e o endereço dele em "Responder para": o servidor SMTP
+    /// da empresa segue como remetente técnico (um provedor não deixa enviar "como" outro domínio sem quebrar SPF/DKIM), e a resposta do cliente cai na caixa do consultor.
+    /// </summary>
+    Task<bool> EnviarEmNomeDeAsync(string destinatarioEmail, string destinatarioNome, string assunto, string corpoHtml, string remetenteNome, string responderParaEmail, CancellationToken ct);
 }
