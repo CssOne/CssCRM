@@ -156,7 +156,7 @@ public sealed class DisparoEmailService(
         }
 
         var mensagens = destinatarios
-            .Select(d => new MensagemEmail(d.Email, d.Nome, assunto, MontarCorpo(mensagem, d.Nome, consultor.NomeCompleto, consultor.PhoneNumber, conta.Email)))
+            .Select(d => new MensagemEmail(d.Email, d.Nome, SubstituirNome(assunto, d.Nome), MontarCorpo(mensagem, d.Nome, consultor.NomeCompleto, consultor.PhoneNumber, conta.Email)))
             .ToList();
 
         int enviados;
@@ -193,10 +193,14 @@ public sealed class DisparoEmailService(
     }
 
     /// <summary>Texto simples do consultor vira HTML seguro (escapado); {nome} é trocado pelo primeiro nome do cliente; a assinatura leva nome e telefone do consultor.</summary>
+    private static string PrimeiroNome(string nomeCliente) => nomeCliente.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? nomeCliente;
+
+    /// <summary>{nome} vira o primeiro nome do cliente — vale para o assunto e para a mensagem.</summary>
+    private static string SubstituirNome(string texto, string nomeCliente) => texto.Replace("{nome}", PrimeiroNome(nomeCliente), StringComparison.OrdinalIgnoreCase);
+
     private static string MontarCorpo(string mensagem, string nomeCliente, string nomeConsultor, string? telefoneConsultor, string emailConsultor)
     {
-        var primeiroNome = nomeCliente.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? nomeCliente;
-        var texto = Escapar(mensagem.Replace("{nome}", primeiroNome, StringComparison.OrdinalIgnoreCase))
+        var texto = Escapar(SubstituirNome(mensagem, nomeCliente))
             .Replace("\r\n", "\n").Replace("\n", "<br>");
         var linhaTelefone = string.IsNullOrWhiteSpace(telefoneConsultor) ? "" : $"<br>Telefone/WhatsApp: {Escapar(telefoneConsultor)}";
         var whatsapp = LinkWhatsApp(telefoneConsultor, nomeConsultor);

@@ -97,6 +97,18 @@ public class DisparoEmailServiceTests
     }
 
     [Fact]
+    public async Task NomeDoClienteTroca_TambemNoAssunto()
+    {
+        using var factory = new TestDbContextFactory();
+        var c = await MontarAsync(factory);
+        await LeadAsync(c, "Maria Souza", "maria@x.com", c.Ana.Id, c.Etapa.Id);
+
+        await c.Servico.EnviarAsync(new DisparoEmailRequest(c.Etapa.Id, "{nome}, sua cotação está te esperando", "Mensagem"), CancellationToken.None);
+
+        Assert.Equal("Maria, sua cotação está te esperando", Assert.Single(c.Email.Enviados).Assunto);
+    }
+
+    [Fact]
     public async Task Assinatura_TemNomeTelefoneEBotaoDeWhatsApp()
     {
         using var factory = new TestDbContextFactory();
