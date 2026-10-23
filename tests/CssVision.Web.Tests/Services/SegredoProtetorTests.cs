@@ -38,11 +38,25 @@ public class SegredoProtetorTests
     [Fact]
     public void ChaveDiferente_NaoLe_EValorAdulteradoNaoLe()
     {
-        var guardado = Criar("chave-A").Proteger("segredo");
+        var guardado = Criar("chave-A-bem-comprida-123").Proteger("segredo");
 
-        Assert.ThrowsAny<CryptographicException>(() => Criar("chave-B").Revelar(guardado));
+        Assert.ThrowsAny<CryptographicException>(() => Criar("chave-B-bem-comprida-456").Revelar(guardado));
         var adulterado = guardado[..^3] + (guardado.EndsWith("AAA") ? "BBB" : "AAA");
-        Assert.ThrowsAny<CryptographicException>(() => Criar("chave-A").Revelar(adulterado));
+        Assert.ThrowsAny<CryptographicException>(() => Criar("chave-A-bem-comprida-123").Revelar(adulterado));
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("NULL")]
+    [InlineData("curta")]
+    [InlineData("   ")]
+    public void ChaveAusenteNulaOuCurta_ContaComoSemChave(string valor)
+    {
+        // "null" é o que o jq grava no .env quando a chave não existe no segredo da AWS.
+        var p = Criar(valor);
+
+        Assert.False(p.UsaChaveExterna);
+        Assert.StartsWith("v1:", p.Proteger("segredo"));
     }
 
     [Fact]
@@ -64,7 +78,7 @@ public class SegredoProtetorTests
     [Fact]
     public void ValorComChaveExterna_SemAChaveConfigurada_FalhaEmVezDeDevolverLixo()
     {
-        var guardado = Criar("chave-A").Proteger("segredo");
+        var guardado = Criar("chave-A-bem-comprida-123").Proteger("segredo");
 
         Assert.ThrowsAny<CryptographicException>(() => Criar(null).Revelar(guardado));
     }

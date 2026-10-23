@@ -27,6 +27,7 @@ public sealed class SegredoProtetor : ISegredoProtetor
     private const string PrefixoDataProtection = "v1:";
     private const int TamanhoNonce = 12;
     private const int TamanhoTag = 16;
+    public const int TamanhoMinimoDaChave = 16;
 
     private readonly byte[]? _chave;
     private readonly IDataProtector _dataProtection;
@@ -35,9 +36,10 @@ public sealed class SegredoProtetor : ISegredoProtetor
     {
         _dataProtection = dataProtection.CreateProtector("CssVision.CrmContaEmail");
         var segredo = configuracao["Seguranca:ChaveSegredos"]?.Trim();
-        if (string.IsNullOrEmpty(segredo))
+        // O .env de produção sai do Secrets Manager com "jq -r": uma chave que faltou no segredo vira o texto "null" — e uma chave curta é fraca demais. As duas valem como "sem chave".
+        if (string.IsNullOrEmpty(segredo) || segredo.Equals("null", StringComparison.OrdinalIgnoreCase) || segredo.Length < TamanhoMinimoDaChave)
         {
-            logger.LogWarning("Seguranca:ChaveSegredos não configurada: as senhas de e-mail dos consultores ficam protegidas só pelo Data Protection (chaves no banco). " +
+            logger.LogWarning("Seguranca:ChaveSegredos ausente ou curta demais (mínimo 16 caracteres): as senhas de e-mail dos consultores ficam protegidas só pelo Data Protection (chaves no banco). " +
                               "Defina a chave por variável de ambiente (ex.: openssl rand -base64 32).");
             return;
         }
