@@ -13,7 +13,7 @@ public enum StatusChamadoSuporte
 
 /// <summary>
 /// Chamado aberto por qualquer usuário na aba Suporte. Quem atende é o administrador do sistema
-/// (<see cref="Services.Crm.SuporteService.EmailAtendente"/>); o solicitante só enxerga os próprios chamados.
+/// (configurado em Suporte:Atendentes; padrão <see cref="Services.Crm.SuporteService.EmailAtendente"/>); o solicitante só enxerga os próprios chamados.
 /// </summary>
 public class CrmSuporteChamado : CrmEntityBase
 {
@@ -33,4 +33,8 @@ public class CrmSuporteMensagem : CrmEntityBase
     public Guid AutorId { get; set; }
     public bool DoSuporte { get; set; }
     public string Texto { get; set; } = string.Empty;
+
+    /// <summary>Print ou PDF enviado junto (guardado no armazenamento de arquivos; a URL é a devolvida por ele).</summary>
+    public string? AnexoUrl { get; set; }
+    public string? AnexoNome { get; set; }
 }

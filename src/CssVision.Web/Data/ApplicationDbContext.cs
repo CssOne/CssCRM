@@ -53,6 +53,8 @@ public class ApplicationDbContext(
     public DbSet<CrmSuporteChamado> CrmSuporteChamados => Set<CrmSuporteChamado>();
     public DbSet<CrmAvisoConsultor> CrmAvisosConsultor => Set<CrmAvisoConsultor>();
     public DbSet<CrmContaEmail> CrmContasEmail => Set<CrmContaEmail>();
+    public DbSet<CrmDisparoEmail> CrmDisparosEmail => Set<CrmDisparoEmail>();
+    public DbSet<CrmDisparoEmailDestinatario> CrmDisparosEmailDestinatarios => Set<CrmDisparoEmailDestinatario>();
     public DbSet<CrmSuporteMensagem> CrmSuporteMensagens => Set<CrmSuporteMensagem>();
     public DbSet<CrmPushInscricao> CrmPushInscricoes => Set<CrmPushInscricao>();
     public DbSet<CrmParametro> CrmParametros => Set<CrmParametro>();

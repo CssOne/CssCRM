@@ -924,6 +924,27 @@ public sealed class LeadService(
         return nota.Id;
     }
 
+    private static readonly string[] CanaisDeContato = ["WhatsApp"];
+
+    public async Task RegistrarContatoAsync(Guid leadId, string canal, CancellationToken ct)
+    {
+        var nomeCanal = CanaisDeContato.FirstOrDefault(c => string.Equals(c, canal?.Trim(), StringComparison.OrdinalIgnoreCase))
+            ?? throw new CrmBusinessException("Canal de contato inválido.", "canal_invalido");
+        var lead = await CarregarComEscopoAsync(leadId, ct);
+
+        var agora = DateTimeOffset.UtcNow;
+        lead.UltimoContatoEm = agora;
+
+        // Vários cliques seguidos no mesmo botão viram uma nota só.
+        var texto = $"Contato iniciado pelo {nomeCanal}.";
+        var recente = agora.AddMinutes(-10);
+        if (!await db.CrmNotes.AnyAsync(n => n.LeadId == lead.Id && n.AutorId == currentUser.UserId && n.Texto == texto && n.CriadoEm > recente, ct))
+        {
+            db.CrmNotes.Add(new CrmNote { LeadId = lead.Id, AutorId = currentUser.UserId, Texto = texto });
+        }
+        await db.SaveChangesAsync(ct);
+    }
+
     /// <summary>
     /// Exclusão lógica (arquivamento) — nunca DELETE físico, ver CrmEntityBase. Só permitida pra
     /// leads com a etiqueta "Indicação" do quadro de leads (cadastro manual ou TipoIndicacao

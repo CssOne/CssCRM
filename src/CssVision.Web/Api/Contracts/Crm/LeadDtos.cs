@@ -294,6 +294,9 @@ public record LeadImportResultDto(
 
 public record AddNoteRequest(string Texto);
 
+/// <summary>Contato iniciado com o cliente fora do CRM (ex.: clique no botão de WhatsApp).</summary>
+public record LeadContatoRequest(string Canal);
+
 public record LeadTimelineItemDto(
     Guid Id,
     TipoEventoTimeline Tipo,

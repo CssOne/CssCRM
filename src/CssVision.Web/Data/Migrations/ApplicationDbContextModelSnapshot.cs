@@ -947,6 +947,135 @@ namespace CssVision.Web.Data.Migrations
                     b.ToTable("CrmDiscordVinculos", (string)null);
                 });
 
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmDisparoEmail", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Assunto")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ConcluidoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Enviados")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Erro")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("EtapaId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EtapaNome")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Falhas")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("IniciadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Mensagem")
+                        .IsRequired()
+                        .HasMaxLength(5000)
+                        .HasColumnType("character varying(5000)");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Total")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UsuarioId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "CriadoEm");
+
+                    b.HasIndex("UsuarioId", "CriadoEm");
+
+                    b.ToTable("CrmDisparosEmail", (string)null);
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmDisparoEmailDestinatario", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DisparoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset?>("EnviadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DisparoId", "Status");
+
+                    b.ToTable("CrmDisparosEmailDestinatarios", (string)null);
+                });
+
             modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroConfig", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1490,6 +1619,9 @@ namespace CssVision.Web.Data.Migrations
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset?>("EmailDescadastradoEm")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("EmailNormalizado")
                         .HasMaxLength(256)
@@ -2459,6 +2591,14 @@ namespace CssVision.Web.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AnexoNome")
+                        .HasMaxLength(260)
+                        .HasColumnType("character varying(260)");
+
+                    b.Property<string>("AnexoUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<DateTimeOffset?>("AtualizadoEm")
                         .HasColumnType("timestamp with time zone");
 
@@ -2994,6 +3134,17 @@ namespace CssVision.Web.Data.Migrations
                     b.Navigation("Usuario");
                 });
 
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmDisparoEmailDestinatario", b =>
+                {
+                    b.HasOne("CssVision.Web.Domain.Crm.CrmDisparoEmail", "Disparo")
+                        .WithMany("Destinatarios")
+                        .HasForeignKey("DisparoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Disparo");
+                });
+
             modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroConfig", b =>
                 {
                     b.HasOne("CssVision.Web.Domain.Identity.ApplicationUser", "Usuario")
@@ -3393,6 +3544,11 @@ namespace CssVision.Web.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmDisparoEmail", b =>
+                {
+                    b.Navigation("Destinatarios");
                 });
 
             modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmGrupo", b =>

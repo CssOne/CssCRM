@@ -56,17 +56,14 @@ public class AccountController(
         }
 
         var resultado = await signInManager.PasswordSignInAsync(usuario, request.Senha, isPersistent: request.ManterConectado, lockoutOnFailure: true);
-        if (resultado.RequiresTwoFactor)
-        {
-            return Ok(new LoginResultDto(true, null));
-        }
-        if (!resultado.Succeeded)
+        if (!resultado.Succeeded && !resultado.RequiresTwoFactor)
         {
             return Unauthorized(new ApiError("E-mail ou senha inválidos.", "credenciais_invalidas"));
         }
 
         // A senha inicial antiga estava escrita no código-fonte: quem a usa ainda não criou uma senha própria. Não entra —
         // recebe por e-mail o link para criar uma nova (em desenvolvimento as contas de demonstração continuam usando-a).
+        // Vale também para quem tem verificação em dois fatores: o segundo fator não pode "limpar" uma senha que todo mundo conhecia.
         if (!ambiente.IsDevelopment() && request.Senha == SenhaSegura.SenhaInicialLegada)
         {
             await signInManager.SignOutAsync();
@@ -74,6 +71,11 @@ public class AccountController(
             return Unauthorized(new ApiError(
                 "Por segurança, a senha inicial não vale mais. Enviamos um link para o seu e-mail para você criar uma nova senha. Se não chegar, peça ao administrador para redefinir.",
                 "senha_inicial"));
+        }
+
+        if (resultado.RequiresTwoFactor)
+        {
+            return Ok(new LoginResultDto(true, null));
         }
 
         return Ok(new LoginResultDto(false, await MontarSessaoAsync(usuario)));

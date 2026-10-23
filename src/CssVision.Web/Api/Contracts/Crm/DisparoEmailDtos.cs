@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using CssVision.Web.Domain.Crm;
 
 namespace CssVision.Web.Api.Contracts.Crm;
 
@@ -8,10 +9,13 @@ public record DisparoEmailRequest(
     [Required, StringLength(150, MinimumLength = 3)] string Assunto,
     [Required, StringLength(5000, MinimumLength = 3)] string Mensagem);
 
-/// <summary>Quantos clientes da carteira receberiam o disparo naquela etapa.</summary>
-public record DisparoEmailPreviaDto(int Destinatarios, int Limite);
+/// <summary>Quantos clientes da carteira receberiam o disparo naquela etapa (e quantos ficam de fora por terem cancelado a inscrição).</summary>
+public record DisparoEmailPreviaDto(int Destinatarios, int Limite, int Descadastrados);
 
-public record DisparoEmailResultadoDto(int Destinatarios, int Enviados, int Falhas);
+/// <summary>Disparo na fila ou já enviado — é também a linha do histórico do consultor.</summary>
+public record DisparoEmailDto(
+    Guid Id, string EtapaNome, string Assunto, StatusDisparoEmail Status, int Total, int Enviados, int Falhas, string? Erro,
+    DateTimeOffset CriadoEm, DateTimeOffset? ConcluidoEm);
 
 /// <summary>Conta de e-mail do consultor (sem a senha). Host/Port em branco = detectados pelo provedor do e-mail (Gmail, Outlook...).</summary>
 public record ContaEmailRequest(

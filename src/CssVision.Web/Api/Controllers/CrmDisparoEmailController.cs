@@ -36,7 +36,13 @@ public class CrmDisparoEmailController(IDisparoEmailService service) : Controlle
     public async Task<ActionResult<DisparoEmailPreviaDto>> Previa([FromQuery] Guid etapaId, CancellationToken ct) =>
         Ok(await service.PreviaAsync(etapaId, ct));
 
+    /// <summary>Entra na fila e responde na hora; o envio segue em segundo plano — acompanhe pelo histórico.</summary>
     [HttpPost]
-    public async Task<ActionResult<DisparoEmailResultadoDto>> Enviar(DisparoEmailRequest request, CancellationToken ct) =>
+    public async Task<ActionResult<DisparoEmailDto>> Enviar(DisparoEmailRequest request, CancellationToken ct) =>
         Ok(await service.EnviarAsync(request, ct));
+
+    /// <summary>Histórico dos últimos disparos do consultor (com o andamento dos que estão na fila).</summary>
+    [HttpGet("historico")]
+    public async Task<ActionResult<IReadOnlyList<DisparoEmailDto>>> Historico(CancellationToken ct) =>
+        Ok(await service.HistoricoAsync(ct));
 }
