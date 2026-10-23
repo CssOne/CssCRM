@@ -51,6 +51,19 @@ export function formatarTelefone(valor: string | null | undefined): string {
   return valor;
 }
 
+/**
+ * Link que abre a conversa no WhatsApp (wa.me) para um telefone brasileiro: DDD + número (10 ou 11 dígitos), com ou sem o 55, só celular.
+ * Retorna nulo quando o número não dá para chamar (vazio, sem DDD, estrangeiro).
+ */
+export function linkWhatsApp(telefone: string | null | undefined): string | null {
+  let digitos = (telefone ?? "").replace(/\D/g, "").replace(/^0+/, "");
+  if ((digitos.length === 12 || digitos.length === 13) && digitos.startsWith("55")) digitos = digitos.slice(2);
+  if (digitos.length !== 10 && digitos.length !== 11) return null;
+  // Fixo não tem WhatsApp: celular tem 9 depois do DDD (11 dígitos) ou, no formato antigo de 10 dígitos, começa em 6 a 9.
+  if (digitos.length === 11 ? digitos[2] !== "9" : !"6789".includes(digitos[2])) return null;
+  return `https://wa.me/55${digitos}`;
+}
+
 export function formatarDocumento(valor: string | null | undefined): string {
   if (!valor) return "-";
   const digitos = valor.replace(/\D/g, "");

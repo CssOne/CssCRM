@@ -1,9 +1,9 @@
-import { LifeBuoy, Plus, Send } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { LifeBuoy, Plus, Search, Send } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, isAbortError } from "../lib/api";
 import { formatarDataHora } from "../lib/format";
-import { Badge, Button, Card, EmptyState, ErrorState, Input, Label, Modal, Select, Skeleton, Textarea, useToast } from "../components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Input, Label, Modal, Skeleton, Textarea, useToast } from "../components/ui";
 
 type StatusChamado = "Aberto" | "EmAtendimento" | "Resolvido";
 
@@ -41,6 +41,16 @@ interface ListaSuporte {
 
 const CATEGORIAS = ["Dúvida", "Problema", "Sugestão", "Acesso", "Outro"];
 
+type FiltroChamados = "abertos" | "atendimento" | "resolvidos" | "todos";
+
+const iniciais = (nome: string) =>
+  nome
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase())
+    .join("");
+
 const STATUS_ROTULO: Record<StatusChamado, string> = { Aberto: "Aberto", EmAtendimento: "Em atendimento", Resolvido: "Resolvido" };
 const STATUS_COR: Record<StatusChamado, "warning" | "info" | "success"> = { Aberto: "warning", EmAtendimento: "info", Resolvido: "success" };
 
@@ -54,7 +64,10 @@ export function SuportePage() {
   const [lista, setLista] = useState<ListaSuporte | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [recarregar, setRecarregar] = useState(0);
-  const [filtro, setFiltro] = useState<"abertos" | "todos">("abertos");
+  const [filtro, setFiltro] = useState<FiltroChamados>("abertos");
+  const [busca, setBusca] = useState("");
+  const fimDaConversa = useRef<HTMLDivElement>(null);
+  const painelDoChamado = useRef<HTMLDivElement>(null);
 
   const [novoAberto, setNovoAberto] = useState(false);
   const [assunto, setAssunto] = useState("");
@@ -97,6 +110,16 @@ export function SuportePage() {
       });
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chamadoId]);
+
+  // Conversa sempre na última mensagem; no celular, escolher um chamado leva até o painel dele (a lista fica acima).
+  useEffect(() => {
+    if (!detalhe) return;
+    fimDaConversa.current?.scrollIntoView({ block: "nearest" });
+  }, [detalhe?.resumo.id, detalhe?.mensagens.length]);
+
+  useEffect(() => {
+    if (chamadoId && window.matchMedia("(max-width: 1023px)").matches) painelDoChamado.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [chamadoId]);
 
   const abrirChamado = useCallback(async () => {
@@ -142,7 +165,23 @@ export function SuportePage() {
   }
 
   const atende = lista?.atende ?? false;
-  const chamados = (lista?.chamados ?? []).filter((c) => filtro === "todos" || c.status !== "Resolvido");
+  const todos = lista?.chamados ?? [];
+  const contagem = {
+    abertos: todos.filter((c) => c.status !== "Resolvido").length,
+    atendimento: todos.filter((c) => c.status === "EmAtendimento").length,
+    resolvidos: todos.filter((c) => c.status === "Resolvido").length,
+    todos: todos.length,
+  };
+  const termo = busca.trim().toLowerCase();
+  const chamados = todos
+    .filter((c) => (filtro === "todos" ? true : filtro === "abertos" ? c.status !== "Resolvido" : filtro === "atendimento" ? c.status === "EmAtendimento" : c.status === "Resolvido"))
+    .filter((c) => !termo || `${c.assunto} ${c.solicitanteNome} ${c.categoria}`.toLowerCase().includes(termo));
+  const FILTROS: { valor: FiltroChamados; rotulo: string }[] = [
+    { valor: "abertos", rotulo: "Em aberto" },
+    ...(atende ? [{ valor: "atendimento" as const, rotulo: "Em atendimento" }] : []),
+    { valor: "resolvidos", rotulo: "Resolvidos" },
+    { valor: "todos", rotulo: "Todos" },
+  ];
 
   return (
     <div className="space-y-4">
@@ -171,19 +210,37 @@ export function SuportePage() {
       ) : (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
           <Card className="space-y-3 p-4">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-[var(--fg)]">
-                {atende ? "Todos os chamados" : "Meus chamados"}
-                {lista.abertos > 0 && <span className="ml-2 text-xs font-normal text-[var(--fg-muted)]">{lista.abertos} em aberto</span>}
-              </h2>
-              <Select aria-label="Filtrar chamados" value={filtro} onChange={(e) => setFiltro(e.target.value as "abertos" | "todos")} className="!w-auto">
-                <option value="abertos">Em aberto</option>
-                <option value="todos">Todos</option>
-              </Select>
+            <h2 className="text-sm font-semibold text-[var(--fg)]">
+              {atende ? "Todos os chamados" : "Meus chamados"}
+              {lista.abertos > 0 && <span className="ml-2 text-xs font-normal text-[var(--fg-muted)]">{lista.abertos} em aberto</span>}
+            </h2>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[var(--fg-muted)]" aria-hidden />
+              <Input aria-label="Buscar chamados" className="pl-9" placeholder="Buscar por assunto, tipo ou pessoa" value={busca} onChange={(e) => setBusca(e.target.value)} />
+            </div>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filtrar chamados">
+              {FILTROS.map((f) => (
+                <button
+                  key={f.valor}
+                  type="button"
+                  aria-pressed={filtro === f.valor}
+                  onClick={() => setFiltro(f.valor)}
+                  className={`focus-ring cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                    filtro === f.valor
+                      ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]"
+                      : "border-[var(--border)] text-[var(--fg-muted)] hover:bg-[var(--surface-hover)]"
+                  }`}
+                >
+                  {f.rotulo} <span className="opacity-70">{contagem[f.valor]}</span>
+                </button>
+              ))}
             </div>
 
             {chamados.length === 0 ? (
-              <EmptyState title="Nenhum chamado" description={filtro === "abertos" ? "Não há chamados em aberto." : "Ainda não há chamados."} />
+              <EmptyState
+                title="Nenhum chamado"
+                description={termo ? "Nada encontrado para essa busca." : filtro === "abertos" ? "Não há chamados em aberto." : "Nenhum chamado nesse filtro."}
+              />
             ) : (
               <ul className="space-y-2">
                 {chamados.map((c) => (
@@ -210,7 +267,8 @@ export function SuportePage() {
             )}
           </Card>
 
-          <Card className="p-4">
+          <Card className="scroll-mt-4 p-4 lg:sticky lg:top-4 lg:self-start">
+            <div ref={painelDoChamado} className="-mt-4 pt-4" aria-hidden />
             {!detalhe ? (
               <EmptyState title="Selecione um chamado" description="Escolha um chamado da lista ou abra um novo." />
             ) : (
@@ -227,18 +285,27 @@ export function SuportePage() {
                   <Badge variant={STATUS_COR[detalhe.resumo.status]}>{STATUS_ROTULO[detalhe.resumo.status]}</Badge>
                 </div>
 
-                <div className="max-h-[50vh] space-y-3 overflow-y-auto pr-1">
+                <div className="max-h-[50vh] space-y-3 overflow-y-auto pr-1" role="log" aria-label="Mensagens do chamado">
                   {detalhe.mensagens.map((m) => (
-                    <div
-                      key={m.id}
-                      className={`rounded-xl p-3 text-sm ${m.doSuporte ? "bg-[var(--brand-soft)]" : "bg-[var(--surface-hover)]"}`}
-                    >
-                      <p className="mb-1 text-xs font-medium text-[var(--fg-muted)]">
-                        {m.autorNome} · {formatarDataHora(m.criadoEm)}
-                      </p>
-                      <p className="whitespace-pre-wrap break-words text-[var(--fg)]">{m.texto}</p>
+                    <div key={m.id} className={`flex items-end gap-2 ${m.doSuporte ? "flex-row-reverse" : ""}`}>
+                      <span
+                        aria-hidden
+                        className={`flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                          m.doSuporte ? "bg-[var(--brand)] text-[var(--brand-fg)]" : "bg-[var(--surface-hover)] text-[var(--fg-muted)]"
+                        }`}
+                      >
+                        {iniciais(m.autorNome)}
+                      </span>
+                      <div className={`max-w-[85%] rounded-2xl p-3 text-sm ${m.doSuporte ? "rounded-br-sm bg-[var(--brand-soft)]" : "rounded-bl-sm bg-[var(--surface-hover)]"}`}>
+                        <p className="mb-1 text-xs font-medium text-[var(--fg-muted)]">
+                          {m.autorNome}
+                          {m.doSuporte && !m.autorNome.toLowerCase().includes("suporte") ? " · Suporte" : ""} · {formatarDataHora(m.criadoEm)}
+                        </p>
+                        <p className="whitespace-pre-wrap break-words text-[var(--fg)]">{m.texto}</p>
+                      </div>
                     </div>
                   ))}
+                  <div ref={fimDaConversa} />
                 </div>
 
                 <div className="space-y-2">
@@ -248,7 +315,14 @@ export function SuportePage() {
                     placeholder={detalhe.resumo.status === "Resolvido" ? "Responder reabre o chamado…" : "Escreva sua mensagem…"}
                     value={resposta}
                     onChange={(e) => setResposta(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !respondendo) {
+                        e.preventDefault();
+                        void responder();
+                      }
+                    }}
                   />
+                  <p className="text-xs text-[var(--fg-muted)]">Ctrl + Enter para enviar.</p>
                   <div className="flex flex-wrap justify-end gap-2">
                     {atende && detalhe.resumo.status === "Aberto" && (
                       <Button variant="secondary" onClick={() => mudarStatus("EmAtendimento")}>
@@ -283,11 +357,24 @@ export function SuportePage() {
           </div>
           <div>
             <Label htmlFor="suporte-categoria">Tipo</Label>
-            <Select id="suporte-categoria" value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+            <div id="suporte-categoria" className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Tipo do chamado">
               {CATEGORIAS.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <button
+                  key={c}
+                  type="button"
+                  role="radio"
+                  aria-checked={categoria === c}
+                  onClick={() => setCategoria(c)}
+                  className={`focus-ring cursor-pointer rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                    categoria === c
+                      ? "border-[var(--brand)] bg-[var(--brand-soft)] font-medium text-[var(--brand)]"
+                      : "border-[var(--border)] text-[var(--fg-muted)] hover:bg-[var(--surface-hover)]"
+                  }`}
+                >
+                  {c}
+                </button>
               ))}
-            </Select>
+            </div>
           </div>
           <div>
             <Label htmlFor="suporte-mensagem" required>Mensagem</Label>

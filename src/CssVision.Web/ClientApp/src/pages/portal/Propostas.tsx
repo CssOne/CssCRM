@@ -8,6 +8,7 @@ import { TipoEtapaPipeline, type Opportunity, type PagedResult } from "../../lib
 /** Em propostas ganhas vale o valor da adesão paga; nas demais, o valor final ou o estimado. */
 const valorDaProposta = (o: Opportunity) =>
   o.etapaTipo === TipoEtapaPipeline.Ganho && o.pagamentoAdesao != null ? o.pagamentoAdesao : o.valorFinal ?? o.valorEstimado ?? 0;
+import { BotaoWhatsApp } from "../../components/crm/BotaoWhatsApp";
 import { Avatar, EmptyState, ErrorState, Pagination, Select, Skeleton } from "../../components/ui";
 import { BarraDeFiltros, CampoDeFiltro, type ChipDeFiltro } from "../../components/Filtros";
 import { PeriodoInput } from "../../components/PeriodoInput";
@@ -107,11 +108,11 @@ export function PortalPropostasPage() {
               const cor = ganho ? "var(--success)" : perdido ? "var(--danger)" : "var(--brand)";
               const Icone = ganho ? Trophy : perdido ? XCircle : FileText;
               return (
+                <div key={op.id} className="relative">
                 <Link
-                  key={op.id}
                   to={`/app/crm/leads/${op.leadId}`}
                   style={{ "--cor": cor } as React.CSSProperties}
-                  className="focus-ring group flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[var(--shadow-card)] transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--cor)_50%,var(--border))] hover:shadow-[0_12px_26px_-16px_var(--cor)]"
+                  className="focus-ring group flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 pr-12 shadow-[var(--shadow-card)] transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--cor)_50%,var(--border))] hover:shadow-[0_12px_26px_-16px_var(--cor)]"
                 >
                   <span className="flex size-10 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `color-mix(in srgb, ${cor} 14%, transparent)`, color: cor }}>
                     <Icone className="size-5" aria-hidden />
@@ -141,6 +142,8 @@ export function PortalPropostasPage() {
                     </p>
                   </div>
                 </Link>
+                <BotaoWhatsApp telefone={op.leadTelefone} nome={op.leadNome} className="absolute right-3 top-1/2 size-7 -translate-y-1/2" />
+                </div>
               );
             })}
           </div>

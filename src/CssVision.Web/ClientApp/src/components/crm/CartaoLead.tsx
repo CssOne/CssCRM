@@ -5,6 +5,7 @@ import { diasRelativos, formatarData, formatarDataHora, formatarMoeda, formatarT
 import type { LeadKanbanCard } from "../../lib/types";
 import { TIPO_INDICACAO_LEAD } from "../../lib/opcoesLead";
 import { Avatar } from "../ui";
+import { BotaoWhatsApp } from "./BotaoWhatsApp";
 
 /** Cores das etiquetas do cartão: cada uma mistura a cor com o texto do tema, então vale nos temas claro, escuro e translúcido. */
 const COR_ETIQUETA = {
@@ -196,14 +197,13 @@ export function CartaoLead({
 
       {/* Contato */}
       <div className="mt-2.5 space-y-1 text-xs text-[var(--fg-muted)]">
-        {(cartao.telefone || cartao.telefone2) && (
-          <p className="flex items-center gap-1.5 truncate">
+        {[cartao.telefone, cartao.telefone2].filter(Boolean).map((t) => (
+          <p key={t} className="flex items-center gap-1.5">
             <Phone className="size-3.5 shrink-0" aria-hidden />
-            <span className="truncate">
-              {[cartao.telefone, cartao.telefone2].filter(Boolean).map((t) => formatarTelefone(t)).join(" · ")}
-            </span>
+            <span className="truncate">{formatarTelefone(t)}</span>
+            <BotaoWhatsApp telefone={t} nome={cartao.nomeOuRazaoSocial} className="size-6" />
           </p>
-        )}
+        ))}
         {cartao.email && (
           <p className="flex items-center gap-1.5">
             <Mail className="size-3.5 shrink-0" aria-hidden />

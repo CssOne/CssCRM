@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarData, formatarTelefone } from "../../lib/format";
 import type { LeadListItem, LeadStage, PagedResult } from "../../lib/types";
+import { BotaoWhatsApp } from "../../components/crm/BotaoWhatsApp";
 import { Avatar, EmptyState, ErrorState, Pagination, Skeleton } from "../../components/ui";
 import { BarraDeFiltros, CampoDeFiltro, type ChipDeFiltro } from "../../components/Filtros";
 import { MultiSelect } from "../../components/MultiSelect";
@@ -146,6 +147,7 @@ export function PortalClientesPage() {
                       )}
                     </div>
                     <div className="flex shrink-0 gap-1.5">
+                      <BotaoWhatsApp telefone={cliente.telefone} nome={cliente.nomeOuRazaoSocial} className="size-6" />
                       {cliente.telefone && (
                         <a href={`tel:${cliente.telefone}`} title="Ligar" aria-label={`Ligar para ${cliente.nomeOuRazaoSocial}`} className={acao}>
                           <Phone className="size-3" />

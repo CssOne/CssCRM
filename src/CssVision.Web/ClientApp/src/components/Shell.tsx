@@ -73,6 +73,7 @@ const iconesPorChave: Record<string, typeof Gauge> = {
   wallet: Wallet,
   landmark: Landmark,
   monitor: Monitor,
+  settings: Settings,
 };
 
 export const PAPEL_LABEL: Record<string, string> = {

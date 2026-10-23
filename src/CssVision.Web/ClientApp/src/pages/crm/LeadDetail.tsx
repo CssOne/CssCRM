@@ -27,6 +27,7 @@ import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog"
 import { EtapaDoLead } from "../../components/crm/EtapaDoLead";
 import { AlterarResponsavelDialog } from "../../components/crm/AlterarResponsavelDialog";
 import { Timeline } from "../../components/crm/Timeline";
+import { BotaoWhatsApp } from "../../components/crm/BotaoWhatsApp";
 import { useAbrirLead, useFecharPainelLead } from "../../lib/painelLead";
 
 const ETAPA_VENDA_CONCLUIDA = "Venda concluída";
@@ -438,8 +439,8 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
         </div>
 
         <div className="mt-4 grid gap-2 border-t border-[var(--border)] pt-4 @md:grid-cols-2 @4xl:grid-cols-4">
-          <InfoItem icone={Phone} label="Telefone" valor={formatarTelefone(lead.telefone)} href={lead.telefone ? `tel:${lead.telefone}` : undefined} />
-          {lead.telefone2 && <InfoItem icone={Phone} label="Telefone 2" valor={formatarTelefone(lead.telefone2)} href={`tel:${lead.telefone2}`} />}
+          <InfoItem icone={Phone} label="Telefone" valor={formatarTelefone(lead.telefone)} href={lead.telefone ? `tel:${lead.telefone}` : undefined} whatsapp={lead.telefone} nome={lead.nomeOuRazaoSocial} />
+          {lead.telefone2 && <InfoItem icone={Phone} label="Telefone 2" valor={formatarTelefone(lead.telefone2)} href={`tel:${lead.telefone2}`} whatsapp={lead.telefone2} nome={lead.nomeOuRazaoSocial} />}
           <InfoItem icone={Mail} label="E-mail" valor={lead.email || "-"} href={lead.email ? `mailto:${lead.email}` : undefined} />
           <InfoItem icone={MapPin} label="Local" valor={[lead.cidade, lead.estado].filter(Boolean).join(" - ") || "-"} />
           <div className="flex items-start gap-2">
@@ -833,13 +834,13 @@ function AnexosDaVenda({ op }: { op: LeadOpportunitySummary }) {
   );
 }
 
-function InfoItem({ icone: Icone, label, valor, href }: { icone: typeof Phone; label: string; valor: string; href?: string }) {
+function InfoItem({ icone: Icone, label, valor, href, whatsapp, nome }: { icone: typeof Phone; label: string; valor: string; href?: string; whatsapp?: string | null; nome?: string }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5 rounded-xl bg-[var(--surface-hover)] px-2.5 py-2">
       <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]">
         <Icone className="size-4" aria-hidden />
       </span>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">{label}</p>
         {href ? (
           <a href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noreferrer" className="focus-ring block truncate text-sm font-medium text-[var(--fg)] hover:text-[var(--brand)] hover:underline" title={valor}>
@@ -849,6 +850,7 @@ function InfoItem({ icone: Icone, label, valor, href }: { icone: typeof Phone; l
           <p className="truncate text-sm font-medium text-[var(--fg)]" title={valor}>{valor}</p>
         )}
       </div>
+      {whatsapp && <BotaoWhatsApp telefone={whatsapp} nome={nome ?? valor} className="size-8" />}
     </div>
   );
 }

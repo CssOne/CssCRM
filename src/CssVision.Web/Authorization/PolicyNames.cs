@@ -17,6 +17,9 @@ public static class PolicyNames
     /// <summary>Quem pode abrir o contrato financeiro: consultores e gestão (o escopo de cada um é conferido no serviço) e o financeiro.</summary>
     public const string ContratoFinanceiro = "ContratoFinanceiro";
 
+    /// <summary>Recursos da própria conta que o Financeiro também usa na tela Configurações (ex.: notificações no navegador): perfis comerciais + Financeiro.</summary>
+    public const string ComercialOuFinanceiro = "ComercialOuFinanceiro";
+
     /// <summary>Visão consolidada / total, sem restrição de carteira ou equipe.</summary>
     public const string VisaoTotalComercial = "VisaoTotalComercial";
 

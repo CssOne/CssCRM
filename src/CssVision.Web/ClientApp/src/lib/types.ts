@@ -679,6 +679,8 @@ export interface Opportunity {
   id: string;
   leadId: string;
   leadNome: string;
+  /** Telefone do cliente — para o atalho de WhatsApp. */
+  leadTelefone?: string | null;
   titulo: string;
   responsavelId: string;
   responsavelNome: string;

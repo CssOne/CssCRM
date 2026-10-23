@@ -439,6 +439,7 @@ public class AccountController(
             menu.Add(new MenuItemDto("chat", "Chat", "messages-square", "/app/chat"));
             menu.Add(new MenuItemDto("discord", "Discord", "message-circle", "/app/discord"));
             menu.Add(new MenuItemDto("suporte", "Suporte", "life-buoy", "/app/suporte"));
+            menu.Add(new MenuItemDto("configuracoes", "Configurações", "settings", "/app/portal/configuracoes"));
             return new SessionDto(usuario.Id, usuario.Email!, usuario.NomeCompleto, usuario.FotoUrl, papeis.ToList(), "/app/crm/gestao", menu);
         }
 

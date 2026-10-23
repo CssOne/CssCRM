@@ -32,6 +32,7 @@ import { Avatar,
 import { LeadForm, leadFormVazio, paraLeadCreateRequest, type LeadFormValues } from "../../components/crm/LeadForm";
 import { ImportModal } from "../../components/crm/ImportModal";
 import { AssignModal } from "../../components/crm/AssignModal";
+import { BotaoWhatsApp } from "../../components/crm/BotaoWhatsApp";
 
 /** Nome da etapa sem o complemento entre parênteses ("Em atendimento (Leads)" → "Em atendimento"). */
 const rotuloEtapa = (nome: string) => nome.replace(/\s*\([^)]*\)\s*$/, "");
@@ -364,8 +365,9 @@ export function LeadsPage() {
                         </Link>
                         {lead.semContato && <Badge variant="warning">sem contato</Badge>}
                       </div>
-                      <div className="truncate text-[11px] leading-tight text-[var(--fg-muted)]">
-                        {[formatarTelefone(lead.telefone), lead.email].filter(Boolean).join(" · ") || "—"}
+                      <div className="flex items-center gap-1.5 text-[11px] leading-tight text-[var(--fg-muted)]">
+                        <span className="truncate">{[formatarTelefone(lead.telefone), lead.email].filter(Boolean).join(" · ") || "—"}</span>
+                        <BotaoWhatsApp telefone={lead.telefone} nome={lead.nomeOuRazaoSocial} className="size-5" />
                       </div>
                     </td>
                     <td className="px-2.5 py-0.5">
@@ -432,10 +434,10 @@ export function LeadsPage() {
 
           <div className="space-y-2 lg:hidden">
             {dados.itens.map((lead) => (
+              <div key={lead.id} className="relative">
               <Link
-                key={lead.id}
                 to={`/app/crm/leads/${lead.id}`}
-                className="focus-ring block rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 shadow-[var(--shadow-card)]"
+                className="focus-ring block rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-3 pr-12 shadow-[var(--shadow-card)]"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate font-medium text-[var(--fg)]">{lead.nomeOuRazaoSocial}</span>
@@ -451,6 +453,8 @@ export function LeadsPage() {
                   </span>
                 </div>
               </Link>
+              <BotaoWhatsApp telefone={lead.telefone} nome={lead.nomeOuRazaoSocial} className="absolute bottom-2.5 right-3 size-7" />
+              </div>
             ))}
           </div>
 

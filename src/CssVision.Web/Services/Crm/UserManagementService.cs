@@ -24,17 +24,26 @@ public sealed class UserManagementService(
     internal static bool ProcurandoProvisorios(string? busca) =>
         !string.IsNullOrWhiteSpace(busca) && busca.Trim().StartsWith("Vendedor Notion", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Financeiro (sem papel de gestão): vê só consultores da própria regional e só ativa/inativa a conta deles.</summary>
+    /// <summary>
+    /// Papéis cujas contas o Financeiro enxerga e pode ativar/inativar (sempre dentro da regional dele): consultores, gestores regionais e supervisores.
+    /// Administradores (Admin e GestorMaster) ficam de fora — nem aparecem para ele.
+    /// </summary>
+    private static readonly string[] PapeisQueOFinanceiroAtivaEInativa = [Roles.Comercial, Roles.GestorComercial, Roles.SupervisorComercial];
+
+    /// <summary>Financeiro (sem papel de gestão): vê consultores, gestores e supervisores da própria regional e só ativa/inativa a conta deles.</summary>
     private bool EhFinanceiro => currentUser.IsInRole(Roles.Financeiro) && !currentUser.PodeGerirComercial;
 
     private void ExigirNaoFinanceiro()
     {
-        if (EhFinanceiro) throw new CrmForbiddenException("O perfil financeiro só ativa ou inativa contas de consultores.");
+        if (EhFinanceiro) throw new CrmForbiddenException("O perfil financeiro só ativa ou inativa contas de consultores, gestores e supervisores.");
     }
 
     public async Task<PagedResult<UserSummaryDto>> ListarAsync(UserFilterRequest filtro, CancellationToken ct)
     {
-        if (EhFinanceiro) filtro = filtro with { Papel = Roles.Comercial };
+        if (EhFinanceiro && !string.IsNullOrWhiteSpace(filtro.Papel) && !PapeisQueOFinanceiroAtivaEInativa.Contains(filtro.Papel))
+        {
+            filtro = filtro with { Papel = Roles.Comercial };
+        }
         var query = db.Users.AsNoTracking()
             .Include(u => u.Regional)
             .Include(u => u.GestorComercial)
@@ -74,6 +83,21 @@ public sealed class UserManagementService(
             var idsComPapel = await userManager.GetUsersInRoleAsync(filtro.Papel);
             var ids = idsComPapel.Select(u => u.Id).ToList();
             query = query.Where(u => ids.Contains(u.Id));
+        }
+
+        if (EhFinanceiro)
+        {
+            var visiveis = new HashSet<Guid>();
+            foreach (var papel in PapeisQueOFinanceiroAtivaEInativa)
+            {
+                foreach (var u in await userManager.GetUsersInRoleAsync(papel)) visiveis.Add(u.Id);
+            }
+            // Quem também é administrador some da lista, mesmo que tenha um papel comercial junto.
+            foreach (var papel in new[] { Roles.Admin, Roles.GestorMaster })
+            {
+                foreach (var u in await userManager.GetUsersInRoleAsync(papel)) visiveis.Remove(u.Id);
+            }
+            query = query.Where(u => visiveis.Contains(u.Id));
         }
 
         var total = await query.CountAsync(ct);
@@ -195,7 +219,15 @@ public sealed class UserManagementService(
 
         // O escopo (regional de quem chama, regionais ocultas) é o de sempre: CarregarComEscopoAsync.
         var usuario = await CarregarComEscopoAsync(id, ct);
-        if (!await userManager.IsInRoleAsync(usuario, Roles.Comercial))
+        if (EhFinanceiro)
+        {
+            // Nunca administrador (mesmo com outro papel junto); só consultor, gestor regional ou supervisor.
+            if (await PossuiAlgumPapelAsync(usuario, [Roles.Admin, Roles.GestorMaster]) || !await PossuiAlgumPapelAsync(usuario, PapeisQueOFinanceiroAtivaEInativa))
+            {
+                throw new CrmForbiddenException("O perfil financeiro só ativa ou inativa contas de consultores, gestores e supervisores.");
+            }
+        }
+        else if (!await userManager.IsInRoleAsync(usuario, Roles.Comercial))
         {
             throw new CrmForbiddenException("Aqui só é possível ativar ou inativar contas de consultores.");
         }

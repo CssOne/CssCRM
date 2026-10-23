@@ -730,7 +730,8 @@ public sealed class OpportunityService(
         o.ComprovanteIndicacaoArquivoUrl,
         o.ComprovanteVistoriaArquivoUrl,
         o.ConversaoOfflineEnviadaEm,
-        o.DataPagamentoAdesaoPrevista);
+        o.DataPagamentoAdesaoPrevista,
+        o.Lead.Telefone);
 
     /// <summary>
     /// Comprovante de pagamento da adesão anexado exige o valor pago: sem ele a venda fica de fora da meta e do card de adesão

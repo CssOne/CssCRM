@@ -114,6 +114,7 @@ public static class ServiceCollectionExtensions
             .AddPolicy(PolicyNames.GestaoComercial, p => p.RequireRole(Roles.GestaoComercial))
             .AddPolicy(PolicyNames.GestaoFinanceira, p => p.RequireRole(Roles.GestaoFinanceira))
             .AddPolicy(PolicyNames.ContratoFinanceiro, p => p.RequireRole([.. Roles.Comerciais, Roles.Financeiro]))
+            .AddPolicy(PolicyNames.ComercialOuFinanceiro, p => p.RequireRole([.. Roles.Comerciais, Roles.Financeiro]))
             .AddPolicy(PolicyNames.VisaoTotalComercial, p => p.RequireRole(Roles.VisaoTotal))
             .AddPolicy(PolicyNames.AreaMarketing, p => p.RequireRole(Roles.AreaMarketing));
 
