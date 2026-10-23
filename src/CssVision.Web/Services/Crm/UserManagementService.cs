@@ -227,9 +227,12 @@ public sealed class UserManagementService(
                 throw new CrmForbiddenException("O perfil financeiro só ativa ou inativa contas de consultores, gestores e supervisores.");
             }
         }
-        else if (!await userManager.IsInRoleAsync(usuario, Roles.Comercial))
+        else if (!GerenciaTodasAsRegionais && !await PossuiAlgumPapelAsync(usuario, PapeisQuePodeGerenciar))
         {
-            throw new CrmForbiddenException("Aqui só é possível ativar ou inativar contas de consultores.");
+            // Mesma regra de quem edita: o gestor regional ativa/inativa consultores; o supervisor, também gestores regionais. Admin e Gestor master, qualquer conta.
+            throw new CrmForbiddenException(EhSomenteSupervisor
+                ? "Você só pode ativar ou inativar consultores e gestores regionais."
+                : "Aqui só é possível ativar ou inativar contas de consultores.");
         }
 
         usuario.Ativo = ativo;
