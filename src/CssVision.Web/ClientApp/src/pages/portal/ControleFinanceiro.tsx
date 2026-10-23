@@ -51,6 +51,8 @@ import { PortalStatCard } from "../../components/portal/PortalStatCard";
 import { useAuth } from "../../context/AuthContext";
 import { ContratoFinanceiro } from "../../components/portal/ContratoFinanceiro";
 import { CobrancasDoConsultor } from "../../components/portal/CobrancasDoConsultor";
+import { useSearchParams } from "react-router-dom";
+import { abaDoFinanceiro, filtroDeVendas } from "../../lib/atalhosRapidos";
 import { ignoraFiltroDeMes, rotuloDaDataDeAdesao, vendasVisiveis } from "../../lib/vendasPendentes";
 
 // ---------- Tipos (espelham PortalFinanceiroController) ----------
@@ -388,7 +390,10 @@ export function PortalControleFinanceiroPage() {
   const [ano, setAno] = useState(Number(hoje.slice(0, 4)));
   const [dados, setDados] = useState<FinanceiroAno | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [aba, setAba] = useState("resumo");
+  // Vindo de um atalho do Portal (?aba=vendas&filtro=pendente): já abre na aba e no atalho de situação pedidos.
+  const [paramsDaUrl] = useSearchParams();
+  const [aba, setAba] = useState(() => abaDoFinanceiro(paramsDaUrl));
+  const [filtroInicialDeVendas] = useState(() => filtroDeVendas(paramsDaUrl));
   // Ao entrar, já mostra o mês atual (quando o ano é o corrente); "Todos os meses" fica a um clique.
   const [mes, setMes] = useState(Number(hoje.slice(5, 7)));
   // Gestão (como no Relatório comercial): escolhe um consultor ou a equipe toda. Vazio = os próprios números.
@@ -492,7 +497,7 @@ export function PortalControleFinanceiroPage() {
           } catch (e) { falha(e); }
         }} />
       ) : aba === "vendas" ? (
-        <Vendas dados={dados} mes={mes} somenteLeitura={somenteLeitura} onAbrirConsultor={abrirConsultor} hoje={hoje} ano={ano} recarregar={() => carregar()} onErro={falha} />
+        <Vendas filtroInicial={filtroInicialDeVendas} dados={dados} mes={mes} somenteLeitura={somenteLeitura} onAbrirConsultor={abrirConsultor} hoje={hoje} ano={ano} recarregar={() => carregar()} onErro={falha} />
       ) : aba === "cobrancas" && dados.visao?.tipo !== "equipe" ? (
         <CobrancasDoConsultor consultorId={dados.visao?.consultorId ?? sessao?.id ?? ""} onMudou={() => carregar()} />
       ) : aba === "contrato" && dados.visao?.tipo !== "equipe" ? (
@@ -1110,7 +1115,7 @@ function FiltroSelect({ rotulo, valor, onChange, opcoes }: { rotulo: string; val
 
 // ---------- Vendas ----------
 
-function Vendas({ dados, mes, somenteLeitura, onAbrirConsultor, hoje, ano, recarregar, onErro }: { dados: FinanceiroAno; mes: number; somenteLeitura: boolean; onAbrirConsultor: (id: string) => void; hoje: string; ano: number; recarregar: () => void; onErro: (e: unknown) => void }) {
+function Vendas({ filtroInicial = "", dados, mes, somenteLeitura, onAbrirConsultor, hoje, ano, recarregar, onErro }: { filtroInicial?: string; dados: FinanceiroAno; mes: number; somenteLeitura: boolean; onAbrirConsultor: (id: string) => void; hoje: string; ano: number; recarregar: () => void; onErro: (e: unknown) => void }) {
   const mostrarConsultor = dados.visao?.tipo !== undefined && dados.visao.tipo !== "propria";
   const opcoesConsultor = opcoesDeConsultor(dados.vendas);
   const [edicao, setEdicao] = useState<Venda | null>(null);
@@ -1118,7 +1123,7 @@ function Vendas({ dados, mes, somenteLeitura, onAbrirConsultor, hoje, ano, recar
   const [salvando, setSalvando] = useState(false);
 
   const [busca, setBusca] = useState("");
-  const [chip, setChip] = useState("");
+  const [chip, setChip] = useState(filtroInicial);
   const [fProduto, setFProduto] = useState("");
   const [fConsultor, setFConsultor] = useState("");
   const [ordem, setOrdem] = useState("recentes");

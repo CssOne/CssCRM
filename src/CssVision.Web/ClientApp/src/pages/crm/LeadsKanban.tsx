@@ -1,6 +1,7 @@
 import { ArrowRightLeft, Bookmark, List, Mail, Plus, RotateCcw, Trash2, X, Car } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { acaoDoQuadro, PARAM_ACAO } from "../../lib/atalhosRapidos";
 import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
 import {
   TipoEtapaPipeline,
@@ -150,7 +151,13 @@ export function LeadsKanbanPage() {
   const podeExcluir = temPapel("Admin", "GestorMaster", "SupervisorComercial");
   const podeExcluirCartao = (cartao: LeadKanbanCard) => podeExcluir || (temPapel("Comercial") && classificarCartao(cartao) === "indicacao");
   const [disparoAberto, setDisparoAberto] = useState(false);
+  const [params, setParams] = useSearchParams();
   const [etapasDisparo, setEtapasDisparo] = useState<LeadStage[]>([]);
+
+  const abrirDisparo = useCallback(() => {
+    api.get<LeadStage[]>("/crm/settings/lead-stages").then(setEtapasDisparo).catch(() => setEtapasDisparo([]));
+    setDisparoAberto(true);
+  }, []);
   const [lixeiraAberta, setLixeiraAberta] = useState(false);
   const [lixeira, setLixeira] = useState<LeadLixeira[] | null>(null);
   const [restaurandoId, setRestaurandoId] = useState<string | null>(null);
@@ -218,6 +225,22 @@ export function LeadsKanbanPage() {
   const [enviando, setEnviando] = useState(false);
 
   const [modalNovo, setModalNovo] = useState(false);
+
+  // Vindo de um atalho do Portal (?acao=novo-cliente / ?acao=disparar-email): abre a ação e limpa o parâmetro, para recarregar a página não repetir.
+  const acaoDoAtalho = acaoDoQuadro(params);
+  useEffect(() => {
+    if (!acaoDoAtalho) return;
+    if (acaoDoAtalho === "novo-cliente") setModalNovo(true);
+    else abrirDisparo();
+    setParams(
+      (atual) => {
+        const proximo = new URLSearchParams(atual);
+        proximo.delete(PARAM_ACAO);
+        return proximo;
+      },
+      { replace: true }
+    );
+  }, [acaoDoAtalho, abrirDisparo, setParams]);
   const [salvandoNovo, setSalvandoNovo] = useState(false);
   const [duplicidade, setDuplicidade] = useState<LeadDuplicateWarning | null>(null);
 
@@ -704,10 +727,7 @@ export function LeadsKanbanPage() {
             variant="secondary"
             type="button"
             className="h-10 rounded-full px-4"
-            onClick={() => {
-              api.get<LeadStage[]>("/crm/settings/lead-stages").then(setEtapasDisparo).catch(() => setEtapasDisparo([]));
-              setDisparoAberto(true);
-            }}
+            onClick={abrirDisparo}
           >
             <Mail className="size-4" /> Disparar e-mail
           </Button>
