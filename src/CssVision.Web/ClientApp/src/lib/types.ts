@@ -138,6 +138,8 @@ export interface LeadListItem {
   etapaAtual?: string | null;
   responsavelId?: string | null;
   responsavelNome?: string | null;
+  /** Foto do consultor responsável. */
+  responsavelFotoUrl?: string | null;
   tags: string[];
   criadoEm: string;
   ultimoContatoEm?: string | null;
@@ -677,6 +679,8 @@ export interface Opportunity {
   id: string;
   leadId: string;
   leadNome: string;
+  /** Telefone do cliente — para o atalho de WhatsApp. */
+  leadTelefone?: string | null;
   titulo: string;
   responsavelId: string;
   responsavelNome: string;
@@ -887,8 +891,9 @@ export interface LossReason {
 
 export interface Activity {
   id: string;
-  leadId: string;
-  leadNome: string;
+  /** Nulo = atividade pessoal (sem lead). */
+  leadId?: string | null;
+  leadNome?: string | null;
   opportunityId?: string | null;
   opportunityTitulo?: string | null;
   responsavelId: string;
@@ -906,7 +911,7 @@ export interface Activity {
 }
 
 export interface ActivityCreateRequest {
-  leadId: string;
+  leadId?: string | null;
   opportunityId?: string | null;
   responsavelId?: string | null;
   tipo: TipoAtividade;

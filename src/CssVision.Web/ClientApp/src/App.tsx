@@ -10,16 +10,15 @@ import { LeadsPage } from "./pages/crm/Leads";
 import { LeadsKanbanPage } from "./pages/crm/LeadsKanban";
 import { LeadDetailPage } from "./pages/crm/LeadDetail";
 import { PipelinePage } from "./pages/crm/Pipeline";
-import { ActivitiesPage } from "./pages/crm/Activities";
 import { AgendaPage } from "./pages/crm/Agenda";
 import { GoalsPage } from "./pages/crm/Goals";
 import { ManagementPage } from "./pages/crm/Management";
 import { RelatorioComercialPage } from "./pages/crm/RelatorioComercial";
-import { ConsultoresPage } from "./pages/crm/Consultores";
 import { UsersPage } from "./pages/crm/Users";
 import { PortalDashboardPage } from "./pages/portal/Dashboard";
 import { PortalClientesPage } from "./pages/portal/Clientes";
 import { PortalPropostasPage } from "./pages/portal/Propostas";
+import { PortalControleFinanceiroPage } from "./pages/portal/ControleFinanceiro";
 import { ConfiguracoesPage } from "./pages/portal/Configuracoes";
 import { TrafegoPagoPage } from "./pages/marketing/TrafegoPago";
 import { BackupsPage } from "./pages/admin/Backups";
@@ -29,7 +28,8 @@ import { DiscordPage } from "./pages/Discord";
 import { TvComercialPage } from "./pages/tv/TvComercial";
 import { GestaoFinanceiraPage } from "./pages/crm/GestaoFinanceira";
 import { UsuariosFinanceiroPage } from "./pages/crm/UsuariosFinanceiro";
-import { AvisosPagamentoPage } from "./pages/crm/AvisosPagamento";
+import { SetorFinanceiroPage } from "./pages/crm/SetorFinanceiro";
+import { RedirecionarAvisosPagamento, SetorFinanceiroConsultorPage } from "./pages/crm/SetorFinanceiroConsultor";
 
 function CarregandoTelaCheia() {
   return (
@@ -92,7 +92,8 @@ export default function App() {
       <Route path="/app/crm/leads/kanban" element={<RotaProtegida><LeadsKanbanPage /></RotaProtegida>} />
       <Route path="/app/crm/leads/:id" element={<RotaProtegida><LeadDetailPage /></RotaProtegida>} />
       <Route path="/app/crm/pipeline" element={<RotaProtegida><PipelinePage /></RotaProtegida>} />
-      <Route path="/app/crm/activities" element={<RotaProtegida><ActivitiesPage /></RotaProtegida>} />
+      {/* A aba "Atividades" foi unida à Agenda: links e favoritos antigos continuam funcionando. */}
+      <Route path="/app/crm/activities" element={<Navigate to="/app/crm/agenda" replace />} />
       <Route path="/app/crm/agenda" element={<RotaProtegida><AgendaPage /></RotaProtegida>} />
       <Route path="/app/crm/goals" element={<RotaProtegida><GoalsPage /></RotaProtegida>} />
       <Route
@@ -111,14 +112,7 @@ export default function App() {
           </RotaProtegida>
         }
       />
-      <Route
-        path="/app/crm/consultores"
-        element={
-          <RotaProtegida papeis={PAPEIS_GESTAO}>
-            <ConsultoresPage />
-          </RotaProtegida>
-        }
-      />
+      <Route path="/app/crm/consultores" element={<Navigate to="/app/crm/gestao" replace />} />
       <Route
         path="/app/crm/usuarios"
         element={
@@ -128,13 +122,22 @@ export default function App() {
         }
       />
       <Route
-        path="/app/crm/avisos-pagamento"
+        path="/app/crm/setor-financeiro"
         element={
           <RotaProtegida papeis={PAPEIS_GESTAO_FINANCEIRA}>
-            <AvisosPagamentoPage />
+            <SetorFinanceiroPage />
           </RotaProtegida>
         }
       />
+      <Route
+        path="/app/crm/setor-financeiro/:consultorId"
+        element={
+          <RotaProtegida papeis={PAPEIS_GESTAO_FINANCEIRA}>
+            <SetorFinanceiroConsultorPage />
+          </RotaProtegida>
+        }
+      />
+      <Route path="/app/crm/avisos-pagamento" element={<RotaProtegida papeis={PAPEIS_GESTAO_FINANCEIRA}><RedirecionarAvisosPagamento /></RotaProtegida>} />
 
       <Route path="/tv/comercial" element={<RotaTelaCheia papeis={PAPEIS_GESTAO}><TvComercialPage /></RotaTelaCheia>} />
       <Route path="/app/suporte" element={<RotaProtegida><SuportePage /></RotaProtegida>} />
@@ -144,6 +147,7 @@ export default function App() {
       <Route path="/app/portal" element={<RotaProtegida><PortalDashboardPage /></RotaProtegida>} />
       <Route path="/app/portal/clientes" element={<RotaProtegida><PortalClientesPage /></RotaProtegida>} />
       <Route path="/app/portal/propostas" element={<RotaProtegida><PortalPropostasPage /></RotaProtegida>} />
+      <Route path="/app/portal/controle-financeiro" element={<RotaProtegida><PortalControleFinanceiroPage /></RotaProtegida>} />
       <Route path="/app/portal/configuracoes" element={<RotaProtegida><ConfiguracoesPage /></RotaProtegida>} />
 
       <Route

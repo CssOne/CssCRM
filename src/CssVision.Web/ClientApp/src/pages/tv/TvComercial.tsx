@@ -144,7 +144,7 @@ function PainelRankingsBase({ dados, periodo, aoAbrir }: { dados: TvComercial; p
           </button>
         </div>
       </div>
-      <div className="ranking-tabs" role="tablist" aria-label="Tipo de ranking">
+      <div className="ranking-tabs" role="tablist" data-sem-animacao aria-label="Tipo de ranking">
         {MODOS.map((m) => (
           <button key={m} type="button" role="tab" aria-selected={m === modo} className={m === modo ? "active" : ""} onClick={() => setModo(m)}>{ROTULOS[m].aba}</button>
         ))}

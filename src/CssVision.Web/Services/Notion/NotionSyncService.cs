@@ -779,6 +779,11 @@ public sealed class NotionSyncService(
 
         if (_idsAtivos!.Contains(vendedorId))
         {
+            // Lead que chegou direto do tráfego pago foi entregue pelo rodízio do CRM, que respeita o dia e o horário de recebimento de
+            // cada consultor. O vendedor do card (definido no Notion, que não conhece essa agenda) só fica com ele se estava dentro da
+            // agenda quando o lead chegou — senão o lead voltaria a cair em quem está fora do horário.
+            if (OrigemLead.EhDiretoDoTrafegoPago(lead) && !await VendedorEstavaNaAgendaAsync(vendedorId, lead.CriadoEm, ct)) return;
+
             lead.ResponsavelId = vendedorId;
             return;
         }
@@ -788,6 +793,22 @@ public sealed class NotionSyncService(
         {
             lead.ResponsavelId = vendedorId;
         }
+    }
+
+    private readonly Dictionary<Guid, (TimeOnly? Inicio, TimeOnly? Fim, int? Dias)> _agendas = [];
+
+    /// <summary>O consultor estava dentro do dia/horário de recebimento de leads (agenda da Gestão comercial) no instante dado? Sem agenda = sempre.</summary>
+    private async Task<bool> VendedorEstavaNaAgendaAsync(Guid vendedorId, DateTimeOffset quando, CancellationToken ct)
+    {
+        if (!_agendas.TryGetValue(vendedorId, out var agenda))
+        {
+            var u = await db.Users.AsNoTracking().Where(x => x.Id == vendedorId)
+                .Select(x => new { x.HorarioInicioLeads, x.HorarioFimLeads, x.DiasSemanaLeads })
+                .FirstOrDefaultAsync(ct);
+            agenda = (u?.HorarioInicioLeads, u?.HorarioFimLeads, u?.DiasSemanaLeads);
+            _agendas[vendedorId] = agenda;
+        }
+        return JanelaRecebimentoLeads.Permite(agenda.Inicio, agenda.Fim, agenda.Dias, quando);
     }
 
     private bool DeConsultorAtivo(JsonElement page) =>
@@ -1415,7 +1436,7 @@ public sealed class NotionSyncService(
             GrupoId = _grupoId,
             Ativo = false,
         };
-        await userManager.CreateAsync(usuario, "Senha@123");
+        await userManager.CreateAsync(usuario, SenhaSegura.Gerar());
         await userManager.AddToRoleAsync(usuario, Roles.Comercial);
         _placeholderPorBaseCache[email] = usuario.Id;
         return usuario.Id;

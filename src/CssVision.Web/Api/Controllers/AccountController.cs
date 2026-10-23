@@ -4,11 +4,13 @@ using CssVision.Web.Api.Contracts.Common;
 using CssVision.Web.Authorization;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Identity;
+using CssVision.Web.Services.Crm;
 using CssVision.Web.Services.Email;
 using CssVision.Web.Services.Storage;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace CssVision.Web.Api.Controllers;
@@ -20,12 +22,31 @@ public class AccountController(
     UserManager<ApplicationUser> userManager,
     ApplicationDbContext db,
     IFileStorageService armazenamento,
-    IEmailSender emailSender) : ControllerBase
+    IEmailSender emailSender,
+    IConfiguration configuracao,
+    IWebHostEnvironment ambiente,
+    ILogger<AccountController> logger) : ControllerBase
 {
+    /// <summary>
+    /// Endereço público do sistema usado nos links enviados por e-mail. Vem da configuração (App:PublicBaseUrl) e não do
+    /// cabeçalho Host da requisição: esse cabeçalho é enviado por quem chama, e um link montado com ele permitiria a um
+    /// atacante receber o token de redefinição de senha da vítima no domínio dele. Sem configuração (ex.: desenvolvimento)
+    /// cai no endereço da requisição, com aviso no log.
+    /// </summary>
+    private string BaseUrlPublica()
+    {
+        var configurada = configuracao["App:PublicBaseUrl"]?.Trim().TrimEnd('/');
+        if (!string.IsNullOrEmpty(configurada)) return configurada;
+
+        logger.LogWarning("App:PublicBaseUrl não configurada: o link de redefinição de senha usa o Host da requisição. Configure em produção.");
+        return $"{Request.Scheme}://{Request.Host}";
+    }
+
     private static readonly string[] ExtensoesFotoPermitidas = [".jpg", ".jpeg", ".png", ".webp"];
 
     [HttpPost("login")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Login)]
     public async Task<ActionResult<LoginResultDto>> Login(LoginRequest request, CancellationToken ct)
     {
         var usuario = await userManager.FindByEmailAsync(request.Email.Trim());
@@ -44,12 +65,24 @@ public class AccountController(
             return Unauthorized(new ApiError("E-mail ou senha inválidos.", "credenciais_invalidas"));
         }
 
+        // A senha inicial antiga estava escrita no código-fonte: quem a usa ainda não criou uma senha própria. Não entra —
+        // recebe por e-mail o link para criar uma nova (em desenvolvimento as contas de demonstração continuam usando-a).
+        if (!ambiente.IsDevelopment() && request.Senha == SenhaSegura.SenhaInicialLegada)
+        {
+            await signInManager.SignOutAsync();
+            await EnviarLinkDeRedefinicaoAsync(usuario, ct);
+            return Unauthorized(new ApiError(
+                "Por segurança, a senha inicial não vale mais. Enviamos um link para o seu e-mail para você criar uma nova senha. Se não chegar, peça ao administrador para redefinir.",
+                "senha_inicial"));
+        }
+
         return Ok(new LoginResultDto(false, await MontarSessaoAsync(usuario)));
     }
 
     /// <summary>Segunda etapa do login quando a conta tem verificação em dois fatores ativada.</summary>
     [HttpPost("login/2fa")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.Login)]
     public async Task<ActionResult<SessionDto>> LoginDoisFatores(TwoFactorLoginRequest request, CancellationToken ct)
     {
         var usuario = await signInManager.GetTwoFactorAuthenticationUserAsync();
@@ -79,29 +112,36 @@ public class AccountController(
     /// </summary>
     [HttpPost("forgot-password")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.RecuperarSenha)]
     public async Task<IActionResult> EsqueciSenha(ForgotPasswordRequest request, CancellationToken ct)
     {
         var usuario = await userManager.FindByEmailAsync(request.Email.Trim());
         if (usuario is not null && usuario.Ativo)
         {
-            var token = await userManager.GeneratePasswordResetTokenAsync(usuario);
-            var link = $"{Request.Scheme}://{Request.Host}/reset-password?email={HttpUtility.UrlEncode(usuario.Email)}&token={HttpUtility.UrlEncode(token)}";
-
-            var corpo = $"""
-                <p>Olá, {usuario.NomeCompleto}.</p>
-                <p>Recebemos um pedido para redefinir a senha da sua conta no CSS Brasil CRM.</p>
-                <p><a href="{link}">Clique aqui para escolher uma nova senha</a>.</p>
-                <p>Se você não solicitou essa redefinição, pode ignorar este e-mail com segurança — sua senha continua a mesma.</p>
-                """;
-
-            await emailSender.EnviarAsync(usuario.Email!, usuario.NomeCompleto, "Redefinição de senha — CSS Brasil CRM", corpo, ct);
+            await EnviarLinkDeRedefinicaoAsync(usuario, ct);
         }
 
         return NoContent();
     }
 
+    private async Task EnviarLinkDeRedefinicaoAsync(ApplicationUser usuario, CancellationToken ct)
+    {
+        var token = await userManager.GeneratePasswordResetTokenAsync(usuario);
+        var link = $"{BaseUrlPublica()}/reset-password?email={HttpUtility.UrlEncode(usuario.Email)}&token={HttpUtility.UrlEncode(token)}";
+
+        var corpo = $"""
+            <p>Olá, {HttpUtility.HtmlEncode(usuario.NomeCompleto)}.</p>
+            <p>Recebemos um pedido para redefinir a senha da sua conta no CSS Brasil CRM.</p>
+            <p><a href="{link}">Clique aqui para escolher uma nova senha</a>.</p>
+            <p>Se você não solicitou essa redefinição, pode ignorar este e-mail com segurança — sua senha continua a mesma.</p>
+            """;
+
+        await emailSender.EnviarAsync(usuario.Email!, usuario.NomeCompleto, "Redefinição de senha — CSS Brasil CRM", corpo, ct);
+    }
+
     [HttpPost("reset-password")]
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitPolicies.RecuperarSenha)]
     public async Task<IActionResult> RedefinirSenhaComToken(ResetPasswordConfirmRequest request, CancellationToken ct)
     {
         var usuario = await userManager.FindByEmailAsync(request.Email.Trim())
@@ -196,10 +236,15 @@ public class AccountController(
             throw new CrmBusinessException("Formato inválido. Envie uma imagem JPG, PNG ou WEBP.", "foto_invalida");
         }
 
+        await using var stream = arquivo.OpenReadStream();
+        if (!await AssinaturaDeArquivo.ConfereAsync(stream, extensao, ct))
+        {
+            throw new CrmBusinessException("O arquivo não é uma imagem válida. Envie uma imagem JPG, PNG ou WEBP.", "foto_invalida");
+        }
+
         await ExcluirArquivoFotoAtualAsync(usuario, ct);
 
         var nomeArquivo = $"{usuario.Id}{extensao}";
-        await using var stream = arquivo.OpenReadStream();
         usuario.FotoUrl = await armazenamento.SalvarAsync("avatars", nomeArquivo, stream, arquivo.ContentType, ct);
         await userManager.UpdateAsync(usuario);
 
@@ -389,11 +434,12 @@ public class AccountController(
         if (papeis.Contains(Roles.Financeiro) && papeis.Count == 1)
         {
             menu.Add(new MenuItemDto("crm-management", "Gestão comercial", "users-round", "/app/crm/gestao"));
-            menu.Add(new MenuItemDto("avisos-pagamento", "Avisos de pagamento", "wallet", "/app/crm/avisos-pagamento"));
+            menu.Add(new MenuItemDto("setor-financeiro", "Setor Financeiro", "landmark", "/app/crm/setor-financeiro"));
             menu.Add(new MenuItemDto("crm-users", "Usuários", "user-cog", "/app/crm/usuarios"));
             menu.Add(new MenuItemDto("chat", "Chat", "messages-square", "/app/chat"));
             menu.Add(new MenuItemDto("discord", "Discord", "message-circle", "/app/discord"));
             menu.Add(new MenuItemDto("suporte", "Suporte", "life-buoy", "/app/suporte"));
+            menu.Add(new MenuItemDto("configuracoes", "Configurações", "settings", "/app/portal/configuracoes"));
             return new SessionDto(usuario.Id, usuario.Email!, usuario.NomeCompleto, usuario.FotoUrl, papeis.ToList(), "/app/crm/gestao", menu);
         }
 
@@ -402,7 +448,6 @@ public class AccountController(
         menu.Add(new MenuItemDto("crm-leads", "Leads", "users", "/app/crm/leads"));
         menu.Add(new MenuItemDto("crm-leads-kanban", "Quadro de leads", "layout-grid", "/app/crm/leads/kanban"));
         menu.Add(new MenuItemDto("crm-pipeline", "Pipeline", "kanban-square", "/app/crm/pipeline"));
-        menu.Add(new MenuItemDto("crm-activities", "Atividades", "check-square", "/app/crm/activities"));
         menu.Add(new MenuItemDto("crm-agenda", "Agenda", "calendar-days", "/app/crm/agenda"));
         menu.Add(new MenuItemDto("crm-goals", "Metas", "target", "/app/crm/goals"));
         menu.Add(new MenuItemDto("crm-relatorio", "Relatório comercial", "chart-column", "/app/crm/relatorio-comercial"));
@@ -410,9 +455,8 @@ public class AccountController(
         if (Roles.GestaoComercial.Any(papeis.Contains))
         {
             menu.Add(new MenuItemDto("crm-management", "Gestão comercial", "users-round", "/app/crm/gestao"));
-            menu.Add(new MenuItemDto("crm-consultores", "Consultores", "id-card", "/app/crm/consultores"));
             menu.Add(new MenuItemDto("crm-users", "Usuários", "user-cog", "/app/crm/usuarios"));
-            menu.Add(new MenuItemDto("avisos-pagamento", "Avisos de pagamento", "wallet", "/app/crm/avisos-pagamento"));
+            menu.Add(new MenuItemDto("setor-financeiro", "Setor Financeiro", "landmark", "/app/crm/setor-financeiro"));
             menu.Add(new MenuItemDto("tv-comercial", "Painel da TV", "monitor", "/tv/comercial"));
         }
         else if (usuario.VerPainelTv)

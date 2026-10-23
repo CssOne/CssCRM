@@ -64,9 +64,14 @@ public sealed class LeadAssignmentService(
 
     public async Task<Guid?> ProximoResponsavelAsync(string? oQue, string? regional, CancellationToken ct)
     {
-        // "Continuar distribuindo" do gestor vale para os limites e para o dia/horário de recebimento.
-        var continuar = await ContinuarAteAsync(ct) is not null;
-        return await ProximoAsync(oQue, regional, continuar, continuar, ct);
+        // Só entra no rodízio quem está dentro do dia e do horário de recebimento definidos na Gestão comercial, e abaixo dos limites.
+        var normal = await ProximoAsync(oQue, regional, false, false, ct);
+        if (normal is not null) return normal;
+
+        // "Continuar distribuindo hoje" do gestor afrouxa só os LIMITES (diário/mensal). A agenda de dias e horários nunca é ignorada:
+        // quem está fora dela não recebe lead, nem por esse modo, nem ao ter o "Recebe leads" ligado. Sem ninguém dentro da agenda o lead
+        // espera sem responsável até alguém entrar no horário (o gestor é avisado e pode ajustar os horários).
+        return await ContinuarAteAsync(ct) is null ? null : await ProximoAsync(oQue, regional, true, false, ct);
     }
 
     private async Task<Guid?> ProximoAsync(string? oQue, string? regional, bool ignorarLimites, bool ignorarHorario, CancellationToken ct)
@@ -151,9 +156,11 @@ public sealed class LeadAssignmentService(
             .Select(u => new { u.Ativo, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads })
             .FirstOrDefaultAsync(ct);
         if (usuario is null || !usuario.Ativo) return false;
-        var continuar = await ContinuarAteAsync(ct) is not null;
-        if (!continuar && !JanelaRecebimentoLeads.Permite(usuario.HorarioInicioLeads, usuario.HorarioFimLeads, usuario.DiasSemanaLeads, Agora)) return false;
+        // Dia e horário de recebimento valem sempre — o "Continuar distribuindo hoje" afrouxa só os limites; um consultor fora da agenda
+        // só recebe por ele quando ninguém dentro da agenda pode (isso é decidido no rodízio, em ProximoResponsavelAsync).
+        if (!JanelaRecebimentoLeads.Permite(usuario.HorarioInicioLeads, usuario.HorarioFimLeads, usuario.DiasSemanaLeads, Agora)) return false;
 
+        var continuar = await ContinuarAteAsync(ct) is not null;
         if (continuar) return true;
         if (usuario.LimiteMensalLeads is { } mensal
             && await LeadsDoTrafegoNoMes().CountAsync(l => l.ResponsavelId == usuarioId, ct) >= mensal) return false;
@@ -202,23 +209,27 @@ public sealed class LeadAssignmentService(
             .ToList();
         var semResponsavel = porTipo.Sum(g => g.Count());
 
-        // Parado por limite e/ou horário: ninguém recebe o lead hoje, mas receberia se o limite (ou o
-        // horário) fosse ignorado. Se só os dois juntos liberam, conta nos dois motivos.
+        // Parado por limite ou por horário. Por limite: alguém dentro da agenda receberia se o limite fosse ignorado (o gestor pode liberar). Por
+        // horário: ninguém está dentro do dia/horário de recebimento — a agenda não se ignora, então o lead espera até alguém entrar nela.
         int bloqueados = 0, porLimite = 0, porHorario = 0;
-        if (continuarAte is null)
+        foreach (var grupo in porTipo)
         {
-            foreach (var grupo in porTipo)
-            {
-                if (await ProximoAsync(grupo.Key.OQue, grupo.Key.Regional, false, false, ct) is not null) continue;
-                if (await ProximoAsync(grupo.Key.OQue, grupo.Key.Regional, true, true, ct) is null) continue;
+            if (await ProximoAsync(grupo.Key.OQue, grupo.Key.Regional, false, false, ct) is not null) continue;
 
-                var quantidade = grupo.Count();
+            var quantidade = grupo.Count();
+            if (await ProximoAsync(grupo.Key.OQue, grupo.Key.Regional, true, false, ct) is not null)
+            {
+                // Com o modo "continuar" ligado esse lead já está sendo entregue: não conta como parado.
+                if (continuarAte is not null) continue;
                 bloqueados += quantidade;
-                var soLimite = await ProximoAsync(grupo.Key.OQue, grupo.Key.Regional, true, false, ct) is not null;
-                var soHorario = await ProximoAsync(grupo.Key.OQue, grupo.Key.Regional, false, true, ct) is not null;
-                if (soLimite || !soHorario) porLimite += quantidade;
-                if (soHorario || !soLimite) porHorario += quantidade;
+                porLimite += quantidade;
+                continue;
             }
+
+            // Ninguém dentro da agenda. Só avisa se existe alguém que receberia fora dela (senão não há consultor nenhum: não é horário).
+            if (await ProximoAsync(grupo.Key.OQue, grupo.Key.Regional, true, true, ct) is null) continue;
+            bloqueados += quantidade;
+            porHorario += quantidade;
         }
 
         var agora = Agora;

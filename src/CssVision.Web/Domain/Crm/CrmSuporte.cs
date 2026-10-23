@@ -1,5 +1,9 @@
+using System.Text.Json.Serialization;
+
 namespace CssVision.Web.Domain.Crm;
 
+/// <summary>Vai e volta como texto ("Aberto", "EmAtendimento", "Resolvido") na API — é o que a tela de Suporte usa.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum StatusChamadoSuporte
 {
     Aberto = 1,

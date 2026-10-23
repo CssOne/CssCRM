@@ -49,6 +49,8 @@ services:
       # Chave pública da aplicação (comandos /vendas e /meta). Vazia = comandos desligados.
       Discord__PublicKey: ${DISCORD_PUBLIC_KEY:-}
       Discord__UrlPublica: https://${CADDY_DOMAIN}
+      # Endereço público usado nos links de e-mail (redefinição de senha). Fixo, para não depender do cabeçalho Host de quem chama.
+      App__PublicBaseUrl: https://${CADDY_DOMAIN}
     expose:
       - "8080"
     healthcheck:

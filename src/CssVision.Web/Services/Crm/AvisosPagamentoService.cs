@@ -75,7 +75,19 @@ public sealed class AvisosPagamentoService(
 
         var titulo = string.IsNullOrWhiteSpace(request.Titulo) ? TituloPadrao : request.Titulo.Trim();
         var referencia = string.IsNullOrWhiteSpace(request.Referencia) ? null : request.Referencia.Trim();
-        var avisos = consultores.Select(c => new CrmAvisoConsultor
+
+        // O mesmo aviso (texto, valor e referência) já em aberto para o consultor é um envio repetido: não cria outro. Para lembrar de novo, é "Reenviar".
+        var idsDosConsultores = consultores.Select(c => c.Id).ToList();
+        var jaAvisados = (await db.CrmAvisosConsultor.AsNoTracking()
+            .Where(a => idsDosConsultores.Contains(a.ConsultorId) && a.Status == StatusAvisoConsultor.Aberto && a.Mensagem == mensagem && a.Valor == request.Valor && a.Referencia == referencia)
+            .Select(a => a.ConsultorId).ToListAsync(ct)).ToHashSet();
+        var aEnviar = consultores.Where(c => !jaAvisados.Contains(c.Id)).ToList();
+        if (aEnviar.Count == 0)
+        {
+            throw new CrmBusinessException(
+                $"Já existe um aviso igual em aberto para {string.Join(", ", consultores.Select(c => c.NomeCompleto))}. Use \"Reenviar\" no aviso que já foi enviado, em vez de criar outro.", "aviso_duplicado");
+        }
+        var avisos = aEnviar.Select(c => new CrmAvisoConsultor
         {
             ConsultorId = c.Id, Titulo = titulo, Mensagem = mensagem, Valor = request.Valor, Referencia = referencia, EnviadoPorId = currentUser.UserId,
         }).ToList();

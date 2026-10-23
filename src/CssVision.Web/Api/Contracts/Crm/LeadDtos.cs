@@ -31,7 +31,9 @@ public record LeadListItemDto(
     bool SemContato,
     bool Arquivado,
     /// <summary>Dados da venda do lead (colunas dos Relatórios do Notion); nulo se o lead não tem oportunidade.</summary>
-    LeadVendaResumoDto? Venda = null);
+    LeadVendaResumoDto? Venda = null,
+    /// <summary>Foto do consultor responsável (a lista mostra o avatar dele).</summary>
+    string? ResponsavelFotoUrl = null);
 
 /// <summary>Venda do lead: as mesmas colunas da tela "RELATÓRIOS CSS BRASIL" do Notion.</summary>
 public record LeadVendaResumoDto(

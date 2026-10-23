@@ -28,6 +28,7 @@ builder.Services.AddNotionSync(builder.Configuration);
 builder.Services.AddCssOne(builder.Configuration);
 builder.Services.AddDiscordIntegration(builder.Configuration);
 builder.Services.AddPublicLeadIntakeCors();
+builder.Services.AddCrmRateLimiting();
 
 builder.Services.AddControllers();
 builder.Services.AddExceptionHandler<CrmExceptionHandler>();
@@ -57,6 +58,7 @@ var app = builder.Build();
 // HSTS, rate limiting por IP etc.) — senão eles leem os valores da conexão interna com o LB, não os
 // do cliente real.
 app.UseForwardedHeaders();
+app.UseCrmSecurityHeaders();
 
 // Migrations e seeds essenciais (papéis, etapas do funil, contas reais dos consultores) rodam em
 // qualquer ambiente — sem isso o banco sobe vazio em produção e ninguém consegue logar. São
@@ -88,6 +90,7 @@ app.UseExceptionHandler();
 app.UseHttpsRedirection();
 app.UseSerilogRequestLogging();
 
+app.UseUploadsProtegidos();
 app.UseStaticFiles();
 if (!app.Environment.IsDevelopment())
 {
@@ -108,6 +111,7 @@ if (!app.Environment.IsDevelopment())
 app.UseRouting();
 
 app.UseCors();
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

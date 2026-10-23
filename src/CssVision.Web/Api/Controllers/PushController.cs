@@ -8,7 +8,7 @@ namespace CssVision.Web.Api.Controllers;
 /// <summary>Inscrição do navegador do usuário logado nas notificações push (aviso de lead novo).</summary>
 [ApiController]
 [Route("api/crm/push")]
-[Authorize(Policy = PolicyNames.AreaComercial)]
+[Authorize(Policy = PolicyNames.ComercialOuFinanceiro)]
 public class PushController(IPushService push, ICurrentUserService currentUser) : ControllerBase
 {
     [HttpGet("chave-publica")]

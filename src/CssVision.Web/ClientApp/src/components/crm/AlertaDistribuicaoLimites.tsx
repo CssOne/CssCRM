@@ -39,7 +39,7 @@ export function AlertaDistribuicaoLimites() {
       setEstado(novo);
       notificar(
         "success",
-        valor ? "Distribuição liberada até o fim do dia, ignorando limites e horários." : "Limites e horários voltaram a valer na distribuição."
+        valor ? "Distribuição liberada até o fim do dia, ignorando os limites (o dia e o horário de cada consultor continuam valendo)." : "Os limites voltaram a valer na distribuição."
       );
     } catch {
       notificar("error", "Não foi possível alterar a distribuição.");
@@ -50,11 +50,10 @@ export function AlertaDistribuicaoLimites() {
 
   if (!estado) return null;
 
-  if (estado.continuarAteEm) {
-    return (
+  const bannerContinuar = estado.continuarAteEm ? (
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm">
         <span className="text-[var(--fg-muted)]">
-          A distribuição automática está ignorando os limites e o horário de recebimento até o fim de hoje.
+          A distribuição automática está ignorando os limites de leads até o fim de hoje (o dia e o horário de recebimento de cada consultor continuam valendo).
         </span>
         <button
           type="button"
@@ -62,18 +61,19 @@ export function AlertaDistribuicaoLimites() {
           onClick={() => continuar(false)}
           className="focus-ring cursor-pointer font-medium text-[var(--brand)] hover:underline disabled:opacity-50"
         >
-          Voltar a respeitar limites e horários
+          Voltar a respeitar os limites
         </button>
       </div>
-    );
-  }
+  ) : null;
 
-  if (!estado.bloqueada || (dispensadoEm !== null && dispensadoEm === estado.leadsBloqueados)) return null;
+  if (!estado.bloqueada || (dispensadoEm !== null && dispensadoEm === estado.leadsBloqueados)) return bannerContinuar;
 
   const porLimite = estado.leadsBloqueadosPorLimite > 0;
   const porHorario = estado.leadsBloqueadosPorHorario > 0;
 
   return (
+    <>
+    {bannerContinuar}
     <div role="alert" className="mb-4 rounded-lg border border-[var(--warning)] bg-[var(--surface)] p-3 text-sm">
       <div className="flex items-start gap-2">
         <AlertTriangle className="mt-0.5 size-4 shrink-0 text-[var(--warning)]" aria-hidden />
@@ -93,24 +93,28 @@ export function AlertaDistribuicaoLimites() {
                 {estado.noLimiteDiario} de {estado.consultores} consultor(es) no limite do dia e {estado.noLimiteMensal} no do mês.
               </>
             )}
-            {porHorario && <> {estado.consultoresForaDoHorario} consultor(es) fora do dia/horário de recebimento agora.</>} Deseja continuar a
-            distribuição automática mesmo assim?
+            {porHorario && <> {estado.consultoresForaDoHorario} consultor(es) fora do dia/horário de recebimento agora.</>}{" "}
+            {porLimite
+              ? "Deseja continuar a distribuição automática mesmo com os limites atingidos?"
+              : "Os leads serão entregues assim que um consultor entrar no dia/horário de recebimento — a agenda de cada um sempre vale."}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-medium">
-            <button
-              type="button"
-              disabled={enviando}
-              onClick={() => continuar(true)}
-              className="focus-ring cursor-pointer rounded-md bg-[var(--brand)] px-3 py-1.5 text-white disabled:opacity-50"
-            >
-              Continuar distribuindo hoje
-            </button>
+            {porLimite && !estado.continuarAteEm && (
+              <button
+                type="button"
+                disabled={enviando}
+                onClick={() => continuar(true)}
+                className="focus-ring cursor-pointer rounded-md bg-[var(--brand)] px-3 py-1.5 text-white disabled:opacity-50"
+              >
+                Continuar distribuindo hoje
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setDispensadoEm(estado.leadsBloqueados)}
               className="focus-ring cursor-pointer text-[var(--fg-muted)] hover:underline"
             >
-              Manter parado
+              {porLimite ? "Manter parado" : "Dispensar aviso"}
             </button>
             <Link to="/app/crm/gestao" className="text-[var(--brand)] hover:underline">
               Ajustar limites e horários na Gestão comercial
@@ -119,5 +123,6 @@ export function AlertaDistribuicaoLimites() {
         </div>
       </div>
     </div>
+    </>
   );
 }

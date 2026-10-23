@@ -83,23 +83,41 @@ public class FinanceiroEAvisosTests
     }
 
     [Fact]
-    public async Task Financeiro_ListaSoConsultoresDaRegional_AtivaEInativa_MasNaoEditaNemCria()
+    public async Task Financeiro_ListaConsultoresGestoresESupervisoresDaRegional_AtivaEInativa_MasNaoEditaNemCriaNemExclui()
     {
         using var factory = new TestDbContextFactory();
         var c = await MontarAsync(factory);
+        var supervisor = await factory.CriarUsuarioAsync(c.Db, "Supervisor 132");
+        await factory.AtribuirPapelAsync(c.Db, supervisor, Roles.SupervisorComercial);
+        supervisor.RegionalId = c.Fin.RegionalId;
+        var adminDaRegional = await factory.CriarUsuarioAsync(c.Db, "Admin 132");
+        await factory.AtribuirPapelAsync(c.Db, adminDaRegional, Roles.Admin);
+        adminDaRegional.RegionalId = c.Fin.RegionalId;
+        var adminEGestor = await factory.CriarUsuarioAsync(c.Db, "Admin Gestor 132");
+        await factory.AtribuirPapelAsync(c.Db, adminEGestor, Roles.GestorComercial);
+        await factory.AtribuirPapelAsync(c.Db, adminEGestor, Roles.Admin);
+        adminEGestor.RegionalId = c.Fin.RegionalId;
+        await c.Db.SaveChangesAsync();
         var usuarios = Usuarios(c);
 
         var lista = await usuarios.ListarAsync(new UserFilterRequest { TamanhoPagina = 100 }, CancellationToken.None);
-        Assert.Equal([c.Ana.Id], lista.Itens.Select(u => u.Id)); // não vê o gestor, o admin, nem a outra regional
+        // Vê consultor, gestor e supervisor da regional; não vê administrador (nem quem acumula Admin), outra regional, nem o próprio financeiro.
+        Assert.Equal(new[] { c.Ana.Id, c.Gestor134.Id, supervisor.Id }.Order(), lista.Itens.Select(u => u.Id).Order());
 
-        var inativo = await usuarios.AlterarAtivoAsync(c.Ana.Id, false, CancellationToken.None);
-        Assert.False(inativo.Ativo);
-        c.Db.ChangeTracker.Clear();
-        Assert.True((await usuarios.AlterarAtivoAsync(c.Ana.Id, true, CancellationToken.None)).Ativo);
+        foreach (var alvo in new[] { c.Ana.Id, c.Gestor134.Id, supervisor.Id })
+        {
+            c.Db.ChangeTracker.Clear();
+            Assert.False((await usuarios.AlterarAtivoAsync(alvo, false, CancellationToken.None)).Ativo);
+            c.Db.ChangeTracker.Clear();
+            Assert.True((await usuarios.AlterarAtivoAsync(alvo, true, CancellationToken.None)).Ativo);
+        }
 
-        await Assert.ThrowsAsync<CrmForbiddenException>(() => usuarios.AlterarAtivoAsync(c.Bruno.Id, false, CancellationToken.None));     // outra regional
-        await Assert.ThrowsAsync<CrmForbiddenException>(() => usuarios.AlterarAtivoAsync(c.Gestor134.Id, false, CancellationToken.None));  // não é consultor
-        await Assert.ThrowsAsync<CrmForbiddenException>(() => usuarios.AlterarAtivoAsync(c.Fin.Id, false, CancellationToken.None));       // a própria conta
+        await Assert.ThrowsAsync<CrmForbiddenException>(() => usuarios.AlterarAtivoAsync(adminDaRegional.Id, false, CancellationToken.None)); // administrador
+        await Assert.ThrowsAsync<CrmForbiddenException>(() => usuarios.AlterarAtivoAsync(adminEGestor.Id, false, CancellationToken.None));   // administrador que também é gestor
+        await Assert.ThrowsAsync<CrmForbiddenException>(() => usuarios.AlterarAtivoAsync(c.Admin.Id, false, CancellationToken.None));       // administrador sem regional
+        await Assert.ThrowsAsync<CrmForbiddenException>(() => usuarios.AlterarAtivoAsync(c.Bruno.Id, false, CancellationToken.None));        // outra regional
+        await Assert.ThrowsAsync<CrmForbiddenException>(() => usuarios.AlterarAtivoAsync(c.Fin.Id, false, CancellationToken.None));         // a própria conta
+        await Assert.ThrowsAsync<CrmForbiddenException>(() => usuarios.ExcluirAsync(c.Ana.Id, CancellationToken.None));                      // nunca exclui
         await Assert.ThrowsAsync<CrmForbiddenException>(() => usuarios.CriarAsync(
             new UserCreateRequest("Novo", "novo@teste.com", "Senha@123", null, Roles.Comercial, c.Fin.RegionalId, null, null, null), CancellationToken.None));
         await Assert.ThrowsAsync<CrmForbiddenException>(() => usuarios.AtualizarAsync(c.Ana.Id,

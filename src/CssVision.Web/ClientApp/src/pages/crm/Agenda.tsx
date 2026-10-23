@@ -8,8 +8,11 @@ import {
   ChevronRight,
   Clock,
   List,
+  Pencil,
   Plus,
   RotateCcw,
+  Trash2,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
@@ -25,8 +28,8 @@ import {
   type PagedResult,
   type VendedorResumo,
 } from "../../lib/types";
-import { Button, Card, Checkbox, ErrorState, Modal, Select, Skeleton, useToast } from "../../components/ui";
-import { ActivityForm, tipoLabel, type ActivityFormValues } from "../../components/crm/ActivityForm";
+import { Button, Card, Checkbox, ConfirmDialog, ErrorState, Modal, Select, Skeleton, useToast } from "../../components/ui";
+import { ActivityForm, COR_TIPO, isoParaDatetimeLocal, tipoLabel, type ActivityFormValues } from "../../components/crm/ActivityForm";
 import { LeadPicker } from "../../components/crm/LeadPicker";
 import { avisarAtividadesAlteradas, concluirAtividade, EVENTO_ATIVIDADES_ALTERADAS } from "../../components/crm/NotificacoesAtividades";
 import { useAuth } from "../../context/AuthContext";
@@ -36,17 +39,6 @@ type Visao = "mes" | "semana" | "lista";
 const DIAS_SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-/** Uma cor por tipo de atividade — a mesma no mês, na semana, na lista e na legenda. */
-const COR_TIPO: Record<TipoAtividade, string> = {
-  [TipoAtividade.Ligacao]: "#2563eb",
-  [TipoAtividade.WhatsApp]: "#16a34a",
-  [TipoAtividade.Email]: "#0ea5e9",
-  [TipoAtividade.Reuniao]: "#8b5cf6",
-  [TipoAtividade.Visita]: "#f97316",
-  [TipoAtividade.Retorno]: "#d97706",
-  [TipoAtividade.Tarefa]: "#475569",
-  [TipoAtividade.Observacao]: "#94a3b8",
-};
 
 const CHAVE_PREFERENCIAS = "css:agenda:preferencias";
 
@@ -123,8 +115,16 @@ export function AgendaPage() {
   const [arrastando, setArrastando] = useState<Activity | null>(null);
   const [diaSobre, setDiaSobre] = useState<string | null>(null);
 
+  // Trazido da antiga aba "Atividades": editar, excluir e filtrar por lead agora são feitos aqui.
+  const [atividadeEditando, setAtividadeEditando] = useState<Activity | null>(null);
+  const [atividadeExcluindo, setAtividadeExcluindo] = useState<Activity | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
+  const [leadFiltro, setLeadFiltro] = useState<LeadListItem | null>(null);
+  const [escolhendoLeadFiltro, setEscolhendoLeadFiltro] = useState(false);
+
   const [novaNoDia, setNovaNoDia] = useState<Date | null>(null);
   const [leadNova, setLeadNova] = useState<LeadListItem | null>(null);
+  const [pessoal, setPessoal] = useState(false); // atividade pessoal: sem lead
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
@@ -158,7 +158,7 @@ export function AgendaPage() {
   useEffect(() => {
     const controller = new AbortController();
     setErro(null);
-    const filtroBase = { responsavelId: responsavelId || undefined };
+    const filtroBase = { responsavelId: responsavelId || undefined, leadId: leadFiltro?.id };
     async function carregarTudo() {
       // O período pode ter mais atividades que uma página (máx. 100): busca página por página.
       const todas: Activity[] = [];
@@ -189,7 +189,7 @@ export function AgendaPage() {
     });
     return () => controller.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveDia(inicio), chaveDia(fim), responsavelId, recarregar]);
+  }, [chaveDia(inicio), chaveDia(fim), responsavelId, leadFiltro?.id, recarregar]);
 
   const visiveis = useMemo(
     () =>
@@ -280,11 +280,11 @@ export function AgendaPage() {
   }
 
   async function criarAtividade(valores: ActivityFormValues) {
-    if (!leadNova) return;
+    if (!leadNova && !pessoal) return;
     setSalvando(true);
     try {
       const request: ActivityCreateRequest = {
-        leadId: leadNova.id,
+        leadId: leadNova?.id ?? null,
         tipo: valores.tipo,
         assunto: valores.assunto,
         descricao: valores.descricao || null,
@@ -295,6 +295,7 @@ export function AgendaPage() {
       notificar("success", "Atividade agendada.");
       setNovaNoDia(null);
       setLeadNova(null);
+      setPessoal(false);
       avisarAtividadesAlteradas();
     } catch (e) {
       notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível agendar a atividade.");
@@ -347,13 +348,13 @@ export function AgendaPage() {
       onDragEnd={() => setArrastando(null)}
       onClick={(e) => {
         e.stopPropagation();
-        abrirLead(a.leadId);
+        if (a.leadId) abrirLead(a.leadId);
       }}
-      title={`${tipoLabel[a.tipo]} · ${a.assunto} · ${a.leadNome}${a.status === StatusAtividade.Pendente ? " (arraste para reagendar)" : ""}`}
-      className={`group flex cursor-pointer items-center gap-1 truncate rounded-md px-1 py-0.5 text-[11px] leading-tight transition hover:brightness-95 ${
+      title={`${tipoLabel[a.tipo]} · ${a.assunto} · ${a.leadNome ?? "Pessoal"}${a.status === StatusAtividade.Pendente ? " (arraste para reagendar)" : ""}`}
+      className={`group flex cursor-pointer items-center gap-1.5 truncate rounded-lg px-1.5 py-1 text-[11px] leading-tight transition hover:brightness-95 ${
         a.status === StatusAtividade.Concluida ? "opacity-50 line-through" : ""
       }`}
-      style={{ backgroundColor: `${COR_TIPO[a.tipo]}1f`, color: a.atrasada ? "var(--danger)" : "var(--fg)" }}
+      style={{ backgroundColor: `color-mix(in srgb, ${COR_TIPO[a.tipo]} 16%, transparent)`, color: a.atrasada ? "var(--danger)" : "var(--fg)" }}
     >
       <CheckBotao a={a} pequeno />
       <span className="shrink-0 font-semibold" style={{ color: COR_TIPO[a.tipo] }}>
@@ -364,34 +365,112 @@ export function AgendaPage() {
   );
 
   /** Atividade completa (lista do dia, semana e lista). */
-  const Cartao = ({ a }: { a: Activity }) => (
-    <div
-      draggable={a.status === StatusAtividade.Pendente}
-      onDragStart={() => setArrastando(a)}
-      onDragEnd={() => setArrastando(null)}
-      className={`flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-2.5 text-sm transition hover:shadow-sm ${
-        a.status === StatusAtividade.Concluida ? "opacity-60" : ""
-      }`}
-      style={{ borderLeft: `3px solid ${COR_TIPO[a.tipo]}` }}
-    >
-      <CheckBotao a={a} />
-      <button type="button" onClick={() => abrirLead(a.leadId)} className="min-w-0 flex-1 cursor-pointer text-left">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs font-semibold" style={{ color: COR_TIPO[a.tipo] }}>
-            {tipoLabel[a.tipo]}
-          </span>
-          <span className={`flex items-center gap-1 text-xs ${a.atrasada ? "font-semibold text-[var(--danger)]" : "text-[var(--fg-muted)]"}`}>
-            <Clock className="size-3" /> {hora(a.dataHoraPrevista)}
-          </span>
+  async function salvarEdicao(valores: ActivityFormValues) {
+    if (!atividadeEditando) return;
+    setSalvando(true);
+    try {
+      const request: ActivityUpdateRequest = {
+        tipo: valores.tipo,
+        assunto: valores.assunto,
+        descricao: valores.descricao || null,
+        dataHoraPrevista: new Date(valores.dataHoraPrevista).toISOString(),
+        lembreteMinutosAntes: valores.lembreteMinutosAntes ? Number(valores.lembreteMinutosAntes) : null,
+        rowVersion: atividadeEditando.rowVersion,
+      };
+      await api.put(`/crm/activities/${atividadeEditando.id}`, request);
+      notificar("success", "Atividade atualizada com sucesso.");
+      setAtividadeEditando(null);
+      setRecarregar((n) => n + 1);
+    } catch (e) {
+      notificar("error", e instanceof Error ? e.message : "Não foi possível salvar as alterações.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function excluirAtividade() {
+    if (!atividadeExcluindo) return;
+    setExcluindo(true);
+    try {
+      await api.del(`/crm/activities/${atividadeExcluindo.id}`);
+      notificar("success", "Atividade excluída com sucesso.");
+      setAtividadeExcluindo(null);
+      setRecarregar((n) => n + 1);
+    } catch (e) {
+      notificar("error", e instanceof Error ? e.message : "Não foi possível excluir a atividade.");
+    } finally {
+      setExcluindo(false);
+    }
+  }
+
+  const Cartao = ({ a }: { a: Activity }) => {
+    const cor = COR_TIPO[a.tipo];
+    const concluida = a.status === StatusAtividade.Concluida;
+    return (
+      <div
+        draggable={a.status === StatusAtividade.Pendente}
+        onDragStart={() => setArrastando(a)}
+        onDragEnd={() => setArrastando(null)}
+        className={`group relative flex items-center gap-2 overflow-hidden rounded-xl border bg-[var(--surface)] p-1.5 text-[13px] shadow-[var(--shadow-card)] transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_26px_-14px_var(--cor-tipo)] ${
+          a.atrasada && !concluida ? "border-[color-mix(in_srgb,var(--danger)_45%,var(--border))]" : "border-[var(--border)] hover:border-[color-mix(in_srgb,var(--cor-tipo)_55%,var(--border))]"
+        } ${concluida ? "opacity-60" : ""}`}
+        style={{ "--cor-tipo": cor } as React.CSSProperties}
+      >
+        {/* Bloco do horário, na cor do tipo da atividade */}
+        <div
+          className="flex w-11 shrink-0 flex-col items-center justify-center rounded-lg py-1 text-center"
+          style={{ backgroundColor: `color-mix(in srgb, ${cor} 15%, transparent)`, color: `color-mix(in srgb, ${cor} 72%, var(--fg))` }}
+        >
+          <span className="text-[12px] font-bold leading-none [font-variant-numeric:tabular-nums]">{hora(a.dataHoraPrevista)}</span>
         </div>
-        <p className={`mt-0.5 truncate font-medium text-[var(--fg)] ${a.status === StatusAtividade.Concluida ? "line-through" : ""}`}>{a.assunto}</p>
-        <p className="truncate text-xs text-[var(--fg-muted)]">
-          {a.leadNome}
-          {ehGestao && ` · ${a.responsavelNome}`}
-        </p>
-      </button>
-    </div>
-  );
+
+        <button type="button" onClick={() => a.leadId && abrirLead(a.leadId)} className={`min-w-0 flex-1 text-left ${a.leadId ? "cursor-pointer" : "cursor-default"}`}>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: `color-mix(in srgb, ${cor} 72%, var(--fg))` }}>
+              {tipoLabel[a.tipo]}
+            </span>
+            {a.atrasada && !concluida && (
+              <span className="rounded-full bg-[var(--danger-soft)] px-1.5 py-px text-[10px] font-semibold text-[var(--danger)]">atrasada</span>
+            )}
+          </div>
+          <p className={`truncate font-semibold leading-snug text-[var(--fg)] ${concluida ? "line-through" : ""}`}>{a.assunto}</p>
+          <p className="flex items-center gap-1.5 truncate text-[11px] text-[var(--fg-muted)]">
+            <span className="truncate">{a.leadNome ?? "Pessoal"}</span>
+            {ehGestao && a.responsavelNome && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="truncate">{a.responsavelNome}</span>
+              </>
+            )}
+          </p>
+        </button>
+
+        <div className="flex shrink-0 flex-col items-end justify-between">
+          <CheckBotao a={a} />
+          <div className="flex gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+            <button
+              type="button"
+              title="Editar atividade"
+              aria-label="Editar atividade"
+              onClick={() => setAtividadeEditando(a)}
+              className="focus-ring cursor-pointer rounded-full p-1 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+            >
+              <Pencil className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              title="Excluir atividade"
+              aria-label="Excluir atividade"
+              onClick={() => setAtividadeExcluindo(a)}
+              className="focus-ring cursor-pointer rounded-full p-1 text-[var(--fg-muted)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
+            >
+              <Trash2 className="size-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const selecionadoChave = chaveDia(diaSelecionado);
   const doDiaSelecionado = porDia.get(selecionadoChave) ?? [];
@@ -401,27 +480,24 @@ export function AgendaPage() {
       {/* Cabeçalho */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex size-11 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]">
-            <CalendarDays className="size-5" />
-          </div>
           <div>
             <h1 className="text-xl font-semibold text-[var(--fg)]">{tituloPeriodo}</h1>
             <p className="text-sm text-[var(--fg-muted)]">Agenda de atividades · arraste uma atividade para outro dia para reagendar</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-            <button type="button" onClick={() => navegar(-1)} className="cursor-pointer rounded-l-lg p-2 hover:bg-[var(--surface-hover)]" aria-label="Anterior">
+          <div className="flex items-center rounded-lg bg-[var(--surface-hover)] p-0.5">
+            <button type="button" onClick={() => navegar(-1)} className="cursor-pointer rounded-md p-1.5 text-[var(--fg-muted)] hover:bg-[var(--surface)] hover:text-[var(--fg)]" aria-label="Anterior">
               <ChevronLeft className="size-4" />
             </button>
-            <button type="button" onClick={irParaHoje} className="cursor-pointer border-x border-[var(--border)] px-3 py-1.5 text-sm font-medium hover:bg-[var(--surface-hover)]">
+            <button type="button" onClick={irParaHoje} className="cursor-pointer rounded-md px-3 py-1 text-sm font-medium hover:bg-[var(--surface)]">
               Hoje
             </button>
-            <button type="button" onClick={() => navegar(1)} className="cursor-pointer rounded-r-lg p-2 hover:bg-[var(--surface-hover)]" aria-label="Próximo">
+            <button type="button" onClick={() => navegar(1)} className="cursor-pointer rounded-md p-1.5 text-[var(--fg-muted)] hover:bg-[var(--surface)] hover:text-[var(--fg)]" aria-label="Próximo">
               <ChevronRight className="size-4" />
             </button>
           </div>
-          <div className="flex rounded-lg border border-[var(--border)] bg-[var(--surface)] p-0.5">
+          <div className="flex rounded-lg bg-[var(--surface-hover)] p-0.5">
             {(
               [
                 ["mes", "Mês", CalendarDays],
@@ -434,7 +510,7 @@ export function AgendaPage() {
                 type="button"
                 onClick={() => setVisao(v)}
                 className={`flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium transition ${
-                  visao === v ? "bg-[var(--brand)] text-white" : "text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                  visao === v ? "bg-[var(--surface)] text-[var(--fg)] shadow-[0_1px_2px_rgb(0_0_0/0.12)]" : "text-[var(--fg-muted)] hover:text-[var(--fg)]"
                 }`}
               >
                 <Icone className="size-3.5" /> {rotulo}
@@ -452,19 +528,31 @@ export function AgendaPage() {
         {[
           { rotulo: "Atrasadas", valor: atrasadas.length, cor: "var(--danger)", Icone: AlertTriangle },
           { rotulo: "Para hoje", valor: qtdHoje, cor: "var(--brand)", Icone: Clock },
-          { rotulo: "Esta semana", valor: qtdSemana, cor: "#8b5cf6", Icone: CalendarRange },
+          { rotulo: "Esta semana", valor: qtdSemana, cor: "var(--info)", Icone: CalendarRange },
           { rotulo: "Concluídas no período", valor: qtdConcluidasNoPeriodo, cor: "var(--success)", Icone: CalendarCheck },
-        ].map(({ rotulo, valor, cor, Icone }) => (
-          <Card key={rotulo} className="flex items-center gap-3 p-3">
-            <div className="flex size-9 items-center justify-center rounded-lg" style={{ backgroundColor: `color-mix(in srgb, ${cor} 15%, transparent)`, color: cor }}>
-              <Icone className="size-4" />
-            </div>
-            <div>
-              <p className="text-xs text-[var(--fg-muted)]">{rotulo}</p>
-              <p className="text-lg font-semibold text-[var(--fg)]">{atividades ? valor : "—"}</p>
-            </div>
-          </Card>
-        ))}
+        ].map(({ rotulo, valor, cor, Icone }) => {
+          const alerta = rotulo === "Atrasadas" && valor > 0;
+          return (
+            <Card key={rotulo} className="group relative overflow-hidden p-2.5 transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-md">
+              {/* Brilho suave da cor do indicador no canto */}
+              <span aria-hidden className="pointer-events-none absolute -right-6 -top-6 size-24 rounded-full opacity-60 blur-2xl" style={{ backgroundColor: `color-mix(in srgb, ${cor} 22%, transparent)` }} />
+              <div className="relative flex items-center gap-3">
+                <span
+                  className="flex size-8 shrink-0 items-center justify-center rounded-xl"
+                  style={{ backgroundColor: `color-mix(in srgb, ${cor} 15%, transparent)`, color: cor }}
+                >
+                  <Icone className="size-4" aria-hidden />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-medium text-[var(--fg-muted)]">{rotulo}</p>
+                  <p className={`text-xl font-bold leading-tight tracking-tight [font-variant-numeric:tabular-nums] ${alerta ? "text-[var(--danger)]" : "text-[var(--fg)]"}`}>
+                    {atividades ? valor : "—"}
+                  </p>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
       {/* Filtros e legenda */}
@@ -476,11 +564,11 @@ export function AgendaPage() {
               key={t}
               type="button"
               onClick={() => setTiposOcultos((l) => (oculto ? l.filter((x) => x !== t) : [...l, t]))}
-              className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition ${oculto ? "opacity-40" : ""}`}
-              style={{ borderColor: COR_TIPO[t], color: COR_TIPO[t] }}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition hover:brightness-95 ${oculto ? "bg-[var(--surface-hover)] text-[var(--fg-muted)] line-through opacity-70" : ""}`}
+              style={oculto ? undefined : { backgroundColor: `color-mix(in srgb, ${COR_TIPO[t]} 15%, transparent)`, color: `color-mix(in srgb, ${COR_TIPO[t]} 70%, var(--fg))` }}
               title={oculto ? "Mostrar" : "Esconder"}
             >
-              <span className="size-2 rounded-full" style={{ backgroundColor: COR_TIPO[t] }} /> {tipoLabel[t]}
+              <span className="size-2 rounded-full" style={{ backgroundColor: oculto ? "var(--fg-muted)" : COR_TIPO[t] }} /> {tipoLabel[t]}
             </button>
           );
         })}
@@ -499,6 +587,18 @@ export function AgendaPage() {
                   ))}
               </Select>
             </div>
+          )}
+          {leadFiltro ? (
+            <span className="inline-flex h-8 items-center gap-1 rounded-full bg-[var(--brand-soft)] pl-3 pr-1 text-sm font-medium text-[var(--brand)]">
+              Lead: {leadFiltro.nomeOuRazaoSocial}
+              <button type="button" aria-label="Remover filtro de lead" onClick={() => setLeadFiltro(null)} className="focus-ring flex size-6 cursor-pointer items-center justify-center rounded-full hover:bg-[var(--brand)]/15">
+                <X className="size-3.5" />
+              </button>
+            </span>
+          ) : (
+            <Button size="sm" variant="secondary" onClick={() => setEscolhendoLeadFiltro(true)}>
+              Filtrar por lead
+            </Button>
           )}
           <Checkbox label="Mostrar concluídas" checked={mostrarConcluidas} onChange={(e) => setMostrarConcluidas(e.target.checked)} />
         </div>
@@ -539,10 +639,10 @@ export function AgendaPage() {
       ) : (
         <div className={`grid gap-4 ${visao === "mes" ? "xl:grid-cols-[1fr_20rem]" : ""}`}>
           {/* Calendário */}
-          <Card className="overflow-hidden p-0">
-            <div className="grid grid-cols-7 border-b border-[var(--border)] bg-[var(--surface-hover)]">
+          <Card className="overflow-hidden !rounded-3xl p-0">
+            <div className="grid grid-cols-7 border-b border-[var(--border)]">
               {DIAS_SEMANA.map((d, i) => (
-                <div key={d} className={`px-2 py-2 text-center text-xs font-semibold uppercase ${i >= 5 ? "text-[var(--fg-muted)]" : "text-[var(--fg)]"}`}>
+                <div key={d} className={`px-2 py-3 text-center text-[11px] font-semibold uppercase tracking-wider ${i >= 5 ? "text-[var(--fg-muted)]/60" : "text-[var(--fg-muted)]"}`}>
                   {d}
                 </div>
               ))}
@@ -565,16 +665,16 @@ export function AgendaPage() {
                     }}
                     onDragLeave={() => setDiaSobre((atual) => (atual === k ? null : atual))}
                     onDrop={(e) => aoSoltar(e, dia)}
-                    className={`group relative cursor-pointer border-b border-r border-[var(--border)] p-1.5 transition-colors [&:nth-child(7n)]:border-r-0 ${
+                    className={`group relative cursor-pointer border-b border-r border-[var(--border)] p-2 transition-colors [&:nth-child(7n)]:border-r-0 ${
                       visao === "mes" ? "min-h-28" : "min-h-[26rem]"
                     } ${foraDoMes ? "bg-[var(--surface-hover)]/50" : "bg-[var(--surface)]"} ${
-                      diaSobre === k ? "!bg-[var(--brand-soft)]" : selecionado && visao === "mes" ? "bg-[var(--brand-soft)]/40" : "hover:bg-[var(--surface-hover)]/60"
+                      diaSobre === k ? "!bg-[var(--brand-soft)]" : selecionado && visao === "mes" ? "bg-[var(--brand-soft)]/50 ring-2 ring-inset ring-[var(--brand)]/45" : "hover:bg-[var(--surface-hover)]/60"
                     }`}
                   >
                     <div className="mb-1 flex items-center justify-between">
                       <span
-                        className={`flex size-6 items-center justify-center rounded-full text-xs font-semibold ${
-                          ehHoje ? "bg-[var(--brand)] text-white" : foraDoMes ? "text-[var(--fg-muted)]/60" : "text-[var(--fg)]"
+                        className={`flex size-7 items-center justify-center rounded-full text-[13px] font-semibold ${
+                          ehHoje ? "bg-[var(--brand)] text-white shadow-[0_4px_10px_-4px_var(--brand)]" : foraDoMes ? "text-[var(--fg-muted)]/60" : "text-[var(--fg)]"
                         }`}
                       >
                         {dia.getDate()}
@@ -615,11 +715,17 @@ export function AgendaPage() {
           {visao === "mes" && (
             <Card className="flex flex-col p-4 xl:sticky xl:top-20 xl:max-h-[calc(100vh-7rem)]">
               <div className="mb-3 flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-sm font-semibold text-[var(--fg)]">{tituloDia(diaSelecionado)}</p>
-                  <p className="text-xs text-[var(--fg-muted)]">
-                    {doDiaSelecionado.length} atividade(s){selecionadoChave === hojeChave && " · hoje"}
-                  </p>
+                <div className="flex items-center gap-3">
+                  <div className="flex size-12 shrink-0 flex-col items-center justify-center rounded-2xl bg-[var(--brand-soft)] text-[var(--brand)]">
+                    <span className="text-[10px] font-semibold uppercase leading-none">{diaSelecionado.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "")}</span>
+                    <span className="text-lg font-bold leading-tight [font-variant-numeric:tabular-nums]">{diaSelecionado.getDate()}</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-[var(--fg)]">{tituloDia(diaSelecionado)}</p>
+                    <p className="text-xs text-[var(--fg-muted)]">
+                      {doDiaSelecionado.length} atividade(s){selecionadoChave === hojeChave && " · hoje"}
+                    </p>
+                  </div>
                 </div>
                 <Button size="sm" variant="secondary" onClick={() => setNovaNoDia(diaSelecionado)}>
                   <Plus className="size-3.5" /> Agendar
@@ -655,16 +761,37 @@ export function AgendaPage() {
         onClose={() => {
           setNovaNoDia(null);
           setLeadNova(null);
+          setPessoal(false);
         }}
         title={novaNoDia ? `Nova atividade · ${novaNoDia.toLocaleDateString("pt-BR")}` : "Nova atividade"}
       >
         {novaNoDia &&
-          (!leadNova ? (
-            <LeadPicker onSelecionar={setLeadNova} />
+          (!leadNova && !pessoal ? (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setPessoal(true)}
+                className="focus-ring flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-[color-mix(in_srgb,var(--brand)_55%,var(--border))] bg-[var(--brand-soft)] px-3 py-2.5 text-left transition hover:brightness-95"
+              >
+                <span className="flex size-9 items-center justify-center rounded-xl bg-[var(--brand)] text-[var(--brand-fg)]">
+                  <Plus className="size-4" />
+                </span>
+                <span>
+                  <span className="block text-sm font-semibold text-[var(--fg)]">Atividade pessoal</span>
+                  <span className="block text-xs text-[var(--fg-muted)]">Lembrete ou compromisso seu, sem ligar a um lead</span>
+                </span>
+              </button>
+              <p className="text-center text-xs text-[var(--fg-muted)]">ou escolha o lead da atividade</p>
+              <LeadPicker onSelecionar={setLeadNova} />
+            </div>
           ) : (
             <div>
               <p className="mb-3 text-sm text-[var(--fg-muted)]">
-                Lead: <strong className="text-[var(--fg)]">{leadNova.nomeOuRazaoSocial}</strong>
+                {leadNova ? (
+                  <>Lead: <strong className="text-[var(--fg)]">{leadNova.nomeOuRazaoSocial}</strong></>
+                ) : (
+                  <strong className="text-[var(--fg)]">Atividade pessoal</strong>
+                )}
               </p>
               <ActivityForm
                 valoresIniciais={{ tipo: TipoAtividade.Ligacao, assunto: "", descricao: "", dataHoraPrevista: datetimeLocal(novaNoDia), lembreteMinutosAntes: "" }}
@@ -673,11 +800,55 @@ export function AgendaPage() {
                 onCancel={() => {
                   setNovaNoDia(null);
                   setLeadNova(null);
+                  setPessoal(false);
                 }}
               />
             </div>
           ))}
       </Modal>
+
+      <Modal open={escolhendoLeadFiltro} onClose={() => setEscolhendoLeadFiltro(false)} title="Filtrar por lead">
+        <LeadPicker
+          onSelecionar={(lead) => {
+            setLeadFiltro(lead);
+            setEscolhendoLeadFiltro(false);
+          }}
+        />
+      </Modal>
+
+      <Modal open={!!atividadeEditando} onClose={() => setAtividadeEditando(null)} title="Editar atividade">
+        {atividadeEditando && (
+          <div>
+            <p className="mb-3 text-sm text-[var(--fg-muted)]">
+              {atividadeEditando.leadId ? <>Lead: <strong className="text-[var(--fg)]">{atividadeEditando.leadNome}</strong></> : <strong className="text-[var(--fg)]">Atividade pessoal</strong>}
+            </p>
+            <ActivityForm
+              modoEdicao
+              valoresIniciais={{
+                tipo: atividadeEditando.tipo,
+                assunto: atividadeEditando.assunto,
+                descricao: atividadeEditando.descricao ?? "",
+                dataHoraPrevista: isoParaDatetimeLocal(atividadeEditando.dataHoraPrevista),
+                lembreteMinutosAntes: atividadeEditando.lembreteMinutosAntes != null ? String(atividadeEditando.lembreteMinutosAntes) : "",
+              }}
+              salvando={salvando}
+              onSubmit={salvarEdicao}
+              onCancel={() => setAtividadeEditando(null)}
+            />
+          </div>
+        )}
+      </Modal>
+
+      <ConfirmDialog
+        open={!!atividadeExcluindo}
+        title="Excluir atividade"
+        message={<>Tem certeza que deseja excluir a atividade <strong className="text-[var(--fg)]">{atividadeExcluindo?.assunto}</strong>? Essa ação não pode ser desfeita.</>}
+        confirmLabel="Excluir"
+        danger
+        loading={excluindo}
+        onConfirm={excluirAtividade}
+        onCancel={() => setAtividadeExcluindo(null)}
+      />
     </div>
   );
 }

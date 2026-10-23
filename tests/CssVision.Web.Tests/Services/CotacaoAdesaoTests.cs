@@ -54,6 +54,73 @@ public class CotacaoAdesaoTests
     }
 
     [Fact]
+    public async Task MoverParaCotacao_SemOportunidade_CriaUmaEmPropostaEnviadaComAAdesao()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, usuario, lead, cotacao) = await PrepararAsync(factory);
+        var proposta = await factory.CriarEtapaAsync(db, "Proposta enviada", 5);
+
+        await LeadService(db, usuario).MudarEtapaAsync(lead.Id, new ChangeLeadStageRequest(cotacao.Id, lead.RowVersion, ValorAdesao: 350m), CancellationToken.None);
+
+        db.ChangeTracker.Clear();
+        var oportunidade = await db.CrmOpportunities.SingleAsync();
+        Assert.Equal(proposta.Id, oportunidade.EtapaId);
+        Assert.Equal(350m, oportunidade.ValorEstimado);
+        Assert.Equal(lead.ResponsavelId, oportunidade.ResponsavelId);
+        Assert.Single(await db.CrmStageHistories.ToListAsync());
+    }
+
+    [Fact]
+    public async Task MoverParaCotacao_NovamenteNaoDuplicaAOportunidade()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, usuario, lead, cotacao) = await PrepararAsync(factory);
+        await factory.CriarEtapaAsync(db, "Proposta enviada", 5);
+        var service = LeadService(db, usuario);
+
+        await service.MudarEtapaAsync(lead.Id, new ChangeLeadStageRequest(cotacao.Id, lead.RowVersion, ValorAdesao: 350m), CancellationToken.None);
+        db.ChangeTracker.Clear();
+        var atual = await db.CrmLeads.SingleAsync();
+        var emAtendimento = await factory.ObterOuCriarEtapaLeadAsync(db, "Em atendimento (Indicação)", 1);
+        await service.MudarEtapaAsync(lead.Id, new ChangeLeadStageRequest(emAtendimento.Id, atual.RowVersion), CancellationToken.None);
+        db.ChangeTracker.Clear();
+        atual = await db.CrmLeads.SingleAsync();
+        await service.MudarEtapaAsync(lead.Id, new ChangeLeadStageRequest(cotacao.Id, atual.RowVersion, ValorAdesao: 400m), CancellationToken.None);
+
+        db.ChangeTracker.Clear();
+        Assert.Single(await db.CrmOpportunities.ToListAsync());
+    }
+
+    [Fact]
+    public async Task MoverParaCotacao_OportunidadeEmEtapaAnterior_AvancaParaPropostaEnviada_MasNegociacaoFicaComoEsta()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, usuario, lead, cotacao) = await PrepararAsync(factory);
+        var novoLead = await factory.CriarEtapaAsync(db, "Novo lead", 1);
+        var proposta = await factory.CriarEtapaAsync(db, "Proposta enviada", 5);
+        var negociacao = await factory.CriarEtapaAsync(db, "Negociação", 6);
+        db.CrmOpportunities.Add(new CrmOpportunity { LeadId = lead.Id, Titulo = "Op", ResponsavelId = lead.ResponsavelId!.Value, EtapaId = novoLead.Id, ValorEstimado = 1000m });
+        await db.SaveChangesAsync();
+
+        await LeadService(db, usuario).MudarEtapaAsync(lead.Id, new ChangeLeadStageRequest(cotacao.Id, lead.RowVersion, ValorAdesao: 350m), CancellationToken.None);
+        db.ChangeTracker.Clear();
+        var op = await db.CrmOpportunities.SingleAsync();
+        Assert.Equal(proposta.Id, op.EtapaId);
+        Assert.Equal(1000m, op.ValorEstimado);
+
+        op.EtapaId = negociacao.Id;
+        await db.SaveChangesAsync();
+        var atual = await db.CrmLeads.SingleAsync();
+        var emAtendimento = await factory.ObterOuCriarEtapaLeadAsync(db, "Em atendimento (Indicação)", 1);
+        await LeadService(db, usuario).MudarEtapaAsync(lead.Id, new ChangeLeadStageRequest(emAtendimento.Id, atual.RowVersion), CancellationToken.None);
+        db.ChangeTracker.Clear();
+        atual = await db.CrmLeads.SingleAsync();
+        await LeadService(db, usuario).MudarEtapaAsync(lead.Id, new ChangeLeadStageRequest(cotacao.Id, atual.RowVersion, ValorAdesao: 350m), CancellationToken.None);
+        db.ChangeTracker.Clear();
+        Assert.Equal(negociacao.Id, (await db.CrmOpportunities.SingleAsync()).EtapaId);
+    }
+
+    [Fact]
     public async Task OutraEtapa_NaoExigeValorDaAdesao()
     {
         using var factory = new TestDbContextFactory();

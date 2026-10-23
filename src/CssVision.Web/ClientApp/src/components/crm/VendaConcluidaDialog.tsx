@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { OPCOES_TIPO_INDICACAO, TIPO_INDICACAO_LEAD } from "../../lib/opcoesLead";
 import { Paperclip } from "lucide-react";
 import { api, ApiRequestError, isAbortError, uploadFile } from "../../lib/api";
-import { TipoEtapaPipeline, TipoPessoa, type LeadDuplicateWarning, type ChangeStageRequest, type LeadDetail, type Opportunity, type OpportunityCreateRequest, type OpportunityUpdateRequest, type PipelineBoard } from "../../lib/types";
+import { TipoEtapaPipeline, TipoPessoa, type LeadDuplicateWarning, type ChangeStageRequest, type LeadDetail, type Opportunity, type OpportunityCreateRequest, type OpportunityUpdateRequest, type PipelineStage, type PipelineBoard } from "../../lib/types";
 import { ESTADOS_BRASIL } from "../../lib/estados";
 import { formatarData, hojeBrasilia } from "../../lib/format";
 import { Button, Checkbox, DocumentoInput, Input, Label, Modal, MoneyInput, Select, useToast } from "../ui";
@@ -10,6 +10,7 @@ import { leadFormVazio, paraLeadCreateRequest } from "./LeadForm";
 import { CidadeInput } from "../CidadeInput";
 import { erroDocumento, erroTelefone } from "../../lib/validacao";
 import { useAuth } from "../../context/AuthContext";
+import { DataInput } from "../PeriodoInput";
 
 export type DadosVendaConcluida = Omit<ChangeStageRequest, "novaEtapaId" | "motivoPerdaId">;
 
@@ -105,6 +106,7 @@ export function VendaConcluidaDialog({
   pipelineGanhoEtapaId,
   oportunidadeEditar = null,
   modo = "venda",
+  onEscolherGanho,
   indicacaoLead = false,
   permitirVeiculosAdicionais = false,
   novoVeiculo = false,
@@ -128,6 +130,8 @@ export function VendaConcluidaDialog({
   oportunidadeEditar?: Opportunity | null;
   /** "oportunidade": cria uma oportunidade com este mesmo formulário (só o nome do cliente é obrigatório). */
   modo?: "venda" | "oportunidade";
+  /** Modo "oportunidade": mostra a opção "Ganho" entre os tipos; ao escolhê-la quem chamou abre o fluxo de venda concluída. */
+  onEscolherGanho?: () => void;
   /** Card "Lead" solto em "Venda concluída (Indicação)": a venda já vem marcada como indicação "Indicação Lead". */
   indicacaoLead?: boolean;
   /** Mostra a opção "o cliente fechou mais de um veículo" (quadro de leads). */
@@ -183,6 +187,24 @@ export function VendaConcluidaDialog({
    */
   const rascunhoVendaRef = useRef<{ id: string; leadId: string } | null>(null);
   const ehVenda = modo === "venda";
+
+  // Nova oportunidade: o consultor escolhe o tipo (etapa do pipeline em que a oportunidade começa).
+  const [etapasAbertas, setEtapasAbertas] = useState<PipelineStage[]>([]);
+  const [etapaInicialId, setEtapaInicialId] = useState("");
+  useEffect(() => {
+    if (!open || ehVenda) return;
+    let cancelado = false;
+    api
+      .get<PipelineStage[]>("/crm/settings/stages")
+      .then((todas) => {
+        if (cancelado) return;
+        const abertas = todas.filter((e) => e.ativa && e.tipo === TipoEtapaPipeline.Aberta).sort((a, b) => a.ordem - b.ordem);
+        setEtapasAbertas(abertas);
+        setEtapaInicialId("");
+      })
+      .catch(() => { if (!cancelado) setEtapasAbertas([]); });
+    return () => { cancelado = true; };
+  }, [open, ehVenda]);
   const ehNovoCliente = !!novoCliente;
   const [telefone, setTelefone] = useState("");
   const [telefone2, setTelefone2] = useState("");
@@ -388,7 +410,7 @@ export function VendaConcluidaDialog({
       !carroZero);
 
   const podeConfirmar = !ehVenda
-    ? !!nomeCliente.trim() && !enviandoArquivos && !enviando
+    ? !!nomeCliente.trim() && (etapasAbertas.length === 0 || !!etapaInicialId) && !enviandoArquivos && !enviando
     : (valores.valorFinal ?? -1) >= 0 &&
     !!valores.dataEfetivaFechamento &&
     !dataDaVendaFutura &&
@@ -473,6 +495,7 @@ export function VendaConcluidaDialog({
       leadId,
       titulo: nomeCliente.trim(),
       responsavelId: responsavelIdLead,
+      etapaId: etapaInicialId || null,
       produtoOuServico: null,
       valorEstimado: valores.mensalidade ?? 0,
       probabilidadeFechamento: null,
@@ -729,6 +752,49 @@ export function VendaConcluidaDialog({
               : `Concluir venda — mover para "${etapaNome}"`
       } size="lg">
       <div className="space-y-5">
+        {!ehVenda && (etapasAbertas.length > 0 || !!onEscolherGanho) && (
+          <div>
+            <Label>Tipo da oportunidade</Label>
+            <div role="radiogroup" aria-label="Tipo da oportunidade" className="flex flex-wrap gap-1.5">
+              {etapasAbertas.map((e) => {
+                const ativo = etapaInicialId === e.id;
+                const cor = e.cor ?? "#64748b";
+                return (
+                  <button
+                    key={e.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={ativo}
+                    onClick={() => setEtapaInicialId(e.id)}
+                    style={{ "--cor": cor } as React.CSSProperties}
+                    className={`focus-ring inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium transition-colors ${
+                      ativo
+                        ? "border-[var(--cor)] bg-[color-mix(in_srgb,var(--cor)_16%,transparent)] text-[color-mix(in_srgb,var(--cor)_75%,var(--fg))] shadow-[0_0_0_2px_color-mix(in_srgb,var(--cor)_22%,transparent)]"
+                        : "border-[color-mix(in_srgb,var(--cor)_30%,var(--border))] bg-[color-mix(in_srgb,var(--cor)_7%,var(--surface))] text-[var(--fg)] hover:bg-[color-mix(in_srgb,var(--cor)_14%,var(--surface))]"
+                    }`}
+                  >
+                    <span className="size-2 rounded-full" style={{ backgroundColor: cor }} />
+                    {e.nome}
+                  </button>
+                );
+              })}
+              {onEscolherGanho && (
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={false}
+                  onClick={onEscolherGanho}
+                  title="Venda já fechada: abre o formulário de venda concluída"
+                  className="focus-ring inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[color-mix(in_srgb,var(--success)_40%,var(--border))] bg-[color-mix(in_srgb,var(--success)_9%,var(--surface))] px-3 py-1.5 text-[13px] font-medium text-[var(--fg)] transition-colors hover:bg-[color-mix(in_srgb,var(--success)_18%,var(--surface))]"
+                >
+                  <span className="size-2 rounded-full bg-[var(--success)]" />
+                  Ganho (venda concluída)
+                </button>
+              )}
+            </div>
+            {!etapaInicialId && <p className="mt-1 text-xs text-[var(--fg-muted)]">Escolha em que etapa do pipeline a oportunidade começa.</p>}
+          </div>
+        )}
         {ehNovoCliente && (
           <div>
             <h3 className="mb-3 text-sm font-semibold text-[var(--fg)]">Dados do cliente</h3>
@@ -819,14 +885,7 @@ export function VendaConcluidaDialog({
                 <Label htmlFor="venda-data" required={ehVenda}>
                   Data da venda
                 </Label>
-                <Input
-                  id="venda-data"
-                  type="date"
-                  max={hojeBrasilia()}
-                  aria-invalid={dataDaVendaFutura}
-                  value={valores.dataEfetivaFechamento ?? ""}
-                  onChange={(e) => set("dataEfetivaFechamento", e.target.value)}
-                />
+                <DataInput id="venda-data" max={hojeBrasilia()} invalid={dataDaVendaFutura} value={valores.dataEfetivaFechamento ?? ""} onChange={(v) => set("dataEfetivaFechamento", v)} />
                 {dataDaVendaFutura && (
                   <p role="alert" className="mt-1 text-xs text-[var(--danger)]">
                     A data da venda não pode ser futura. Informe o dia em que a venda foi fechada.
@@ -836,7 +895,7 @@ export function VendaConcluidaDialog({
             ) : (
               <div>
                 <Label htmlFor="venda-previsao">Previsão de fechamento</Label>
-                <Input id="venda-previsao" type="date" value={previsaoFechamento} onChange={(e) => setPrevisaoFechamento(e.target.value)} />
+                <DataInput id="venda-previsao" value={previsaoFechamento} onChange={setPrevisaoFechamento} />
               </div>
             )}
             {!ehVenda && (
@@ -1097,13 +1156,7 @@ export function VendaConcluidaDialog({
             {ehVenda && !temComprovantePagamento && (
               <div className="sm:col-start-2">
                 <Label htmlFor="venda-data-pagamento-adesao">Adesão será paga em</Label>
-                <Input
-                  id="venda-data-pagamento-adesao"
-                  type="date"
-                  min={oportunidadeEditar ? undefined : hojeLocal()}
-                  value={valores.dataPagamentoAdesaoPrevista ?? ""}
-                  onChange={(e) => set("dataPagamentoAdesaoPrevista", e.target.value || null)}
-                />
+                <DataInput id="venda-data-pagamento-adesao" min={oportunidadeEditar ? undefined : hojeLocal()} value={valores.dataPagamentoAdesaoPrevista ?? ""} onChange={(v) => set("dataPagamentoAdesaoPrevista", v || null)} />
                 <p className="mt-1 text-xs text-[var(--fg-muted)]">
                   Se a adesão não foi paga hoje, marque a data: o comprovante fica dispensado e você recebe um lembrete nesse dia.
                 </p>
