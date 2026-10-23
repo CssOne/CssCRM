@@ -367,7 +367,7 @@ export function LeadsPage() {
                       </div>
                       <div className="flex items-center gap-1.5 text-[11px] leading-tight text-[var(--fg-muted)]">
                         <span className="truncate">{[formatarTelefone(lead.telefone), lead.email].filter(Boolean).join(" · ") || "—"}</span>
-                        <BotaoWhatsApp telefone={lead.telefone} nome={lead.nomeOuRazaoSocial} className="size-5" />
+                        <BotaoWhatsApp telefone={lead.telefone} nome={lead.nomeOuRazaoSocial} leadId={lead.id} etapa={lead.etapaNome} className="size-5" />
                       </div>
                     </td>
                     <td className="px-2.5 py-0.5">
@@ -453,7 +453,7 @@ export function LeadsPage() {
                   </span>
                 </div>
               </Link>
-              <BotaoWhatsApp telefone={lead.telefone} nome={lead.nomeOuRazaoSocial} className="absolute bottom-2.5 right-3 size-7" />
+              <BotaoWhatsApp telefone={lead.telefone} nome={lead.nomeOuRazaoSocial} leadId={lead.id} etapa={lead.etapaNome} className="absolute bottom-2.5 right-3 size-7" />
               </div>
             ))}
           </div>

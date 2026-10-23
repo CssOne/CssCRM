@@ -201,7 +201,7 @@ export function CartaoLead({
           <p key={t} className="flex items-center gap-1.5">
             <Phone className="size-3.5 shrink-0" aria-hidden />
             <span className="truncate">{formatarTelefone(t)}</span>
-            <BotaoWhatsApp telefone={t} nome={cartao.nomeOuRazaoSocial} className="size-6" />
+            <BotaoWhatsApp telefone={t} nome={cartao.nomeOuRazaoSocial} leadId={cartao.leadId} etapa={nomeColuna} className="size-6" />
           </p>
         ))}
         {cartao.email && (
