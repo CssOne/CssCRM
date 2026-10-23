@@ -51,6 +51,7 @@ import { PortalStatCard } from "../../components/portal/PortalStatCard";
 import { useAuth } from "../../context/AuthContext";
 import { ContratoFinanceiro } from "../../components/portal/ContratoFinanceiro";
 import { CobrancasDoConsultor } from "../../components/portal/CobrancasDoConsultor";
+import { ignoraFiltroDeMes, rotuloDaDataDeAdesao, vendasVisiveis } from "../../lib/vendasPendentes";
 
 // ---------- Tipos (espelham PortalFinanceiroController) ----------
 
@@ -1123,19 +1124,25 @@ function Vendas({ dados, mes, somenteLeitura, onAbrirConsultor, hoje, ano, recar
   const [ordem, setOrdem] = useState("recentes");
   const limpar = () => { setBusca(""); setChip(""); setFProduto(""); setFConsultor(""); };
 
-  // Tudo menos o atalho de situação: serve de base para as contagens dos atalhos.
-  const base = dados.vendas.filter((v) => (!mes || mesDe(v.dataVenda) === mes) && (contem(v.cliente, busca) || contem(v.observacoes, busca) || contem(v.consultor, busca)) && (!fProduto || v.produto === fProduto) && (!fConsultor || v.consultorId === fConsultor));
   const situacaoDe = (v: Venda) => calcVenda(v, hoje);
   const confere = (v: Venda, f: string) => {
     if (!f) return true;
     const c = situacaoDe(v);
     return f === "pendente" ? c.pendente > 0 : f === "atrasada" ? c.diasAtraso > 0 : c.pendente === 0;
   };
+  // "Com pendência" e "Em atraso" valem para o ano todo (uma venda fechada em outro mês, com a adesão agendada para depois, continua pendente); os demais atalhos seguem o mês.
+  const visiveis = vendasVisiveis(dados.vendas, {
+    mes,
+    filtro: chip,
+    noMes: (v) => mesDe(v.dataVenda) === mes,
+    passaOutros: (v) => (contem(v.cliente, busca) || contem(v.observacoes, busca) || contem(v.consultor, busca)) && (!fProduto || v.produto === fProduto) && (!fConsultor || v.consultorId === fConsultor),
+    confere,
+  });
   const chips: ChipFiltro[] = [
-    { valor: "", rotulo: "Todas", contagem: base.length },
-    { valor: "pendente", rotulo: "Com pendência", contagem: base.filter((v) => confere(v, "pendente")).length, cor: "var(--warning)" },
-    { valor: "atrasada", rotulo: "Em atraso", contagem: base.filter((v) => confere(v, "atrasada")).length, cor: "var(--danger)" },
-    { valor: "recebida", rotulo: "Tudo recebido", contagem: base.filter((v) => confere(v, "recebida")).length, cor: "var(--success)" },
+    { valor: "", rotulo: "Todas", contagem: visiveis.contagem("") },
+    { valor: "pendente", rotulo: "Com pendência", contagem: visiveis.contagem("pendente"), cor: "var(--warning)" },
+    { valor: "atrasada", rotulo: "Em atraso", contagem: visiveis.contagem("atrasada"), cor: "var(--danger)" },
+    { valor: "recebida", rotulo: "Tudo recebido", contagem: visiveis.contagem("recebida"), cor: "var(--success)" },
   ];
   const ordenacoes: Record<string, (a: Venda, b: Venda) => number> = {
     recentes: (a, b) => b.dataVenda.localeCompare(a.dataVenda),
@@ -1144,7 +1151,7 @@ function Vendas({ dados, mes, somenteLeitura, onAbrirConsultor, hoje, ano, recar
     pendente: (a, b) => situacaoDe(b).pendente - situacaoDe(a).pendente,
     cliente: (a, b) => a.cliente.localeCompare(b.cliente, "pt-BR"),
   };
-  const lista = base.filter((v) => confere(v, chip)).sort(ordenacoes[ordem]);
+  const lista = [...visiveis.lista].sort(ordenacoes[ordem]);
   const tags: TagFiltro[] = [
     ...(busca.trim() ? [{ rotulo: `“${busca.trim()}”`, onRemover: () => setBusca("") }] : []),
     ...(fProduto ? [{ rotulo: fProduto, onRemover: () => setFProduto("") }] : []),
@@ -1185,7 +1192,10 @@ function Vendas({ dados, mes, somenteLeitura, onAbrirConsultor, hoje, ano, recar
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-[var(--fg-muted)]">{lista.length} venda(s) no período</p>
+        <p className="text-sm text-[var(--fg-muted)]">
+          {lista.length} venda(s) {ignoraFiltroDeMes(chip) ? "do ano" : "no período"}
+          {visiveis.fezCortePorMes && " — inclui vendas fechadas em outros meses que ainda estão pendentes"}
+        </p>
       </div>
 
       <BarraFiltros
@@ -1251,6 +1261,10 @@ function Vendas({ dados, mes, somenteLeitura, onAbrirConsultor, hoje, ano, recar
                     <button type="button" className="cursor-pointer disabled:cursor-default" title={somenteLeitura ? undefined : "Clique para marcar como recebido / pendente"} disabled={somenteLeitura} onClick={() => alternar(v, "statusAdesao")}>
                       <BadgeSituacao s={c.sa} />
                     </button>
+                    {(() => {
+                      const data = rotuloDaDataDeAdesao(c.sa, v.dataPrevistaAdesao);
+                      return data && <span className={`block whitespace-nowrap text-[11px] ${data.atrasada ? "font-medium text-[var(--danger)]" : "text-[var(--fg-muted)]"}`}>{data.texto}</span>;
+                    })()}
                   </td>
                   <td className="px-3 py-2">
                     {formatarMoeda(v.valorBonus)}

@@ -146,6 +146,7 @@ public sealed class FinanceiroService(ApplicationDbContext db, ICurrentUserServi
                 o.Id, Cliente = o.Lead.NomeOuRazaoSocial, o.DataEfetivaFechamento, o.ProdutoOuServico, o.PagamentoAdesao,
                 o.PagamentoAdesaoArquivoUrl, o.DataPagamentoAdesaoPrevista, o.Indicacao, o.ValorIndicacao, o.ComprovanteIndicacaoArquivoUrl,
                 Rastreador = o.Veiculo != null ? o.Veiculo.Rastreador : null,
+                AdesaoDoLead = o.Lead.ValorAdesao,
             })
             .ToListAsync(ct);
 
@@ -156,9 +157,12 @@ public sealed class FinanceiroService(ApplicationDbContext db, ICurrentUserServi
             var salva = vendasSalvas.FirstOrDefault(v => v.OportunidadeId == o.Id);
             // Adesão sem comprovante e com data combinada ainda não foi paga; nos demais casos o card já conta como recebida.
             var pendente = o.PagamentoAdesaoArquivoUrl is null && o.DataPagamentoAdesaoPrevista is not null;
+            // Fechada sem pagar a adesão no dia (ficou combinada para outra data): o "valor pago" do fechamento costuma ficar em 0,00 — o que está para receber é o valor da adesão
+            // que o consultor informou na cotação. Sem isso a venda apareceria "sem valor" e fora de "Com pendência"/"Em atraso".
+            var valorAdesao = pendente && !(o.PagamentoAdesao > 0) && o.AdesaoDoLead is > 0 ? o.AdesaoDoLead.Value : o.PagamentoAdesao ?? 0m;
             vendas.Add(new FinanceiroVendaDto(
                 salva?.Id, o.Id, true, dia, o.Cliente, string.IsNullOrWhiteSpace(o.ProdutoOuServico) ? "Adesão" : o.ProdutoOuServico!,
-                o.PagamentoAdesao ?? 0m, salva?.ValorBonus ?? 0m, salva?.Premiacoes ?? 0m,
+                valorAdesao, salva?.ValorBonus ?? 0m, salva?.Premiacoes ?? 0m,
                 salva?.DataPrevistaAdesao ?? o.DataPagamentoAdesaoPrevista,
                 salva?.StatusAdesao ?? (pendente ? FinanceiroStatus.Pendente : FinanceiroStatus.Recebido),
                 salva?.DataPrevistaBonus, salva?.StatusBonus ?? FinanceiroStatus.Pendente, salva?.Observacoes, salva?.RowVersion, BonusRecebido: salva?.BonusRecebido));
