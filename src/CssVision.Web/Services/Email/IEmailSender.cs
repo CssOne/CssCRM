@@ -11,8 +11,20 @@ public interface IEmailSender
     Task<bool> EnviarAsync(string destinatarioEmail, string destinatarioNome, string assunto, string corpoHtml, CancellationToken ct);
 
     /// <summary>
-    /// Igual a <see cref="EnviarAsync"/>, mas o e-mail sai com o nome do consultor e o endereço dele em "Responder para": o servidor SMTP
-    /// da empresa segue como remetente técnico (um provedor não deixa enviar "como" outro domínio sem quebrar SPF/DKIM), e a resposta do cliente cai na caixa do consultor.
+    /// Envia vários e-mails numa só conexão, pela conta SMTP do próprio consultor (o remetente é o e-mail dele). Diferente de
+    /// <see cref="EnviarAsync"/>, falha de conexão/login LANÇA <see cref="EmailContaException"/> — o consultor precisa saber que a
+    /// senha dele foi recusada. Falha em uma mensagem só não derruba as outras; retorna quantas saíram.
     /// </summary>
-    Task<bool> EnviarEmNomeDeAsync(string destinatarioEmail, string destinatarioNome, string assunto, string corpoHtml, string remetenteNome, string responderParaEmail, CancellationToken ct);
+    Task<int> EnviarLoteComContaAsync(ContaSmtp conta, string remetenteNome, IReadOnlyList<MensagemEmail> mensagens, CancellationToken ct);
+
+    /// <summary>Conecta e autentica na conta sem enviar nada; lança <see cref="EmailContaException"/> se não der.</summary>
+    Task ValidarContaAsync(ContaSmtp conta, CancellationToken ct);
 }
+
+/// <summary>Credenciais SMTP de uma caixa de e-mail (a do consultor).</summary>
+public sealed record ContaSmtp(string Host, int Port, string UserName, string Senha, string Email);
+
+public sealed record MensagemEmail(string DestinatarioEmail, string DestinatarioNome, string Assunto, string CorpoHtml);
+
+/// <summary>Conta de e-mail inválida/recusada pelo provedor — a mensagem é segura para mostrar ao usuário.</summary>
+public sealed class EmailContaException(string mensagem) : Exception(mensagem);
