@@ -56,7 +56,7 @@ public static class ServiceCollectionExtensions
 
         services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
             {
-                options.Password.RequiredLength = 8;
+                options.Password.RequiredLength = 10;
                 options.Password.RequireNonAlphanumeric = false;
                 options.User.RequireUniqueEmail = true;
                 options.SignIn.RequireConfirmedAccount = false;
@@ -113,6 +113,7 @@ public static class ServiceCollectionExtensions
             .AddPolicy(PolicyNames.AreaComercial, p => p.RequireRole(Roles.Comerciais))
             .AddPolicy(PolicyNames.GestaoComercial, p => p.RequireRole(Roles.GestaoComercial))
             .AddPolicy(PolicyNames.GestaoFinanceira, p => p.RequireRole(Roles.GestaoFinanceira))
+            .AddPolicy(PolicyNames.ContratoFinanceiro, p => p.RequireRole([.. Roles.Comerciais, Roles.Financeiro]))
             .AddPolicy(PolicyNames.VisaoTotalComercial, p => p.RequireRole(Roles.VisaoTotal))
             .AddPolicy(PolicyNames.AreaMarketing, p => p.RequireRole(Roles.AreaMarketing));
 
@@ -162,6 +163,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITvComercialService, TvComercialService>();
         services.AddSingleton<ITvNotionFonte, TvNotionFonte>();
         services.AddScoped<IGoalService, GoalService>();
+        services.AddScoped<IFinanceiroService, FinanceiroService>();
+        services.AddScoped<IFinanceiroContratoService, FinanceiroContratoService>();
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IManagementService, ManagementService>();
         services.AddScoped<IRelatorioComercialService, RelatorioComercialService>();
@@ -170,6 +173,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAnnouncementService, AnnouncementService>();
         services.AddScoped<ISuporteService, SuporteService>();
         services.AddScoped<IAvisosPagamentoService, AvisosPagamentoService>();
+        services.AddScoped<ISetorFinanceiroService, SetorFinanceiroService>();
+        services.AddScoped<ICustoVencimentoNotificador, CustoVencimentoNotificador>();
+        services.AddScoped<ILembreteCobrancaNotificador, LembreteCobrancaNotificador>();
+        services.AddHostedService<CustoVencimentoBackgroundService>();
         services.AddScoped<IMarketingService, MarketingService>();
 
         return services;

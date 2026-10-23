@@ -38,7 +38,9 @@ public sealed class AlertaDistribuicaoService(
             : "porque todos atingiram o limite diário ou mensal";
         return new PushMensagem(
             titulo,
-            $"{estado.LeadsBloqueados} lead(s) sem responsável {motivo}. Abra a Gestão comercial para continuar a distribuição mesmo assim.",
+            porLimite
+                ? $"{estado.LeadsBloqueados} lead(s) sem responsável {motivo}. Abra a Gestão comercial para continuar a distribuição mesmo assim."
+                : $"{estado.LeadsBloqueados} lead(s) sem responsável {motivo}. Eles serão entregues assim que um consultor entrar no dia/horário de recebimento; na Gestão comercial você pode ajustar os horários.",
             "/app/crm/gestao",
             "alerta-limite-distribuicao");
     }

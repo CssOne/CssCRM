@@ -14,6 +14,9 @@ public static class PolicyNames
     /// <summary>Gestão leve da carteira (leads por consultor, receber lead, ativar/inativar consultor) e avisos de pagamento: gestão comercial + Financeiro.</summary>
     public const string GestaoFinanceira = "GestaoFinanceira";
 
+    /// <summary>Quem pode abrir o contrato financeiro: consultores e gestão (o escopo de cada um é conferido no serviço) e o financeiro.</summary>
+    public const string ContratoFinanceiro = "ContratoFinanceiro";
+
     /// <summary>Visão consolidada / total, sem restrição de carteira ou equipe.</summary>
     public const string VisaoTotalComercial = "VisaoTotalComercial";
 

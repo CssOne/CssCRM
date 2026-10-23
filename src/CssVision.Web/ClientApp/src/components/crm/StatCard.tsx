@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { Card } from "../ui";
+import { NumeroAnimado } from "../../lib/useContagem";
 
 export function StatCard({
   titulo,
@@ -33,7 +34,7 @@ export function StatCard({
           <Icone className="size-3.5" aria-hidden />
         </span>
       </div>
-      <p className="relative mt-0.5 text-xl font-bold leading-tight tracking-tight text-[var(--fg)] [font-variant-numeric:tabular-nums]">{valor}</p>
+      <p className="relative mt-0.5 text-xl font-bold leading-tight tracking-tight text-[var(--fg)] [font-variant-numeric:tabular-nums]"><NumeroAnimado valor={valor} /></p>
       {subtitulo && <p className="relative mt-0.5 truncate text-xs text-[var(--fg-muted)]">{subtitulo}</p>}
     </Card>
   );

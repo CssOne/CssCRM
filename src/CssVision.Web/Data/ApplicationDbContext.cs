@@ -28,6 +28,17 @@ public class ApplicationDbContext(
     public DbSet<CrmLeadAssignmentHistory> CrmLeadAssignmentHistories => Set<CrmLeadAssignmentHistory>();
     public DbSet<CrmLossReason> CrmLossReasons => Set<CrmLossReason>();
     public DbSet<CrmSalesGoal> CrmSalesGoals => Set<CrmSalesGoal>();
+    public DbSet<CrmFinanceiroVenda> CrmFinanceiroVendas => Set<CrmFinanceiroVenda>();
+    public DbSet<CrmFinanceiroCusto> CrmFinanceiroCustos => Set<CrmFinanceiroCusto>();
+    public DbSet<CrmFinanceiroMeta> CrmFinanceiroMetas => Set<CrmFinanceiroMeta>();
+    public DbSet<CrmFinanceiroConfig> CrmFinanceiroConfigs => Set<CrmFinanceiroConfig>();
+    public DbSet<CrmFinanceiroPerfil> CrmFinanceiroPerfis => Set<CrmFinanceiroPerfil>();
+    public DbSet<CrmFinanceiroValor> CrmFinanceiroValores => Set<CrmFinanceiroValor>();
+    public DbSet<CrmFinanceiroPadrao> CrmFinanceiroPadroes => Set<CrmFinanceiroPadrao>();
+    public DbSet<CrmFinanceiroPrazo> CrmFinanceiroPrazos => Set<CrmFinanceiroPrazo>();
+    public DbSet<CrmCobrancaPagamento> CrmCobrancasPagamento => Set<CrmCobrancaPagamento>();
+    public DbSet<CrmCustoConsultor> CrmCustosConsultor => Set<CrmCustoConsultor>();
+    public DbSet<CrmCustoAviso> CrmCustosAviso => Set<CrmCustoAviso>();
     public DbSet<CrmRegionalGoal> CrmRegionalGoals => Set<CrmRegionalGoal>();
     public DbSet<CrmAttachment> CrmAttachments => Set<CrmAttachment>();
     public DbSet<CrmVeiculo> CrmVeiculos => Set<CrmVeiculo>();

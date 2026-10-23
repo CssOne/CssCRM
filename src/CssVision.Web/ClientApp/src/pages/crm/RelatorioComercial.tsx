@@ -344,12 +344,12 @@ export function RelatorioComercialPage() {
             <option value="nao">Não</option>
           </Select>
         </CampoDeFiltro>
-        <CampoDeFiltro rotulo="Chegada" className="sm:col-span-2">
+        <CampoDeFiltro rotulo="Chegada">
           <div title="Vazio = usa o período acima. Escolhendo, as vendas passam a ser só dos leads que chegaram nessas datas.">
             <PeriodoInput ariaLabel="Chegada" de={chegadaInicio} ate={chegadaFim} onChange={(a, b) => { setChegadaInicio(a); setChegadaFim(b); }} />
           </div>
         </CampoDeFiltro>
-        <CampoDeFiltro rotulo="Ativação" className="sm:col-span-2">
+        <CampoDeFiltro rotulo="Ativação">
           <div title="Vazio = usa o período acima.">
             <PeriodoInput ariaLabel="Ativação" de={vendaInicio} ate={vendaFim} onChange={(a, b) => { setVendaInicio(a); setVendaFim(b); }} />
           </div>

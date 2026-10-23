@@ -300,10 +300,10 @@ export function LeadsPage() {
             </CampoDeFiltro>
           </>
         )}
-        <CampoDeFiltro rotulo="Chegada" className="sm:col-span-2">
+        <CampoDeFiltro rotulo="Chegada">
           <PeriodoInput ariaLabel="Chegada" de={chegadaDe} ate={chegadaAte} onChange={(a, b) => { comPagina1(setChegadaDe)(a); comPagina1(setChegadaAte)(b); }} />
         </CampoDeFiltro>
-        <CampoDeFiltro rotulo="Ativação" className="sm:col-span-2">
+        <CampoDeFiltro rotulo="Ativação">
           <PeriodoInput ariaLabel="Ativação" de={vendaDe} ate={vendaAte} onChange={(a, b) => { comPagina1(setVendaDe)(a); comPagina1(setVendaAte)(b); }} />
         </CampoDeFiltro>
       </BarraDeFiltros>

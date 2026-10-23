@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarTelefone } from "../../lib/format";
 import type { PagedResult, UserSummary } from "../../lib/types";
-import { Badge, Button, Card, EmptyState, ErrorState, Input, Pagination, Select, Skeleton, useToast } from "../../components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Input, Modal, Pagination, Select, Skeleton, useToast } from "../../components/ui";
+import { ContratoFinanceiro } from "../../components/portal/ContratoFinanceiro";
 
 /**
  * Usuários do perfil Financeiro: lista os consultores da regional dele e permite só ativar ou inativar a conta de cada um
@@ -17,6 +18,7 @@ export function UsuariosFinanceiroPage() {
   const [situacao, setSituacao] = useState<"" | "true" | "false">("");
   const [pagina, setPagina] = useState(1);
   const [alterando, setAlterando] = useState<string | null>(null);
+  const [contratoDe, setContratoDe] = useState<UserSummary | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -96,6 +98,7 @@ export function UsuariosFinanceiroPage() {
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   <Badge variant={u.ativo ? "success" : "danger"}>{u.ativo ? "Ativo" : "Inativo"}</Badge>
+                  <Button size="sm" variant="secondary" onClick={() => setContratoDe(u)}>Financeiro</Button>
                   <Button size="sm" variant="secondary" loading={alterando === u.id} onClick={() => alternar(u)}>
                     {u.ativo ? "Inativar" : "Ativar"}
                   </Button>
@@ -106,6 +109,9 @@ export function UsuariosFinanceiroPage() {
           <Pagination pagina={dados.pagina} totalPaginas={Math.max(1, Math.ceil(dados.totalRegistros / dados.tamanhoPagina))} onChange={setPagina} />
         </>
       )}
+      <Modal open={!!contratoDe} onClose={() => setContratoDe(null)} title={contratoDe ? `Financeiro — ${contratoDe.nomeCompleto}` : "Financeiro"} size="xl">
+        {contratoDe && <ContratoFinanceiro consultorId={contratoDe.id} ano={new Date().getFullYear()} />}
+      </Modal>
     </div>
   );
 }

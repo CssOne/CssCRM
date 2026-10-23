@@ -5,11 +5,12 @@ import {
   CheckSquare,
   Database,
   ChevronRight,
-  Pin,
-  PinOff,
+  PanelLeftClose,
+  PanelLeftOpen,
   FileText,
   Gauge,
   IdCard,
+  Landmark,
   KanbanSquare,
   LayoutDashboard,
   LayoutGrid,
@@ -48,6 +49,7 @@ import { NotificacoesAtividades } from "./crm/NotificacoesAtividades";
 import { PainelLead } from "./crm/PainelLead";
 import { ConviteNotificacoesPush } from "./crm/NotificacoesPush";
 import { NotificacaoAvisosPagamento } from "./crm/NotificacaoAvisosPagamento";
+import { AlertaInicioCobranca } from "./portal/AlertaInicioCobranca";
 
 const iconesPorChave: Record<string, typeof Gauge> = {
   gauge: Gauge,
@@ -69,6 +71,7 @@ const iconesPorChave: Record<string, typeof Gauge> = {
   "message-circle": MessageCircle,
   "messages-square": MessagesSquare,
   wallet: Wallet,
+  landmark: Landmark,
   monitor: Monitor,
 };
 
@@ -87,13 +90,14 @@ const PORTAL_NAV = [
   { chave: "portal-dashboard", rotulo: "Dashboard", icone: Gauge, rota: "/app/portal" },
   { chave: "portal-clientes", rotulo: "Clientes", icone: Users, rota: "/app/portal/clientes" },
   { chave: "portal-propostas", rotulo: "Propostas", icone: FileText, rota: "/app/portal/propostas" },
+  { chave: "portal-financeiro", rotulo: "Controle financeiro", icone: Wallet, rota: "/app/portal/controle-financeiro" },
 ];
 
 /** Seções do menu lateral. Cada item cai na seção da sua chave; o que não estiver aqui vai para "Outros". */
 const SECOES: { rotulo: string; chaves: string[] }[] = [
   { rotulo: "Início", chaves: ["portal", "crm-overview", "overview"] },
   { rotulo: "Comercial", chaves: ["crm-leads", "crm-leads-kanban", "crm-pipeline", "crm-agenda", "crm-goals", "crm-relatorio"] },
-  { rotulo: "Gestão", chaves: ["crm-management", "crm-users", "avisos-pagamento", "tv-comercial"] },
+  { rotulo: "Gestão", chaves: ["crm-management", "crm-users", "setor-financeiro", "tv-comercial"] },
   { rotulo: "Marketing e sistema", chaves: ["marketing", "admin-backups"] },
   { rotulo: "Comunicação", chaves: ["chat", "discord", "suporte"] },
 ];
@@ -110,7 +114,7 @@ function Logo({ subtitulo, colapsado = false }: { subtitulo: string; colapsado?:
     <div className="flex min-w-0 items-center gap-2.5">
       <img src="/logo-css-white.png" alt="CSS Brasil" className="size-8 shrink-0 object-contain" />
       {!colapsado && (
-        <div className="min-w-0 leading-tight">
+        <div className="logo-texto min-w-0 leading-tight">
           <p className="truncate text-sm font-semibold tracking-tight text-[var(--sidebar-fg)]">CSS Brasil</p>
           <p className="truncate text-[10px] font-medium text-[var(--sidebar-fg-muted)]">{subtitulo}</p>
         </div>
@@ -314,24 +318,75 @@ export function Shell({ children }: { children: ReactNode }) {
   useEffect(() => {
     localStorage.setItem("crm-sidebar-fixada", fixada ? "1" : "0");
   }, [fixada]);
-  const [aoPassar, setAoPassar] = useState(false);
-  const tempoHover = useRef<number | undefined>(undefined);
-  const recolhida = colapsado && !aoPassar; // cápsula só de ícones
-  const previa = colapsado && aoPassar; // mesma cápsula, um pouco mais larga, com os nomes
-  const capsula = colapsado; // cápsula (recolhida ou prévia); fixada = barra oficial
-  const abrirAoPassar = () => {
-    if (!colapsado) return;
-    window.clearTimeout(tempoHover.current);
-    tempoHover.current = window.setTimeout(() => setAoPassar(true), 90);
-  };
-  const fecharAoSair = () => {
-    window.clearTimeout(tempoHover.current);
-    tempoHover.current = window.setTimeout(() => setAoPassar(false), 160);
-  };
+  // Tamanho da barra em animação: a cápsula tem a altura do conteúdo (muda ao trocar de menu, ex.: Portal do consultor) e, ao abrir/fechar a barra
+  // inteira, largura, altura e posição passam de um valor ao outro com transição — em vez de a barra ser recriada de uma vez.
+  const [desktop, setDesktop] = useState(() => window.matchMedia("(min-width: 1024px)").matches);
   useEffect(() => {
-    if (!colapsado) setAoPassar(false);
-    return () => window.clearTimeout(tempoHover.current);
-  }, [colapsado]);
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const mudou = () => setDesktop(mq.matches);
+    mq.addEventListener("change", mudou);
+    return () => mq.removeEventListener("change", mudou);
+  }, []);
+  const cabecalhoRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  const conteudoRef = useRef<HTMLDivElement>(null);
+  const [alturaCapsula, setAlturaCapsula] = useState<number | null>(null);
+  useEffect(() => {
+    if (!desktop) {
+      setAlturaCapsula(null);
+      return;
+    }
+    if (colapsado === false) return; // barra inteira: altura da janela; a última altura da cápsula fica guardada para a volta animada
+    const medir = () => {
+      const cab = cabecalhoRef.current;
+      const nav = navRef.current;
+      const conteudo = conteudoRef.current;
+      if (!cab || !nav || !conteudo) return;
+      const cs = getComputedStyle(nav);
+      const natural = cab.offsetHeight + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + conteudo.offsetHeight + 2;
+      setAlturaCapsula(Math.min(Math.ceil(natural), window.innerHeight - 32));
+    };
+    medir();
+    const ro = new ResizeObserver(medir);
+    if (conteudoRef.current) ro.observe(conteudoRef.current);
+    if (cabecalhoRef.current) ro.observe(cabecalhoRef.current);
+    window.addEventListener("resize", medir);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", medir);
+    };
+  }, [desktop, colapsado]);
+  const recolhida = colapsado; // cápsula só de ícones (não abre ao passar o mouse)
+  const capsula = colapsado; // cápsula; fixada = barra oficial
+  // Efeito "dock": os ícones crescem perto do mouse e uma etiqueta com o nome desliza ao lado do ícone mais próximo.
+  const [dica, setDica] = useState<{ texto: string; x: number; y: number; visivel: boolean } | null>(null);
+  const docar = (e: React.MouseEvent<HTMLElement>) => {
+    if (!recolhida || window.innerWidth < 1024) return;
+    const reduzido = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let perto: HTMLElement | null = null;
+    let menor = Infinity;
+    e.currentTarget.querySelectorAll<HTMLElement>("a[data-rotulo]").forEach((el) => {
+      const r = el.getBoundingClientRect();
+      const d = Math.abs(r.top + r.height / 2 - e.clientY);
+      if (d < menor) {
+        menor = d;
+        perto = el;
+      }
+      el.style.transition = "transform .45s cubic-bezier(.22,1,.36,1), background-color .2s, color .2s";
+      el.style.transform = reduzido ? "" : `scale(${(1 + 0.38 * Math.exp(-(d * d) / 4800)).toFixed(3)})`;
+    });
+    const alvo = perto as HTMLElement | null;
+    if (!alvo || menor > 24) return setDica((d) => (d ? { ...d, visivel: false } : d));
+    const r = alvo.getBoundingClientRect();
+    const barra = alvo.closest("aside")?.getBoundingClientRect();
+    setDica({ texto: alvo.dataset.rotulo ?? "", x: (barra?.right ?? r.right) + 10, y: r.top + r.height / 2, visivel: true });
+  };
+  const soltarDock = (e: React.MouseEvent<HTMLElement>) => {
+    e.currentTarget.querySelectorAll<HTMLElement>("a[data-rotulo]").forEach((el) => {
+      el.style.transform = "";
+    });
+    setDica((d) => (d ? { ...d, visivel: false } : d));
+  };
 
   async function handleLogout() {
     await logout();
@@ -350,40 +405,79 @@ export function Shell({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen bg-[var(--bg)]">
       {menuAberto && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setMenuAberto(false)} />}
 
+      {dica && (
+        <span
+          aria-hidden
+          className="pointer-events-none fixed z-50 hidden -translate-y-1/2 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[#04264c] shadow-[0_6px_16px_-6px_rgb(0_0_0/0.5)] lg:block"
+          style={{ left: dica.x, top: dica.y, opacity: dica.visivel ? 1 : 0, transition: "top .45s cubic-bezier(.22,1,.36,1), opacity .3s" }}
+        >
+          {dica.texto}
+        </span>
+      )}
+
       {/* Barra lateral nas cores da empresa: azul-marinho cheio, menu em seções e marcador claro no item ativo. */}
       <aside
-        key={fixada ? "fixada" : previa ? "previa" : "recolhida"}
-        onMouseEnter={abrirAoPassar}
-        onMouseLeave={fecharAoSair}
         data-capsula={capsula ? "true" : "false"}
+        style={
+          desktop
+            ? {
+                height: capsula ? (alturaCapsula ?? undefined) : "calc(100vh - 1.5rem)",
+                transition:
+                  "height .75s cubic-bezier(.22,1,.36,1), width .65s cubic-bezier(.22,1,.36,1), left .65s cubic-bezier(.22,1,.36,1), border-radius .65s cubic-bezier(.22,1,.36,1), box-shadow .65s ease",
+              }
+            : undefined
+        }
         className={`ui-bar barra-anim fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar-bg)] text-[var(--sidebar-fg)] transition-[transform,width] lg:translate-x-0 ${
           menuAberto ? "translate-x-0" : "-translate-x-full"
         } ${
           capsula
-            ? `lg:bottom-auto lg:left-4 lg:top-1/2 lg:h-auto lg:max-h-[calc(100vh-2rem)] ${previa ? "lg:w-60" : "lg:w-16"} lg:-translate-y-1/2 lg:rounded-[2rem] lg:border lg:border-white/10 lg:shadow-[0_10px_28px_-10px_rgb(4_38_76/0.55)] lg:[background-image:linear-gradient(180deg,rgb(255_255_255/0.09),transparent_38%)]`
-            : "lg:inset-y-3 lg:left-3 lg:w-60 lg:rounded-[1.75rem] lg:border lg:border-white/10 lg:shadow-[0_10px_28px_-10px_rgb(4_38_76/0.5)] lg:[background-image:linear-gradient(180deg,rgb(255_255_255/0.07),transparent_32%)]"
+            ? `lg:bottom-auto lg:left-4 lg:top-1/2 lg:h-auto lg:max-h-[calc(100vh-2rem)] lg:w-16 lg:-translate-y-1/2 lg:rounded-[2rem] lg:border lg:border-white/10 lg:shadow-[0_10px_28px_-10px_rgb(4_38_76/0.55)] lg:[background-image:linear-gradient(180deg,rgb(255_255_255/0.09),transparent_38%)]`
+            : "lg:bottom-auto lg:left-3 lg:top-1/2 lg:w-60 lg:-translate-y-1/2 lg:rounded-[1.75rem] lg:border lg:border-white/10 lg:shadow-[0_10px_28px_-10px_rgb(4_38_76/0.5)] lg:[background-image:linear-gradient(180deg,rgb(255_255_255/0.07),transparent_32%)]"
         }`}
       >
-        <div className={`flex h-16 shrink-0 items-center justify-between gap-2 px-4 ${recolhida ? "lg:h-auto lg:flex-col lg:justify-center lg:gap-2 lg:px-2 lg:pb-1 lg:pt-4" : previa ? "lg:h-auto lg:pb-1 lg:pt-4" : ""}`}>
-          <Logo subtitulo={emPortal ? "Portal do consultor" : "CRM comercial"} colapsado={recolhida} />
+        <div ref={cabecalhoRef} className={`flex h-16 shrink-0 items-center justify-between gap-2 px-4 ${recolhida ? "lg:h-auto lg:flex-col lg:justify-center lg:gap-2 lg:px-2 lg:pb-1 lg:pt-4" : ""}`}>
+          {recolhida ? (
+            <>
+              {/* Recolhida: a logo vira o botão de abrir a barra inteira quando o mouse passa por cima. */}
+              <button
+                type="button"
+                aria-label="Abrir menu completo"
+                title="Abrir menu completo"
+                onClick={() => setFixada(true)}
+                className="focus-ring group/logo relative hidden size-10 shrink-0 cursor-pointer items-center justify-center rounded-xl transition-colors hover:bg-[var(--sidebar-hover)] lg:flex"
+              >
+                <img src="/logo-css-white.png" alt="" className="absolute size-8 object-contain transition-all duration-200 group-hover/logo:scale-75 group-hover/logo:opacity-0 group-focus-visible/logo:opacity-0" />
+                <PanelLeftOpen className="absolute size-5 scale-75 text-white opacity-0 transition-all duration-200 group-hover/logo:scale-100 group-hover/logo:opacity-100 group-focus-visible/logo:scale-100 group-focus-visible/logo:opacity-100" aria-hidden />
+              </button>
+              <div className="lg:hidden">
+                <Logo subtitulo={emPortal ? "Portal do consultor" : "CRM comercial"} />
+              </div>
+            </>
+          ) : (
+            <Logo subtitulo={emPortal ? "Portal do consultor" : "CRM comercial"} />
+          )}
           <IconButton label="Fechar menu" className="text-white/70 hover:bg-[var(--sidebar-hover)] hover:text-white lg:hidden" onClick={() => setMenuAberto(false)}>
             <X className="size-4" />
           </IconButton>
           <button
             type="button"
-            aria-pressed={fixada}
-            aria-label={fixada ? "Desafixar menu" : "Fixar menu"}
-            title={fixada ? "Desafixar menu (volta a abrir só ao passar o mouse)" : "Fixar menu aberto"}
-            onClick={() => setFixada((v) => !v)}
-            className={`focus-ring hidden size-7 shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors hover:bg-[var(--sidebar-hover)] ${recolhida ? "" : "lg:flex"} ${
-              fixada ? "text-white" : "text-[var(--sidebar-fg-muted)] hover:text-white"
-            }`}
+            aria-label="Recolher menu"
+            title="Recolher menu"
+            onClick={() => setFixada(false)}
+            className={`focus-ring hidden size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-white transition-colors hover:bg-[var(--sidebar-hover)] ${fixada ? "lg:flex" : ""}`}
           >
-            {fixada ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+            <PanelLeftClose className="size-4" />
           </button>
         </div>
 
-        <nav className={`sidebar-nav min-h-0 flex-1 overflow-y-auto px-3 pb-3 ${capsula ? "lg:px-2" : ""}`} aria-label="Navegação principal">
+        <nav
+          ref={navRef}
+          className={`sidebar-nav min-h-0 flex-1 overflow-y-auto px-3 pb-3 ${capsula ? "lg:px-1 lg:pt-2" : ""}`}
+          aria-label="Navegação principal"
+          onMouseMove={docar}
+          onMouseLeave={soltarDock}
+        >
+          <div ref={conteudoRef}>
           {agruparNav((itensNav ?? []).filter((i) => i.chave !== "suporte")).map((grupo, gi) => (
             <div key={grupo.rotulo} className={gi === 0 ? "" : capsula ? "mt-4 lg:mt-3" : "mt-4"}>
               {!emPortal && (
@@ -391,7 +485,7 @@ export function Shell({ children }: { children: ReactNode }) {
               )}
               <div className="space-y-0.5">
                 {grupo.itens.map((item) => {
-                  const linhaBase = `focus-ring group relative flex h-9 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium transition-colors ${recolhida ? "lg:mx-auto lg:size-10 lg:justify-center lg:rounded-full lg:px-0" : previa ? "lg:h-10 lg:w-full lg:rounded-full lg:pl-[15px] lg:pr-4" : ""}`;
+                  const linhaBase = `focus-ring group relative flex h-9 items-center gap-3 rounded-lg px-3 text-[13.5px] font-medium transition-colors ${recolhida ? "lg:mx-auto lg:size-10 lg:justify-center lg:rounded-full lg:px-0" : ""}`;
                   const inativa = "text-[var(--sidebar-fg-muted)] hover:bg-[var(--sidebar-hover)] hover:text-white";
                   return (
                     <div key={item.chave} className="menu-item-anim" style={{ "--i": indiceItem++ } as React.CSSProperties}>
@@ -400,7 +494,8 @@ export function Shell({ children }: { children: ReactNode }) {
                           href={item.rota}
                           target="_blank"
                           rel="noopener"
-                          title={recolhida ? `${item.rotulo} (abre em outra aba)` : "Abre em outra aba"}
+                          data-rotulo={`${item.rotulo} (outra aba)`}
+                          title={recolhida ? undefined : "Abre em outra aba"}
                           className={`${linhaBase} ${inativa}`}
                         >
                           <item.icone className="size-[18px] shrink-0" aria-hidden />
@@ -411,7 +506,7 @@ export function Shell({ children }: { children: ReactNode }) {
                           to={item.rota}
                           end={item.rota === "/app" || item.rota === "/app/crm" || item.rota === "/app/portal"}
                           onClick={() => setMenuAberto(false)}
-                          title={recolhida ? item.rotulo : undefined}
+                          data-rotulo={item.rotulo}
                           className={({ isActive: ativoPelaRota }) => {
                             const isActive = ativoPelaRota && item.rota === rotaAtiva;
                             return `${linhaBase} ${
@@ -442,6 +537,7 @@ export function Shell({ children }: { children: ReactNode }) {
               </div>
             </div>
           ))}
+          </div>
         </nav>
 
       </aside>
@@ -506,7 +602,10 @@ export function Shell({ children }: { children: ReactNode }) {
 
         <main className="min-w-0 flex-1 p-4 lg:px-8 lg:py-7">
           {!emPortal && temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial") && <AlertaDistribuicaoLimites />}
-          {children}
+          {/* Cada tela entra com um fade e uma leve subida; a chave pelo caminho refaz a animação a cada troca de página. */}
+          <div key={location.pathname} className="pagina-anim">
+            {children}
+          </div>
         </main>
         <footer className="ui-surface mx-4 mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-xs text-[var(--fg-muted)] lg:mx-8">
           <span>
@@ -526,6 +625,7 @@ export function Shell({ children }: { children: ReactNode }) {
         {!emPortal && !soFinanceiro && <LembretesAdesao />}
         {!emPortal && !soFinanceiro && <NotificacaoNovosLeads usuarioId={sessao.id} />}
         {!soFinanceiro && temPapel("Comercial") && <NotificacaoAvisosPagamento usuarioId={sessao.id} />}
+        {sessao.papeis.some((p) => p !== "Marketing") && <AlertaInicioCobranca usuarioId={sessao.id} />}
         {!emPortal && !soFinanceiro && <PainelLead />}
         <ConviteNotificacoesPush />
       </div>

@@ -29,7 +29,7 @@ import {
   type VendedorResumo,
 } from "../../lib/types";
 import { Button, Card, Checkbox, ConfirmDialog, ErrorState, Modal, Select, Skeleton, useToast } from "../../components/ui";
-import { ActivityForm, isoParaDatetimeLocal, tipoLabel, type ActivityFormValues } from "../../components/crm/ActivityForm";
+import { ActivityForm, COR_TIPO, isoParaDatetimeLocal, tipoLabel, type ActivityFormValues } from "../../components/crm/ActivityForm";
 import { LeadPicker } from "../../components/crm/LeadPicker";
 import { avisarAtividadesAlteradas, concluirAtividade, EVENTO_ATIVIDADES_ALTERADAS } from "../../components/crm/NotificacoesAtividades";
 import { useAuth } from "../../context/AuthContext";
@@ -39,17 +39,6 @@ type Visao = "mes" | "semana" | "lista";
 const DIAS_SEMANA = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
-/** Uma cor por tipo de atividade — a mesma no mês, na semana, na lista e na legenda. */
-const COR_TIPO: Record<TipoAtividade, string> = {
-  [TipoAtividade.Ligacao]: "#2563eb",
-  [TipoAtividade.WhatsApp]: "#16a34a",
-  [TipoAtividade.Email]: "#0ea5e9",
-  [TipoAtividade.Reuniao]: "#8b5cf6",
-  [TipoAtividade.Visita]: "#f97316",
-  [TipoAtividade.Retorno]: "#d97706",
-  [TipoAtividade.Tarefa]: "#475569",
-  [TipoAtividade.Observacao]: "#94a3b8",
-};
 
 const CHAVE_PREFERENCIAS = "css:agenda:preferencias";
 

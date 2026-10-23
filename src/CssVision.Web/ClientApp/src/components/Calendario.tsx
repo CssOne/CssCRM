@@ -1,8 +1,8 @@
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-const SEMANA = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+const SEMANA = [["D", "domingo"], ["S", "segunda"], ["T", "terça"], ["Q", "quarta"], ["Q", "quinta"], ["S", "sexta"], ["S", "sábado"]];
 const MESES_CURTOS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 /** "2026-10-05" → Date local (sem deslocar por fuso). */
@@ -25,7 +25,9 @@ function mesmoDia(a: Date, b: Date) {
 }
 
 const botaoSeta =
-  "focus-ring flex size-8 cursor-pointer items-center justify-center rounded-full text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]";
+  "focus-ring flex size-7 cursor-pointer items-center justify-center rounded-full text-[var(--fg-muted)] transition-colors hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]";
+
+const maiuscula = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
 /** Grade de dias de um mês: os extremos (início/fim) em círculo escuro e o intervalo entre eles com faixa suave. */
 export function Calendario({
@@ -57,26 +59,52 @@ export function Calendario({
     d.setDate(comeco.getDate() + i);
     return d;
   });
-  const titulo = primeiro.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  const titulo = maiuscula(primeiro.toLocaleDateString("pt-BR", { month: "long", year: "numeric" }));
+  const [vista, setVista] = useState<"dias" | "meses">("dias");
+
+  // Clicar no título troca para a grade de meses (e do ano), para pular direto para outro mês sem clicar seta por seta.
+  if (vista === "meses") {
+    return (
+      <div>
+        <GradeDeMeses
+          ano={mes.getFullYear()}
+          onAno={(a) => onMes(new Date(a, mes.getMonth(), 1))}
+          mesEscolhido={`${mes.getFullYear()}-${String(mes.getMonth() + 1).padStart(2, "0")}`}
+          onEscolher={(iso) => {
+            onMes(new Date(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, 1));
+            setVista("dias");
+          }}
+        />
+        {rodape && <div className="mt-3 flex items-center justify-between border-t border-[var(--border)] pt-3 text-xs">{rodape}</div>}
+      </div>
+    );
+  }
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-[15px] font-medium text-[var(--fg)]">{titulo}</span>
-        <div className="flex items-center">
+      <div className="mb-2 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setVista("meses")}
+          title="Escolher outro mês ou ano"
+          className="focus-ring cursor-pointer rounded-lg px-2 py-0.5 text-sm font-semibold text-[var(--fg)] transition-colors hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]"
+        >
+          {titulo}
+        </button>
+        <div className="flex items-center gap-0.5">
           <button type="button" aria-label="Mês anterior" onClick={() => onMes(new Date(mes.getFullYear(), mes.getMonth() - 1, 1))} className={botaoSeta}>
-            <ChevronUp className="size-4" />
+            <ChevronLeft className="size-4" />
           </button>
           <button type="button" aria-label="Próximo mês" onClick={() => onMes(new Date(mes.getFullYear(), mes.getMonth() + 1, 1))} className={botaoSeta}>
-            <ChevronDown className="size-4" />
+            <ChevronRight className="size-4" />
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-7 text-center text-xs text-[var(--fg-muted)]">
-        {SEMANA.map((s) => (
-          <span key={s} className="pb-2">
-            {s}
+        {SEMANA.map(([letra, nome]) => (
+          <span key={nome} title={nome} className="pb-1 text-[11px] font-semibold tracking-wide">
+            {letra}
           </span>
         ))}
       </div>
@@ -95,10 +123,10 @@ export function Calendario({
                 onClick={() => onEscolher(d)}
                 aria-label={d.toLocaleDateString("pt-BR", { dateStyle: "long" })}
                 aria-pressed={!!extremo}
-                className={`focus-ring flex size-9 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
+                className={`focus-ring flex size-8 items-center justify-center rounded-full text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
                   extremo
-                    ? "cursor-pointer bg-[var(--fg)] font-semibold text-[var(--surface-solid)]"
-                    : `cursor-pointer enabled:hover:bg-[var(--surface-hover)] ${doMes ? "text-[var(--fg)]" : "text-[var(--fg-muted)]/45"} ${mesmoDia(d, hoje) ? "ring-1 ring-inset ring-[var(--brand)]" : ""}`
+                    ? "cursor-pointer bg-[var(--brand)] font-semibold text-white shadow-[0_4px_10px_-4px_var(--brand)]"
+                    : `cursor-pointer enabled:hover:bg-[var(--brand-soft)] enabled:hover:text-[var(--brand)] ${doMes ? "text-[var(--fg)]" : "text-[var(--fg-muted)]/45"} ${mesmoDia(d, hoje) ? "bg-[var(--surface-hover)] font-bold text-[var(--brand)] ring-1 ring-inset ring-[var(--brand)]" : ""}`
                 }`}
               >
                 {d.getDate()}
@@ -107,7 +135,7 @@ export function Calendario({
           );
         })}
       </div>
-      {rodape && <div className="mt-3 flex items-center justify-between border-t border-[var(--border)] pt-3 text-xs">{rodape}</div>}
+      {rodape && <div className="mt-2 flex items-center justify-between border-t border-[var(--border)] pt-2 text-xs">{rodape}</div>}
     </div>
   );
 }
@@ -118,13 +146,13 @@ export function GradeDeMeses({ ano, onAno, mesEscolhido, onEscolher }: { ano: nu
   return (
     <div>
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-[15px] font-medium text-[var(--fg)]">{ano}</span>
-        <div className="flex items-center">
+        <span className="px-2 text-[15px] font-semibold text-[var(--fg)]">{ano}</span>
+        <div className="flex items-center gap-0.5">
           <button type="button" aria-label="Ano anterior" onClick={() => onAno(ano - 1)} className={botaoSeta}>
-            <ChevronUp className="size-4" />
+            <ChevronLeft className="size-4" />
           </button>
           <button type="button" aria-label="Próximo ano" onClick={() => onAno(ano + 1)} className={botaoSeta}>
-            <ChevronDown className="size-4" />
+            <ChevronRight className="size-4" />
           </button>
         </div>
       </div>
@@ -141,8 +169,8 @@ export function GradeDeMeses({ ano, onAno, mesEscolhido, onEscolher }: { ano: nu
               onClick={() => onEscolher(iso)}
               className={`focus-ring h-10 cursor-pointer rounded-xl text-sm capitalize transition-colors ${
                 escolhido
-                  ? "bg-[var(--fg)] font-semibold text-[var(--surface-solid)]"
-                  : `text-[var(--fg)] hover:bg-[var(--surface-hover)] ${atual ? "ring-1 ring-inset ring-[var(--brand)]" : ""}`
+                  ? "bg-[var(--brand)] font-semibold text-white shadow-[0_4px_10px_-4px_var(--brand)]"
+                  : `text-[var(--fg)] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)] ${atual ? "font-bold text-[var(--brand)] ring-1 ring-inset ring-[var(--brand)]" : ""}`
               }`}
             >
               {nome}
@@ -162,10 +190,10 @@ export function Flutuante({
   aberto,
   ancora,
   onFechar,
-  largura = 312,
+  largura = 288,
   larguraDaAncora = false,
   rotulo,
-  className = "p-4",
+  className = "p-3",
   children,
 }: {
   aberto: boolean;
@@ -179,18 +207,19 @@ export function Flutuante({
   children: ReactNode;
 }) {
   const painel = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number } | null>(null);
+  const [pos, setPos] = useState<{ left: number; width: number; top?: number; bottom?: number; maxHeight: number } | null>(null);
 
   useLayoutEffect(() => {
     if (!aberto) return;
     const r = ancora.current?.getBoundingClientRect();
     if (!r) return;
     const abaixo = window.innerHeight - r.bottom;
-    const paraCima = abaixo < 400 && r.top > abaixo;
+    const paraCima = abaixo < 470 && r.top > abaixo;
     const w = larguraDaAncora ? Math.min(r.width, window.innerWidth - 16) : largura;
     setPos({
       width: w,
       left: Math.max(8, Math.min(r.left, window.innerWidth - w - 8)),
+      maxHeight: Math.max(240, (paraCima ? r.top : abaixo) - 20),
       ...(paraCima ? { bottom: window.innerHeight - r.top + 8 } : { top: r.bottom + 8 }),
     });
   }, [aberto, ancora, largura, larguraDaAncora]);
@@ -234,8 +263,8 @@ export function Flutuante({
       role="dialog"
       aria-label={rotulo}
       data-flutuante
-      style={{ position: "fixed", left: pos.left, top: pos.top, bottom: pos.bottom, width: pos.width }}
-      className={`z-[80] rounded-2xl border border-[var(--border)] bg-[var(--surface-solid)] shadow-[0_20px_50px_-12px_rgb(0_0_0/0.3)] ${className}`}
+      style={{ position: "fixed", left: pos.left, top: pos.top, bottom: pos.bottom, width: pos.width, maxHeight: pos.maxHeight, overflowY: "auto" }}
+      className={`flutuante-anim z-[80] rounded-2xl border border-[var(--border)] bg-[var(--surface-solid)] shadow-[0_20px_50px_-12px_rgb(0_0_0/0.3)] ${className}`}
     >
       {children}
     </div>,

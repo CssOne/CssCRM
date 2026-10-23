@@ -24,7 +24,7 @@ public class HorarioFiltrosESupervisorTests
     };
 
     [Fact]
-    public async Task TodosForaDoHorario_ComLeadParado_AlertaPorHorario_EContinuarLibera()
+    public async Task TodosForaDoHorario_ComLeadParado_AlertaPorHorario_EContinuarNaoLibera()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
@@ -52,14 +52,17 @@ public class HorarioFiltrosESupervisorTests
         var mensagem = AlertaDistribuicaoService.MontarMensagem(estado);
         Assert.Contains("fora do horário", mensagem.Titulo);
 
+        // "Continuar distribuindo hoje" afrouxa só os limites: a agenda de dias e horários não se ignora, o lead segue esperando.
         await distribuicao.DefinirContinuarAposLimiteAsync(true, CancellationToken.None);
         var depois = await distribuicao.ObterEstadoDistribuicaoAsync(CancellationToken.None);
-        Assert.False(depois.Bloqueada);
-        Assert.Equal(0, depois.LeadsSemResponsavel); // entregue mesmo fora do horário
+        Assert.True(depois.Bloqueada);
+        Assert.Equal(1, depois.LeadsBloqueadosPorHorario);
+        Assert.Equal(1, depois.LeadsSemResponsavel);
+        Assert.Contains("entrar no dia/horário", AlertaDistribuicaoService.MontarMensagem(depois).Corpo);
     }
 
     [Fact]
-    public async Task LimiteEHorario_JuntosAparecemNosDoisMotivos()
+    public async Task LimiteComAlguemNoHorario_ApareceSoPorLimite()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
@@ -77,8 +80,9 @@ public class HorarioFiltrosESupervisorTests
         var estado = await distribuicao.ObterEstadoDistribuicaoAsync(CancellationToken.None);
 
         Assert.Equal(1, estado.LeadsBloqueados);
+        // Ana está no horário (só o limite a segura): o gestor pode liberar. Bruna está fora do horário: isso nunca é ignorado.
         Assert.Equal(1, estado.LeadsBloqueadosPorLimite);
-        Assert.Equal(1, estado.LeadsBloqueadosPorHorario);
+        Assert.Equal(0, estado.LeadsBloqueadosPorHorario);
         Assert.Contains("limite", AlertaDistribuicaoService.MontarMensagem(estado).Titulo);
     }
 

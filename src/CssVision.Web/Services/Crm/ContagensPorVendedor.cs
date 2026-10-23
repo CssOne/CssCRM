@@ -19,15 +19,42 @@ public static class ContagensPorVendedor
             .Select(g => new { g.Key, Quantidade = g.Count() })
             .ToDictionaryAsync(x => x.Key, x => x.Quantidade, ct);
 
-    /// <summary>Oportunidades abertas e o valor estimado delas, por responsável.</summary>
-    public static async Task<Dictionary<Guid, (int Quantidade, decimal Valor)>> AbertasAsync(IQueryable<CrmOpportunity> oportunidades, CancellationToken ct)
+    /// <summary>Nome da coluna do quadro de leads em que o consultor informa o valor da adesão.</summary>
+    public const string EtapaCotacao = "Cotação";
+
+    /// <summary>
+    /// Leads em "Cotação" com valor de adesão informado e ainda sem oportunidade aberta (quem já tem oportunidade
+    /// aberta entra pelo valor dela, sem contar duas vezes). A consulta de leads já vem filtrada pelo chamador.
+    /// </summary>
+    public static IQueryable<CrmLead> EmCotacaoComAdesao(IQueryable<CrmLead> leads) =>
+        leads.Where(l => !l.Arquivado && l.Etapa != null && l.Etapa.Nome == EtapaCotacao && l.ValorAdesao > 0
+            && !l.Oportunidades.Any(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Aberta));
+
+    /// <summary>
+    /// Oportunidades abertas e o valor em pipeline, por responsável. Com <paramref name="leads"/>, o valor soma também a adesão
+    /// informada na "Cotação" do quadro de leads (a quantidade segue sendo só de oportunidades).
+    /// </summary>
+    public static async Task<Dictionary<Guid, (int Quantidade, decimal Valor)>> AbertasAsync(
+        IQueryable<CrmOpportunity> oportunidades, CancellationToken ct, IQueryable<CrmLead>? leads = null)
     {
         var linhas = await oportunidades
             .Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Aberta)
             .GroupBy(o => o.ResponsavelId)
             .Select(g => new { g.Key, Quantidade = g.Count(), Valor = g.Sum(o => (decimal?)o.ValorEstimado) ?? 0m })
             .ToListAsync(ct);
-        return linhas.ToDictionary(x => x.Key, x => (x.Quantidade, x.Valor));
+        var resultado = linhas.ToDictionary(x => x.Key, x => (x.Quantidade, x.Valor));
+        if (leads is null) return resultado;
+
+        var cotacoes = await EmCotacaoComAdesao(leads).Where(l => l.ResponsavelId != null)
+            .GroupBy(l => l.ResponsavelId!.Value)
+            .Select(g => new { g.Key, Valor = g.Sum(l => l.ValorAdesao ?? 0m) })
+            .ToListAsync(ct);
+        foreach (var c in cotacoes)
+        {
+            resultado.TryGetValue(c.Key, out var atual);
+            resultado[c.Key] = (atual.Quantidade, atual.Valor + c.Valor);
+        }
+        return resultado;
     }
 
     /// <summary>

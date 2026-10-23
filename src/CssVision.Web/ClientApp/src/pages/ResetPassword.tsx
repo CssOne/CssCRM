@@ -38,7 +38,7 @@ export function ResetPasswordPage() {
 
   return (
     <div className="flex min-h-screen">
-      <div className="login-aurora relative hidden w-1/2 flex-col justify-between overflow-hidden p-12 lg:flex">
+      <div className="login-rota relative hidden w-1/2 flex-col justify-between overflow-hidden p-12 lg:flex">
         <div className="relative z-10 flex items-center gap-2.5">
           <img src="/logo-css-white.png" alt="CSS Brasil" className="size-10 shrink-0 object-contain" />
           <div className="leading-tight">

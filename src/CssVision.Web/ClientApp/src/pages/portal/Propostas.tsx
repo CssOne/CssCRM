@@ -4,10 +4,21 @@ import { Link } from "react-router-dom";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarData, formatarMoeda } from "../../lib/format";
 import { TipoEtapaPipeline, type Opportunity, type PagedResult } from "../../lib/types";
-import { Avatar, EmptyState, ErrorState, Pagination, Skeleton } from "../../components/ui";
+
+/** Em propostas ganhas vale o valor da adesão paga; nas demais, o valor final ou o estimado. */
+const valorDaProposta = (o: Opportunity) =>
+  o.etapaTipo === TipoEtapaPipeline.Ganho && o.pagamentoAdesao != null ? o.pagamentoAdesao : o.valorFinal ?? o.valorEstimado ?? 0;
+import { Avatar, EmptyState, ErrorState, Pagination, Select, Skeleton } from "../../components/ui";
+import { BarraDeFiltros, CampoDeFiltro, type ChipDeFiltro } from "../../components/Filtros";
+import { PeriodoInput } from "../../components/PeriodoInput";
+
+const STATUS: Record<string, string> = { "1": "Em andamento", "2": "Ganho", "3": "Perdido" };
 
 export function PortalPropostasPage() {
   const [pagina, setPagina] = useState(1);
+  const [status, setStatus] = useState("");
+  const [de, setDe] = useState("");
+  const [ate, setAte] = useState("");
   const [dados, setDados] = useState<PagedResult<Opportunity> | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -17,15 +28,26 @@ export function PortalPropostasPage() {
       setCarregando(true);
       setErro(null);
       api
-        .get<PagedResult<Opportunity>>(`/crm/opportunities${toQueryString({ pagina, tamanhoPagina: 12 })}`, signal)
+        .get<PagedResult<Opportunity>>(`/crm/opportunities${toQueryString({ statusEtapa: status || undefined, dataInicio: de || undefined, dataFim: ate || undefined, pagina, tamanhoPagina: 12 })}`, signal)
         .then(setDados)
         .catch((e) => {
           if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar suas propostas.");
         })
         .finally(() => { if (!signal?.aborted) setCarregando(false); });
     },
-    [pagina]
+    [status, de, ate, pagina]
   );
+
+  const dataCurta = (d: string) => (d ? d.split("-").reverse().slice(0, 2).join("/") : "…");
+  const chips: ChipDeFiltro[] = [];
+  if (status) chips.push({ rotulo: "Situação", valor: STATUS[status], limpar: () => { setStatus(""); setPagina(1); } });
+  if (de || ate) chips.push({ rotulo: "Período", valor: `${dataCurta(de)} → ${dataCurta(ate)}`, limpar: () => { setDe(""); setAte(""); setPagina(1); } });
+  function limparFiltros() {
+    setStatus("");
+    setDe("");
+    setAte("");
+    setPagina(1);
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -33,7 +55,7 @@ export function PortalPropostasPage() {
     return () => controller.abort();
   }, [carregar]);
 
-  const totalPagina = (dados?.itens ?? []).reduce((n, o) => n + (o.valorFinal ?? o.valorEstimado ?? 0), 0);
+  const totalPagina = (dados?.itens ?? []).reduce((n, o) => n + valorDaProposta(o), 0);
 
   return (
     <div className="space-y-4">
@@ -51,6 +73,20 @@ export function PortalPropostasPage() {
           </div>
         )}
       </div>
+
+      <BarraDeFiltros chips={chips} onLimparTudo={limparFiltros}>
+        <CampoDeFiltro rotulo="Situação">
+          <Select aria-label="Situação" value={status} onChange={(e) => { setStatus(e.target.value); setPagina(1); }}>
+            <option value="">Todas</option>
+            {Object.entries(STATUS).map(([v, r]) => (
+              <option key={v} value={v}>{r}</option>
+            ))}
+          </Select>
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Período">
+          <PeriodoInput ariaLabel="Período" de={de} ate={ate} onChange={(x, y) => { setDe(x); setAte(y); setPagina(1); }} />
+        </CampoDeFiltro>
+      </BarraDeFiltros>
 
       {carregando ? (
         <div className="space-y-2">
@@ -98,7 +134,8 @@ export function PortalPropostasPage() {
                     {op.etapaNome}
                   </span>
                   <div className="w-32 shrink-0 text-right">
-                    <p className="text-sm font-bold text-[var(--fg)] [font-variant-numeric:tabular-nums]">{formatarMoeda(op.valorFinal ?? op.valorEstimado)}</p>
+                    <p className="text-sm font-bold text-[var(--fg)] [font-variant-numeric:tabular-nums]">{formatarMoeda(valorDaProposta(op))}</p>
+                    {ganho && op.pagamentoAdesao != null && <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--success)]">adesão</p>}
                     <p className="flex items-center justify-end gap-1 text-[11px] text-[var(--fg-muted)]">
                       <CalendarDays className="size-3" aria-hidden /> {formatarData(op.criadoEm)}
                     </p>

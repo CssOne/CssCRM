@@ -53,6 +53,11 @@ public static class OrigemLead
         tag is not null && (string.Equals(tag.Trim(), "Facebook ADS", StringComparison.OrdinalIgnoreCase)
             || string.Equals(tag.Trim(), "Google ads", StringComparison.OrdinalIgnoreCase));
 
+    private static readonly Func<Domain.Crm.CrmLead, bool> _veioDoTrafegoPago = VeioDoTrafegoPago.Compile();
+
+    /// <summary>O lead chegou direto do tráfego pago (webhook do Meta ou formulário do site) — o que o rodízio distribui. Mesma regra de <see cref="VeioDoTrafegoPago"/>.</summary>
+    public static bool EhDiretoDoTrafegoPago(Domain.Crm.CrmLead lead) => _veioDoTrafegoPago(lead);
+
     // Mesma regra da expressão (uma só definição): antes eram duas cópias, e o ranking/Gestão comercial ignoravam a tag de anúncio e a UTM.
     private static readonly Func<Domain.Crm.CrmLead, bool> _deTrafegoPago = DeTrafegoPagoInclusiveNotion.Compile();
 

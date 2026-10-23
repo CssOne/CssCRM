@@ -426,7 +426,7 @@ export function TrafegoPagoPage() {
         }
       >
         {filtros.periodo === "personalizado" && (
-          <CampoDeFiltro rotulo="Chegada" className="sm:col-span-2">
+          <CampoDeFiltro rotulo="Chegada">
             <PeriodoInput ariaLabel="Chegada" de={filtros.dataInicio} ate={filtros.dataFim} onChange={(a, b) => { set("dataInicio", a); set("dataFim", b); }} />
           </CampoDeFiltro>
         )}

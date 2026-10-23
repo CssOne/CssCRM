@@ -160,11 +160,11 @@ export function GestaoFinanceiraPage() {
                 <div className="flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2">
                   <Chave vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
                   <Link
-                    to={`/app/crm/avisos-pagamento?consultor=${v.id}`}
+                    to={`/app/crm/setor-financeiro/${v.id}`}
                     className="shrink-0 text-xs font-medium text-[var(--brand)] hover:underline"
-                    title="Enviar ou ver avisos de pagamento em aberto deste consultor"
+                    title="Abrir o Setor Financeiro deste consultor: cobranças, custos e avisos de pagamento"
                   >
-                    {(avisosAbertos[v.id] ?? 0) > 0 ? `${avisosAbertos[v.id]} aviso(s) em aberto` : "Avisar pagamento"}
+                    {(avisosAbertos[v.id] ?? 0) > 0 ? `${avisosAbertos[v.id]} aviso(s) em aberto` : "Setor financeiro"}
                   </Link>
                 </div>
               </Card>

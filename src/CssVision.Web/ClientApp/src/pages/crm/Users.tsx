@@ -19,6 +19,7 @@ import {
   Tabs,
   useToast,
 } from "../../components/ui";
+import { ContratoFinanceiro } from "../../components/portal/ContratoFinanceiro";
 import { PAPEL_LABEL, UserForm, paraAtualizarRequest, paraCriarRequest, paraFormValues, type UserFormValues } from "../../components/crm/UserForm";
 import { BarraDeFiltros, CampoDeFiltro } from "../../components/Filtros";
 
@@ -335,8 +336,9 @@ function UsuariosTab({
         )}
       </Modal>
 
-      <Modal open={!!usuarioEditando} onClose={() => setUsuarioEditando(null)} title="Editar usuário" size="lg">
+      <Modal open={!!usuarioEditando} onClose={() => setUsuarioEditando(null)} title="Editar usuário" size="xl">
         {usuarioEditando && (
+          <>
           <UserForm
             modoEdicao
             podeGerenciarTudo={podeGerenciarTudo}
@@ -347,6 +349,16 @@ function UsuariosTab({
             onSubmit={salvarEdicao}
             onCancel={() => setUsuarioEditando(null)}
           />
+          {usuarioEditando.papeis.includes("Comercial") && (
+            <section className="mt-6 border-t border-[var(--border)] pt-5" aria-label="Financeiro">
+              <h3 className="text-base font-semibold text-[var(--fg)]">Financeiro</h3>
+              <p className="mb-4 text-sm text-[var(--fg-muted)]">
+                Marque se o consultor é PJ ou CLT e defina os valores dele: PJ ganha bônus por placa ou recorrência (um dos dois) e tem custos fixos; CLT tem salário e % da adesão. Cada mudança fica no histórico do Controle financeiro dele.
+              </p>
+              <ContratoFinanceiro consultorId={usuarioEditando.id} ano={new Date().getFullYear()} />
+            </section>
+          )}
+          </>
         )}
       </Modal>
 
@@ -356,7 +368,7 @@ function UsuariosTab({
             <p className="text-sm text-[var(--fg-muted)]">
               Definir uma nova senha para <strong className="text-[var(--fg)]">{usuarioRedefinindo.nomeCompleto}</strong>.
             </p>
-            <Input type="password" placeholder="Nova senha (mín. 8 caracteres)" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} />
+            <Input type="password" placeholder="Nova senha (mín. 10 caracteres)" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} />
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => { setUsuarioRedefinindo(null); setNovaSenha(""); }} disabled={salvando}>
                 Cancelar

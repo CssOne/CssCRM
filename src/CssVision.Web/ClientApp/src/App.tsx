@@ -18,6 +18,7 @@ import { UsersPage } from "./pages/crm/Users";
 import { PortalDashboardPage } from "./pages/portal/Dashboard";
 import { PortalClientesPage } from "./pages/portal/Clientes";
 import { PortalPropostasPage } from "./pages/portal/Propostas";
+import { PortalControleFinanceiroPage } from "./pages/portal/ControleFinanceiro";
 import { ConfiguracoesPage } from "./pages/portal/Configuracoes";
 import { TrafegoPagoPage } from "./pages/marketing/TrafegoPago";
 import { BackupsPage } from "./pages/admin/Backups";
@@ -27,7 +28,8 @@ import { DiscordPage } from "./pages/Discord";
 import { TvComercialPage } from "./pages/tv/TvComercial";
 import { GestaoFinanceiraPage } from "./pages/crm/GestaoFinanceira";
 import { UsuariosFinanceiroPage } from "./pages/crm/UsuariosFinanceiro";
-import { AvisosPagamentoPage } from "./pages/crm/AvisosPagamento";
+import { SetorFinanceiroPage } from "./pages/crm/SetorFinanceiro";
+import { RedirecionarAvisosPagamento, SetorFinanceiroConsultorPage } from "./pages/crm/SetorFinanceiroConsultor";
 
 function CarregandoTelaCheia() {
   return (
@@ -120,13 +122,22 @@ export default function App() {
         }
       />
       <Route
-        path="/app/crm/avisos-pagamento"
+        path="/app/crm/setor-financeiro"
         element={
           <RotaProtegida papeis={PAPEIS_GESTAO_FINANCEIRA}>
-            <AvisosPagamentoPage />
+            <SetorFinanceiroPage />
           </RotaProtegida>
         }
       />
+      <Route
+        path="/app/crm/setor-financeiro/:consultorId"
+        element={
+          <RotaProtegida papeis={PAPEIS_GESTAO_FINANCEIRA}>
+            <SetorFinanceiroConsultorPage />
+          </RotaProtegida>
+        }
+      />
+      <Route path="/app/crm/avisos-pagamento" element={<RotaProtegida papeis={PAPEIS_GESTAO_FINANCEIRA}><RedirecionarAvisosPagamento /></RotaProtegida>} />
 
       <Route path="/tv/comercial" element={<RotaTelaCheia papeis={PAPEIS_GESTAO}><TvComercialPage /></RotaTelaCheia>} />
       <Route path="/app/suporte" element={<RotaProtegida><SuportePage /></RotaProtegida>} />
@@ -136,6 +147,7 @@ export default function App() {
       <Route path="/app/portal" element={<RotaProtegida><PortalDashboardPage /></RotaProtegida>} />
       <Route path="/app/portal/clientes" element={<RotaProtegida><PortalClientesPage /></RotaProtegida>} />
       <Route path="/app/portal/propostas" element={<RotaProtegida><PortalPropostasPage /></RotaProtegida>} />
+      <Route path="/app/portal/controle-financeiro" element={<RotaProtegida><PortalControleFinanceiroPage /></RotaProtegida>} />
       <Route path="/app/portal/configuracoes" element={<RotaProtegida><ConfiguracoesPage /></RotaProtegida>} />
 
       <Route

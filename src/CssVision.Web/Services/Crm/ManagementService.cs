@@ -55,7 +55,7 @@ public sealed class ManagementService(
         var tempoMedioPorEtapa = await ObterTempoMedioPorEtapaAsync(oportunidadesQuery, ct);
         var oportunidadesSemMovimentacao = await ObterOportunidadesSemMovimentacaoAsync(oportunidadesQuery, agora, ct);
         var ranking = await ObterRankingAsync(visiveis, inicio, fim, ct);
-        var motivosPerda = await ObterMotivosPerdaAsync(oportunidadesQuery, inicio, fim, ct);
+        var motivosPerda = await ObterMotivosPerdaAsync(oportunidadesQuery, leadsQuery, inicio, fim, ct);
 
         return new GestaoComercialResumoDto(tempoMedioContatoHoras, tempoMedioPorEtapa, oportunidadesSemMovimentacao, ranking, motivosPerda,
             leadsComContato, contatoPorVendedor);
@@ -104,7 +104,7 @@ public sealed class ManagementService(
         var leadsDosVendedores = db.CrmLeads.AsNoTracking().Where(LixeiraDoQuadro.ForaDaLixeira).Where(l => ids.Contains(l.ResponsavelId));
         var leadsAtivos = await ContagensPorVendedor.ContarLeadsAsync(leadsDosVendedores.Where(l => !l.Arquivado), ct);
         var abertas = await ContagensPorVendedor.AbertasAsync(
-            db.CrmOpportunities.AsNoTracking().Where(o => !o.Arquivado && idsOportunidade.Contains(o.ResponsavelId)), ct);
+            db.CrmOpportunities.AsNoTracking().Where(o => !o.Arquivado && idsOportunidade.Contains(o.ResponsavelId)), ct, leadsDosVendedores);
         // Mesma contagem dos limites: só leads do tráfego pago (ver LeadAssignmentService).
         var doTrafego = leadsDosVendedores.Where(OrigemLead.VeioDoTrafegoPago);
         // Lead do tráfego é de quem o tem agora, no mês em que passou para ele (atribuição a outro consultor tira de um e dá ao outro).
@@ -150,7 +150,7 @@ public sealed class ManagementService(
 
         // Agrupado por consultor no banco — antes eram 8 consultas por consultor.
         var leadsAtivos = await ContagensPorVendedor.ContarLeadsAsync(leadsDosConsultores.Where(l => !l.Arquivado), ct);
-        var abertas = await ContagensPorVendedor.AbertasAsync(oportunidades, ct);
+        var abertas = await ContagensPorVendedor.AbertasAsync(oportunidades, ct, leadsDosConsultores);
         var fechadas = await ContagensPorVendedor.FechadasAsync(
             oportunidades.Where(o => o.DataEfetivaFechamento >= inicioMes && o.DataEfetivaFechamento < fimMes), ct);
         var recebidos = await ContagensPorVendedor.ContarLeadsAsync(
@@ -531,16 +531,36 @@ public sealed class ManagementService(
         return ordenado.Select((r, i) => r with { Posicao = i + 1 }).ToList();
     }
 
+    /// <summary>
+    /// Motivos de perda do período: as oportunidades perdidas no pipeline mais os leads que estão na coluna "Perdido" do quadro de
+    /// leads (onde as perdas acontecem hoje). Lead sem motivo informado aparece como "Sem motivo informado"; lead cuja oportunidade
+    /// perdida já entrou na primeira parte não conta de novo. O quadro de leads não guarda a data da perda: vale a última alteração do lead.
+    /// </summary>
     private static async Task<List<MotivoPerdaResumoDto>> ObterMotivosPerdaAsync(
-        IQueryable<CrmOpportunity> oportunidadesQuery, DateTimeOffset inicio, DateTimeOffset fim, CancellationToken ct)
+        IQueryable<CrmOpportunity> oportunidadesQuery, IQueryable<CrmLead> leadsQuery, DateTimeOffset inicio, DateTimeOffset fim, CancellationToken ct)
     {
-        var bruto = await oportunidadesQuery
-            .Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Perdido && o.DataEfetivaFechamento >= inicio && o.DataEfetivaFechamento <= fim && o.MotivoPerda != null)
-            .GroupBy(o => o.MotivoPerda!.Descricao)
+        const string semMotivo = "Sem motivo informado";
+
+        var perdidasNoPeriodo = oportunidadesQuery
+            .Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Perdido && o.DataEfetivaFechamento >= inicio && o.DataEfetivaFechamento <= fim);
+
+        var deOportunidades = await perdidasNoPeriodo
+            .GroupBy(o => o.MotivoPerda != null ? o.MotivoPerda.Descricao : semMotivo)
             .Select(g => new { Motivo = g.Key, Quantidade = g.Count(), Valor = g.Sum(o => o.ValorEstimado) })
-            .OrderByDescending(g => g.Quantidade)
             .ToListAsync(ct);
 
-        return bruto.Select(b => new MotivoPerdaResumoDto(b.Motivo, b.Quantidade, b.Valor)).ToList();
+        var idsComOportunidade = perdidasNoPeriodo.Select(o => o.LeadId);
+        var deLeads = await leadsQuery
+            .Where(l => l.Etapa != null && l.Etapa.Nome == "Perdido" && (l.AtualizadoEm ?? l.CriadoEm) >= inicio && (l.AtualizadoEm ?? l.CriadoEm) <= fim)
+            .Where(l => !idsComOportunidade.Contains(l.Id))
+            .GroupBy(l => l.MotivoPerda != null ? l.MotivoPerda.Descricao : semMotivo)
+            .Select(g => new { Motivo = g.Key, Quantidade = g.Count(), Valor = g.Sum(l => l.ValorAdesao ?? 0m) })
+            .ToListAsync(ct);
+
+        return deOportunidades.Concat(deLeads)
+            .GroupBy(x => x.Motivo)
+            .Select(g => new MotivoPerdaResumoDto(g.Key, g.Sum(x => x.Quantidade), g.Sum(x => x.Valor)))
+            .OrderByDescending(m => m.Quantidade)
+            .ToList();
     }
 }

@@ -45,8 +45,8 @@ public interface ILeadAssignmentService
     Task<AlertaDistribuicaoDto> ObterEstadoDistribuicaoAsync(CancellationToken ct);
 
     /// <summary>
-    /// Gestor decide continuar a distribuição automática mesmo com os limites atingidos (vale até o fim
-    /// do dia, horário de Brasília) ou volta a respeitá-los.
+    /// Gestor decide continuar a distribuição automática mesmo com os limites diário/mensal atingidos (vale até o fim
+    /// do dia, horário de Brasília) ou volta a respeitá-los. Não afeta o dia e o horário de recebimento de cada consultor: esses sempre valem.
     /// </summary>
     Task DefinirContinuarAposLimiteAsync(bool continuar, CancellationToken ct);
 

@@ -779,10 +779,16 @@ public sealed class OpportunityService(
             "comprovante-indicacao" => opportunity.ComprovanteIndicacaoArquivoUrl,
             _ => opportunity.ComprovanteVistoriaArquivoUrl,
         };
+        // O conteúdo precisa ser do formato da extensão (um arquivo renomeado não passa), e só depois o anterior é apagado.
+        await using var stream = arquivo.OpenReadStream();
+        if (!await AssinaturaDeArquivo.ConfereAsync(stream, extensao, ct))
+        {
+            throw new CrmBusinessException("O conteúdo do arquivo não corresponde ao formato. Envie um PDF, JPG, PNG ou WEBP válido.", "anexo_invalido");
+        }
+
         await armazenamento.ExcluirSeExistirAsync(urlAtual, ct);
 
         var nomeArquivo = $"{tipoNormalizado}{extensao}";
-        await using var stream = arquivo.OpenReadStream();
         var novaUrl = await armazenamento.SalvarAsync($"opportunities/{opportunity.Id}", nomeArquivo, stream, arquivo.ContentType, ct);
 
         switch (tipoNormalizado)

@@ -1,12 +1,14 @@
 import { usePaginacao } from "../../lib/usePaginacao";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { HoraInput } from "../../components/PeriodoInput";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, isAbortError } from "../../lib/api";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
 import type { GestaoComercialResumo, RecebeLeadsHistorico, RedistribuicaoHistorico, VendedorResumo } from "../../lib/types";
-import { AlertTriangle, Timer, UserPlus, Users } from "lucide-react";
+import { AlertTriangle, ChevronDown, LayoutGrid, List, Timer, UserPlus, Users } from "lucide-react";
 import { Avatar, Badge, Card, ConfirmDialog, ErrorState, Select, Skeleton, useToast, Pagination } from "../../components/ui";
 import { StatCard } from "../../components/crm/StatCard";
+import { NumeroAnimado } from "../../lib/useContagem";
 import { OPCOES_O_QUE } from "../../lib/opcoesLead";
 import { useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
@@ -124,16 +126,14 @@ function JanelaRecebimento({ vendedor, onSalvo }: { vendedor: VendedorResumo; on
     setDias((atual) => (atual.includes(d) ? atual.filter((x) => x !== d) : [...atual, d].sort()));
   }
 
-  const campoHora =
-    "focus-ring h-7 w-[4.5rem] rounded-md border border-[var(--border)] bg-[var(--surface)] px-1 text-center text-xs text-[var(--fg)] disabled:opacity-50";
   return (
     <div className="space-y-1.5 border-t border-[var(--border)] pt-2 text-xs">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[var(--fg-muted)]" title="Horário de Brasília. Vazio = o dia todo">Horário</span>
         <div className="flex items-center gap-1">
-          <input type="time" className={campoHora} aria-label="Início do horário de recebimento de leads" value={inicio} disabled={salvando} onChange={(e) => setInicio(e.target.value)} />
+          <HoraInput compacto ariaLabel="Início do horário de recebimento de leads" value={inicio} disabled={salvando} onChange={setInicio} />
           <span className="text-[var(--fg-muted)]">às</span>
-          <input type="time" className={campoHora} aria-label="Fim do horário de recebimento de leads" value={fim} disabled={salvando} onChange={(e) => setFim(e.target.value)} />
+          <HoraInput compacto ariaLabel="Fim do horário de recebimento de leads" value={fim} disabled={salvando} onChange={setFim} />
         </div>
       </div>
       <div className="flex items-center justify-between gap-2">
@@ -317,89 +317,410 @@ function diaDaSemanaBrasilia(): number {
 }
 
 /** Quantos leads de tráfego pago cada consultor marcado para receber já pegou hoje e quantos ainda faltam (até o limite diário). */
+type SituacaoDoDia = "todos" | "faltam" | "atingiram" | "semlead" | "fora";
+
+/**
+ * Leads de hoje por vendedor: quanto cada consultor que recebe leads já pegou hoje, quanto falta para o limite diário e quem está parado, com barra de
+ * progresso e uma situação por consultor. Dá para filtrar por situação e ordenar. Conta os leads de tráfego pago atribuídos hoje.
+ */
 function LeadsDoDiaCard({ vendedores, filtrado = false }: { vendedores: VendedorResumo[]; filtrado?: boolean }) {
   const hoje = diaDaSemanaBrasilia();
-  const linhas = vendedores
+  const [situacao, setSituacao] = useState<SituacaoDoDia>("todos");
+  const [ordem, setOrdem] = useState<"menos" | "mais" | "nome">("menos");
+
+  const todas = vendedores
     .filter((v) => v.ativo !== false && v.recebeLeads)
     .map((v) => {
       const pegou = v.leadsRecebidosHoje ?? 0;
       const limite = v.limiteDiarioLeads ?? null;
-      return {
-        v,
-        pegou,
-        limite,
-        faltam: limite === null ? null : Math.max(limite - pegou, 0),
-        foraDoDia: !!v.diasSemanaLeads && v.diasSemanaLeads.length > 0 && !v.diasSemanaLeads.includes(hoje),
-      };
-    })
-    .sort((a, b) => (a.foraDoDia === b.foraDoDia ? a.pegou - b.pegou || a.v.nome.localeCompare(b.v.nome) : a.foraDoDia ? 1 : -1));
-  const totalPegou = linhas.reduce((n, l) => n + l.pegou, 0);
-  const totalFaltam = linhas.reduce((n, l) => n + (l.foraDoDia ? 0 : (l.faltam ?? 0)), 0);
-  const semLimite = linhas.filter((l) => l.limite === null && !l.foraDoDia).length;
-  const semLeadHoje = linhas.filter((l) => l.pegou === 0 && !l.foraDoDia).length;
-  const pagina = usePaginacao(linhas, 12);
+      const foraDoDia = !!v.diasSemanaLeads && v.diasSemanaLeads.length > 0 && !v.diasSemanaLeads.includes(hoje);
+      const faltam = limite === null ? null : Math.max(limite - pegou, 0);
+      const estado: "fora" | "atingiu" | "semlead" | "andamento" | "semlimite" = foraDoDia ? "fora" : limite !== null && faltam === 0 ? "atingiu" : pegou === 0 ? "semlead" : limite === null ? "semlimite" : "andamento";
+      return { v, pegou, limite, faltam, foraDoDia, estado };
+    });
+
+  const contagens = {
+    todos: todas.length,
+    faltam: todas.filter((l) => !l.foraDoDia && l.faltam !== null && l.faltam > 0).length,
+    atingiram: todas.filter((l) => l.estado === "atingiu").length,
+    semlead: todas.filter((l) => !l.foraDoDia && l.pegou === 0).length,
+    fora: todas.filter((l) => l.foraDoDia).length,
+  };
+  const linhas = todas
+    .filter((l) => (situacao === "todos" ? true : situacao === "faltam" ? !l.foraDoDia && l.faltam !== null && l.faltam > 0 : situacao === "atingiram" ? l.estado === "atingiu" : situacao === "semlead" ? !l.foraDoDia && l.pegou === 0 : l.foraDoDia))
+    .sort((a, b) =>
+      ordem === "nome"
+        ? a.v.nome.localeCompare(b.v.nome, "pt-BR")
+        : ordem === "mais"
+          ? b.pegou - a.pegou || a.v.nome.localeCompare(b.v.nome, "pt-BR")
+          : a.foraDoDia === b.foraDoDia ? a.pegou - b.pegou || a.v.nome.localeCompare(b.v.nome, "pt-BR") : a.foraDoDia ? 1 : -1
+    );
+
+  const totalPegou = todas.reduce((n, l) => n + l.pegou, 0);
+  const comLimite = todas.filter((l) => !l.foraDoDia && l.limite !== null);
+  const limiteTotal = comLimite.reduce((n, l) => n + (l.limite ?? 0), 0);
+  const pegouComLimite = comLimite.reduce((n, l) => n + Math.min(l.pegou, l.limite ?? 0), 0);
+  const totalFaltam = comLimite.reduce((n, l) => n + (l.faltam ?? 0), 0);
+  const semLimite = todas.filter((l) => l.limite === null && !l.foraDoDia).length;
+  const pagina = usePaginacao(linhas, 16);
+
+  const estiloDoEstado = {
+    fora: { rotulo: "Não recebe hoje", cor: "var(--fg-muted)" },
+    atingiu: { rotulo: "Limite atingido", cor: "var(--success)" },
+    semlead: { rotulo: "Sem lead hoje", cor: "var(--warning)" },
+    semlimite: { rotulo: "Sem limite diário", cor: "var(--brand)" },
+    andamento: { rotulo: "", cor: "var(--brand)" },
+  } as const;
+
+  const abas: [SituacaoDoDia, string][] = [["todos", "Todos"], ["faltam", "Faltam"], ["atingiram", "Atingiram o limite"], ["semlead", "Sem lead hoje"], ["fora", "Fora hoje"]];
 
   return (
-    <Card className="p-4">
-      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+    <Card className="h-full p-4">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-[15px] font-semibold tracking-tight text-[var(--fg)]">Leads de hoje por vendedor</h2>
           <p className="text-xs text-[var(--fg-muted)]">Só quem está marcado para receber leads. Conta os leads de tráfego pago atribuídos hoje. Segue os filtros acima.</p>
         </div>
         <div className="flex flex-wrap gap-4 text-center">
           <div>
-            <p className="text-xl font-semibold text-[var(--brand)]">{totalPegou}</p>
+            <p className="text-xl font-semibold text-[var(--brand)]"><NumeroAnimado valor={String(totalPegou)} /></p>
             <p className="text-[11px] text-[var(--fg-muted)]">pegos hoje</p>
           </div>
           <div title="Soma do que falta até o limite diário de quem tem limite">
-            <p className="text-xl font-semibold text-[var(--fg)]">{totalFaltam}</p>
+            <p className="text-xl font-semibold text-[var(--fg)]"><NumeroAnimado valor={String(totalFaltam)} /></p>
             <p className="text-[11px] text-[var(--fg-muted)]">faltam (com limite)</p>
           </div>
           <div title="Ainda não receberam nenhum lead hoje">
-            <p className="text-xl font-semibold text-[var(--fg)]">{semLeadHoje}</p>
+            <p className="text-xl font-semibold text-[var(--fg)]"><NumeroAnimado valor={String(contagens.semlead)} /></p>
             <p className="text-[11px] text-[var(--fg-muted)]">sem lead hoje</p>
           </div>
           {semLimite > 0 && (
             <div title="Sem limite diário: recebem enquanto houver lead, na ordem do rodízio">
-              <p className="text-xl font-semibold text-[var(--fg)]">{semLimite}</p>
+              <p className="text-xl font-semibold text-[var(--fg)]"><NumeroAnimado valor={String(semLimite)} /></p>
               <p className="text-[11px] text-[var(--fg-muted)]">sem limite diário</p>
             </div>
           )}
         </div>
       </div>
-      {linhas.length === 0 ? (
-        <p className="text-sm text-[var(--fg-muted)]">{filtrado ? "Ninguém que está marcado para receber leads combina com os filtros." : "Ninguém está marcado para receber leads."}</p>
+
+      {limiteTotal > 0 && (
+        <div className="mb-3" title="Do total dos limites diários de quem tem limite, quanto já foi distribuído hoje">
+          <div className="mb-1 flex items-center justify-between text-[11px] text-[var(--fg-muted)]">
+            <span>Distribuição do dia (quem tem limite)</span>
+            <span className="font-semibold text-[var(--fg)] [font-variant-numeric:tabular-nums]">{pegouComLimite} de {limiteTotal} · {Math.round((pegouComLimite / limiteTotal) * 100)}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-[var(--surface-hover)]">
+            <div className="barra-cresce h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[color-mix(in_srgb,var(--brand)_55%,#A6C3E0)]" style={{ width: `${Math.min(100, (pegouComLimite / limiteTotal) * 100)}%` }} />
+          </div>
+        </div>
+      )}
+
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div role="tablist" data-sem-animacao aria-label="Situação no dia" className="flex flex-wrap gap-1">
+          {abas.map(([chave, rotulo]) => (
+            <button
+              key={chave}
+              type="button"
+              role="tab"
+              aria-selected={situacao === chave}
+              onClick={() => setSituacao(chave)}
+              className={`focus-ring flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                situacao === chave ? "bg-[var(--brand)] text-white" : "bg-[var(--surface-hover)] text-[var(--fg-muted)] hover:text-[var(--fg)]"
+              }`}
+            >
+              {rotulo}
+              <span className={`rounded-full px-1.5 text-[10px] ${situacao === chave ? "bg-white/25" : "bg-[var(--surface)]"}`}>{contagens[chave]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="w-44">
+          <Select aria-label="Ordenar" value={ordem} onChange={(e) => setOrdem(e.target.value as typeof ordem)}>
+            <option value="menos">Menos leads primeiro</option>
+            <option value="mais">Mais leads primeiro</option>
+            <option value="nome">Nome (A–Z)</option>
+          </Select>
+        </div>
+      </div>
+
+      {todas.length === 0 ? (
+        <p className="rounded-xl bg-[var(--surface-hover)] px-4 py-6 text-center text-sm text-[var(--fg-muted)]">{filtrado ? "Ninguém que está marcado para receber leads combina com os filtros." : "Ninguém está marcado para receber leads."}</p>
+      ) : linhas.length === 0 ? (
+        <p className="rounded-xl bg-[var(--surface-hover)] px-4 py-6 text-center text-sm text-[var(--fg-muted)]">Ninguém nesta situação agora.</p>
       ) : (
         <>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {pagina.itensDaPagina.map(({ v, pegou, limite, faltam, foraDoDia }) => (
-              <div key={v.id} className={`rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 ${foraDoDia ? "opacity-60" : ""}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-medium text-[var(--fg)]" title={v.nome}>
-                    {v.nome}
-                  </span>
-                  <span className="shrink-0 text-xs text-[var(--fg-muted)] [font-variant-numeric:tabular-nums]">
-                    <strong className="text-sm text-[var(--fg)]">{pegou}</strong>
-                    {limite !== null ? ` / ${limite}` : ""}
-                  </span>
-                </div>
-                {limite !== null && !foraDoDia && (
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--surface-hover)]">
-                    <div
-                      className={`h-full rounded-full ${faltam === 0 ? "bg-[var(--success)]" : "bg-[var(--brand)]"}`}
-                      style={{ width: `${Math.min(100, limite === 0 ? 0 : (pegou / limite) * 100)}%` }}
-                    />
+          {/* A chave muda só com o filtro/ordem (o bloco reaparece); a troca de página é animada pela própria paginação — sem animar duas vezes. */}
+          <div key={`${situacao}-${ordem}`} className="entra grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            {pagina.itensDaPagina.map(({ v, pegou, limite, faltam, estado }, i) => {
+              const est = estiloDoEstado[estado];
+              const texto = estado === "andamento" ? `faltam ${faltam}` : est.rotulo;
+              return (
+                <div
+                  key={v.id}
+                  style={{ "--i": i, borderLeftColor: est.cor } as React.CSSProperties}
+                  title={`${v.nome} · ${v.regionalNome ?? "Sem regional"}`}
+                  className={`cartao-sobe rounded-lg border border-l-[3px] border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 ${estado === "fora" ? "opacity-60" : ""}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <Avatar nome={v.nome} usuarioId={v.id} className="size-6 text-[9px]" />
+                    <p className="min-w-0 flex-1 truncate text-xs font-semibold text-[var(--fg)]">{v.nome}</p>
+                    <span className="shrink-0 text-right [font-variant-numeric:tabular-nums]">
+                      <strong className="text-sm leading-none text-[var(--fg)]">{pegou}</strong>
+                      {limite !== null && <span className="text-[11px] text-[var(--fg-muted)]"> / {limite}</span>}
+                    </span>
                   </div>
-                )}
-                <p className="mt-1.5 text-[11px] text-[var(--fg-muted)]">
-                  {foraDoDia ? "não recebe hoje" : faltam === null ? "sem limite diário" : faltam === 0 ? "limite atingido" : `faltam ${faltam}`}
-                </p>
-              </div>
-            ))}
+                  <div className="mt-1 flex items-center gap-2">
+                    {limite !== null && estado !== "fora" ? (
+                      <div className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--surface-hover)]">
+                        <div className="barra-cresce h-full rounded-full" style={{ "--i": i, width: `${Math.min(100, limite === 0 ? 0 : (pegou / limite) * 100)}%`, backgroundColor: est.cor } as React.CSSProperties} />
+                      </div>
+                    ) : null}
+                    <p className="shrink-0 text-[10px] font-medium leading-tight" style={{ color: est.cor }}>{texto}</p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
           <Pagination pagina={pagina.pagina} totalPaginas={pagina.totalPaginas} onChange={pagina.setPagina} />
         </>
       )}
+    </Card>
+  );
+}
+
+type OrdemCarteira = "nome" | "mes" | "anterior" | "oportunidades" | "hoje";
+
+/** Resumo, em uma linha, de como o consultor recebe leads: tipos, horário e dias. */
+function resumoDaDistribuicao(v: VendedorResumo) {
+  const tipos = v.recebeSomenteOQue?.length ? v.recebeSomenteOQue.join(", ") : "todos os tipos";
+  const horario = v.horarioInicioLeads && v.horarioFimLeads ? `${v.horarioInicioLeads}–${v.horarioFimLeads}` : "o dia todo";
+  const dias = !v.diasSemanaLeads || v.diasSemanaLeads.length === 0 || v.diasSemanaLeads.length === 7 ? "todos os dias" : v.diasSemanaLeads.map((d) => NOMES_DIAS[d].slice(0, 3)).join(", ");
+  return { tipos, horario, dias };
+}
+
+function CartaoDoVendedor({ v, onSalvo }: { v: VendedorResumo; onSalvo: () => void }) {
+  return (
+          <div className="space-y-3.5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
+            <div className="flex items-center gap-3">
+              <Avatar nome={v.nome} usuarioId={v.id} className="size-9 text-xs" />
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-2 font-semibold text-[var(--fg)]" title={v.nome}>
+                  <span className="truncate">{v.nome}</span>
+                  {v.ativo === false && <Badge variant="danger">Inativo</Badge>}
+                </p>
+                <p className="truncate text-xs text-[var(--fg-muted)]">{v.regionalNome ?? "Sem regional"}</p>
+              </div>
+            </div>
+            <dl
+              className="grid grid-cols-3 gap-2 rounded-xl bg-[var(--surface-hover)] p-2.5 text-center [font-variant-numeric:tabular-nums]"
+              title="Leads de tráfego pago (Notion e sistema novo) que chegaram para o vendedor"
+            >
+              <div>
+                <dd className="text-base font-semibold text-[var(--brand)]">{(v.leadsTrafegoNoMes ?? 0).toLocaleString("pt-BR")}</dd>
+                <dt className="text-[10px] text-[var(--fg-muted)]">leads no mês</dt>
+              </div>
+              <div>
+                <dd className="text-base font-semibold text-[var(--fg)]">{(v.leadsTrafegoMesAnterior ?? 0).toLocaleString("pt-BR")}</dd>
+                <dt className="text-[10px] text-[var(--fg-muted)]">mês anterior</dt>
+              </div>
+              <div>
+                <dd className="text-base font-semibold text-[var(--fg)]">{v.oportunidadesAbertas}</dd>
+                <dt className="text-[10px] text-[var(--fg-muted)]">oportunidades</dt>
+              </div>
+            </dl>
+            <div>
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">Limites de leads</p>
+              <div className="space-y-1.5">
+                <LimiteInput tipo="mensal" vendedor={v} onSalvo={() => onSalvo()} />
+                <LimiteInput tipo="diario" vendedor={v} onSalvo={() => onSalvo()} />
+              </div>
+            </div>
+            <div className="space-y-2.5 border-t border-[var(--border)] pt-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">Distribuição</p>
+              <TiposLeadSelect key={`${v.id}-${v.recebeSomenteOQue?.join("|")}`} vendedor={v} onSalvo={() => onSalvo()} />
+              <JanelaRecebimento key={`${v.id}-${v.horarioInicioLeads}-${v.horarioFimLeads}-${v.diasSemanaLeads?.join("")}`} vendedor={v} onSalvo={() => onSalvo()} />
+              <RecebeLeadsSwitch vendedor={v} onSalvo={() => onSalvo()} />
+            </div>
+          </div>
+  );
+}
+
+/**
+ * Carteira por vendedor: em lista (padrão, compacta, com o "recebe leads" na própria linha e a configuração completa ao abrir a linha) ou em cartões.
+ * A ordem e o modo ficam guardados no navegador.
+ */
+function CarteiraDosVendedores({ vendedores, onSalvo }: { vendedores: VendedorResumo[]; onSalvo: () => void }) {
+  const [modo, setModo] = useEstadoSalvo<"lista" | "cartoes">("gestao:carteira-modo", "lista");
+  const [ordem, setOrdem] = useEstadoSalvo<OrdemCarteira>("gestao:carteira-ordem", "nome");
+  const [abertos, setAbertos] = useState<Set<string>>(() => new Set());
+  // Quem já foi aberto alguma vez mantém o conteúdo montado: assim a linha também anima ao fechar (a altura recolhe em vez de sumir de uma vez).
+  const [jaAbertos, setJaAbertos] = useState<Set<string>>(() => new Set());
+
+  const ordenados = useMemo(() => {
+    const lista = [...vendedores];
+    const valor = (v: VendedorResumo) => {
+      switch (ordem) {
+        case "mes": return v.leadsTrafegoNoMes ?? 0;
+        case "anterior": return v.leadsTrafegoMesAnterior ?? 0;
+        case "oportunidades": return v.oportunidadesAbertas;
+        case "hoje": return v.leadsRecebidosHoje ?? 0;
+        default: return 0;
+      }
+    };
+    return ordem === "nome" ? lista.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR")) : lista.sort((a, b) => valor(b) - valor(a) || a.nome.localeCompare(b.nome, "pt-BR"));
+  }, [vendedores, ordem]);
+  const pagina = usePaginacao(ordenados, modo === "lista" ? 20 : 9);
+
+  const alternarAberto = (id: string) =>
+    setAbertos((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  const alternar = (id: string) => {
+    if (jaAbertos.has(id)) return alternarAberto(id);
+    // Primeira abertura: monta o conteúdo já recolhido e só no quadro seguinte abre, para a transição de altura rodar.
+    setJaAbertos((atual) => new Set(atual).add(id));
+    requestAnimationFrame(() => requestAnimationFrame(() => alternarAberto(id)));
+  };
+
+  return (
+    <Card className="p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-[15px] font-semibold tracking-tight text-[var(--fg)]">Carteira por vendedor</h2>
+          <p className="text-xs text-[var(--fg-muted)]">
+            {ordenados.length} consultor(es){modo === "lista" ? " · clique na linha para configurar limites, tipos de lead e horário" : ""}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="w-44">
+            <Select aria-label="Ordenar a carteira" value={ordem} onChange={(e) => setOrdem(e.target.value as OrdemCarteira)}>
+              <option value="nome">Ordem: nome (A–Z)</option>
+              <option value="mes">Ordem: leads no mês</option>
+              <option value="anterior">Ordem: mês anterior</option>
+              <option value="oportunidades">Ordem: oportunidades</option>
+              <option value="hoje">Ordem: leads hoje</option>
+            </Select>
+          </div>
+          <div role="radiogroup" aria-label="Forma de exibição" className="flex items-center gap-0.5 rounded-full bg-[var(--surface-hover)] p-0.5">
+            {([["lista", "Lista", List], ["cartoes", "Cartões", LayoutGrid]] as const).map(([valor, rotulo, Icone]) => (
+              <button
+                key={valor}
+                type="button"
+                role="radio"
+                aria-checked={modo === valor}
+                onClick={() => setModo(valor)}
+                className={`focus-ring flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
+                  modo === valor ? "bg-[var(--surface)] text-[var(--fg)] shadow-[0_1px_2px_rgb(0_0_0/0.12)]" : "text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                }`}
+              >
+                <Icone className="size-3.5" aria-hidden /> {rotulo}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {ordenados.length === 0 ? (
+        <p className="rounded-xl bg-[var(--surface-hover)] px-4 py-6 text-center text-sm text-[var(--fg-muted)]">Nenhum consultor combina com os filtros.</p>
+      ) : modo === "cartoes" ? (
+        <div key={`cartoes-${ordem}`} className="entra grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {pagina.itensDaPagina.map((v) => (
+            <CartaoDoVendedor key={v.id} v={v} onSalvo={onSalvo} />
+          ))}
+        </div>
+      ) : (
+        <div key={`lista-${ordem}`} className="entra overflow-x-auto">
+          <table className="w-full min-w-[60rem] text-sm [font-variant-numeric:tabular-nums]">
+            <thead>
+              <tr className="text-left">
+                {["Consultor", "Leads no mês", "Mês anterior", "Oportunidades", "Hoje", "Limite mensal", "Distribuição", "Recebe leads", ""].map((h, i) => (
+                  <th key={`${h}${i}`} className={`border-b border-[var(--border)] px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--fg-muted)] ${i >= 1 && i <= 5 ? "text-right" : ""}`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {pagina.itensDaPagina.map((v) => {
+                const aberto = abertos.has(v.id);
+                const d = resumoDaDistribuicao(v);
+                return (
+                  <Fragment key={v.id}>
+                    <tr
+                      onClick={() => alternar(v.id)}
+                      aria-expanded={aberto}
+                      className={`group cursor-pointer border-b border-[var(--border)] transition-colors duration-300 hover:bg-[var(--brand-soft)] active:bg-[var(--brand-soft)] ${aberto ? "bg-[var(--brand-soft)]" : ""} ${v.ativo === false ? "opacity-70" : ""}`}
+                    >
+                      <td className={`px-3 py-2.5 transition-[box-shadow,padding] duration-300 ${aberto ? "pl-4 shadow-[inset_3px_0_0_var(--brand)]" : "shadow-[inset_0_0_0_var(--brand)] group-hover:pl-4"}`}>
+                        <span className="flex items-center gap-2.5">
+                          <Avatar nome={v.nome} usuarioId={v.id} className="size-8 text-xs" />
+                          <span className="min-w-0">
+                            <span className="flex items-center gap-2 font-semibold text-[var(--fg)]">
+                              <span className="truncate" title={v.nome}>{v.nome}</span>
+                              {v.ativo === false && <Badge variant="danger">Inativo</Badge>}
+                            </span>
+                            <span className="block truncate text-xs text-[var(--fg-muted)]">{v.regionalNome ?? "Sem regional"}</span>
+                          </span>
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right font-semibold text-[var(--brand)]">{(v.leadsTrafegoNoMes ?? 0).toLocaleString("pt-BR")}</td>
+                      <td className="px-3 py-2.5 text-right text-[var(--fg)]">{(v.leadsTrafegoMesAnterior ?? 0).toLocaleString("pt-BR")}</td>
+                      <td className="px-3 py-2.5 text-right text-[var(--fg)]">{v.oportunidadesAbertas}</td>
+                      <td className="px-3 py-2.5 text-right text-[var(--fg)]">
+                        {v.leadsRecebidosHoje ?? 0}
+                        <span className="text-[var(--fg-muted)]">{v.limiteDiarioLeads != null ? ` / ${v.limiteDiarioLeads}` : ""}</span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-[var(--fg)]">
+                        {v.leadsRecebidosNoMes.toLocaleString("pt-BR")}
+                        <span className="text-[var(--fg-muted)]">{v.limiteMensalLeads != null ? ` / ${v.limiteMensalLeads}` : ""}</span>
+                      </td>
+                      <td className="max-w-[14rem] px-3 py-2.5 text-xs text-[var(--fg-muted)]">
+                        <span className="block truncate" title={d.tipos}>{d.tipos}</span>
+                        <span className="block truncate">{d.horario} · {d.dias}</span>
+                      </td>
+                      <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                        <RecebeLeadsSwitch vendedor={v} onSalvo={onSalvo} />
+                      </td>
+                      <td className="px-3 py-2.5 text-right">
+                        <ChevronDown className={`inline size-4 transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${aberto ? "rotate-180 text-[var(--brand)]" : "text-[var(--fg-muted)]"}`} aria-hidden />
+                      </td>
+                    </tr>
+                    {jaAbertos.has(v.id) && (
+                      <tr className={`bg-[var(--surface-hover)] ${aberto ? "border-b border-[var(--border)]" : ""}`} aria-hidden={!aberto}>
+                        <td colSpan={9} className="p-0">
+                          {/* grid-template-rows 0fr → 1fr: a altura do conteúdo cresce e recolhe suavemente, sem saber o tamanho dele. */}
+                          <div className={`grid transition-[grid-template-rows,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${aberto ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                            <div className="min-h-0 overflow-hidden">
+                              <div className="grid gap-4 px-4 py-3 md:grid-cols-3">
+                            <div>
+                              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">Limites de leads</p>
+                              <div className="space-y-1.5">
+                                <LimiteInput tipo="mensal" vendedor={v} onSalvo={onSalvo} />
+                                <LimiteInput tipo="diario" vendedor={v} onSalvo={onSalvo} />
+                              </div>
+                            </div>
+                            <div>
+                              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">Tipos de lead</p>
+                              <TiposLeadSelect key={`${v.id}-${v.recebeSomenteOQue?.join("|")}`} vendedor={v} onSalvo={onSalvo} />
+                            </div>
+                            <div>
+                              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">Horário e dias</p>
+                              <JanelaRecebimento key={`${v.id}-${v.horarioInicioLeads}-${v.horarioFimLeads}-${v.diasSemanaLeads?.join("")}`} vendedor={v} onSalvo={onSalvo} />
+                            </div>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <Pagination pagina={pagina.pagina} totalPaginas={pagina.totalPaginas} onChange={pagina.setPagina} />
     </Card>
   );
 }
@@ -481,7 +802,6 @@ export function ManagementPage() {
 
   // Paginação das listas (hooks antes dos retornos de carregando/erro).
   const paginaContato = usePaginacao(contatoFiltrado, 8);
-  const paginaCarteira = usePaginacao(vendedoresFiltrados, 9);
   const paginaRanking = usePaginacao(rankingFiltrado, 10);
   const paginaParadas = usePaginacao(resumo?.oportunidadesSemMovimentacao, 8);
   const paginaHistorico = usePaginacao(historico, 10);
@@ -547,17 +867,19 @@ export function ManagementPage() {
         </CampoDeFiltro>
       </BarraDeFiltros>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="entra grid grid-cols-2 gap-3 lg:grid-cols-4" style={{ "--i": 1 } as React.CSSProperties}>
         <StatCard titulo="Recebendo leads" valor={String(vendedoresFiltrados.filter((v) => v.ativo !== false && v.recebeLeads).length)} icone={Users} tom="brand" subtitulo={`de ${vendedoresFiltrados.filter((v) => v.ativo !== false).length} consultores ativos`} />
         <StatCard titulo="Leads no mês (tráfego)" valor={vendedoresFiltrados.reduce((n, v) => n + (v.leadsTrafegoNoMes ?? 0), 0).toLocaleString("pt-BR")} icone={UserPlus} tom="success" subtitulo="atribuídos à equipe" />
         <StatCard titulo="1º contato (24 h)" valor={(resumo.leadsComPrimeiroContato ?? 0) > 0 ? formatarDuracao(resumo.tempoMedioPrimeiroContatoHoras) : "—"} icone={Timer} tom="warning" subtitulo="média nas últimas 24 horas" />
         <StatCard titulo="Oportunidades paradas" valor={String(resumo.oportunidadesSemMovimentacao.length)} icone={AlertTriangle} tom={resumo.oportunidadesSemMovimentacao.length > 0 ? "danger" : "neutral"} subtitulo="sem movimentação" />
       </div>
 
-      <LeadsDoDiaCard vendedores={vendedoresFiltrados} filtrado={temFiltro} />
-
+      {/* "Leads de hoje" e "Tempo até o 1º contato" lado a lado; a carteira ocupa a largura toda (lista ou cartões). */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="!rounded-2xl p-4">
+        <div className="entra lg:col-span-2" style={{ "--i": 2 } as React.CSSProperties}>
+          <LeadsDoDiaCard vendedores={vendedoresFiltrados} filtrado={temFiltro} />
+        </div>
+        <Card className="entra !rounded-2xl p-4" style={{ "--i": 3 } as React.CSSProperties}>
           <div className="mb-3 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
               <span className="flex size-8 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]">
@@ -600,7 +922,7 @@ export function ManagementPage() {
                       <li key={v.vendedorId} className="text-xs">
                         <div className="flex items-center justify-between gap-2">
                           <span className="flex min-w-0 items-center gap-2">
-                            <Avatar nome={v.vendedorNome} className="size-5 text-[9px]" />
+                            <Avatar nome={v.vendedorNome} usuarioId={v.vendedorId} className="size-5 text-[9px]" />
                             <span className="truncate font-medium text-[var(--fg)]" title={v.vendedorNome}>
                               {v.vendedorNome}
                             </span>
@@ -621,56 +943,10 @@ export function ManagementPage() {
             </>
           )}
         </Card>
-        <Card className="p-4 lg:col-span-2">
-          <h2 className="mb-3 text-[15px] font-semibold tracking-tight text-[var(--fg)]">Carteira por vendedor</h2>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {paginaCarteira.itensDaPagina.map((v) => (
-              <div key={v.id} className="space-y-3.5 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm">
-                <div className="flex items-center gap-3">
-                  <Avatar nome={v.nome} className="size-9 text-xs" />
-                  <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-2 font-semibold text-[var(--fg)]" title={v.nome}>
-                      <span className="truncate">{v.nome}</span>
-                      {v.ativo === false && <Badge variant="danger">Inativo</Badge>}
-                    </p>
-                    <p className="truncate text-xs text-[var(--fg-muted)]">{v.regionalNome ?? "Sem regional"}</p>
-                  </div>
-                </div>
-                <dl
-                  className="grid grid-cols-3 gap-2 rounded-xl bg-[var(--surface-hover)] p-2.5 text-center [font-variant-numeric:tabular-nums]"
-                  title="Leads de tráfego pago (Notion e sistema novo) que chegaram para o vendedor"
-                >
-                  <div>
-                    <dd className="text-base font-semibold text-[var(--brand)]">{(v.leadsTrafegoNoMes ?? 0).toLocaleString("pt-BR")}</dd>
-                    <dt className="text-[10px] text-[var(--fg-muted)]">leads no mês</dt>
-                  </div>
-                  <div>
-                    <dd className="text-base font-semibold text-[var(--fg)]">{(v.leadsTrafegoMesAnterior ?? 0).toLocaleString("pt-BR")}</dd>
-                    <dt className="text-[10px] text-[var(--fg-muted)]">mês anterior</dt>
-                  </div>
-                  <div>
-                    <dd className="text-base font-semibold text-[var(--fg)]">{v.oportunidadesAbertas}</dd>
-                    <dt className="text-[10px] text-[var(--fg-muted)]">oportunidades</dt>
-                  </div>
-                </dl>
-                <div>
-                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">Limites de leads</p>
-                  <div className="space-y-1.5">
-                    <LimiteInput tipo="mensal" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
-                    <LimiteInput tipo="diario" vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
-                  </div>
-                </div>
-                <div className="space-y-2.5 border-t border-[var(--border)] pt-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">Distribuição</p>
-                  <TiposLeadSelect key={`${v.id}-${v.recebeSomenteOQue?.join("|")}`} vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
-                  <JanelaRecebimento key={`${v.id}-${v.horarioInicioLeads}-${v.horarioFimLeads}-${v.diasSemanaLeads?.join("")}`} vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
-                  <RecebeLeadsSwitch vendedor={v} onSalvo={() => setRecarregar((n) => n + 1)} />
-                </div>
-              </div>
-            ))}
-          </div>
-          <Pagination pagina={paginaCarteira.pagina} totalPaginas={paginaCarteira.totalPaginas} onChange={paginaCarteira.setPagina} />
-        </Card>
+      </div>
+
+      <div className="entra" style={{ "--i": 4 } as React.CSSProperties}>
+        <CarteiraDosVendedores vendedores={vendedoresFiltrados} onSalvo={() => setRecarregar((n) => n + 1)} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

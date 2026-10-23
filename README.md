@@ -138,10 +138,10 @@ semeia automaticamente, em qualquer ambiente**:
 - **As contas reais dos consultores comerciais** (`Data/Seed/ConsultorSeeder.cs`), já com papel
   `Comercial` e elegíveis pra distribuição automática de leads.
 
-> ⚠️ **Segurança**: todas as contas de consultor nascem com a mesma senha inicial
-> (`Senha@123`, definida em `ConsultorSeeder.cs`). Assim que o ambiente estiver no ar, cada
-> consultor precisa trocar a própria senha — essa senha compartilhada não deve ficar valendo em
-> produção por mais tempo que o necessário pro primeiro login de cada um.
+> 🔒 **Segurança**: as contas de consultor nascem com uma senha **aleatória que ninguém conhece**
+> (`ConsultorSeeder.cs` → `SenhaSegura.Gerar()`). Cada consultor cria a própria senha em
+> "Esqueci minha senha" (o e-mail já vem confirmado). Fora do desenvolvimento, quem tentar entrar com a
+> antiga senha inicial (`Senha@123`) não entra: recebe por e-mail o link para criar uma nova.
 
 As contas fictícias de demonstração (`admin@cssvision.local` etc.) **só são criadas em
 Development** — nunca existem num deploy em produção.

@@ -86,7 +86,7 @@
 }
 
 [data-theme="glass"] {
-  --bg: #dfe8f5;
+  --bg: #e4eaf7;
   --surface: rgb(255 255 255 / 0.34);
   --surface-hover: rgb(255 255 255 / 0.3);
   --surface-solid: rgb(246 249 255 / 0.82);
@@ -130,11 +130,9 @@
   --bar-blur: 40px;
   /* Papel de parede colorido: o desfoque do vidro só aparece de verdade quando há cor por trás. */
   --page-bg:
-    radial-gradient(46rem 34rem at 6% -2%, rgb(96 160 255 / 0.95) 0%, transparent 62%),
-    radial-gradient(42rem 34rem at 96% 4%, rgb(176 146 255 / 0.85) 0%, transparent 60%),
-    radial-gradient(48rem 38rem at 78% 104%, rgb(100 222 232 / 0.9) 0%, transparent 64%),
-    radial-gradient(40rem 30rem at 4% 98%, rgb(255 176 208 / 0.7) 0%, transparent 62%),
-    linear-gradient(165deg, #dbe6f6, #eef2fa);
+    radial-gradient(60rem 40rem at 8% -6%, rgb(206 218 244 / 0.95) 0%, transparent 66%),
+    radial-gradient(52rem 38rem at 96% 108%, rgb(214 224 247 / 0.9) 0%, transparent 64%),
+    linear-gradient(165deg, #dde5f5 0%, #eaeff9 52%, #e4eaf7 100%);
 }
 
 /* Título de página (h1 do conteúdo): um padrão só para todas as telas. */
@@ -228,8 +226,8 @@ body {
  * (como no macOS) e engordam um pouco quando o mouse chega nelas.
  */
 ::-webkit-scrollbar {
-  width: 14px;
-  height: 14px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track,
 ::-webkit-scrollbar-corner {
@@ -243,22 +241,35 @@ body {
 ::-webkit-scrollbar-thumb {
   background-color: transparent;
   background-clip: padding-box;
-  border: 4px solid transparent;
+  border: 3px solid transparent;
   border-radius: 999px;
   min-height: 36px;
   min-width: 36px;
-  transition: background-color 160ms;
+  transition:
+    background-color 420ms ease,
+    border-width 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-*:hover::-webkit-scrollbar-thumb {
+*:hover::-webkit-scrollbar-thumb,
+[data-rolando]::-webkit-scrollbar-thumb {
   background-color: color-mix(in srgb, var(--fg-muted) 38%, transparent);
+}
+/* Rolando: a barra engrossa e ganha um toque da cor da marca, depois volta ao repouso. */
+[data-rolando]::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--brand) 55%, var(--fg-muted));
+  border-width: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background-color: color-mix(in srgb, var(--fg-muted) 65%, transparent);
-  border-width: 3px;
+  border-width: 2px;
 }
 ::-webkit-scrollbar-thumb:active {
   background-color: var(--brand);
-  border-width: 3px;
+  border-width: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::-webkit-scrollbar-thumb {
+    transition: none;
+  }
 }
 /* Firefox não tem o pseudo-elemento acima: usa a barra fina padrão na mesma cor. */
 @supports not selector(::-webkit-scrollbar) {
@@ -276,78 +287,50 @@ body {
   outline-offset: 2px;
 }
 
-/* Fundo animado do painel de login */
-.login-aurora {
-  background: linear-gradient(160deg, #04264c 0%, #07428b 55%, #1f5fae 100%);
-  background-size: 400% 400%;
-  animation: aurora-shift 16s ease infinite;
+/* Painel de login: azul da marca com a rota desenhada em SVG (ver PainelDaMarca em pages/Login.tsx). */
+.login-rota {
+  background:
+    radial-gradient(120% 90% at 100% 0%, #1f5fae 0%, rgb(31 95 174 / 0) 58%),
+    linear-gradient(165deg, #031d3b 0%, #04264c 45%, #07428b 100%);
 }
 
-.login-aurora::before,
-.login-aurora::after {
-  content: "";
-  position: absolute;
-  border-radius: 9999px;
-  filter: blur(60px);
-  opacity: 0.35;
+/* A estrada se desenha uma vez ao abrir a tela; o brilho e as paradas ficam em movimento lento. */
+@keyframes rota-desenhar {
+  from { stroke-dashoffset: 1000; }
+  to { stroke-dashoffset: 0; }
 }
-
-.login-aurora::before {
-  top: -10%;
-  left: -10%;
-  width: 55%;
-  height: 55%;
-  background: #467fc5;
-  animation: aurora-float-1 14s ease-in-out infinite;
+@keyframes rota-brilho {
+  0% { stroke-dashoffset: 70; opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { stroke-dashoffset: -1000; opacity: 0; }
 }
-
-.login-aurora::after {
-  bottom: -15%;
-  right: -10%;
-  width: 60%;
-  height: 60%;
-  background: #a6c3e0;
-  animation: aurora-float-2 18s ease-in-out infinite;
+@keyframes rota-pulso {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  70%, 100% { transform: scale(1.9); opacity: 0; }
 }
-
-@keyframes aurora-shift {
-  0% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
-  100% {
-    background-position: 0% 50%;
-  }
+.rota-traco {
+  stroke-dasharray: 1000;
+  animation: rota-desenhar 2.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-
-@keyframes aurora-float-1 {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(6%, 8%) scale(1.15);
-  }
+.rota-brilho {
+  animation: rota-brilho 7s cubic-bezier(0.45, 0, 0.2, 1) 2.2s infinite;
 }
-
-@keyframes aurora-float-2 {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(-6%, -8%) scale(1.1);
-  }
+.rota-pulso {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: rota-pulso 3.6s ease-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .login-aurora,
-  .login-aurora::before,
-  .login-aurora::after {
+  .rota-traco,
+  .rota-brilho,
+  .rota-pulso {
     animation: none;
   }
+  .rota-traco { stroke-dashoffset: 0; }
+  .rota-brilho { display: none; }
+  .rota-pulso { opacity: 0; }
 }
 
 /* Painel lateral do lead (PainelLead): fundo aparece e o painel desliza da direita. */
@@ -584,15 +567,15 @@ main h1 + p {
 /* Tema translúcido: UM só vidro (o da referência da Apple) para a barra lateral e para tudo que abre sobre a tela — listas, calendários,
    menus. Transparente de verdade: pega a cor do fundo por trás, desfocada, só com um leve clareado e um brilho fino na borda. */
 [data-theme="glass"] {
-  --vidro-blur: blur(40px) saturate(2.2) brightness(1.1);
+  --vidro-blur: blur(34px) saturate(1.5);
   --vidro-borda: rgb(255 255 255 / 0.75);
   --vidro-brilho: inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 0 0 0.5px rgb(255 255 255 / 0.5);
 }
 [data-theme="glass"] [data-flutuante],
 [data-theme="glass"] body > div[class*="z-[70]"],
 [data-theme="glass"] .ui-surface[class*="bg-[var(--surface-solid)]"]:not([aria-modal]) {
-  background-color: rgb(255 255 255 / 0.5);
-  background-image: linear-gradient(160deg, rgb(255 255 255 / 0.5), rgb(255 255 255 / 0.08) 60%, rgb(255 255 255 / 0.22));
+  background-color: rgb(250 252 255 / 0.9);
+  background-image: linear-gradient(160deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0) 60%, rgb(255 255 255 / 0.25));
   -webkit-backdrop-filter: var(--vidro-blur);
   backdrop-filter: var(--vidro-blur);
   border: 1px solid var(--vidro-borda);
@@ -600,12 +583,11 @@ main h1 + p {
   box-shadow: var(--vidro-brilho), 0 26px 60px -20px rgb(30 70 130 / 0.4);
 }
 [data-theme="glass"] body > div[class*="z-[70]"] input {
-  background-color: rgb(255 255 255 / 0.55);
-  border-color: rgb(255 255 255 / 0.9);
+  background-color: rgb(255 255 255 / 0.92);
 }
 [data-theme="glass"] body > div[class*="z-[70]"] button:hover,
 [data-theme="glass"] [data-flutuante] button:hover {
-  background-color: rgb(255 255 255 / 0.55);
+  background-color: rgb(10 79 166 / 0.08);
 }
 
 
@@ -618,3 +600,449 @@ main h1 + p {
   color: #5d7390;
 }
 
+
+/* Barra lateral aberta (fixada): ícone dá um passo à frente no hover, o nome desliza junto e o item ativo "acende" ao ser aberto. */
+@media (prefers-reduced-motion: no-preference) {
+  aside[data-capsula="false"] nav a {
+    transition:
+      background-color 220ms ease,
+      color 220ms ease,
+      transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  aside[data-capsula="false"] nav a > svg {
+    transition: transform 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  aside[data-capsula="false"] nav a > span {
+    transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  aside[data-capsula="false"] nav a:hover {
+    transform: translateX(3px);
+  }
+  aside[data-capsula="false"] nav a:hover > svg {
+    transform: scale(1.18) rotate(-6deg);
+  }
+  aside[data-capsula="false"] nav a:active {
+    transform: translateX(3px) scale(0.97);
+  }
+  aside[data-capsula="false"] nav a.item-ativo > svg {
+    animation: tvx-icone-ativo 520ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  aside[data-capsula="false"] nav a.item-ativo::before {
+    animation: tvx-marcador-ativo 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    transform-origin: center;
+  }
+}
+@keyframes tvx-icone-ativo {
+  0% {
+    transform: scale(0.6) rotate(-20deg);
+  }
+  100% {
+    transform: scale(1) rotate(0);
+  }
+}
+@keyframes tvx-marcador-ativo {
+  0% {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  100% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+/* Ao abrir a barra inteira, os nomes entram com um fade suave enquanto a barra se alarga. */
+@media (prefers-reduced-motion: no-preference) {
+  aside[data-capsula="false"] nav a > span:not(.rounded-full),
+  aside[data-capsula="false"] .logo-texto {
+    animation: tvx-rotulo-entra 560ms cubic-bezier(0.22, 1, 0.36, 1) 160ms both;
+  }
+}
+@keyframes tvx-rotulo-entra {
+  0% {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Troca de tela: a página nova entra com fade e uma leve subida (sem fill "forwards", para não deixar transform/opacity presos nos modais da página). */
+@media (prefers-reduced-motion: no-preference) {
+  .pagina-anim {
+    animation: tvx-pagina-entra 460ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  }
+}
+@keyframes tvx-pagina-entra {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Janelas de data/hora e listas flutuantes: abrem com um fade e uma leve subida a partir do campo. */
+@media (prefers-reduced-motion: no-preference) {
+  .flutuante-anim {
+    animation: tvx-flutuante-abre 220ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    transform-origin: top left;
+  }
+}
+@keyframes tvx-flutuante-abre {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Entrada em sequência das seções, barras de progresso que crescem e linhas que abrem (Gestão comercial e telas parecidas). */
+@media (prefers-reduced-motion: no-preference) {
+  .entra {
+    animation: tvx-entra 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--i, 0) * 60ms);
+  }
+  .barra-cresce {
+    transform-origin: left center;
+    animation: tvx-barra-cresce 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: calc(var(--i, 0) * 35ms + 120ms);
+  }
+  .linha-abre {
+    animation: tvx-linha-abre 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .cartao-sobe {
+    transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 220ms ease, border-color 220ms ease;
+  }
+  .cartao-sobe:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px -14px rgb(0 0 0 / 0.35);
+  }
+}
+@keyframes tvx-entra {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes tvx-barra-cresce {
+  0% {
+    transform: scaleX(0);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+@keyframes tvx-linha-abre {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Número da página: um pequeno "pulo" ao trocar (o deslize da lista é feito pela paginação, em ui.tsx). */
+@media (prefers-reduced-motion: no-preference) {
+  .pagina-numero {
+    display: inline-block;
+    animation: tvx-pag-numero 260ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+}
+@keyframes tvx-pag-numero {
+  0% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Janelas (modais e painéis laterais): o fundo escurece e a janela "pousa" ao abrir; ao fechar, recolhe rápido. */
+@media (prefers-reduced-motion: no-preference) {
+  .modal-fundo {
+    animation: tvx-fundo-entra 240ms ease both;
+  }
+  .modal-fundo.saindo {
+    animation: tvx-fundo-sai 190ms ease both;
+  }
+  .modal-painel {
+    animation: tvx-modal-entra 360ms cubic-bezier(0.34, 1.35, 0.64, 1) both;
+  }
+  .modal-painel.saindo {
+    animation: tvx-modal-sai 190ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+  .drawer-painel {
+    animation: tvx-drawer-entra 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .drawer-painel.saindo {
+    animation: tvx-drawer-sai 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  /* Clique em botões: um "aperto" com um anel que se espalha e some (a classe é posta por main.tsx a cada clique). */
+  .clique {
+    animation: tvx-clique 480ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+@keyframes tvx-fundo-entra {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes tvx-fundo-sai {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes tvx-modal-entra {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes tvx-modal-sai {
+  0% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+@keyframes tvx-drawer-entra {
+  0% {
+    opacity: 0.4;
+    transform: translateX(48px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes tvx-drawer-sai {
+  0% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+}
+@keyframes tvx-clique {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 45%, transparent);
+  }
+  25% {
+    transform: scale(0.94);
+  }
+  55% {
+    transform: scale(1.03);
+    box-shadow: 0 0 0 9px color-mix(in srgb, var(--brand) 0%, transparent);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 9px transparent;
+  }
+}
+
+/* Cartões do sistema: ao passar o mouse a borda ganha um toque da cor da marca e a sombra cresce; e, nos navegadores que suportam, o cartão que ainda
+   está abaixo da dobra aparece (fade e subida) quando entra na tela ao rolar. Os que já estão visíveis ao abrir a página não animam por aqui (sem repetir
+   a animação de entrada da tela). */
+.card-anim {
+  transition: box-shadow 260ms ease, border-color 260ms ease;
+}
+.card-anim:hover {
+  border-color: color-mix(in srgb, var(--brand) 30%, var(--border));
+  box-shadow: 0 14px 30px -20px rgb(0 0 0 / 0.32);
+}
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .card-anim {
+      animation: tvx-revela linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 45%;
+    }
+  }
+}
+@keyframes tvx-revela {
+  0% {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Abas: a cor, o fundo e a borda mudam com transição, e a aba que fica ativa dá um pequeno "pulo". */
+[role="tablist"]:not([data-sem-animacao]) > [role="tab"] {
+  transition: color 260ms ease, background-color 260ms ease, border-color 260ms ease, box-shadow 260ms ease;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [role="tablist"]:not([data-sem-animacao]) > [role="tab"][aria-selected="true"] {
+    animation: tvx-aba-ativa 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+}
+@keyframes tvx-aba-ativa {
+  0% {
+    transform: scale(0.92);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Listas de escolha (filtros): abrem crescendo a partir do campo, as opções entram em sequência, a marca de selecionado "pula" e o campo aberto ganha destaque. */
+button[aria-haspopup="listbox"] {
+  transition: border-color 220ms ease, box-shadow 220ms ease;
+}
+button[aria-haspopup="listbox"][aria-expanded="true"] {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 18%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .lista-flutuante {
+    animation: tvx-lista-abre 230ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    transform-origin: top center;
+  }
+  .lista-flutuante[data-origem="baixo"] {
+    transform-origin: bottom center;
+  }
+  .lista-flutuante [role="option"] {
+    animation: tvx-opcao-entra 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .lista-flutuante [role="option"]:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .lista-flutuante [role="option"]:nth-child(2) {
+    animation-delay: 16ms;
+  }
+  .lista-flutuante [role="option"]:nth-child(3) {
+    animation-delay: 32ms;
+  }
+  .lista-flutuante [role="option"]:nth-child(4) {
+    animation-delay: 48ms;
+  }
+  .lista-flutuante [role="option"]:nth-child(5) {
+    animation-delay: 64ms;
+  }
+  .lista-flutuante [role="option"]:nth-child(6) {
+    animation-delay: 80ms;
+  }
+  .lista-flutuante [role="option"]:nth-child(7) {
+    animation-delay: 96ms;
+  }
+  .lista-flutuante [role="option"]:nth-child(8) {
+    animation-delay: 112ms;
+  }
+  .lista-flutuante [role="option"]:nth-child(9) {
+    animation-delay: 128ms;
+  }
+  .lista-flutuante [role="option"]:nth-child(10) {
+    animation-delay: 144ms;
+  }
+  .opcao-marca {
+    animation: tvx-marca-pula 340ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+}
+@keyframes tvx-lista-abre {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes tvx-opcao-entra {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes tvx-marca-pula {
+  0% {
+    opacity: 0;
+    transform: scale(0.3) rotate(-25deg);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+
+/* Tema translúcido — um padrão só para caixas e formulários (o do calendário): vidro leitoso, texto sempre legível.
+   Cobre janelas (modal/gaveta), menus, notificações e qualquer caixa que use a superfície sólida do tema. */
+[data-theme="glass"] {
+  --surface-solid: rgb(250 252 255 / 0.9);
+  --field: rgb(255 255 255 / 0.92);
+}
+[data-theme="glass"] [class*="bg-[var(--surface-solid)]"]:not(.sticky):not(.ui-bar) {
+  -webkit-backdrop-filter: var(--vidro-blur);
+  backdrop-filter: var(--vidro-blur);
+  border-color: var(--vidro-borda);
+  box-shadow: var(--vidro-brilho), 0 26px 60px -20px rgb(30 70 130 / 0.4);
+}
+[data-theme="glass"] .modal-painel,
+[data-theme="glass"] .drawer-painel {
+  background-image: linear-gradient(160deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0) 60%, rgb(255 255 255 / 0.25));
+}
+[data-theme="glass"] .modal-fundo {
+  background-color: rgb(40 60 110 / 0.22);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+/* Campos de formulário (janelas, páginas, listas): fundo firme e borda visível — sem isso o branco sumia no vidro. */
+[data-theme="glass"] :is(input, select, textarea):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+[data-theme="glass"] button[aria-haspopup="listbox"],
+[data-theme="glass"] button[aria-haspopup="dialog"] {
+  background-color: rgb(255 255 255 / 0.92);
+  border-color: rgb(40 70 130 / 0.26);
+  box-shadow: inset 0 1px 2px rgb(30 50 100 / 0.08), 0 1px 0 rgb(255 255 255 / 0.7);
+}
+[data-theme="glass"] :is(input, select, textarea):not([type="checkbox"]):not([type="radio"]):hover,
+[data-theme="glass"] button[aria-haspopup="listbox"]:hover,
+[data-theme="glass"] button[aria-haspopup="dialog"]:hover {
+  border-color: rgb(10 79 166 / 0.5);
+}
+[data-theme="glass"] :is(input, select, textarea):focus-visible,
+[data-theme="glass"] button[aria-haspopup="listbox"][aria-expanded="true"],
+[data-theme="glass"] button[aria-haspopup="dialog"][aria-expanded="true"] {
+  border-color: var(--brand);
+}

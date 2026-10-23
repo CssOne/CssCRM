@@ -4,7 +4,33 @@ import { Link } from "react-router-dom";
 import { diasRelativos, formatarData, formatarDataHora, formatarMoeda, formatarTelefone } from "../../lib/format";
 import type { LeadKanbanCard } from "../../lib/types";
 import { TIPO_INDICACAO_LEAD } from "../../lib/opcoesLead";
-import { Avatar, Badge } from "../ui";
+import { Avatar } from "../ui";
+
+/** Cores das etiquetas do cartão: cada uma mistura a cor com o texto do tema, então vale nos temas claro, escuro e translúcido. */
+const COR_ETIQUETA = {
+  lead: "#2563eb",
+  indicacao: "#9333ea",
+  neutra: "var(--fg-muted)",
+  aviso: "var(--warning)",
+  ok: "var(--success)",
+} as const;
+
+/** Etiqueta bem visível: fundo colorido, borda e texto mais fortes que a Badge padrão. */
+function Etiqueta({ cor, children }: { cor: keyof typeof COR_ETIQUETA; children: ReactNode }) {
+  const c = COR_ETIQUETA[cor];
+  return (
+    <span
+      className="inline-flex items-center rounded-full px-2.5 py-[3px] text-xs font-bold leading-none tracking-tight"
+      style={{
+        color: `color-mix(in srgb, ${c} 78%, var(--fg))`,
+        backgroundColor: `color-mix(in srgb, ${c} 20%, transparent)`,
+        boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${c} 38%, transparent)`,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
 
 /** Lead ou indicação — mesma regra das colunas "(Leads)"/"(Indicação)" do quadro. */
 export function classificarCartao(cartao: LeadKanbanCard): "lead" | "indicacao" | null {
@@ -124,17 +150,37 @@ export function CartaoLead({
       {/* Etiquetas */}
       <div className="mt-2 flex flex-wrap gap-1">
         {/* Cards de Indicação não mostram a etiqueta "O que?" (AGV...). */}
-        {cartao.oQue && classe !== "indicacao" && <Badge variant="info">{cartao.oQue}</Badge>}
-        {rotuloTipo && <Badge variant={classe === "lead" ? "info" : "brand"}>{rotuloTipo}</Badge>}
-        {cartao.indicacao && rotuloTipo !== "Indicação" && rotuloTipo !== TIPO_INDICACAO_LEAD && <Badge variant="brand">Indicação</Badge>}
-        {cartao.veiculoAdicional && <Badge variant="neutral">Veículo adicional</Badge>}
-        {cartao.migracao && <Badge variant="neutral">Migração</Badge>}
-        {podeVerOrigem && cartao.origem && <Badge variant="neutral">{cartao.origem}</Badge>}
-        {cartao.temSeguro === true && <Badge variant="warning">Tem seguro</Badge>}
-        {cartao.temSeguro === false && <Badge variant="success">Sem seguro</Badge>}
-        {cartao.semContato && <Badge variant="warning">Sem contato</Badge>}
-        {cartao.arquivado && <Badge variant="neutral">Arquivado</Badge>}
+        {cartao.oQue && classe !== "indicacao" && <Etiqueta cor="lead">{cartao.oQue}</Etiqueta>}
+        {rotuloTipo && <Etiqueta cor={classe === "lead" ? "lead" : "indicacao"}>{rotuloTipo}</Etiqueta>}
+        {cartao.indicacao && rotuloTipo !== "Indicação" && rotuloTipo !== TIPO_INDICACAO_LEAD && <Etiqueta cor="indicacao">Indicação</Etiqueta>}
+        {cartao.veiculoAdicional && <Etiqueta cor="neutra">Veículo adicional</Etiqueta>}
+        {cartao.migracao && <Etiqueta cor="neutra">Migração</Etiqueta>}
+        {podeVerOrigem && cartao.origem && <Etiqueta cor="neutra">{cartao.origem}</Etiqueta>}
+        {cartao.temSeguro === true && <Etiqueta cor="aviso">Tem seguro</Etiqueta>}
+        {cartao.temSeguro === false && <Etiqueta cor="ok">Sem seguro</Etiqueta>}
+        {cartao.semContato && <Etiqueta cor="aviso">Sem contato</Etiqueta>}
+        {cartao.arquivado && <Etiqueta cor="neutra">Arquivado</Etiqueta>}
       </div>
+
+      {/* Cartão perdido: o motivo fica em destaque, logo abaixo das etiquetas. */}
+      {(cartao.motivoPerda || nomeColuna === "Perdido") && (
+        <div
+          className={`mt-2 rounded-lg border px-2.5 py-1.5 text-xs ${
+            cartao.motivoPerda
+              ? "border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_9%,transparent)]"
+              : "border-dashed border-[var(--border)] bg-[var(--surface-hover)]"
+          }`}
+          title={cartao.motivoPerdaObservacao ? `${cartao.motivoPerda}: ${cartao.motivoPerdaObservacao}` : "Motivo da perda"}
+        >
+          <p className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide ${cartao.motivoPerda ? "text-[var(--danger)]" : "text-[var(--fg-muted)]"}`}>
+            <XCircle className="size-3 shrink-0" aria-hidden /> Motivo da perda
+          </p>
+          <p className={`mt-0.5 font-semibold ${cartao.motivoPerda ? "text-[var(--fg)]" : "font-normal italic text-[var(--fg-muted)]"}`}>
+            {cartao.motivoPerda ?? "Sem motivo informado"}
+          </p>
+          {cartao.motivoPerdaObservacao && <p className="mt-0.5 line-clamp-3 text-[var(--fg-muted)]">{cartao.motivoPerdaObservacao}</p>}
+        </div>
+      )}
 
       {mostrarAdesao && cartao.valorAdesao != null && (
         <p className="mt-2 text-xs text-[var(--fg-muted)]" title="Valor da adesão informado na cotação">
@@ -195,19 +241,6 @@ export function CartaoLead({
       {podeGerir && cartao.campanha && (
         <p className="mt-2 truncate text-[11px] text-[var(--fg-muted)]" title="Campanha">
           Campanha: {cartao.campanha}
-        </p>
-      )}
-
-      {cartao.motivoPerda && (
-        <p
-          className="mt-1.5 flex items-start gap-1 text-[11px] font-medium text-[var(--danger)]"
-          title={cartao.motivoPerdaObservacao ? `${cartao.motivoPerda}: ${cartao.motivoPerdaObservacao}` : "Motivo da perda"}
-        >
-          <XCircle className="mt-px size-3 shrink-0" aria-hidden />
-          <span className="line-clamp-2">
-            Motivo: {cartao.motivoPerda}
-            {cartao.motivoPerdaObservacao && <span className="font-normal text-[var(--fg-muted)]"> — {cartao.motivoPerdaObservacao}</span>}
-          </span>
         </p>
       )}
 

@@ -50,6 +50,40 @@ public class DashboardServiceTests
     }
 
     [Fact]
+    public async Task ObterAsync_ValorPipeline_SomaAAdesaoInformadaNaCotacaoDoQuadroDeLeads()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
+        var aberta = await factory.CriarEtapaAsync(db, "Novo lead", 1);
+        var cotacao = new CrmLeadStage { Nome = "Cotação", Ordem = 2 };
+        var outra = new CrmLeadStage { Nome = "Em atendimento", Ordem = 1 };
+        db.CrmLeadStages.AddRange(cotacao, outra);
+        await db.SaveChangesAsync();
+
+        CrmLead Novo(string nome, Guid etapa, decimal? adesao) =>
+            new() { EtapaId = etapa, NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id, ValorAdesao = adesao };
+        var semOportunidade = Novo("Só cotação", cotacao.Id, 300m);
+        var comOportunidade = Novo("Já virou proposta", cotacao.Id, 999m);
+        var outraEtapa = Novo("Outra etapa", outra.Id, 500m);
+        db.CrmLeads.AddRange(semOportunidade, comOportunidade, outraEtapa);
+        await db.SaveChangesAsync();
+        db.CrmOpportunities.Add(new CrmOpportunity { LeadId = comOportunidade.Id, Titulo = "Op", ResponsavelId = vendedor.Id, EtapaId = aberta.Id, ValorEstimado = 2000m });
+        await db.SaveChangesAsync();
+
+        var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
+        var equipe = new EquipeComercialService(db, currentUser.Object);
+        var service = new DashboardService(db, equipe, new ActivityService(db, currentUser.Object, equipe, new NoOpAuditSink()), currentUser.Object);
+
+        var hoje = DateOnly.FromDateTime(DateTime.UtcNow);
+        var resultado = await service.ObterAsync(new DashboardFilterRequest(new DateOnly(hoje.Year, hoje.Month, 1), hoje, null), CancellationToken.None);
+
+        // 2.000 da oportunidade aberta + 300 da cotação sem proposta (a de 999 já conta pela oportunidade; a de outra etapa não conta).
+        Assert.Equal(2300m, resultado.Indicadores.ValorPipeline);
+        Assert.Equal(1, resultado.Indicadores.OportunidadesAbertas);
+    }
+
+    [Fact]
     public async Task ObterAsync_VendaComValorFinalZerado_ContaOTotalOuAAdesaoPaga()
     {
         using var factory = new TestDbContextFactory();

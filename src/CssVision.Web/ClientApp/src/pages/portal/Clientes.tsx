@@ -1,15 +1,24 @@
-import { CalendarDays, Mail, MapPin, Phone, Plus, Search, UserX, X } from "lucide-react";
+import { CalendarDays, Mail, MapPin, Phone, Plus, UserX } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarData, formatarTelefone } from "../../lib/format";
-import type { LeadListItem, PagedResult } from "../../lib/types";
+import type { LeadListItem, LeadStage, PagedResult } from "../../lib/types";
 import { Avatar, EmptyState, ErrorState, Pagination, Skeleton } from "../../components/ui";
+import { BarraDeFiltros, CampoDeFiltro, type ChipDeFiltro } from "../../components/Filtros";
+import { MultiSelect } from "../../components/MultiSelect";
+import { PeriodoInput } from "../../components/PeriodoInput";
+
+const SEM_ETAPA = "00000000-0000-0000-0000-000000000000";
 
 export function PortalClientesPage() {
   const [searchParams] = useSearchParams();
   const [busca, setBusca] = useState(searchParams.get("busca") ?? "");
   const [pagina, setPagina] = useState(1);
+  const [etapaIds, setEtapaIds] = useState<string[]>([]);
+  const [chegadaDe, setChegadaDe] = useState("");
+  const [chegadaAte, setChegadaAte] = useState("");
+  const [etapas, setEtapas] = useState<LeadStage[]>([]);
   const [dados, setDados] = useState<PagedResult<LeadListItem> | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -20,15 +29,35 @@ export function PortalClientesPage() {
       setCarregando(true);
       setErro(null);
       api
-        .get<PagedResult<LeadListItem>>(`/crm/leads${toQueryString({ busca, pagina, tamanhoPagina: 12 })}`, signal)
+        .get<PagedResult<LeadListItem>>(`/crm/leads${toQueryString({ busca: busca || undefined, leadEtapaIds: etapaIds, dataInicio: chegadaDe || undefined, dataFim: chegadaAte || undefined, pagina, tamanhoPagina: 24 })}`, signal)
         .then(setDados)
         .catch((e) => {
           if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar seus clientes.");
         })
         .finally(() => { if (!signal?.aborted) setCarregando(false); });
     },
-    [busca, pagina]
+    [busca, etapaIds, chegadaDe, chegadaAte, pagina]
   );
+
+  useEffect(() => {
+    api.get<LeadStage[]>("/crm/settings/lead-stages").then(setEtapas).catch(() => setEtapas([]));
+  }, []);
+
+  const comPagina1 = <T,>(set: (v: T) => void) => (v: T) => {
+    set(v);
+    setPagina(1);
+  };
+  const dataCurta = (d: string) => (d ? d.split("-").reverse().slice(0, 2).join("/") : "…");
+  const chips: ChipDeFiltro[] = [];
+  if (etapaIds.length) chips.push({ rotulo: "Etapa", valor: etapaIds.map((id) => etapas.find((e) => e.id === id)?.nome ?? "Sem etapa").join(", "), limpar: () => comPagina1(setEtapaIds)([]) });
+  if (chegadaDe || chegadaAte) chips.push({ rotulo: "Chegada", valor: `${dataCurta(chegadaDe)} → ${dataCurta(chegadaAte)}`, limpar: () => { setChegadaDe(""); setChegadaAte(""); setPagina(1); } });
+  function limparFiltros() {
+    setBusca("");
+    setEtapaIds([]);
+    setChegadaDe("");
+    setChegadaAte("");
+    setPagina(1);
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -56,40 +85,28 @@ export function PortalClientesPage() {
         </Link>
       </div>
 
-      <div className="ui-surface rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-[var(--shadow-card)]">
-        <div className="relative max-w-md">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-[var(--fg-muted)]" aria-hidden />
-          <input
-            type="search"
-            aria-label="Buscar clientes"
-            className="focus-ring h-8 w-full rounded-full border-0 bg-[var(--surface-hover)] pl-8 pr-8 text-[13px] text-[var(--fg)] placeholder:text-[var(--fg-muted)] [&::-webkit-search-cancel-button]:hidden"
-            placeholder="Nome, documento, telefone ou e-mail"
-            value={busca}
-            onChange={(e) => {
-              setBusca(e.target.value);
-              setPagina(1);
-            }}
+      <BarraDeFiltros busca={busca} onBusca={comPagina1(setBusca)} placeholder="Nome, documento, telefone ou e-mail" chips={chips} onLimparTudo={limparFiltros}>
+        <CampoDeFiltro rotulo="Etapa">
+          <MultiSelect
+            ariaLabel="Etapa"
+            rotuloTodos="Todas"
+            opcoes={[
+              ...etapas.filter((e) => e.ativa !== false && e.id).map((e) => ({ valor: e.id!, rotulo: e.nome })),
+              { valor: SEM_ETAPA, rotulo: "Sem etapa" },
+            ]}
+            valores={etapaIds}
+            onChange={comPagina1(setEtapaIds)}
           />
-          {busca && (
-            <button
-              type="button"
-              aria-label="Limpar busca"
-              onClick={() => {
-                setBusca("");
-                setPagina(1);
-              }}
-              className="focus-ring absolute right-2 top-1/2 flex size-4 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full bg-[var(--fg-muted)]/30 text-[var(--fg)] hover:bg-[var(--fg-muted)]/50"
-            >
-              <X className="size-2.5" />
-            </button>
-          )}
-        </div>
-      </div>
+        </CampoDeFiltro>
+        <CampoDeFiltro rotulo="Chegada">
+          <PeriodoInput ariaLabel="Chegada" de={chegadaDe} ate={chegadaAte} onChange={(x, y) => { setChegadaDe(x); setChegadaAte(y); setPagina(1); }} />
+        </CampoDeFiltro>
+      </BarraDeFiltros>
 
       {carregando ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-36 rounded-2xl" />
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-6">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-xl" />
           ))}
         </div>
       ) : erro ? (
@@ -98,51 +115,51 @@ export function PortalClientesPage() {
         <EmptyState title="Nenhum cliente encontrado" description="Ajuste a busca ou cadastre um novo cliente." />
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-6">
             {dados.itens.map((cliente) => {
               const cor = cliente.etapaCor ?? "#64748b";
               const local = [cliente.cidade, cliente.estado].filter(Boolean).join(" - ");
               const acao =
-                "focus-ring relative z-10 flex size-8 items-center justify-center rounded-full bg-[var(--surface-hover)] text-[var(--fg-muted)] transition hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]";
+                "focus-ring relative z-10 flex size-6 items-center justify-center rounded-full bg-[var(--surface-hover)] text-[var(--fg-muted)] transition hover:bg-[var(--brand-soft)] hover:text-[var(--brand)]";
               return (
                 <div
                   key={cliente.id}
                   style={{ "--cor": cor } as React.CSSProperties}
-                  className="group relative overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[var(--shadow-card)] transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--cor)_50%,var(--border))] hover:shadow-[0_14px_28px_-16px_var(--cor)]"
+                  className="group relative overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 shadow-[var(--shadow-card)] transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--cor)_50%,var(--border))] hover:shadow-[0_14px_28px_-16px_var(--cor)]"
                 >
-                  <div className="flex items-start gap-3">
-                    <Avatar nome={cliente.nomeOuRazaoSocial} className="size-10 shrink-0 text-sm" />
+                  <div className="flex items-start gap-2.5">
+                    <Avatar nome={cliente.nomeOuRazaoSocial} className="size-8 shrink-0 text-xs" />
                     <div className="min-w-0 flex-1">
-                      <Link to={`/app/crm/leads/${cliente.id}`} className="focus-ring block truncate font-semibold text-[var(--fg)] after:absolute after:inset-0">
+                      <Link to={`/app/crm/leads/${cliente.id}`} className="focus-ring block truncate text-sm font-semibold leading-tight text-[var(--fg)] after:absolute after:inset-0">
                         {cliente.nomeOuRazaoSocial}
                       </Link>
                       {cliente.etapaNome ? (
                         <span
-                          className="mt-1 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                          className="mt-0.5 inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-semibold"
                           style={{ backgroundColor: `color-mix(in srgb, ${cor} 14%, transparent)`, color: `color-mix(in srgb, ${cor} 72%, var(--fg))` }}
                         >
                           <span className="size-1.5 rounded-full" style={{ backgroundColor: cor }} />
                           {cliente.etapaNome}
                         </span>
                       ) : (
-                        <span className="mt-1 inline-block text-[11px] text-[var(--fg-muted)]">Sem etapa</span>
+                        <span className="mt-0.5 inline-block text-[10px] text-[var(--fg-muted)]">Sem etapa</span>
                       )}
                     </div>
                     <div className="flex shrink-0 gap-1.5">
                       {cliente.telefone && (
                         <a href={`tel:${cliente.telefone}`} title="Ligar" aria-label={`Ligar para ${cliente.nomeOuRazaoSocial}`} className={acao}>
-                          <Phone className="size-3.5" />
+                          <Phone className="size-3" />
                         </a>
                       )}
                       {cliente.email && (
                         <a href={`mailto:${cliente.email}`} title="Enviar e-mail" aria-label={`Enviar e-mail para ${cliente.nomeOuRazaoSocial}`} className={acao}>
-                          <Mail className="size-3.5" />
+                          <Mail className="size-3" />
                         </a>
                       )}
                     </div>
                   </div>
 
-                  <div className="mt-3 space-y-1 text-xs text-[var(--fg-muted)]">
+                  <div className="mt-2 space-y-0.5 text-[11px] text-[var(--fg-muted)]">
                     <p className="flex items-center gap-1.5 truncate">
                       <Phone className="size-3 shrink-0" aria-hidden /> {cliente.telefone ? formatarTelefone(cliente.telefone) : "sem telefone"}
                     </p>
@@ -151,7 +168,7 @@ export function PortalClientesPage() {
                     </p>
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-2.5 text-[11px] text-[var(--fg-muted)]">
+                  <div className="mt-2 flex items-center justify-between gap-2 border-t border-[var(--border)] pt-1.5 text-[10px] text-[var(--fg-muted)]">
                     <span className="flex min-w-0 items-center gap-1 truncate">
                       <MapPin className="size-3 shrink-0" aria-hidden /> {local || "—"}
                     </span>

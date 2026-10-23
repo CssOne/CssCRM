@@ -822,10 +822,10 @@ export function LeadsKanbanPage() {
             onChange={setFonte}
           />
         </CampoDeFiltro>
-        <CampoDeFiltro rotulo="Chegada" className="sm:col-span-2">
+        <CampoDeFiltro rotulo="Chegada">
           <PeriodoInput ariaLabel="Chegada" de={dataChegadaInicio} ate={dataChegadaFim} onChange={(a, b) => { setDataChegadaInicio(a); setDataChegadaFim(b); }} />
         </CampoDeFiltro>
-        <CampoDeFiltro rotulo="Ativação" className="sm:col-span-2">
+        <CampoDeFiltro rotulo="Ativação">
           <PeriodoInput ariaLabel="Ativação" de={dataVendaInicio} ate={dataVendaFim} onChange={(a, b) => { setDataVendaInicio(a); setDataVendaFim(b); }} />
         </CampoDeFiltro>
         {podeGerir && (
@@ -882,7 +882,7 @@ export function LeadsKanbanPage() {
       {carregando ? (
         <div className="flex gap-4 overflow-x-auto">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-96 w-[clamp(14rem,calc((100vw-var(--menu-w)-7.9rem)/4.6),18rem)] shrink-0 rounded-2xl" />
+            <Skeleton key={i} className="h-96 w-[clamp(15rem,calc((100vw-var(--menu-w)-7.9rem)/4.4),19rem)] shrink-0 rounded-2xl" />
           ))}
         </div>
       ) : erro || !board || !colunasExibidas ? (
@@ -923,7 +923,7 @@ export function LeadsKanbanPage() {
                         borderColor: `color-mix(in srgb, ${cor} 24%, var(--border))`,
                       }
                 }
-                className={`ui-surface flex h-[max(28rem,calc(100vh-15rem))] w-[clamp(14rem,calc((100vw-var(--menu-w)-7.9rem)/4.6),18rem)] shrink-0 flex-col overflow-hidden rounded-3xl border transition-colors ${
+                className={`ui-surface flex h-[max(28rem,calc(100vh-15rem))] w-[clamp(15rem,calc((100vw-var(--menu-w)-7.9rem)/4.4),19rem)] shrink-0 flex-col overflow-hidden rounded-3xl border transition-colors ${
                   alvo ? "border-[var(--brand)] bg-[var(--brand-soft)]" : ""
                 }`}
               >
@@ -931,18 +931,18 @@ export function LeadsKanbanPage() {
                   {/* Título "marcado": uma faixa na cor da etapa que vai do nome até a contagem de cartões. */}
                   <div className="px-2.5 pb-1 pt-2.5">
                     <div
-                      className="flex items-center justify-between gap-2 rounded-full py-1 pl-3.5 pr-1"
+                      className="flex items-center justify-between gap-2 rounded-full py-0.5 pl-3 pr-0.5"
                       style={{
                         color: `color-mix(in srgb, ${cor} 72%, var(--fg))`,
                         backgroundColor: `color-mix(in srgb, ${cor} 20%, transparent)`,
                         boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${cor} 22%, transparent)`,
                       }}
                     >
-                      <h2 className="min-w-0 truncate text-[13px] font-bold uppercase tracking-wide" title={coluna.etapa.nome}>
+                      <h2 className="min-w-0 truncate text-[11px] font-bold uppercase tracking-wide" title={coluna.etapa.nome}>
                         {coluna.etapa.nome}
                       </h2>
                       <span
-                        className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-[var(--surface)] px-2 text-xs font-bold shadow-sm [font-variant-numeric:tabular-nums]"
+                        className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[var(--surface)] px-1.5 text-[11px] font-bold shadow-sm [font-variant-numeric:tabular-nums]"
                         title="Leads nesta coluna"
                       >
                         {coluna.total.toLocaleString("pt-BR")}
@@ -970,7 +970,7 @@ export function LeadsKanbanPage() {
                   )}
                 </header>
 
-                <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-2.5">
+                <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-1.5 py-2.5 [scrollbar-gutter:stable_both-edges]">
                   {coluna.cartoes.length === 0 && (
                     <p className="rounded-xl border border-dashed border-[var(--border)] px-3 py-6 text-center text-xs text-[var(--fg-muted)]">
                       Nenhum lead aqui
