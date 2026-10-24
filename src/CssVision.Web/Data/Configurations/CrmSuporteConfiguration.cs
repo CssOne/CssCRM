@@ -25,6 +25,8 @@ public class CrmSuporteMensagemConfiguration : IEntityTypeConfiguration<CrmSupor
         builder.ConfigureCrmBase();
         builder.ToTable("CrmSuporteMensagens");
         builder.Property(e => e.Texto).IsRequired().HasMaxLength(4000);
+        builder.Property(e => e.AnexoUrl).HasMaxLength(1000);
+        builder.Property(e => e.AnexoNome).HasMaxLength(260);
         builder.HasIndex(e => e.ChamadoId);
     }
 }

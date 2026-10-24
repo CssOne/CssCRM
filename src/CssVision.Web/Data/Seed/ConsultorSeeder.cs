@@ -11,11 +11,10 @@ namespace CssVision.Web.Data.Seed;
 /// <summary>
 /// Cria as contas de login dos consultores comerciais reais (papel Comercial), a partir da
 /// planilha de consultores fornecida. Idempotente por e-mail — seguro rodar toda inicialização.
-/// Senha inicial única para todos; cada consultor deve trocá-la no próprio perfil.
+/// Cada conta nasce com uma senha aleatória que ninguém conhece: o consultor cria a dele em "Esqueci minha senha" (o e-mail já vem confirmado).
 /// </summary>
 public static class ConsultorSeeder
 {
-    private const string SenhaInicial = "Senha@123";
     private const string PastaFotos = "consultores";
 
     private static readonly (string Nome, string Email, string Telefone, string? FotoArquivo)[] Consultores =
@@ -69,7 +68,7 @@ public static class ConsultorSeeder
                     PhoneNumber = DocumentValidation.NormalizarTelefone(telefone),
                 };
 
-                var resultado = await userManager.CreateAsync(usuario, SenhaInicial);
+                var resultado = await userManager.CreateAsync(usuario, SenhaSegura.Gerar());
                 if (!resultado.Succeeded)
                 {
                     throw new InvalidOperationException(

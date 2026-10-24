@@ -104,7 +104,7 @@ public sealed class DashboardService(
         if (visiveis is not null) oportunidadesQuery = oportunidadesQuery.Where(o => visiveis.Contains(o.ResponsavelId));
 
         // Atividade de lead excluído (lixeira) não conta.
-        var atividadesQuery = db.CrmActivities.AsNoTracking().Where(a => !a.Arquivado && !a.Lead.Arquivado);
+        var atividadesQuery = db.CrmActivities.AsNoTracking().Where(a => !a.Arquivado && (a.Lead == null || !a.Lead.Arquivado));
         if (visiveis is not null) atividadesQuery = atividadesQuery.Where(a => visiveis.Contains(a.ResponsavelId));
 
         var inicioHoje = HorarioBrasilia.Inicio(hoje);
@@ -125,7 +125,9 @@ public sealed class DashboardService(
 
         var abertas = oportunidadesQuery.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Aberta);
         var oportunidadesAbertas = await abertas.CountAsync(ct);
-        var valorPipeline = await abertas.SumAsync(o => (decimal?)o.ValorEstimado, ct) ?? 0m;
+        // Valor em pipeline = oportunidades abertas + adesão informada na "Cotação" do quadro de leads.
+        var valorPipeline = (await abertas.SumAsync(o => (decimal?)o.ValorEstimado, ct) ?? 0m)
+            + (await ContagensPorVendedor.EmCotacaoComAdesao(leadsQuery).SumAsync(l => l.ValorAdesao, ct) ?? 0m);
 
         var fechadasNoPeriodo = oportunidadesQuery.Where(o =>
             o.Etapa.Tipo != TipoEtapaPipeline.Aberta && o.DataEfetivaFechamento >= inicioUtc && o.DataEfetivaFechamento <= fimUtc);
@@ -334,7 +336,7 @@ public sealed class DashboardService(
         // período — passaram para ele por rodízio ou troca de responsável (OrigemLead.ComPosseNoPeriodo); conversão = vendas desses leads de tráfego ÷ esses leads.
         var leads = await ContagensPorVendedor.ContarLeadsAsync(
             leadsQuery.Where(OrigemLead.DeTrafegoPagoInclusiveNotion).Where(OrigemLead.ComPosseNoPeriodo(inicioUtc, fimUtc.AddTicks(1))), ct);
-        var abertas = await ContagensPorVendedor.AbertasAsync(oportunidades, ct);
+        var abertas = await ContagensPorVendedor.AbertasAsync(oportunidades, ct, leadsQuery);
         var fechadasNoPeriodo = oportunidades.Where(o => o.DataEfetivaFechamento >= inicioUtc && o.DataEfetivaFechamento <= fimUtc);
         var fechadas = await ContagensPorVendedor.FechadasAsync(fechadasNoPeriodo, ct);
         var fechadasDeTrafego = await ContagensPorVendedor.FechadasAsync(

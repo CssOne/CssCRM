@@ -1,4 +1,4 @@
-import { ArrowRightLeft } from "lucide-react";
+import { ArrowRightLeft, Car, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiRequestError } from "../../lib/api";
 import { TipoEtapaPipeline, type LeadDetail, type LeadStage, type PipelineBoard } from "../../lib/types";
@@ -124,6 +124,33 @@ export function EtapaDoLead({ lead, onMudou }: { lead: LeadDetail; onMudou: () =
           <ArrowRightLeft className="size-3.5" /> Mudar de etapa
         </Button>
       </div>
+
+      {lead.etapaNome === ETAPA_PERDIDO && (
+        <div
+          className={`mt-3 rounded-xl border px-3.5 py-2.5 text-sm ${
+            lead.motivoPerdaDescricao
+              ? "border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_9%,transparent)]"
+              : "border-dashed border-[var(--border)] bg-[var(--surface-hover)]"
+          }`}
+        >
+          <p className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide ${lead.motivoPerdaDescricao ? "text-[var(--danger)]" : "text-[var(--fg-muted)]"}`}>
+            <XCircle className="size-3.5 shrink-0" aria-hidden /> Motivo da perda
+          </p>
+          <p className={`mt-1 font-semibold ${lead.motivoPerdaDescricao ? "text-[var(--fg)]" : "font-normal italic text-[var(--fg-muted)]"}`}>
+            {lead.motivoPerdaDescricao ?? "Sem motivo informado"}
+          </p>
+          {lead.motivoPerdaObservacao && <p className="mt-1 text-[var(--fg-muted)]">{lead.motivoPerdaObservacao}</p>}
+        </div>
+      )}
+
+      {lead.etapaNome === ETAPA_NAO_FAZEMOS && lead.veiculoNaoAtendido && (
+        <div className="mt-3 rounded-xl border border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_9%,transparent)] px-3.5 py-2.5 text-sm">
+          <p className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-[var(--danger)]">
+            <Car className="size-3.5 shrink-0" aria-hidden /> Veículo que não atendemos
+          </p>
+          <p className="mt-1 font-semibold text-[var(--fg)]">{lead.veiculoNaoAtendido}</p>
+        </div>
+      )}
 
       <Modal open={aberto} onClose={() => setAberto(false)} title="Mudar de etapa" size="sm">
         <div className="space-y-1">

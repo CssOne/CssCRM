@@ -1,7 +1,8 @@
-import { ChevronDown, ChevronRight, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Copy, Eye, EyeOff, KeyRound, Pencil, Plus, Power, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarData, formatarTelefone } from "../../lib/format";
+import { gerarSenha, TAMANHO_MINIMO_DA_SENHA } from "../../lib/senha";
 import type { Grupo, PagedResult, Regional, UserSummary } from "../../lib/types";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -19,7 +20,9 @@ import {
   Tabs,
   useToast,
 } from "../../components/ui";
+import { ContratoFinanceiro } from "../../components/portal/ContratoFinanceiro";
 import { PAPEL_LABEL, UserForm, paraAtualizarRequest, paraCriarRequest, paraFormValues, type UserFormValues } from "../../components/crm/UserForm";
+import { BarraDeFiltros, CampoDeFiltro } from "../../components/Filtros";
 
 function MembroAvatar({ nome, fotoUrl }: { nome: string; fotoUrl?: string | null }) {
   const [erroAoCarregar, setErroAoCarregar] = useState(false);
@@ -45,6 +48,34 @@ function MembroAvatar({ nome, fotoUrl }: { nome: string; fotoUrl?: string | null
     <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--brand)] text-xs font-semibold text-white">
       {iniciais || "?"}
     </div>
+  );
+}
+
+const SITUACOES_RAPIDAS: { valor: string; rotulo: string }[] = [
+  { valor: "", rotulo: "Todos" },
+  { valor: "true", rotulo: "Ativos" },
+  { valor: "false", rotulo: "Inativos" },
+];
+
+const PAPEIS_RAPIDOS: { valor: string; rotulo: string }[] = [
+  { valor: "Comercial", rotulo: "Consultores" },
+  { valor: "GestorComercial", rotulo: "Gestores" },
+  { valor: "SupervisorComercial", rotulo: "Supervisores" },
+  { valor: "Admin", rotulo: "Administradores" },
+];
+
+function ChipRapido({ ativo, onClick, children }: { ativo: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={ativo}
+      onClick={onClick}
+      className={`focus-ring cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+        ativo ? "border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand)]" : "border-[var(--border)] text-[var(--fg-muted)] hover:bg-[var(--surface-hover)]"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -106,6 +137,16 @@ function UsuariosTab({
   }, [ehSupervisor, sessao]);
   const papeisDoSupervisor = ehSupervisor ? ["Comercial", "GestorComercial"] : undefined;
   const [busca, setBusca] = useState("");
+  // O campo de busca responde na hora, mas a consulta só sai quando a pessoa para de digitar (evita uma chamada por tecla).
+  const [buscaDigitada, setBuscaDigitada] = useState("");
+  useEffect(() => {
+    if (buscaDigitada === busca) return;
+    const timer = setTimeout(() => {
+      setBusca(buscaDigitada);
+      setPagina(1);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [buscaDigitada, busca]);
   const [papel, setPapel] = useState("");
   const [regionalId, setRegionalId] = useState("");
   const [ativo, setAtivo] = useState("");
@@ -122,6 +163,9 @@ function UsuariosTab({
   const [usuarioEditando, setUsuarioEditando] = useState<UserSummary | null>(null);
   const [usuarioRedefinindo, setUsuarioRedefinindo] = useState<UserSummary | null>(null);
   const [novaSenha, setNovaSenha] = useState("");
+  const [mostrarNovaSenha, setMostrarNovaSenha] = useState(false);
+  const [usuarioInativando, setUsuarioInativando] = useState<UserSummary | null>(null);
+  const [alterandoAtivoId, setAlterandoAtivoId] = useState<string | null>(null);
   const [usuarioExcluindo, setUsuarioExcluindo] = useState<UserSummary | null>(null);
   const [excluindo, setExcluindo] = useState(false);
 
@@ -194,14 +238,42 @@ function UsuariosTab({
     }
   }
 
+  async function alternarAtivo(usuario: UserSummary, ativo: boolean) {
+    setAlterandoAtivoId(usuario.id);
+    try {
+      await api.put(`/crm/users/${usuario.id}/ativo`, { ativo });
+      notificar("success", ativo ? `Conta de ${usuario.nomeCompleto} ativada.` : `Conta de ${usuario.nomeCompleto} inativada.`);
+      setUsuarioInativando(null);
+      setRecarregar((n) => n + 1);
+    } catch (e) {
+      notificar("error", e instanceof Error ? e.message : "Não foi possível alterar a conta.");
+    } finally {
+      setAlterandoAtivoId(null);
+    }
+  }
+
+  function fecharRedefinirSenha() {
+    setUsuarioRedefinindo(null);
+    setNovaSenha("");
+    setMostrarNovaSenha(false);
+  }
+
+  async function copiarSenha() {
+    try {
+      await navigator.clipboard.writeText(novaSenha);
+      notificar("success", "Senha copiada.");
+    } catch {
+      notificar("error", "Não foi possível copiar. Selecione e copie a senha manualmente.");
+    }
+  }
+
   async function redefinirSenha() {
-    if (!usuarioRedefinindo || novaSenha.length < 8) return;
+    if (!usuarioRedefinindo || novaSenha.length < TAMANHO_MINIMO_DA_SENHA) return;
     setSalvando(true);
     try {
       await api.post(`/crm/users/${usuarioRedefinindo.id}/reset-password`, { novaSenha });
       notificar("success", "Senha redefinida com sucesso.");
-      setUsuarioRedefinindo(null);
-      setNovaSenha("");
+      fecharRedefinirSenha();
     } catch (e) {
       notificar("error", e instanceof Error ? e.message : "Não foi possível redefinir a senha.");
     } finally {
@@ -211,50 +283,74 @@ function UsuariosTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="w-56">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Buscar</label>
-            <Input placeholder="Nome ou e-mail" value={busca} onChange={(e) => { setBusca(e.target.value); setPagina(1); }} />
-          </div>
-          <div className="w-40">
-            <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Situação</label>
-            <Select value={ativo} onChange={(e) => { setAtivo(e.target.value); setPagina(1); }} aria-label="Situação do usuário">
-              <option value="">Todos</option>
-              <option value="true">Ativos</option>
-              <option value="false">Inativos</option>
-            </Select>
-          </div>
-          {podeGerenciarTudo && (
-            <>
-              <div className="w-44">
-                <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Papel</label>
-                <Select value={papel} onChange={(e) => { setPapel(e.target.value); setPagina(1); }}>
-                  <option value="">Todos</option>
-                  {Object.entries(PAPEL_LABEL).map(([valor, rotulo]) => (
-                    <option key={valor} value={valor}>
-                      {rotulo}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="w-44">
-                <label className="mb-1 block text-xs font-medium text-[var(--fg-muted)]">Regional</label>
-                <Select value={regionalId} onChange={(e) => { setRegionalId(e.target.value); setPagina(1); }}>
-                  <option value="">Todas</option>
-                  {regionais.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.nome}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            </>
-          )}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <BarraDeFiltros
+            busca={buscaDigitada}
+            onBusca={setBuscaDigitada}
+            placeholder="Buscar por nome ou e-mail"
+            chips={[
+              ...(ativo ? [{ rotulo: "Situação", valor: ativo === "true" ? "Ativos" : "Inativos", limpar: () => { setAtivo(""); setPagina(1); } }] : []),
+              ...(papel ? [{ rotulo: "Papel", valor: PAPEL_LABEL[papel] ?? papel, limpar: () => { setPapel(""); setPagina(1); } }] : []),
+              ...(regionalId ? [{ rotulo: "Regional", valor: regionais.find((r) => r.id === regionalId)?.nome ?? "—", limpar: () => { setRegionalId(""); setPagina(1); } }] : []),
+            ]}
+            onLimparTudo={() => { setBusca(""); setBuscaDigitada(""); setAtivo(""); setPapel(""); setRegionalId(""); setPagina(1); }}
+          >
+            <CampoDeFiltro rotulo="Situação">
+              <Select value={ativo} onChange={(e) => { setAtivo(e.target.value); setPagina(1); }} aria-label="Situação do usuário">
+                <option value="">Todos</option>
+                <option value="true">Ativos</option>
+                <option value="false">Inativos</option>
+              </Select>
+            </CampoDeFiltro>
+            {podeGerenciarTudo && (
+              <>
+                <CampoDeFiltro rotulo="Papel">
+                  <Select value={papel} onChange={(e) => { setPapel(e.target.value); setPagina(1); }}>
+                    <option value="">Todos</option>
+                    {Object.entries(PAPEL_LABEL).map(([valor, rotulo]) => (
+                      <option key={valor} value={valor}>
+                        {rotulo}
+                      </option>
+                    ))}
+                  </Select>
+                </CampoDeFiltro>
+                <CampoDeFiltro rotulo="Regional">
+                  <Select value={regionalId} onChange={(e) => { setRegionalId(e.target.value); setPagina(1); }}>
+                    <option value="">Todas</option>
+                    {regionais.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.nome}
+                      </option>
+                    ))}
+                  </Select>
+                </CampoDeFiltro>
+              </>
+            )}
+          </BarraDeFiltros>
         </div>
         <Button onClick={() => setModalNovo(true)}>
           <Plus className="size-4" /> Novo usuário
         </Button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtros rápidos">
+        {SITUACOES_RAPIDAS.map((f) => (
+          <ChipRapido key={`s${f.valor}`} ativo={ativo === f.valor} onClick={() => { setAtivo(f.valor); setPagina(1); }}>
+            {f.rotulo}
+          </ChipRapido>
+        ))}
+        {podeGerenciarTudo && (
+          <>
+            <span className="mx-1 h-4 w-px bg-[var(--border)]" aria-hidden />
+            {PAPEIS_RAPIDOS.map((f) => (
+              <ChipRapido key={f.valor} ativo={papel === f.valor} onClick={() => { setPapel(papel === f.valor ? "" : f.valor); setPagina(1); }}>
+                {f.rotulo}
+              </ChipRapido>
+            ))}
+          </>
+        )}
+        {dados && <span className="ml-auto text-xs text-[var(--fg-muted)]">{dados.totalRegistros} usuário(s)</span>}
       </div>
 
       {carregando ? (
@@ -266,14 +362,23 @@ function UsuariosTab({
       ) : erro ? (
         <ErrorState message={erro} onRetry={() => setRecarregar((n) => n + 1)} />
       ) : !dados || dados.itens.length === 0 ? (
-        <EmptyState title="Nenhum usuário encontrado" description="Cadastre o primeiro usuário para começar." />
+        busca || ativo || papel || regionalId ? (
+          <EmptyState
+            title="Nenhum usuário com esses filtros"
+            description="Mude ou limpe os filtros para ver os outros usuários."
+            action={<Button size="sm" variant="secondary" onClick={() => { setBusca(""); setBuscaDigitada(""); setAtivo(""); setPapel(""); setRegionalId(""); setPagina(1); }}>Limpar filtros</Button>}
+          />
+        ) : (
+          <EmptyState title="Nenhum usuário cadastrado" description="Cadastre o primeiro usuário para começar." />
+        )
       ) : (
         <>
           <div className="space-y-2">
             {dados.itens.map((usuario) => (
-              <div key={usuario.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+              <div key={usuario.id} className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 ${usuario.ativo ? "" : "opacity-70"}`}>
+                <MembroAvatar nome={usuario.nomeCompleto} fotoUrl={usuario.fotoUrl} />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <p className="truncate font-medium text-[var(--fg)]">{usuario.nomeCompleto}</p>
                     {usuario.papeis.map((p) => (
                       <Badge key={p} variant="brand">
@@ -292,6 +397,16 @@ function UsuariosTab({
                 </div>
                 <div className="flex items-center gap-2 text-xs text-[var(--fg-muted)]">
                   <span>desde {formatarData(usuario.criadoEm)}</span>
+                  {usuario.id !== sessao?.id && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      loading={alterandoAtivoId === usuario.id}
+                      onClick={() => (usuario.ativo ? setUsuarioInativando(usuario) : alternarAtivo(usuario, true))}
+                    >
+                      <Power className="size-4" /> {usuario.ativo ? "Inativar" : "Ativar"}
+                    </Button>
+                  )}
                   <Button size="sm" variant="secondary" onClick={() => setUsuarioRedefinindo(usuario)}>
                     <KeyRound className="size-4" /> Senha
                   </Button>
@@ -299,7 +414,7 @@ function UsuariosTab({
                     <Pencil className="size-4" /> Editar
                   </Button>
                   {(podeGerenciarTudo || ehSupervisor) && usuario.id !== sessao?.id && (
-                    <Button size="sm" variant="danger" onClick={() => setUsuarioExcluindo(usuario)}>
+                    <Button size="sm" variant="dangerSoft" onClick={() => setUsuarioExcluindo(usuario)}>
                       <Trash2 className="size-4" /> Excluir
                     </Button>
                   )}
@@ -329,8 +444,9 @@ function UsuariosTab({
         )}
       </Modal>
 
-      <Modal open={!!usuarioEditando} onClose={() => setUsuarioEditando(null)} title="Editar usuário" size="lg">
+      <Modal open={!!usuarioEditando} onClose={() => setUsuarioEditando(null)} title="Editar usuário" size="xl">
         {usuarioEditando && (
+          <>
           <UserForm
             modoEdicao
             podeGerenciarTudo={podeGerenciarTudo}
@@ -341,27 +457,82 @@ function UsuariosTab({
             onSubmit={salvarEdicao}
             onCancel={() => setUsuarioEditando(null)}
           />
+          {usuarioEditando.papeis.includes("Comercial") && (
+            <section className="mt-6 border-t border-[var(--border)] pt-5" aria-label="Financeiro">
+              <h3 className="text-base font-semibold text-[var(--fg)]">Financeiro</h3>
+              <p className="mb-4 text-sm text-[var(--fg-muted)]">
+                Marque se o consultor é PJ ou CLT e defina os valores dele: PJ ganha bônus por placa ou recorrência (um dos dois) e tem custos fixos; CLT tem salário e % da adesão. Cada mudança fica no histórico do Controle financeiro dele.
+              </p>
+              <ContratoFinanceiro consultorId={usuarioEditando.id} ano={new Date().getFullYear()} />
+            </section>
+          )}
+          </>
         )}
       </Modal>
 
-      <Modal open={!!usuarioRedefinindo} onClose={() => { setUsuarioRedefinindo(null); setNovaSenha(""); }} title="Redefinir senha" size="sm">
+      <Modal open={!!usuarioRedefinindo} onClose={fecharRedefinirSenha} title="Redefinir senha" size="sm">
         {usuarioRedefinindo && (
           <div className="space-y-4">
             <p className="text-sm text-[var(--fg-muted)]">
-              Definir uma nova senha para <strong className="text-[var(--fg)]">{usuarioRedefinindo.nomeCompleto}</strong>.
+              Definir uma nova senha para <strong className="text-[var(--fg)]">{usuarioRedefinindo.nomeCompleto}</strong>. Passe a senha à pessoa por um canal seguro.
             </p>
-            <Input type="password" placeholder="Nova senha (mín. 8 caracteres)" value={novaSenha} onChange={(e) => setNovaSenha(e.target.value)} />
+            <div className="relative">
+              <Input
+                type={mostrarNovaSenha ? "text" : "password"}
+                autoComplete="new-password"
+                aria-label="Nova senha"
+                className="pr-10"
+                placeholder={`Nova senha (mín. ${TAMANHO_MINIMO_DA_SENHA} caracteres)`}
+                value={novaSenha}
+                onChange={(e) => setNovaSenha(e.target.value)}
+              />
+              <button
+                type="button"
+                aria-label={mostrarNovaSenha ? "Ocultar senha" : "Mostrar senha"}
+                onClick={() => setMostrarNovaSenha((v) => !v)}
+                className="focus-ring absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer rounded text-[var(--fg-muted)] hover:text-[var(--fg)]"
+              >
+                {mostrarNovaSenha ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="secondary" type="button" onClick={() => { setNovaSenha(gerarSenha()); setMostrarNovaSenha(true); }}>
+                <Sparkles className="size-4" /> Gerar senha forte
+              </Button>
+              <Button size="sm" variant="secondary" type="button" disabled={!novaSenha} onClick={copiarSenha}>
+                <Copy className="size-4" /> Copiar
+              </Button>
+              {novaSenha.length > 0 && novaSenha.length < TAMANHO_MINIMO_DA_SENHA && (
+                <span role="status" className="text-xs text-[var(--warning)]">Faltam {TAMANHO_MINIMO_DA_SENHA - novaSenha.length} caractere(s)</span>
+              )}
+            </div>
             <div className="flex justify-end gap-2">
-              <Button variant="secondary" onClick={() => { setUsuarioRedefinindo(null); setNovaSenha(""); }} disabled={salvando}>
+              <Button variant="secondary" onClick={fecharRedefinirSenha} disabled={salvando}>
                 Cancelar
               </Button>
-              <Button onClick={redefinirSenha} loading={salvando} disabled={novaSenha.length < 8}>
+              <Button onClick={redefinirSenha} loading={salvando} disabled={novaSenha.length < TAMANHO_MINIMO_DA_SENHA}>
                 Redefinir
               </Button>
             </div>
           </div>
         )}
       </Modal>
+
+      <ConfirmDialog
+        open={!!usuarioInativando}
+        title="Inativar usuário"
+        confirmLabel="Inativar"
+        danger
+        loading={!!usuarioInativando && alterandoAtivoId === usuarioInativando.id}
+        message={
+          <>
+            Inativar <strong className="text-[var(--fg)]">{usuarioInativando?.nomeCompleto}</strong>? A pessoa deixa de conseguir entrar no sistema (e, se for consultor, de receber leads novos).
+            Os dados dela ficam e dá para ativar de novo quando quiser.
+          </>
+        }
+        onConfirm={() => usuarioInativando && alternarAtivo(usuarioInativando, false)}
+        onCancel={() => setUsuarioInativando(null)}
+      />
 
       <ConfirmDialog
         open={!!usuarioExcluindo}

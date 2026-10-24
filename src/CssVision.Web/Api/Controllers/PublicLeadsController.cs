@@ -4,6 +4,7 @@ using CssVision.Web.Services.Crm;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CssVision.Web.Api.Controllers;
 
@@ -15,6 +16,7 @@ namespace CssVision.Web.Api.Controllers;
 [Route("api/public/leads")]
 [AllowAnonymous]
 [EnableCors(CorsPolicies.PublicLeadIntake)]
+[EnableRateLimiting(RateLimitPolicies.FormularioPublico)]
 public class PublicLeadsController(IPublicLeadIntakeService intake) : ControllerBase
 {
     [HttpPost]

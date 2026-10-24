@@ -194,7 +194,7 @@ export function UserForm({
     const novosErros: Record<string, string> = {};
     if (!valores.nomeCompleto.trim()) novosErros.nome = "Informe o nome completo.";
     if (!valores.email.trim() || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(valores.email)) novosErros.email = "E-mail inválido.";
-    if (!modoEdicao && valores.senha.length < 8) novosErros.senha = "A senha deve ter ao menos 8 caracteres.";
+    if (!modoEdicao && valores.senha.length < 10) novosErros.senha = "A senha deve ter ao menos 10 caracteres.";
     if (podeGerenciarTudo && (valores.papel === "Comercial" || valores.papel === "GestorComercial" || valores.papel === "Financeiro") && !valores.regionalId) {
       novosErros.regional = "Selecione a regional.";
     }

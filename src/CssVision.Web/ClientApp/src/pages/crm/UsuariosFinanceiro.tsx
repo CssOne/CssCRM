@@ -2,12 +2,16 @@ import { useCallback, useEffect, useState } from "react";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { formatarTelefone } from "../../lib/format";
 import type { PagedResult, UserSummary } from "../../lib/types";
-import { Badge, Button, Card, EmptyState, ErrorState, Input, Pagination, Select, Skeleton, useToast } from "../../components/ui";
+import { Badge, Button, Card, EmptyState, ErrorState, Input, Modal, Pagination, Select, Skeleton, useToast } from "../../components/ui";
+import { ContratoFinanceiro } from "../../components/portal/ContratoFinanceiro";
 
 /**
- * Usuários do perfil Financeiro: lista os consultores da regional dele e permite só ativar ou inativar a conta de cada um
- * (cadastro, edição e senha continuam com a gestão).
+ * Usuários do perfil Financeiro: lista consultores, gestores e supervisores da regional dele e permite só ativar ou inativar a conta de cada um
+ * (cadastro, edição, senha e exclusão continuam com a gestão; administradores nem aparecem — o servidor também recusa).
  */
+const PAPEL_ROTULO: Record<string, string> = { Comercial: "Consultor", GestorComercial: "Gestor", SupervisorComercial: "Supervisor" };
+const rotuloDoPapel = (papeis: string[]) => papeis.map((p) => PAPEL_ROTULO[p]).filter(Boolean).join(" · ");
+
 export function UsuariosFinanceiroPage() {
   const { notificar } = useToast();
   const [dados, setDados] = useState<PagedResult<UserSummary> | null>(null);
@@ -15,14 +19,16 @@ export function UsuariosFinanceiroPage() {
   const [recarregar, setRecarregar] = useState(0);
   const [busca, setBusca] = useState("");
   const [situacao, setSituacao] = useState<"" | "true" | "false">("");
+  const [papel, setPapel] = useState("");
   const [pagina, setPagina] = useState(1);
   const [alterando, setAlterando] = useState<string | null>(null);
+  const [contratoDe, setContratoDe] = useState<UserSummary | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     api
       .get<PagedResult<UserSummary>>(
-        `/crm/users${toQueryString({ papel: "Comercial", busca: busca.trim() || undefined, ativo: situacao || undefined, pagina, tamanhoPagina: 15 })}`,
+        `/crm/users${toQueryString({ papel: papel || undefined, busca: busca.trim() || undefined, ativo: situacao || undefined, pagina, tamanhoPagina: 15 })}`,
         controller.signal
       )
       .then((r) => {
@@ -30,10 +36,10 @@ export function UsuariosFinanceiroPage() {
         setErro(null);
       })
       .catch((e) => {
-        if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar os consultores.");
+        if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar os usuários.");
       });
     return () => controller.abort();
-  }, [recarregar, busca, situacao, pagina]);
+  }, [recarregar, busca, situacao, papel, pagina]);
 
   const alternar = useCallback(
     async (u: UserSummary) => {
@@ -55,12 +61,20 @@ export function UsuariosFinanceiroPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-semibold text-[var(--fg)]">Usuários</h1>
-        <p className="text-sm text-[var(--fg-muted)]">Consultores da sua regional. Aqui você ativa ou inativa a conta de cada um.</p>
+        <p className="text-sm text-[var(--fg-muted)]">Consultores, gestores e supervisores da sua regional. Aqui você ativa ou inativa a conta de cada um.</p>
       </div>
 
       <div className="flex flex-wrap gap-3">
         <div className="w-64">
-          <Input placeholder="Buscar por nome ou e-mail…" value={busca} onChange={(e) => { setBusca(e.target.value); setPagina(1); }} aria-label="Buscar consultor" />
+          <Input placeholder="Buscar por nome ou e-mail…" value={busca} onChange={(e) => { setBusca(e.target.value); setPagina(1); }} aria-label="Buscar usuário" />
+        </div>
+        <div className="w-44">
+          <Select value={papel} onChange={(e) => { setPapel(e.target.value); setPagina(1); }} aria-label="Tipo de usuário">
+            <option value="">Todos os tipos</option>
+            <option value="Comercial">Consultores</option>
+            <option value="GestorComercial">Gestores</option>
+            <option value="SupervisorComercial">Supervisores</option>
+          </Select>
         </div>
         <div className="w-40">
           <Select value={situacao} onChange={(e) => { setSituacao(e.target.value as typeof situacao); setPagina(1); }} aria-label="Situação da conta">
@@ -80,14 +94,16 @@ export function UsuariosFinanceiroPage() {
           ))}
         </div>
       ) : dados.itens.length === 0 ? (
-        <EmptyState title="Nenhum consultor" description="Não há consultores com este filtro na sua regional." />
+        <EmptyState title="Nenhum usuário" description="Não há usuários com este filtro na sua regional." />
       ) : (
         <>
           <div className="space-y-2">
             {dados.itens.map((u) => (
               <Card key={u.id} className="flex items-center justify-between gap-3 p-3 text-sm">
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-[var(--fg)]">{u.nomeCompleto}</p>
+                  <p className="truncate font-medium text-[var(--fg)]">
+                    {u.nomeCompleto} <span className="text-xs font-normal text-[var(--fg-muted)]">{rotuloDoPapel(u.papeis)}</span>
+                  </p>
                   <p className="truncate text-xs text-[var(--fg-muted)]">
                     {u.email}
                     {u.telefone ? ` · ${formatarTelefone(u.telefone)}` : ""}
@@ -96,6 +112,9 @@ export function UsuariosFinanceiroPage() {
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
                   <Badge variant={u.ativo ? "success" : "danger"}>{u.ativo ? "Ativo" : "Inativo"}</Badge>
+                  {u.papeis.includes("Comercial") && (
+                    <Button size="sm" variant="secondary" onClick={() => setContratoDe(u)}>Financeiro</Button>
+                  )}
                   <Button size="sm" variant="secondary" loading={alterando === u.id} onClick={() => alternar(u)}>
                     {u.ativo ? "Inativar" : "Ativar"}
                   </Button>
@@ -106,6 +125,9 @@ export function UsuariosFinanceiroPage() {
           <Pagination pagina={dados.pagina} totalPaginas={Math.max(1, Math.ceil(dados.totalRegistros / dados.tamanhoPagina))} onChange={setPagina} />
         </>
       )}
+      <Modal open={!!contratoDe} onClose={() => setContratoDe(null)} title={contratoDe ? `Financeiro — ${contratoDe.nomeCompleto}` : "Financeiro"} size="xl">
+        {contratoDe && <ContratoFinanceiro consultorId={contratoDe.id} ano={new Date().getFullYear()} />}
+      </Modal>
     </div>
   );
 }

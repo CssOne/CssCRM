@@ -6,7 +6,7 @@ import { baseOptions, paleta, SemDados } from "../crm/Charts";
 
 /** Cores fixas para o "O que?" — a mesma tag tem sempre a mesma cor em todos os gráficos. */
 export const CORES_O_QUE: Record<string, string> = {
-  AGV: "#2563eb",
+  AGV: "#467fc5",
   "AGV ELÉTRICO": "#22c55e",
   "AGV TRUCK": "#f97316",
   "Não informado": "#94a3b8",
@@ -115,7 +115,7 @@ export function HorarioChart({ dados }: { dados: MarketingHorario[] }) {
   const options: ApexOptions = {
     ...base,
     chart: { ...base.chart, type: "heatmap" },
-    colors: ["#2563eb"],
+    colors: ["#467fc5"],
     dataLabels: { enabled: false },
     plotOptions: { heatmap: { radius: 3, shadeIntensity: 0.6, enableShades: true } },
     tooltip: { ...base.tooltip, y: { formatter: (v) => `${v} lead(s)` } },

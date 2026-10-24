@@ -60,7 +60,7 @@ export function SeletorDeEmojis({
 
   return (
     <div role="dialog" aria-label="Emojis e figurinhas" className="absolute bottom-full left-0 z-20 mb-2 w-80 overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg)] shadow-xl">
-      <div role="tablist" className="flex border-b border-[var(--border)] text-xs">
+      <div role="tablist" data-sem-animacao className="flex border-b border-[var(--border)] text-xs">
         {abas.map((a) => (
           <button
             key={a.id}

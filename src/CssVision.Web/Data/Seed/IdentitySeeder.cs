@@ -1,3 +1,4 @@
+using CssVision.Web.Services.Crm;
 using CssVision.Web.Authorization;
 using CssVision.Web.Domain.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -50,7 +51,7 @@ public static class IdentitySeeder
             GestorComercialId = gestorId
         };
 
-        var resultado = await userManager.CreateAsync(usuario, "Senha@123");
+        var resultado = await userManager.CreateAsync(usuario, SenhaSegura.SenhaInicialLegada);
         if (!resultado.Succeeded)
         {
             throw new InvalidOperationException(string.Join("; ", resultado.Errors.Select(e => e.Description)));

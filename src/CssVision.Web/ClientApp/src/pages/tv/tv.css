@@ -853,3 +853,92 @@
 .tvx .top-adhesion-value strong { color: var(--text); font-size: calc(var(--s) * 1.35); line-height: 1; white-space: nowrap; }
 @keyframes tvx-top-adhesion-in { from { opacity: 0; transform: translateY(calc(var(--s) * -.6)) scale(.96); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .tvx .top-adhesion-card { animation: none; } }
+
+/* ===========================================================================
+   Acabamento do sistema (CRM): mesmas cores da empresa, superfícies, bordas arredondadas e brilhos suaves do resto do CRM.
+   Fica por último para sobrepor os tokens acima sem mexer no restante do painel.
+=========================================================================== */
+.tvx, .tvx[data-theme="light"] {
+  --bg: #f5f5f7;
+  --bg-tint-1: rgba(7, 66, 139, .08);
+  --bg-tint-2: rgba(70, 127, 197, .08);
+  --bg-sheen: linear-gradient(160deg, #f8f9fb, #f5f5f7 60%, #eef1f6);
+  --panel: #ffffff;
+  --panel-flat: #ffffff;
+  --panel-glow: rgba(7, 66, 139, .06);
+  --line: #e5e5ea;
+  --line-soft: #efeff3;
+  --track: #e9e9ee;
+  --text: #1d1d1f;
+  --text-dim: #515154;
+  --text-mute: #6e6e73;
+  --brand: #07428b;
+  --brand-2: #2a64ad;
+  --cyan: #467fc5;
+  --cyan-vivid: #467fc5;
+  --chip: #f2f2f5;
+  --shadow: 0 0 0 .5px rgba(0, 0, 0, .04), 0 1px 2px rgba(0, 0, 0, .04), 0 calc(var(--s) * .45) calc(var(--s) * 1.4) calc(var(--s) * -.5) rgba(0, 0, 0, .12);
+}
+.tvx[data-theme="dark"] {
+  --bg: #0b0b0d;
+  --bg-tint-1: rgba(77, 134, 201, .13);
+  --bg-tint-2: rgba(77, 134, 201, .07);
+  --bg-sheen: linear-gradient(160deg, #0f0f12, #0b0b0d 60%, #08080a);
+  --panel: #1c1c1e;
+  --panel-flat: #232326;
+  --panel-glow: rgba(77, 134, 201, .12);
+  --line: #2e2e32;
+  --line-soft: #26262a;
+  --track: #2e2e33;
+  --text: #f5f5f7;
+  --text-dim: #b4b4bb;
+  --text-mute: #98989f;
+  --brand: #4d86c9;
+  --brand-2: #7aa7dc;
+  --cyan: #6fa3de;
+  --cyan-vivid: #6fa3de;
+  --chip: rgba(77, 134, 201, .16);
+  --shadow: 0 0 0 .5px rgba(255, 255, 255, .04), 0 calc(var(--s) * .6) calc(var(--s) * 1.8) calc(var(--s) * -.6) rgba(0, 0, 0, .7);
+}
+.tvx { --radius: calc(var(--s) * 1.3); }
+/* Cabeçalho: cartão flutuante, como o do CRM */
+.tvx .dashboard { grid-template-rows: calc(var(--s) * 5.4) 1fr calc(var(--s) * 1.9); }
+.tvx header {
+  align-self: center;
+  height: calc(var(--s) * 4);
+  padding: 0 calc(var(--s) * 1.1);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--s) * 1.4);
+  background: var(--panel-flat);
+  box-shadow: var(--shadow);
+}
+/* Cartões: sem a faixa colorida no topo; brilho suave da cor no canto, como os indicadores do CRM */
+.tvx .panel::before, .tvx .metric::before { display: none; }
+.tvx .metric::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  right: calc(var(--s) * -1.6);
+  top: calc(var(--s) * -1.6);
+  width: calc(var(--s) * 6);
+  height: calc(var(--s) * 6);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--brand) 16%, transparent);
+  filter: blur(calc(var(--s) * 1.4));
+  opacity: .7;
+  pointer-events: none;
+}
+.tvx .metric:nth-child(2)::after { background: color-mix(in srgb, var(--cyan) 18%, transparent); }
+.tvx .metric:nth-child(3)::after { background: color-mix(in srgb, var(--green) 18%, transparent); }
+.tvx .metric:nth-child(4)::after { background: color-mix(in srgb, var(--gold) 20%, transparent); }
+.tvx .metric-icon { border: 0; border-radius: calc(var(--s) * .6); }
+.tvx .panel-title h1 { font-weight: 800; }
+.tvx .eyebrow { font-weight: 800; letter-spacing: .16em; }
+.tvx .period { border: 0; border-radius: 999px; }
+.tvx .ranking-tabs { border: 0; border-radius: 999px; background: var(--chip); }
+.tvx .ranking-tabs button { border-radius: 999px; }
+.tvx .rank-row { border-radius: calc(var(--s) * .7); }
+.tvx .rank-row.top-1 { background: linear-gradient(90deg, var(--gold-soft), transparent 70%); }
+.tvx .live, .tvx .goals-button { box-shadow: none; }
+/* O estilo de título do CRM (barra de destaque) não vale no painel da TV. */
+.tvx h1::after { display: none; }

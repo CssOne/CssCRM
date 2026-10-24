@@ -38,7 +38,7 @@ export function ResetPasswordPage() {
 
   return (
     <div className="flex min-h-screen">
-      <div className="login-aurora relative hidden w-1/2 flex-col justify-between overflow-hidden p-12 lg:flex">
+      <div className="login-rota relative hidden w-1/2 flex-col justify-between overflow-hidden p-12 lg:flex">
         <div className="relative z-10 flex items-center gap-2.5">
           <img src="/logo-css-white.png" alt="CSS Brasil" className="size-10 shrink-0 object-contain" />
           <div className="leading-tight">
@@ -114,7 +114,7 @@ export function ResetPasswordPage() {
                       autoFocus
                       value={novaSenha}
                       onChange={(e) => setNovaSenha(e.target.value)}
-                      className="focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-10 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                      className="focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--field)] py-2.5 pl-10 pr-10 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                       placeholder="••••••••"
                     />
                     <button
@@ -142,7 +142,7 @@ export function ResetPasswordPage() {
                       minLength={8}
                       value={confirmarSenha}
                       onChange={(e) => setConfirmarSenha(e.target.value)}
-                      className="focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] py-2.5 pl-10 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+                      className="focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--field)] py-2.5 pl-10 pr-3 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
                       placeholder="••••••••"
                     />
                   </div>

@@ -63,7 +63,7 @@ namespace CssVision.Web.Data.Migrations
                     b.Property<string>("Descricao")
                         .HasColumnType("text");
 
-                    b.Property<Guid>("LeadId")
+                    b.Property<Guid?>("LeadId")
                         .HasColumnType("uuid");
 
                     b.Property<int?>("LembreteMinutosAntes")
@@ -393,6 +393,98 @@ namespace CssVision.Web.Data.Migrations
                     b.ToTable("CrmBackups", (string)null);
                 });
 
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmCobrancaPagamento", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("Competencia")
+                        .HasColumnType("date");
+
+                    b.Property<string>("ComprovanteUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("CustoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("DataInformada")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset?>("InformadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Item")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("LembreteEm")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset?>("LembreteEnviadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("MotivoRecusa")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Observacao")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("ObservacaoConsultor")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<bool>("Pago")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateOnly?>("PagoEm")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset?>("RecusadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RegistradoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<Guid>("UsuarioId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LembreteEm")
+                        .HasFilter("\"LembreteEm\" IS NOT NULL AND \"LembreteEnviadoEm\" IS NULL");
+
+                    b.HasIndex("CustoId", "Competencia")
+                        .IsUnique()
+                        .HasFilter("\"CustoId\" IS NOT NULL");
+
+                    b.HasIndex("UsuarioId", "Item", "Competencia")
+                        .IsUnique()
+                        .HasFilter("\"CustoId\" IS NULL");
+
+                    b.ToTable("CrmCobrancasPagamento", (string)null);
+                });
+
             modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmContaEmail", b =>
                 {
                     b.Property<Guid>("Id")
@@ -489,6 +581,97 @@ namespace CssVision.Web.Data.Migrations
                     b.HasKey("Mes");
 
                     b.ToTable("CrmControleMarketingMeses", (string)null);
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmCustoAviso", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("Competencia")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CustoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Momento")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustoId", "Competencia", "Momento")
+                        .IsUnique();
+
+                    b.ToTable("CrmCustosAviso", (string)null);
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmCustoConsultor", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Descricao")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Parcelas")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("PrimeiraParcela")
+                        .HasColumnType("date");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<int>("Tipo")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UsuarioId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("ValorTotal")
+                        .HasColumnType("numeric(14,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.ToTable("CrmCustosConsultor", (string)null);
                 });
 
             modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmDiscordCanal", b =>
@@ -764,6 +947,574 @@ namespace CssVision.Web.Data.Migrations
                     b.ToTable("CrmDiscordVinculos", (string)null);
                 });
 
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmDisparoEmail", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Assunto")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("ConcluidoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Enviados")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Erro")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("EtapaId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EtapaNome")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Falhas")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("IniciadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Mensagem")
+                        .IsRequired()
+                        .HasMaxLength(5000)
+                        .HasColumnType("character varying(5000)");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Total")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UsuarioId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "CriadoEm");
+
+                    b.HasIndex("UsuarioId", "CriadoEm");
+
+                    b.ToTable("CrmDisparosEmail", (string)null);
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmDisparoEmailDestinatario", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DisparoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset?>("EnviadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Nome")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DisparoId", "Status");
+
+                    b.ToTable("CrmDisparosEmailDestinatarios", (string)null);
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Ano")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("CaixaInicial")
+                        .HasColumnType("numeric(14,2)");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("PercentualReserva")
+                        .HasColumnType("numeric(5,4)");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<Guid>("UsuarioId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId", "Ano")
+                        .IsUnique();
+
+                    b.ToTable("CrmFinanceiroConfigs", (string)null);
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroCusto", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Categoria")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<bool>("ComprovanteSalvo")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("Data")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("DataPagamento")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Descricao")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("UsuarioId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Valor")
+                        .HasColumnType("numeric(14,2)");
+
+                    b.Property<DateOnly?>("Vencimento")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId", "Data");
+
+                    b.ToTable("CrmFinanceiroCustos", (string)null);
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroMeta", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Ano")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Mes")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("MetaAdesao")
+                        .HasColumnType("numeric(14,2)");
+
+                    b.Property<decimal>("MetaBonus")
+                        .HasColumnType("numeric(14,2)");
+
+                    b.Property<decimal>("MetaRecorrencia")
+                        .HasColumnType("numeric(14,2)");
+
+                    b.Property<int>("MetaVendas")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Observacoes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<Guid>("UsuarioId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId", "Ano", "Mes")
+                        .IsUnique();
+
+                    b.ToTable("CrmFinanceiroMetas", (string)null);
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroPadrao", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("CarenciaMeses")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DefinidoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Parametro")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<decimal?>("Valor")
+                        .HasColumnType("numeric(14,4)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Parametro")
+                        .IsUnique();
+
+                    b.ToTable("CrmFinanceiroPadroes", (string)null);
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroPerfil", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("InicioContrato")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("ModeloPj")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<int?>("Tipo")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Transporte")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("UsuarioId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId")
+                        .IsUnique();
+
+                    b.ToTable("CrmFinanceiroPerfis", (string)null);
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroPrazo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("AlertaConfirmadoPara")
+                        .HasColumnType("date");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("CarenciaMeses")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DefinidoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Parametro")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<Guid>("UsuarioId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId", "Parametro")
+                        .IsUnique();
+
+                    b.ToTable("CrmFinanceiroPrazos", (string)null);
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroValor", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DefinidoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Observacao")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int>("Parametro")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<Guid>("UsuarioId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Valor")
+                        .HasColumnType("numeric(14,4)");
+
+                    b.Property<DateOnly>("VigenteDesde")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId", "Parametro", "VigenteDesde")
+                        .IsUnique();
+
+                    b.ToTable("CrmFinanceiroValores", (string)null);
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroVenda", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("BonusRecebido")
+                        .HasColumnType("numeric(14,2)");
+
+                    b.Property<string>("Cliente")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("DataPrevistaAdesao")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("DataPrevistaBonus")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("DataVenda")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Observacoes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<Guid?>("OportunidadeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Premiacoes")
+                        .HasColumnType("numeric(14,2)");
+
+                    b.Property<string>("Produto")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("StatusAdesao")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("StatusBonus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<Guid>("UsuarioId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("ValorAdesao")
+                        .HasColumnType("numeric(14,2)");
+
+                    b.Property<decimal>("ValorBonus")
+                        .HasColumnType("numeric(14,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId", "DataVenda");
+
+                    b.HasIndex("UsuarioId", "OportunidadeId")
+                        .IsUnique()
+                        .HasFilter("\"OportunidadeId\" IS NOT NULL");
+
+                    b.ToTable("CrmFinanceiroVendas", (string)null);
+                });
+
             modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmGrupo", b =>
                 {
                     b.Property<Guid>("Id")
@@ -868,6 +1619,9 @@ namespace CssVision.Web.Data.Migrations
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset?>("EmailDescadastradoEm")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("EmailNormalizado")
                         .HasMaxLength(256)
@@ -1837,6 +2591,14 @@ namespace CssVision.Web.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AnexoNome")
+                        .HasMaxLength(260)
+                        .HasColumnType("character varying(260)");
+
+                    b.Property<string>("AnexoUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<DateTimeOffset?>("AtualizadoEm")
                         .HasColumnType("timestamp with time zone");
 
@@ -2293,8 +3055,7 @@ namespace CssVision.Web.Data.Migrations
                     b.HasOne("CssVision.Web.Domain.Crm.CrmLead", "Lead")
                         .WithMany("Atividades")
                         .HasForeignKey("LeadId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("CssVision.Web.Domain.Crm.CrmOpportunity", "Opportunity")
                         .WithMany("Atividades")
@@ -2346,6 +3107,116 @@ namespace CssVision.Web.Data.Migrations
                         .WithMany()
                         .HasForeignKey("UsuarioId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmCobrancaPagamento", b =>
+                {
+                    b.HasOne("CssVision.Web.Domain.Identity.ApplicationUser", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmCustoConsultor", b =>
+                {
+                    b.HasOne("CssVision.Web.Domain.Identity.ApplicationUser", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmDisparoEmailDestinatario", b =>
+                {
+                    b.HasOne("CssVision.Web.Domain.Crm.CrmDisparoEmail", "Disparo")
+                        .WithMany("Destinatarios")
+                        .HasForeignKey("DisparoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Disparo");
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroConfig", b =>
+                {
+                    b.HasOne("CssVision.Web.Domain.Identity.ApplicationUser", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroCusto", b =>
+                {
+                    b.HasOne("CssVision.Web.Domain.Identity.ApplicationUser", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroMeta", b =>
+                {
+                    b.HasOne("CssVision.Web.Domain.Identity.ApplicationUser", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroPerfil", b =>
+                {
+                    b.HasOne("CssVision.Web.Domain.Identity.ApplicationUser", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroPrazo", b =>
+                {
+                    b.HasOne("CssVision.Web.Domain.Identity.ApplicationUser", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroValor", b =>
+                {
+                    b.HasOne("CssVision.Web.Domain.Identity.ApplicationUser", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroVenda", b =>
+                {
+                    b.HasOne("CssVision.Web.Domain.Identity.ApplicationUser", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Usuario");
@@ -2673,6 +3544,11 @@ namespace CssVision.Web.Data.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmDisparoEmail", b =>
+                {
+                    b.Navigation("Destinatarios");
                 });
 
             modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmGrupo", b =>

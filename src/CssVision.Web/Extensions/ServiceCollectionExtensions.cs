@@ -7,6 +7,7 @@ using CssVision.Web.Services.Email;
 using CssVision.Web.Services.Marketing;
 using CssVision.Web.Services.CssOne;
 using CssVision.Web.Services.Notion;
+using CssVision.Web.Services.Security;
 using CssVision.Web.Services.Storage;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
@@ -56,7 +57,7 @@ public static class ServiceCollectionExtensions
 
         services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
             {
-                options.Password.RequiredLength = 8;
+                options.Password.RequiredLength = 10;
                 options.Password.RequireNonAlphanumeric = false;
                 options.User.RequireUniqueEmail = true;
                 options.SignIn.RequireConfirmedAccount = false;
@@ -113,6 +114,8 @@ public static class ServiceCollectionExtensions
             .AddPolicy(PolicyNames.AreaComercial, p => p.RequireRole(Roles.Comerciais))
             .AddPolicy(PolicyNames.GestaoComercial, p => p.RequireRole(Roles.GestaoComercial))
             .AddPolicy(PolicyNames.GestaoFinanceira, p => p.RequireRole(Roles.GestaoFinanceira))
+            .AddPolicy(PolicyNames.ContratoFinanceiro, p => p.RequireRole([.. Roles.Comerciais, Roles.Financeiro]))
+            .AddPolicy(PolicyNames.ComercialOuFinanceiro, p => p.RequireRole([.. Roles.Comerciais, Roles.Financeiro]))
             .AddPolicy(PolicyNames.VisaoTotalComercial, p => p.RequireRole(Roles.VisaoTotal))
             .AddPolicy(PolicyNames.AreaMarketing, p => p.RequireRole(Roles.AreaMarketing));
 
@@ -162,6 +165,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITvComercialService, TvComercialService>();
         services.AddSingleton<ITvNotionFonte, TvNotionFonte>();
         services.AddScoped<IGoalService, GoalService>();
+        services.AddScoped<IFinanceiroService, FinanceiroService>();
+        services.AddScoped<IFinanceiroContratoService, FinanceiroContratoService>();
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IManagementService, ManagementService>();
         services.AddScoped<IRelatorioComercialService, RelatorioComercialService>();
@@ -170,7 +175,16 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAnnouncementService, AnnouncementService>();
         services.AddScoped<ISuporteService, SuporteService>();
         services.AddScoped<IAvisosPagamentoService, AvisosPagamentoService>();
+        services.AddScoped<ISetorFinanceiroService, SetorFinanceiroService>();
+        services.AddScoped<ICustoVencimentoNotificador, CustoVencimentoNotificador>();
+        services.AddScoped<ILembreteCobrancaNotificador, LembreteCobrancaNotificador>();
+        services.AddHostedService<CustoVencimentoBackgroundService>();
         services.AddScoped<IDisparoEmailService, DisparoEmailService>();
+        services.AddSingleton<ISegredoProtetor, SegredoProtetor>();
+        services.AddSingleton<IDescadastroEmailTokens, DescadastroEmailTokens>();
+        services.AddScoped<DisparoEmailProcessador>();
+        services.AddHostedService<DisparoEmailBackgroundService>();
+        services.AddHostedService<SenhaLegadaVerificador>();
         services.AddScoped<IMarketingService, MarketingService>();
 
         return services;
@@ -179,6 +193,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddCrmEmailSender(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
+        services.Configure<SuporteOptions>(configuration.GetSection(SuporteOptions.SectionName));
         services.AddScoped<IEmailSender, SmtpEmailSender>();
 
         return services;

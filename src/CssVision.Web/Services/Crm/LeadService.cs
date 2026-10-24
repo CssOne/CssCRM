@@ -42,6 +42,9 @@ public sealed class LeadService(
     /// <summary>Etapa "Cotação" do quadro de leads — só entra com o valor da adesão preenchido.</summary>
     private const string EtapaLeadCotacao = "Cotação";
 
+    /// <summary>Etapa do pipeline em que o card entra sozinho quando o lead vai para "Cotação" (ver CrmSeeder.cs).</summary>
+    private const string EtapaPipelinePropostaEnviada = "Proposta enviada";
+
     /// <summary>Coluna das vendas de indicação — ver <see cref="TipoIndicacaoLead.IndicacaoLead"/>.</summary>
     private const string EtapaLeadVendaConcluidaIndicacao = "Venda concluída (Indicação)";
 
@@ -98,7 +101,8 @@ public sealed class LeadService(
                 l.ProximoContatoEm,
                 string.IsNullOrWhiteSpace(l.Telefone) && string.IsNullOrWhiteSpace(l.Telefone2),
                 l.Arquivado,
-                null
+                null,
+                l.Responsavel != null ? l.Responsavel.FotoUrl : null
             ))
             .ToListAsync(ct);
 
@@ -694,6 +698,54 @@ public sealed class LeadService(
         }
     }
 
+    /// <summary>
+    /// Lead que vai para "Cotação" entra no pipeline em "Proposta enviada": sem oportunidade aberta, cria uma com a adesão
+    /// informada como valor; com uma oportunidade aberta numa etapa anterior, avança ela para "Proposta enviada" (etapas
+    /// adiante, como Negociação, ficam como estão). Lead com venda ganha ou sem responsável não entra. As mudanças vão no
+    /// mesmo SaveChanges da troca de etapa do lead.
+    /// </summary>
+    private async Task GarantirPropostaEnviadaNoPipelineAsync(CrmLead lead, decimal valorAdesao, CancellationToken ct)
+    {
+        if (lead.ResponsavelId is not { } responsavelId) return;
+
+        var proposta = await db.CrmPipelineStages.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Ativa && s.Tipo == TipoEtapaPipeline.Aberta && s.Nome == EtapaPipelinePropostaEnviada, ct);
+        if (proposta is null) return;
+
+        var oportunidades = await db.CrmOpportunities
+            .Include(o => o.Etapa)
+            .Where(o => o.LeadId == lead.Id && !o.Arquivado)
+            .ToListAsync(ct);
+        if (oportunidades.Any(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho)) return;
+
+        var aberta = oportunidades
+            .Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Aberta)
+            .OrderByDescending(o => o.CriadoEm)
+            .FirstOrDefault();
+
+        if (aberta is null)
+        {
+            var titulo = $"Cotação — {lead.NomeOuRazaoSocial}";
+            var nova = new CrmOpportunity
+            {
+                LeadId = lead.Id,
+                Titulo = titulo.Length > 200 ? titulo[..200] : titulo,
+                ResponsavelId = responsavelId,
+                EtapaId = proposta.Id,
+                EtapaDesde = DateTimeOffset.UtcNow,
+                ValorEstimado = valorAdesao
+            };
+            db.CrmOpportunities.Add(nova);
+            db.CrmStageHistories.Add(new CrmStageHistory { OpportunityId = nova.Id, EtapaAnteriorId = null, EtapaNovaId = proposta.Id, UsuarioId = currentUser.UserId });
+        }
+        else if (aberta.Etapa.Ordem < proposta.Ordem)
+        {
+            db.CrmStageHistories.Add(new CrmStageHistory { OpportunityId = aberta.Id, EtapaAnteriorId = aberta.EtapaId, EtapaNovaId = proposta.Id, UsuarioId = currentUser.UserId });
+            aberta.EtapaId = proposta.Id;
+            aberta.EtapaDesde = DateTimeOffset.UtcNow;
+        }
+    }
+
     public async Task<LeadDetailDto> MudarEtapaAsync(Guid id, ChangeLeadStageRequest request, CancellationToken ct)
     {
         var lead = await CarregarComEscopoAsync(id, ct);
@@ -723,6 +775,7 @@ public sealed class LeadService(
                     throw new CrmBusinessException("Informe o valor da adesão para mover o lead para 'Cotação'.", "valor_adesao_obrigatorio");
                 }
                 lead.ValorAdesao = valorAdesao;
+                await GarantirPropostaEnviadaNoPipelineAsync(lead, valorAdesao!.Value, ct);
             }
 
             if (novaEtapa.Nome == EtapaLeadPerdido)
@@ -869,6 +922,27 @@ public sealed class LeadService(
         db.CrmNotes.Add(nota);
         await db.SaveChangesAsync(ct);
         return nota.Id;
+    }
+
+    private static readonly string[] CanaisDeContato = ["WhatsApp"];
+
+    public async Task RegistrarContatoAsync(Guid leadId, string canal, CancellationToken ct)
+    {
+        var nomeCanal = CanaisDeContato.FirstOrDefault(c => string.Equals(c, canal?.Trim(), StringComparison.OrdinalIgnoreCase))
+            ?? throw new CrmBusinessException("Canal de contato inválido.", "canal_invalido");
+        var lead = await CarregarComEscopoAsync(leadId, ct);
+
+        var agora = DateTimeOffset.UtcNow;
+        lead.UltimoContatoEm = agora;
+
+        // Vários cliques seguidos no mesmo botão viram uma nota só.
+        var texto = $"Contato iniciado pelo {nomeCanal}.";
+        var recente = agora.AddMinutes(-10);
+        if (!await db.CrmNotes.AnyAsync(n => n.LeadId == lead.Id && n.AutorId == currentUser.UserId && n.Texto == texto && n.CriadoEm > recente, ct))
+        {
+            db.CrmNotes.Add(new CrmNote { LeadId = lead.Id, AutorId = currentUser.UserId, Texto = texto });
+        }
+        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>

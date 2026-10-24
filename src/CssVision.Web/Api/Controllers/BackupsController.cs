@@ -7,8 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace CssVision.Web.Api.Controllers;
 
 /// <summary>
-/// Backups do banco. Só administradores: o arquivo é a base inteira (clientes, CPFs, usuários),
-/// por isso cada download fica registrado na auditoria.
+/// Backups do banco. Administrador e Supervisor comercial (que vê o mesmo que o Admin): o arquivo é a base inteira
+/// (clientes, CPFs, usuários), por isso o acesso é só desses dois papéis e cada download fica registrado na auditoria.
 /// </summary>
 [ApiController]
 [Route("api/admin/backups")]

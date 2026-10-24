@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { Card } from "../ui";
+import { NumeroAnimado } from "../../lib/useContagem";
 
 export function StatCard({
   titulo,
@@ -14,24 +15,27 @@ export function StatCard({
   tom?: "neutral" | "success" | "warning" | "danger" | "brand";
   subtitulo?: string;
 }) {
-  const tons: Record<string, string> = {
-    neutral: "bg-[var(--surface-hover)] text-[var(--fg-muted)]",
-    success: "bg-[var(--success-soft)] text-[var(--success)]",
-    warning: "bg-[var(--warning-soft)] text-[var(--warning)]",
-    danger: "bg-[var(--danger-soft)] text-[var(--danger)]",
-    brand: "bg-[var(--brand-soft)] text-[var(--brand)]",
+  const cores: Record<string, string> = {
+    neutral: "var(--fg-muted)",
+    success: "var(--success)",
+    warning: "var(--warning)",
+    danger: "var(--danger)",
+    brand: "var(--brand)",
   };
+  const cor = cores[tom];
 
   return (
-    <Card className="flex items-start gap-3 p-4">
-      <div className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${tons[tom]}`}>
-        <Icone className="size-5" aria-hidden />
-      </div>
-      <div className="min-w-0">
+    <Card className="group relative overflow-hidden !rounded-xl p-3 transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-md">
+      {/* Brilho suave da cor do indicador no canto */}
+      <span aria-hidden className="pointer-events-none absolute -right-6 -top-6 size-24 rounded-full opacity-60 blur-2xl" style={{ backgroundColor: `color-mix(in srgb, ${cor} 20%, transparent)` }} />
+      <div className="relative flex items-start justify-between gap-2">
         <p className="truncate text-xs font-medium text-[var(--fg-muted)]">{titulo}</p>
-        <p className="text-xl font-semibold text-[var(--fg)]">{valor}</p>
-        {subtitulo && <p className="truncate text-xs text-[var(--fg-muted)]">{subtitulo}</p>}
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: `color-mix(in srgb, ${cor} 15%, transparent)`, color: cor }}>
+          <Icone className="size-3.5" aria-hidden />
+        </span>
       </div>
+      <p className="relative mt-0.5 text-xl font-bold leading-tight tracking-tight text-[var(--fg)] [font-variant-numeric:tabular-nums]"><NumeroAnimado valor={valor} /></p>
+      {subtitulo && <p className="relative mt-0.5 truncate text-xs text-[var(--fg-muted)]">{subtitulo}</p>}
     </Card>
   );
 }

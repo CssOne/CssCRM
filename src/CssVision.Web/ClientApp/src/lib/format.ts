@@ -51,6 +51,19 @@ export function formatarTelefone(valor: string | null | undefined): string {
   return valor;
 }
 
+/**
+ * Link que abre a conversa no WhatsApp (wa.me) para um telefone brasileiro: DDD + número (10 ou 11 dígitos), com ou sem o 55, só celular.
+ * Retorna nulo quando o número não dá para chamar (vazio, sem DDD, estrangeiro).
+ */
+export function linkWhatsApp(telefone: string | null | undefined, mensagem?: string | null): string | null {
+  let digitos = (telefone ?? "").replace(/\D/g, "").replace(/^0+/, "");
+  if ((digitos.length === 12 || digitos.length === 13) && digitos.startsWith("55")) digitos = digitos.slice(2);
+  if (digitos.length !== 10 && digitos.length !== 11) return null;
+  // Fixo não tem WhatsApp: celular tem 9 depois do DDD (11 dígitos) ou, no formato antigo de 10 dígitos, começa em 6 a 9.
+  if (digitos.length === 11 ? digitos[2] !== "9" : !"6789".includes(digitos[2])) return null;
+  return `https://wa.me/55${digitos}${mensagem ? `?text=${encodeURIComponent(mensagem)}` : ""}`;
+}
+
 export function formatarDocumento(valor: string | null | undefined): string {
   if (!valor) return "-";
   const digitos = valor.replace(/\D/g, "");
@@ -61,6 +74,18 @@ export function formatarDocumento(valor: string | null | undefined): string {
     return `${digitos.slice(0, 2)}.${digitos.slice(2, 5)}.${digitos.slice(5, 8)}/${digitos.slice(8, 12)}-${digitos.slice(12)}`;
   }
   return valor;
+}
+
+/** Há quanto tempo algo aconteceu, curto: "agora", "35 min", "3 h", "2 dias". */
+export function tempoDecorrido(valor: string | null | undefined, agora: number = Date.now()): string {
+  if (!valor) return "-";
+  const minutos = Math.max(0, Math.floor((agora - new Date(valor).getTime()) / 60_000));
+  if (minutos < 1) return "agora";
+  if (minutos < 60) return `${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `${horas} h`;
+  const dias = Math.floor(horas / 24);
+  return dias === 1 ? "1 dia" : `${dias} dias`;
 }
 
 export function diasRelativos(valor: string | null | undefined): string {

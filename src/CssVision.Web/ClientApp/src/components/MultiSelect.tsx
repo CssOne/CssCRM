@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Check, ChevronDown, Search, X } from "lucide-react";
 import { paraBusca } from "../lib/busca";
 
 export interface OpcaoMultiSelect {
@@ -26,15 +27,25 @@ export function MultiSelect({
 }) {
   const [aberto, setAberto] = useState(false);
   const [busca, setBusca] = useState("");
+  const [posicao, setPosicao] = useState<{ left: number; width: number; top?: number; bottom?: number; maxHeight: number } | null>(null);
   const raizRef = useRef<HTMLDivElement>(null);
+  const painelRef = useRef<HTMLDivElement>(null);
   const buscaRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!aberto) return;
     // No celular/tablet, focar o campo ao abrir levanta o teclado e a lista some; lá o campo só recebe foco quando a pessoa toca nele.
     if (!window.matchMedia?.("(pointer: coarse)").matches) buscaRef.current?.focus();
+    const abertoEm = Date.now();
     const fecharFora = (e: Event) => {
-      if (!raizRef.current?.contains(e.target as Node)) setAberto(false);
+      const alvo = e.target as Node;
+      if (!raizRef.current?.contains(alvo) && !painelRef.current?.contains(alvo)) setAberto(false);
+    };
+    // A lista é fixa na tela (fora do painel de filtros, que corta e empilha por baixo): rolar a página ou redimensionar fecha.
+    const fecharRolagem = (e: Event) => {
+      if (Date.now() - abertoEm < 600) return;
+      if (e.target instanceof Node && painelRef.current?.contains(e.target)) return;
+      setAberto(false);
     };
     const fecharEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") setAberto(false);
@@ -42,7 +53,11 @@ export function MultiSelect({
     document.addEventListener("mousedown", fecharFora);
     document.addEventListener("touchstart", fecharFora, { passive: true });
     document.addEventListener("keydown", fecharEsc);
+    window.addEventListener("scroll", fecharRolagem, true);
+    window.addEventListener("resize", fecharRolagem);
     return () => {
+      window.removeEventListener("scroll", fecharRolagem, true);
+      window.removeEventListener("resize", fecharRolagem);
       document.removeEventListener("mousedown", fecharFora);
       document.removeEventListener("touchstart", fecharFora);
       document.removeEventListener("keydown", fecharEsc);
@@ -73,29 +88,58 @@ export function MultiSelect({
         aria-expanded={aberto}
         onClick={() => {
           setBusca("");
-          setAberto((a) => !a);
+          if (aberto) {
+            setAberto(false);
+            return;
+          }
+          const ret = raizRef.current?.getBoundingClientRect();
+          if (!ret) return;
+          const abaixo = window.innerHeight - ret.bottom - 8;
+          const acima = ret.top - 8;
+          const paraCima = abaixo < 240 && acima > abaixo;
+          setPosicao({
+            left: ret.left,
+            width: Math.max(ret.width, 200),
+            ...(paraCima ? { bottom: window.innerHeight - ret.top + 4 } : { top: ret.bottom + 4 }),
+            maxHeight: Math.min(320, Math.max(160, paraCima ? acima : abaixo)),
+          });
+          setAberto(true);
         }}
         className="focus-ring flex h-10 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-left text-sm text-[var(--fg)]"
         title={selecionadas.map((o) => o.rotulo).join(", ") || undefined}
       >
         <span className={`truncate ${selecionadas.length === 0 ? "text-[var(--fg-muted)]" : ""}`}>{resumo}</span>
-        <ChevronDown className="size-4 shrink-0 text-[var(--fg-muted)]" aria-hidden />
+        <ChevronDown className={`size-4 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${aberto ? "rotate-180 text-[var(--brand)]" : "text-[var(--fg-muted)]"}`} aria-hidden />
       </button>
-      {aberto && (
+      {aberto && posicao && createPortal(
         <div
+          ref={painelRef}
           role="listbox"
           aria-multiselectable
-          className="absolute left-0 z-30 mt-1 max-h-72 min-w-full overflow-y-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] p-1 shadow-lg"
+          style={{ position: "fixed", left: posicao.left, width: posicao.width, top: posicao.top, bottom: posicao.bottom, maxHeight: posicao.maxHeight }}
+          data-origem={posicao.bottom !== undefined ? "baixo" : "cima"}
+          className="lista-flutuante ui-surface z-[70] overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface-solid)] p-1 shadow-xl"
         >
-          <input
-            ref={buscaRef}
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Pesquisar…"
-            aria-label="Pesquisar nas opções"
-            autoComplete="off"
-            className="focus-ring mb-1 h-8 w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
-          />
+          <div className="sticky top-0 z-10 -mx-1 -mt-1 mb-1 bg-[var(--surface-solid)] p-1">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--fg-muted)]" aria-hidden />
+              <input
+                ref={buscaRef}
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Pesquisar…"
+                aria-label="Pesquisar nas opções"
+                autoComplete="off"
+                className="focus-ring h-8 w-full rounded-md border border-[var(--border)] bg-[var(--bg)] pl-7 pr-7 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+              />
+              {busca && (
+                <button type="button" aria-label="Limpar pesquisa" onClick={() => { setBusca(""); buscaRef.current?.focus(); }} className="focus-ring absolute right-1.5 top-1/2 flex size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]">
+                  <X className="size-3" />
+                </button>
+              )}
+            </div>
+            {termo && visiveis.length > 0 && <p className="px-1 pt-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">{visiveis.length} de {opcoes.length}</p>}
+          </div>
           {opcoes.length === 0 && <p className="px-2 py-1.5 text-sm text-[var(--fg-muted)]">Nenhuma opção</p>}
           {opcoes.length > 0 && visiveis.length === 0 && <p className="px-2 py-1.5 text-sm text-[var(--fg-muted)]">Nada encontrado</p>}
           {visiveis.map((o) => {
@@ -107,14 +151,14 @@ export function MultiSelect({
                 role="option"
                 aria-selected={marcada}
                 onClick={() => alternar(o.valor)}
-                className="flex w-full cursor-pointer items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm text-[var(--fg)] hover:bg-[var(--surface-hover)]"
+                className="flex w-full cursor-pointer items-center gap-2 whitespace-nowrap rounded-md px-2 py-1.5 text-left text-sm text-[var(--fg)] transition-colors duration-150 hover:bg-[var(--surface-hover)]"
               >
                 <span
                   className={`flex size-4 shrink-0 items-center justify-center rounded border ${
                     marcada ? "border-[var(--brand)] bg-[var(--brand)] text-white" : "border-[var(--border)]"
                   }`}
                 >
-                  {marcada && <Check className="size-3" aria-hidden />}
+                  {marcada && <Check className="opcao-marca size-3" aria-hidden />}
                 </span>
                 {o.rotulo}
               </button>
@@ -129,7 +173,8 @@ export function MultiSelect({
               Limpar seleção
             </button>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

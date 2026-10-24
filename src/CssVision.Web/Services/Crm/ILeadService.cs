@@ -22,6 +22,9 @@ public interface ILeadService
     /// <summary>Contagem e somas dos leads que batem com os filtros (rodapé da lista).</summary>
     Task<LeadTotaisDto> ObterTotaisAsync(LeadFilterRequest filtro, CancellationToken ct);
     Task<Guid> AdicionarNotaAsync(Guid leadId, string texto, CancellationToken ct);
+
+    /// <summary>Anota que o consultor iniciou um contato (hoje: pelo botão de WhatsApp): atualiza o "último contato" do lead e deixa uma nota na linha do tempo.</summary>
+    Task RegistrarContatoAsync(Guid leadId, string canal, CancellationToken ct);
     Task ExcluirAsync(Guid id, CancellationToken ct);
 
     /// <summary>Lixeira do quadro: leads excluídos por alguém no CRM (podem voltar para o quadro).</summary>

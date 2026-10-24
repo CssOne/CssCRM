@@ -50,7 +50,9 @@ public record OpportunityDto(
     string? ComprovanteVistoriaArquivoUrl,
     /// <summary>Preenchido só quando o Meta confirma (HTTP 2xx) o recebimento da conversão offline — null se nunca tentou ou se falhou.</summary>
     DateTimeOffset? ConversaoOfflineEnviadaEm,
-    DateOnly? DataPagamentoAdesaoPrevista);
+    DateOnly? DataPagamentoAdesaoPrevista,
+    /// <summary>Telefone do cliente (lead) — alimenta o atalho de WhatsApp da lista de propostas.</summary>
+    string? LeadTelefone = null);
 
 /// <summary>Venda com pagamento da adesão marcado para hoje (ou atrasado) e ainda sem comprovante.</summary>
 public record LembreteAdesaoDto(

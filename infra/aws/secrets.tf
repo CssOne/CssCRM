@@ -28,6 +28,7 @@ resource "aws_secretsmanager_secret_version" "app" {
     DISCORD_CLIENT_SECRET  = "" # segredo do OAuth2 do Discord (OAuth2 → Client Secret)
     DISCORD_GUILD_ID       = "" # id do servidor do Discord da empresa
     DISCORD_PUBLIC_KEY     = "" # chave pública da aplicação do Discord (General Information → Public Key); liga os comandos /vendas e /meta
+    CRM_CHAVE_SEGREDOS     = "" # chave (mín. 16 caracteres) que protege as senhas de e-mail dos consultores; gere com: openssl rand -base64 32
   })
 
   lifecycle {

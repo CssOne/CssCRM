@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Info, Loader2, X, XCircle } from "lucide-react";
+import { Search, AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Info, Loader2, X, XCircle } from "lucide-react";
 import {
   Children,
   createContext,
@@ -17,24 +17,33 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
+import { createPortal } from "react-dom";
 import { paraBusca } from "../lib/busca";
+import { useFotoDoUsuario } from "../lib/useFotosUsuarios";
 
 // --- Botões ---
 
-type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "dangerSoft";
 type ButtonSize = "sm" | "md";
 
+// Botões em pílula: o principal ganha degradê, brilho interno e sombra na própria cor (sobe um pouco no hover); o secundário é
+// um contorno claro que ganha a cor da marca; o fantasma só aparece no hover. Todos encolhem levemente ao clicar.
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: "bg-[var(--brand)] text-[var(--brand-fg)] hover:opacity-90 disabled:opacity-50",
+  primary:
+    "bg-gradient-to-b from-[color-mix(in_srgb,var(--brand)_88%,white)] to-[var(--brand)] text-[var(--brand-fg)] shadow-[inset_0_1px_0_rgb(255_255_255/0.22),0_1px_2px_rgb(0_0_0/0.14),0_6px_14px_-7px_var(--brand)] hover:-translate-y-px hover:shadow-[inset_0_1px_0_rgb(255_255_255/0.26),0_1px_2px_rgb(0_0_0/0.14),0_10px_20px_-8px_var(--brand)] disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none",
   secondary:
-    "bg-[var(--surface)] text-[var(--fg)] border border-[var(--border)] hover:bg-[var(--surface-hover)] disabled:opacity-50",
-  ghost: "text-[var(--fg)] hover:bg-[var(--surface-hover)] disabled:opacity-50",
-  danger: "bg-[var(--danger)] text-white hover:opacity-90 disabled:opacity-50",
+    "border border-[var(--border)] bg-[var(--surface)] text-[var(--fg)] shadow-[0_1px_2px_rgb(0_0_0/0.05)] hover:border-[color-mix(in_srgb,var(--brand)_45%,var(--border))] hover:bg-[var(--brand-soft)] hover:text-[var(--brand)] disabled:opacity-50 disabled:hover:border-[var(--border)] disabled:hover:bg-[var(--surface)] disabled:hover:text-[var(--fg)]",
+  ghost: "text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)] disabled:opacity-50 disabled:hover:bg-transparent",
+  danger:
+    "bg-gradient-to-b from-[color-mix(in_srgb,var(--danger)_88%,white)] to-[var(--danger)] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.22),0_1px_2px_rgb(0_0_0/0.14),0_6px_14px_-7px_var(--danger)] hover:-translate-y-px disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none",
+  /** Ação destrutiva que só abre uma confirmação (listas): fundo suave em vez do vermelho cheio. */
+  dangerSoft:
+    "border border-[color-mix(in_srgb,var(--danger)_25%,transparent)] bg-[var(--danger-soft)] text-[var(--danger)] hover:border-[var(--danger)] hover:bg-[var(--danger)] hover:text-white disabled:opacity-50",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "h-8 px-3 text-sm gap-1.5",
-  md: "h-10 px-4 text-sm gap-2",
+  sm: "h-8 px-3.5 text-[13px] gap-1.5",
+  md: "h-10 px-5 text-sm gap-2",
 };
 
 export const Button = forwardRef<
@@ -44,7 +53,7 @@ export const Button = forwardRef<
   <button
     ref={ref}
     disabled={disabled || loading}
-    className={`focus-ring inline-flex items-center justify-center rounded-lg font-medium transition-colors cursor-pointer disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+    className={`focus-ring inline-flex items-center justify-center whitespace-nowrap rounded-full font-semibold transition-all duration-200 active:scale-[0.97] cursor-pointer disabled:cursor-not-allowed disabled:active:scale-100 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
     {...props}
   >
     {loading && <Loader2 className="size-4 animate-spin" aria-hidden />}
@@ -62,7 +71,7 @@ export function IconButton({
     <button
       aria-label={label}
       title={label}
-      className={`focus-ring inline-flex size-9 items-center justify-center rounded-lg text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)] cursor-pointer ${className}`}
+      className={`focus-ring inline-flex size-9 items-center justify-center rounded-full text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)] cursor-pointer ${className}`}
       {...props}
     />
   );
@@ -70,8 +79,11 @@ export function IconButton({
 
 // --- Avatar (foto do usuário, com iniciais como fallback) ---
 
-export function Avatar({ nome, fotoUrl, className = "size-9 text-sm" }: { nome: string; fotoUrl?: string | null; className?: string }) {
+/** Círculo com a foto de perfil ou, sem foto, as iniciais. Com `usuarioId`, a foto é buscada pelo id quando a tela só tem o nome. */
+export function Avatar({ nome, fotoUrl, usuarioId, className = "size-9 text-sm" }: { nome: string; fotoUrl?: string | null; usuarioId?: string | null; className?: string }) {
   const [erroAoCarregar, setErroAoCarregar] = useState(false);
+  const fotoDoUsuario = useFotoDoUsuario(fotoUrl ? null : usuarioId);
+  fotoUrl = fotoUrl ?? fotoDoUsuario;
   const iniciais = nome
     .split(" ")
     .filter(Boolean)
@@ -92,9 +104,9 @@ export function Avatar({ nome, fotoUrl, className = "size-9 text-sm" }: { nome: 
 
 // --- Cartão ---
 
-export function Card({ className = "", children }: { className?: string; children: ReactNode }) {
+export function Card({ className = "", children, style }: { className?: string; children: ReactNode; style?: React.CSSProperties }) {
   return (
-    <div className={`rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm ${className}`}>{children}</div>
+    <div style={style} className={`card-anim ui-surface rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)] ${className}`}>{children}</div>
   );
 }
 
@@ -113,7 +125,7 @@ const badgeClasses: Record<BadgeVariant, string> = {
 
 export function Badge({ variant = "neutral", children }: { variant?: BadgeVariant; children: ReactNode }) {
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${badgeClasses[variant]}`}>
+    <span className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium ${badgeClasses[variant]}`}>
       {children}
     </span>
   );
@@ -135,7 +147,7 @@ export function FieldError({ children }: { children?: ReactNode }) {
 }
 
 const fieldBase =
-  "focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 h-10 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)] disabled:opacity-50";
+  "focus-ring w-full rounded-lg border border-[var(--border)] bg-[var(--field)] px-3 h-9 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)] disabled:opacity-50";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className = "", ...props }, ref) => (
   <input ref={ref} className={`${fieldBase} ${className}`} {...props} />
@@ -427,16 +439,18 @@ export function Select({
         className={`${fieldBase} flex cursor-pointer items-center justify-between gap-2 text-left ${className}`}
       >
         <span className={`truncate ${escolhida && escolhida.valor !== "" ? "" : "text-[var(--fg-muted)]"}`}>{escolhida?.rotulo || " "}</span>
-        <ChevronDown className="size-4 shrink-0 text-[var(--fg-muted)]" aria-hidden />
+        <ChevronDown className={`size-4 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${aberto ? "rotate-180 text-[var(--brand)]" : "text-[var(--fg-muted)]"}`} aria-hidden />
       </button>
-      {aberto && posicao && (
+      {aberto && posicao && createPortal(
         <div
           ref={painelRef}
           style={{ position: "fixed", left: posicao.left, width: posicao.width, top: posicao.top, bottom: posicao.bottom, maxHeight: posicao.maxHeight }}
-          className="z-[70] flex flex-col overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)] shadow-lg"
+          data-origem={posicao.bottom !== undefined ? "baixo" : "cima"}
+          className="lista-flutuante ui-surface z-[70] flex flex-col overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface-solid)] shadow-xl"
           onKeyDown={teclado}
         >
-          <div className="border-b border-[var(--border)] p-1.5">
+          <div className="relative border-b border-[var(--border)] p-1.5">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-3.5 -translate-y-1/2 text-[var(--fg-muted)]" aria-hidden />
             <input
               ref={buscaRef}
               value={busca}
@@ -448,10 +462,16 @@ export function Select({
               aria-label="Pesquisar nas opções"
               aria-controls={listaId}
               autoComplete="off"
-              className="focus-ring h-8 w-full rounded-md border border-[var(--border)] bg-[var(--bg)] px-2 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
+              className="focus-ring h-8 w-full rounded-md border border-[var(--border)] bg-[var(--field)] pl-7 pr-7 text-sm text-[var(--fg)] placeholder:text-[var(--fg-muted)]"
             />
+            {busca && (
+              <button type="button" aria-label="Limpar pesquisa" onClick={() => { setBusca(""); buscaRef.current?.focus(); }} className="focus-ring absolute right-3 top-1/2 flex size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]">
+                <X className="size-3" />
+              </button>
+            )}
           </div>
           <div id={listaId} role="listbox" className="overflow-y-auto p-1">
+            {termo && visiveis.length > 0 && <p className="px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">{visiveis.length} de {opcoes.length}</p>}
             {visiveis.length === 0 && <p className="px-2 py-1.5 text-sm text-[var(--fg-muted)]">Nada encontrado</p>}
             {visiveis.map((o, i) => (
               <button
@@ -462,16 +482,17 @@ export function Select({
                 disabled={o.desabilitada}
                 onClick={() => escolher(o)}
                 onMouseEnter={() => setDestaque(i)}
-                className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--fg)] disabled:cursor-not-allowed disabled:opacity-50 ${
+                className={`flex w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--fg)] transition-[background-color] duration-150 disabled:cursor-not-allowed disabled:opacity-50 ${
                   i === destaque ? "bg-[var(--surface-hover)]" : ""
                 }`}
               >
                 <span className="truncate">{o.rotulo || " "}</span>
-                {o.valor === atual && <Check className="size-4 shrink-0 text-[var(--brand)]" aria-hidden />}
+                {o.valor === atual && <Check className="opcao-marca size-4 shrink-0 text-[var(--brand)]" aria-hidden />}
               </button>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
@@ -543,6 +564,38 @@ function useFecharPeloFundo(onClose: () => void) {
 
 // --- Modal ---
 
+/**
+ * Mantém uma janela na tela por um instante depois de "fechar", para a animação de saída rodar. Devolve se ela ainda deve ser desenhada, se está saindo e
+ * o conteúdo mais recente de quando estava aberta (o pai costuma esvaziar o conteúdo ao fechar, e a janela não pode encolher no meio da saída).
+ */
+function useSaidaAnimada<T>(aberta: boolean, conteudo: T, duracaoMs = 190) {
+  const [visivel, setVisivel] = useState(aberta);
+  const [saindo, setSaindo] = useState(false);
+  const ultimo = useRef(conteudo);
+  if (aberta) ultimo.current = conteudo;
+
+  useEffect(() => {
+    if (aberta) {
+      setVisivel(true);
+      setSaindo(false);
+      return;
+    }
+    if (!visivel) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setVisivel(false);
+      return;
+    }
+    setSaindo(true);
+    const t = window.setTimeout(() => {
+      setVisivel(false);
+      setSaindo(false);
+    }, duracaoMs);
+    return () => window.clearTimeout(t);
+  }, [aberta, visivel, duracaoMs]);
+
+  return { visivel: aberta || visivel, saindo: !aberta && saindo, conteudo: aberta ? conteudo : ultimo.current };
+}
+
 export function Modal({
   open,
   onClose,
@@ -566,26 +619,28 @@ export function Modal({
   }, [open, onClose]);
 
   const fundo = useFecharPeloFundo(onClose);
-  if (!open) return null;
+  const saida = useSaidaAnimada(open, { title, children, footer });
+  if (!saida.visivel) return null;
+  const { title: tituloExibido, children: filhos, footer: rodape } = saida.conteudo;
 
   const widths = { sm: "max-w-sm", md: "max-w-lg", lg: "max-w-2xl", xl: "max-w-[min(96vw,80rem)]" };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" {...fundo}>
+    <div className={`modal-fundo ${saida.saindo ? "saindo" : ""} fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay)] p-4 backdrop-blur-[2px]`} role="presentation" {...fundo}>
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={title}
-        className={`max-h-[85vh] w-full ${widths[size]} overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-2xl flex flex-col`}
+        aria-label={tituloExibido}
+        className={`modal-painel ${saida.saindo ? "saindo" : ""} ui-surface max-h-[85vh] w-full ${widths[size]} overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-solid)] shadow-2xl flex flex-col`}
       >
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
-          <h2 className="text-base font-semibold text-[var(--fg)]">{title}</h2>
+          <h2 className="text-base font-semibold text-[var(--fg)]">{tituloExibido}</h2>
           <IconButton label="Fechar" onClick={onClose}>
             <X className="size-4" />
           </IconButton>
         </div>
-        <div className="overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <div className="flex justify-end gap-2 border-t border-[var(--border)] px-5 py-3">{footer}</div>}
+        <div className="overflow-y-auto px-5 py-4">{filhos}</div>
+        {rodape && <div className="flex justify-end gap-2 border-t border-[var(--border)] px-5 py-3">{rodape}</div>}
       </div>
     </div>
   );
@@ -602,23 +657,25 @@ export function Drawer({ open, onClose, title, children }: { open: boolean; onCl
   }, [open, onClose]);
 
   const fundo = useFecharPeloFundo(onClose);
-  if (!open) return null;
+  const saida = useSaidaAnimada(open, { title, children });
+  if (!saida.visivel) return null;
+  const { title: tituloExibido, children: filhos } = saida.conteudo;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" role="presentation" {...fundo}>
+    <div className={`modal-fundo ${saida.saindo ? "saindo" : ""} fixed inset-0 z-50 flex justify-end bg-[var(--overlay)]`} role="presentation" {...fundo}>
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={title}
-        className="flex h-full w-full max-w-md flex-col border-l border-[var(--border)] bg-[var(--surface)] shadow-2xl"
+        aria-label={tituloExibido}
+        className={`drawer-painel ${saida.saindo ? "saindo" : ""} ui-surface flex h-full w-full max-w-md flex-col border-l border-[var(--border)] bg-[var(--surface-solid)] shadow-2xl`}
       >
         <div className="flex items-center justify-between border-b border-[var(--border)] px-5 py-4">
-          <h2 className="text-base font-semibold text-[var(--fg)]">{title}</h2>
+          <h2 className="text-base font-semibold text-[var(--fg)]">{tituloExibido}</h2>
           <IconButton label="Fechar" onClick={onClose}>
             <X className="size-4" />
           </IconButton>
         </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto px-5 py-4">{filhos}</div>
       </div>
     </div>
   );
@@ -678,13 +735,33 @@ export function Pagination({
   totalPaginas: number;
   onChange: (pagina: number) => void;
 }) {
+  const raiz = useRef<HTMLDivElement>(null);
+  const anterior = useRef(pagina);
+
+  // Ao trocar de página, a lista logo acima (o elemento irmão anterior à paginação) desliza do lado para onde se foi: da direita ao avançar, da esquerda ao voltar.
+  // Usa a Web Animations API em vez de uma classe CSS: assim não briga com a animação de entrada que o próprio bloco possa ter (ao tirar a classe, aquela
+  // reiniciaria e a lista animaria duas vezes) e uma troca rápida cancela a anterior em vez de empilhar.
+  useEffect(() => {
+    const antes = anterior.current;
+    anterior.current = pagina;
+    if (antes === pagina) return;
+    const alvo = raiz.current?.previousElementSibling as (HTMLElement & { __animacaoDePagina?: Animation }) | null;
+    if (!alvo || typeof alvo.animate !== "function" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    alvo.__animacaoDePagina?.cancel();
+    const lado = pagina > antes ? 28 : -28;
+    alvo.__animacaoDePagina = alvo.animate(
+      [{ opacity: 0, transform: `translateX(${lado}px)` }, { opacity: 1, transform: "translateX(0)" }],
+      { duration: 420, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+    );
+  }, [pagina]);
+
   if (totalPaginas <= 1) return null;
   return (
-    <div className="flex items-center justify-center gap-2 py-2">
+    <div ref={raiz} className="flex items-center justify-center gap-2 py-2">
       <IconButton label="Página anterior" disabled={pagina <= 1} onClick={() => onChange(pagina - 1)}>
         <ChevronLeft className="size-4" />
       </IconButton>
-      <span className="text-sm text-[var(--fg-muted)]">
+      <span key={pagina} className="pagina-numero text-sm text-[var(--fg-muted)]">
         Página {pagina} de {totalPaginas}
       </span>
       <IconButton label="Próxima página" disabled={pagina >= totalPaginas} onClick={() => onChange(pagina + 1)}>
@@ -768,7 +845,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div
               key={toast.id}
               role="status"
-              className={`flex items-center gap-2 rounded-lg border px-4 py-3 text-sm shadow-lg ${toastClasses[toast.tipo]}`}
+              className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur ${toastClasses[toast.tipo]}`}
             >
               <Icon className="size-4 shrink-0" aria-hidden />
               {toast.mensagem}
