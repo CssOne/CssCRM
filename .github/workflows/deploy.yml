@@ -47,7 +47,9 @@ jobs:
           REPOSITORY: ${{ secrets.ECR_REPOSITORY_URL }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -f Dockerfile -t "$REPOSITORY:$IMAGE_TAG" -t "$REPOSITORY:latest" .
+          # Sem atestação (provenance/SBOM): o Docker mais novo do runner empurra um manifesto extra e confere cada um no ECR com um HEAD,
+          # que dá 403 quando o papel de deploy não tem ecr:BatchGetImage (foi o que quebrou os deploys de 23 e 24/10). Imagem simples, como antes.
+          docker build --provenance=false --sbom=false -f Dockerfile -t "$REPOSITORY:$IMAGE_TAG" -t "$REPOSITORY:latest" .
           docker push "$REPOSITORY:$IMAGE_TAG"
           docker push "$REPOSITORY:latest"
 

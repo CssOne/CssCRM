@@ -64,6 +64,9 @@ data "aws_iam_policy_document" "github_deploy" {
     actions = [
       "ecr:BatchCheckLayerAvailability",
       "ecr:PutImage",
+      # O docker push do runner confere se o manifesto já existe (HEAD) antes de enviar: sem estas duas dá 403 Forbidden.
+      "ecr:BatchGetImage",
+      "ecr:GetDownloadUrlForLayer",
       "ecr:InitiateLayerUpload",
       "ecr:UploadLayerPart",
       "ecr:CompleteLayerUpload",
