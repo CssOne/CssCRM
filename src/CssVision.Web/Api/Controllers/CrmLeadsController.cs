@@ -79,6 +79,14 @@ public class CrmLeadsController(ILeadService leadService, ILeadKanbanService kan
     public async Task<ActionResult> AdicionarNota(Guid id, AddNoteRequest request, CancellationToken ct) =>
         Ok(new { id = await leadService.AdicionarNotaAsync(id, request.Texto, ct) });
 
+    /// <summary>O consultor clicou para chamar o cliente (ex.: no WhatsApp): atualiza o último contato e deixa uma nota na linha do tempo.</summary>
+    [HttpPost("{id:guid}/contato")]
+    public async Task<IActionResult> RegistrarContato(Guid id, LeadContatoRequest request, CancellationToken ct)
+    {
+        await leadService.RegistrarContatoAsync(id, request.Canal, ct);
+        return NoContent();
+    }
+
     /// <summary>Administradores excluem qualquer lead; o consultor só os de indicação da própria carteira (a regra fica no serviço).</summary>
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = PolicyNames.AreaComercial)]

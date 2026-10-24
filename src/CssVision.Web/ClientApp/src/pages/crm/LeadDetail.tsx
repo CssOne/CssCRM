@@ -439,8 +439,8 @@ export function LeadDetailConteudo({ leadId: id, noPainel = false }: { leadId: s
         </div>
 
         <div className="mt-4 grid gap-2 border-t border-[var(--border)] pt-4 @md:grid-cols-2 @4xl:grid-cols-4">
-          <InfoItem icone={Phone} label="Telefone" valor={formatarTelefone(lead.telefone)} href={lead.telefone ? `tel:${lead.telefone}` : undefined} whatsapp={lead.telefone} nome={lead.nomeOuRazaoSocial} />
-          {lead.telefone2 && <InfoItem icone={Phone} label="Telefone 2" valor={formatarTelefone(lead.telefone2)} href={`tel:${lead.telefone2}`} whatsapp={lead.telefone2} nome={lead.nomeOuRazaoSocial} />}
+          <InfoItem icone={Phone} label="Telefone" valor={formatarTelefone(lead.telefone)} href={lead.telefone ? `tel:${lead.telefone}` : undefined} whatsapp={lead.telefone} nome={lead.nomeOuRazaoSocial} leadId={lead.id} etapa={lead.etapaNome} />
+          {lead.telefone2 && <InfoItem icone={Phone} label="Telefone 2" valor={formatarTelefone(lead.telefone2)} href={`tel:${lead.telefone2}`} whatsapp={lead.telefone2} nome={lead.nomeOuRazaoSocial} leadId={lead.id} etapa={lead.etapaNome} />}
           <InfoItem icone={Mail} label="E-mail" valor={lead.email || "-"} href={lead.email ? `mailto:${lead.email}` : undefined} />
           <InfoItem icone={MapPin} label="Local" valor={[lead.cidade, lead.estado].filter(Boolean).join(" - ") || "-"} />
           <div className="flex items-start gap-2">
@@ -834,7 +834,7 @@ function AnexosDaVenda({ op }: { op: LeadOpportunitySummary }) {
   );
 }
 
-function InfoItem({ icone: Icone, label, valor, href, whatsapp, nome }: { icone: typeof Phone; label: string; valor: string; href?: string; whatsapp?: string | null; nome?: string }) {
+function InfoItem({ icone: Icone, label, valor, href, whatsapp, nome, leadId, etapa }: { icone: typeof Phone; label: string; valor: string; href?: string; whatsapp?: string | null; nome?: string; leadId?: string; etapa?: string | null }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5 rounded-xl bg-[var(--surface-hover)] px-2.5 py-2">
       <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]">
@@ -850,7 +850,7 @@ function InfoItem({ icone: Icone, label, valor, href, whatsapp, nome }: { icone:
           <p className="truncate text-sm font-medium text-[var(--fg)]" title={valor}>{valor}</p>
         )}
       </div>
-      {whatsapp && <BotaoWhatsApp telefone={whatsapp} nome={nome ?? valor} className="size-8" />}
+      {whatsapp && <BotaoWhatsApp telefone={whatsapp} nome={nome ?? valor} leadId={leadId} etapa={etapa} className="size-8" />}
     </div>
   );
 }

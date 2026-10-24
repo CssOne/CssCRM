@@ -25,6 +25,16 @@ public class CrmSuporteController(ISuporteService suporte) : ControllerBase
     public async Task<ActionResult<SuporteChamadoDto>> Responder(Guid id, SuporteMensagemRequest request, CancellationToken ct) =>
         Ok(await suporte.ResponderAsync(id, request, ct));
 
+    /// <summary>Resposta com print ou PDF (até 5 MB); o texto é opcional quando há anexo.</summary>
+    [HttpPost("{id:guid}/anexo")]
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    public async Task<ActionResult<SuporteChamadoDto>> ResponderComAnexo(Guid id, IFormFile arquivo, [FromForm] string? texto, CancellationToken ct)
+    {
+        if (arquivo is null) return BadRequest(new Api.Contracts.Common.ApiError("Selecione um arquivo.", "anexo_invalido"));
+        await using var stream = arquivo.OpenReadStream();
+        return Ok(await suporte.ResponderComAnexoAsync(id, texto, arquivo.FileName, arquivo.Length, arquivo.ContentType, stream, ct));
+    }
+
     [HttpPut("{id:guid}/status")]
     public async Task<ActionResult<SuporteChamadoDto>> AlterarStatus(Guid id, SuporteStatusRequest request, CancellationToken ct) =>
         Ok(await suporte.AlterarStatusAsync(id, request.Status, ct));

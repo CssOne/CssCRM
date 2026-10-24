@@ -68,6 +68,31 @@ public class LoginSegurancaTests
     }
 
     [Fact]
+    public async Task Producao_SenhaInicialAntiga_ComDoisFatores_TambemNaoPassa_NaoPedeOCodigo()
+    {
+        var c = Controller(Environments.Production, "https://app.exemplo.com");
+        _sign.Setup(s => s.PasswordSignInAsync(_usuario, It.IsAny<string>(), It.IsAny<bool>(), true)).ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.TwoFactorRequired);
+
+        var resposta = await c.Login(new LoginRequest("ana@teste.com", SenhaSegura.SenhaInicialLegada), CancellationToken.None);
+
+        var barrado = Assert.IsType<UnauthorizedObjectResult>(resposta.Result);
+        Assert.Equal("senha_inicial", Assert.IsType<ApiError>(barrado.Value).Codigo);
+        _email.Verify(e => e.EnviarAsync("ana@teste.com", It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SenhaNormal_ComDoisFatores_SegueParaOCodigo()
+    {
+        var c = Controller(Environments.Production, "https://app.exemplo.com");
+        _sign.Setup(s => s.PasswordSignInAsync(_usuario, It.IsAny<string>(), It.IsAny<bool>(), true)).ReturnsAsync(Microsoft.AspNetCore.Identity.SignInResult.TwoFactorRequired);
+
+        var resposta = await c.Login(new LoginRequest("ana@teste.com", "Uma-Senha-Forte-1"), CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(resposta.Result);
+        Assert.True(Assert.IsType<LoginResultDto>(ok.Value).RequerDoisFatores);
+    }
+
+    [Fact]
     public async Task Desenvolvimento_ContasDeDemonstracaoContinuamEntrandoComASenhaInicial()
     {
         var c = Controller(Environments.Development, null);

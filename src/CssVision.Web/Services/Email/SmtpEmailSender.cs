@@ -47,31 +47,41 @@ public sealed class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpE
         await client.DisconnectAsync(true, ct);
     }
 
-    public async Task<int> EnviarLoteComContaAsync(ContaSmtp conta, string remetenteNome, IReadOnlyList<MensagemEmail> mensagens, CancellationToken ct)
+    public async Task<IReadOnlyList<bool>> EnviarLoteComContaAsync(ContaSmtp conta, string remetenteNome, IReadOnlyList<MensagemEmail> mensagens, CancellationToken ct)
     {
         using var client = await ConectarAsync(conta, ct);
-        var enviados = 0;
+        var resultado = new List<bool>(mensagens.Count);
         foreach (var m in mensagens)
         {
             ct.ThrowIfCancellationRequested();
-            if (!client.IsConnected) break;
+            if (!client.IsConnected)
+            {
+                resultado.Add(false);
+                continue;
+            }
             try
             {
                 var mime = new MimeMessage();
                 mime.From.Add(new MailboxAddress(remetenteNome, conta.Email));
                 mime.To.Add(new MailboxAddress(m.DestinatarioNome, m.DestinatarioEmail));
                 mime.Subject = m.Assunto;
+                if (!string.IsNullOrEmpty(m.UrlDescadastro))
+                {
+                    mime.Headers.Add("List-Unsubscribe", $"<{m.UrlDescadastro}>");
+                    mime.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
+                }
                 mime.Body = new BodyBuilder { HtmlBody = m.CorpoHtml }.ToMessageBody();
                 await client.SendAsync(mime, ct);
-                enviados++;
+                resultado.Add(true);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 logger.LogWarning(ex, "Falha ao enviar e-mail do consultor {Conta} para {Email}", conta.Email, m.DestinatarioEmail);
+                resultado.Add(false);
             }
         }
         if (client.IsConnected) await client.DisconnectAsync(true, ct);
-        return enviados;
+        return resultado;
     }
 
     private async Task<SmtpClient> ConectarAsync(ContaSmtp conta, CancellationToken ct)

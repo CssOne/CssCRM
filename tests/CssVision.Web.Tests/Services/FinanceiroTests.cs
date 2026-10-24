@@ -5,6 +5,7 @@ using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
 using CssVision.Web.Services.Crm;
 using CssVision.Web.Tests.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 using Moq;
 using Xunit;
 
@@ -225,6 +226,81 @@ public class FinanceiroServiceTests
         Assert.Equal(2, ano.Custos.Count);
         Assert.Contains(ano.Custos, c => c.Categoria == "Rastreador" && c.Valor == 100m && c.DoCard);
         Assert.Contains(ano.Custos, c => c.Categoria == "Indicação" && c.Valor == 50m && c.DoCard);
+    }
+
+    /// <summary>Venda fechada no quadro de leads com a adesão agendada para outro dia (sem comprovante): entra no controle como pendente, com a data combinada.</summary>
+    private static async Task<CrmOpportunity> VendaComAdesaoAgendadaAsync(TestDbContextFactory factory, ApplicationDbContext db, Guid vendedor, decimal valorPagoNoFechamento, decimal? adesaoDaCotacao, DateOnly prevista, bool comComprovante = false)
+    {
+        var op = await VendaGanhaAsync(factory, db, vendedor, valorPagoNoFechamento);
+        op.DataPagamentoAdesaoPrevista = prevista;
+        if (comComprovante) op.PagamentoAdesaoArquivoUrl = "/uploads/comprovante.pdf";
+        var lead = await db.CrmLeads.FirstAsync(l => l.Id == op.LeadId);
+        lead.ValorAdesao = adesaoDaCotacao;
+        await db.SaveChangesAsync();
+        return op;
+    }
+
+    [Fact]
+    public async Task Ano_AdesaoAgendadaParaOutroDia_VemPendenteComADataCombinada()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var eu = await factory.CriarUsuarioAsync(db, "Eu");
+        var prevista = HorarioBrasilia.Hoje.AddDays(7);
+        await VendaComAdesaoAgendadaAsync(factory, db, eu.Id, 1500m, 1500m, prevista);
+
+        var venda = Assert.Single((await Servico(db, eu.Id).ObterAnoAsync(null, CancellationToken.None)).Vendas);
+
+        Assert.Equal(1500m, venda.ValorAdesao);
+        Assert.Equal(FinanceiroStatus.Pendente, venda.StatusAdesao);
+        Assert.Equal(prevista, venda.DataPrevistaAdesao);
+    }
+
+    [Fact]
+    public async Task Ano_AdesaoAgendada_ComValorZeradoNoFechamento_UsaAAdesaoDaCotacao_ParaNaoSumirDePendencias()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var eu = await factory.CriarUsuarioAsync(db, "Eu");
+        await VendaComAdesaoAgendadaAsync(factory, db, eu.Id, 0m, 1800m, HorarioBrasilia.Hoje.AddDays(-3));
+
+        var venda = Assert.Single((await Servico(db, eu.Id).ObterAnoAsync(null, CancellationToken.None)).Vendas);
+
+        Assert.Equal(1800m, venda.ValorAdesao);
+        Assert.Equal(FinanceiroStatus.Pendente, venda.StatusAdesao);
+        Assert.Equal(HorarioBrasilia.Hoje.AddDays(-3), venda.DataPrevistaAdesao); // a tela marca "Em atraso" porque a data já passou
+    }
+
+    [Fact]
+    public async Task Ano_AdesaoPaga_NaoUsaAAdesaoDaCotacao_NemFicaPendente()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var eu = await factory.CriarUsuarioAsync(db, "Eu");
+        // Paga no dia, sem data combinada: vale o valor pago, mesmo que a cotação tivesse outro número.
+        await VendaComAdesaoAgendadaAsync(factory, db, eu.Id, 900m, 1800m, default);
+        var op = await db.CrmOpportunities.SingleAsync();
+        op.DataPagamentoAdesaoPrevista = null;
+        await db.SaveChangesAsync();
+
+        var venda = Assert.Single((await Servico(db, eu.Id).ObterAnoAsync(null, CancellationToken.None)).Vendas);
+
+        Assert.Equal(900m, venda.ValorAdesao);
+        Assert.Equal(FinanceiroStatus.Recebido, venda.StatusAdesao);
+    }
+
+    [Fact]
+    public async Task Ano_AdesaoAgendadaComComprovante_JaFoiPaga_ComValorZeradoNaoPuxaAdesaoDaCotacao()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var eu = await factory.CriarUsuarioAsync(db, "Eu");
+        await VendaComAdesaoAgendadaAsync(factory, db, eu.Id, 0m, 1800m, HorarioBrasilia.Hoje.AddDays(2), comComprovante: true);
+
+        var venda = Assert.Single((await Servico(db, eu.Id).ObterAnoAsync(null, CancellationToken.None)).Vendas);
+
+        Assert.Equal(0m, venda.ValorAdesao);
+        Assert.Equal(FinanceiroStatus.Recebido, venda.StatusAdesao);
     }
 
     [Fact]

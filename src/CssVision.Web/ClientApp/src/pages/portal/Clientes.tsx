@@ -147,7 +147,7 @@ export function PortalClientesPage() {
                       )}
                     </div>
                     <div className="flex shrink-0 gap-1.5">
-                      <BotaoWhatsApp telefone={cliente.telefone} nome={cliente.nomeOuRazaoSocial} className="size-6" />
+                      <BotaoWhatsApp telefone={cliente.telefone} nome={cliente.nomeOuRazaoSocial} leadId={cliente.id} etapa={cliente.etapaNome} className="size-6" />
                       {cliente.telefone && (
                         <a href={`tel:${cliente.telefone}`} title="Ligar" aria-label={`Ligar para ${cliente.nomeOuRazaoSocial}`} className={acao}>
                           <Phone className="size-3" />

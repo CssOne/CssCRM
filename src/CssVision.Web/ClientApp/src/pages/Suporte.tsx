@@ -1,7 +1,8 @@
-import { LifeBuoy, Plus, Search, Send } from "lucide-react";
+import { FileText, LifeBuoy, Paperclip, Plus, Search, Send, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { api, isAbortError } from "../lib/api";
+import { api, isAbortError, uploadFile } from "../lib/api";
+import { avisoDeEspera, ehImagem, erroDoAnexo } from "../lib/suporte";
 import { formatarDataHora } from "../lib/format";
 import { Badge, Button, Card, EmptyState, ErrorState, Input, Label, Modal, Skeleton, Textarea, useToast } from "../components/ui";
 
@@ -18,6 +19,9 @@ interface ChamadoResumo {
   criadoEm: string;
   ultimaMensagemEm: string;
   mensagens: number;
+  /** Em aberto e a última mensagem é do solicitante: espera resposta do suporte. */
+  aguardandoSuporte?: boolean;
+  aguardandoDesde?: string | null;
 }
 
 interface MensagemChamado {
@@ -26,6 +30,8 @@ interface MensagemChamado {
   doSuporte: boolean;
   texto: string;
   criadoEm: string;
+  anexoUrl?: string | null;
+  anexoNome?: string | null;
 }
 
 interface ChamadoDetalhe {
@@ -41,7 +47,7 @@ interface ListaSuporte {
 
 const CATEGORIAS = ["Dúvida", "Problema", "Sugestão", "Acesso", "Outro"];
 
-type FiltroChamados = "abertos" | "atendimento" | "resolvidos" | "todos";
+type FiltroChamados = "abertos" | "aguardando" | "atendimento" | "resolvidos" | "todos";
 
 const iniciais = (nome: string) =>
   nome
@@ -53,6 +59,18 @@ const iniciais = (nome: string) =>
 
 const STATUS_ROTULO: Record<StatusChamado, string> = { Aberto: "Aberto", EmAtendimento: "Em atendimento", Resolvido: "Resolvido" };
 const STATUS_COR: Record<StatusChamado, "warning" | "info" | "success"> = { Aberto: "warning", EmAtendimento: "info", Resolvido: "success" };
+
+/** "Sem resposta há 3 h": só aparece quando o chamado espera o suporte; vira vermelho depois de um dia. */
+function AvisoDeEspera({ aguardando, desde, atende }: { aguardando: boolean; desde?: string | null; atende: boolean }) {
+  const aviso = avisoDeEspera(aguardando, desde, atende);
+  if (!aviso) return null;
+  return (
+    <p className={`mt-1 text-xs font-medium ${aviso.urgente ? "text-[var(--danger)]" : "text-[var(--warning)]"}`}>
+      {aviso.urgente ? "⚠ " : ""}
+      {aviso.texto}
+    </p>
+  );
+}
 
 /**
  * Suporte: todo usuário abre chamados e acompanha as respostas. Quem atende (o administrador do sistema)
@@ -79,6 +97,8 @@ export function SuportePage() {
   const [detalhe, setDetalhe] = useState<ChamadoDetalhe | null>(null);
   const [resposta, setResposta] = useState("");
   const [respondendo, setRespondendo] = useState(false);
+  const [anexo, setAnexo] = useState<File | null>(null);
+  const inputAnexo = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -140,12 +160,28 @@ export function SuportePage() {
     }
   }, [assunto, categoria, mensagem, notificar, setParams]);
 
+  function escolherAnexo(arquivo: File | null | undefined) {
+    if (!arquivo) return;
+    const erro = erroDoAnexo(arquivo);
+    if (erro) {
+      notificar("error", erro);
+      return;
+    }
+    setAnexo(arquivo);
+  }
+
   async function responder() {
-    if (!detalhe || !resposta.trim()) return;
+    if (!detalhe || (!resposta.trim() && !anexo)) return;
     setRespondendo(true);
     try {
-      setDetalhe(await api.post<ChamadoDetalhe>(`/crm/suporte/${detalhe.resumo.id}/mensagens`, { texto: resposta.trim() }));
+      const id = detalhe.resumo.id;
+      setDetalhe(
+        anexo
+          ? await uploadFile<ChamadoDetalhe>(`/crm/suporte/${id}/anexo`, anexo, { texto: resposta.trim() })
+          : await api.post<ChamadoDetalhe>(`/crm/suporte/${id}/mensagens`, { texto: resposta.trim() })
+      );
       setResposta("");
+      setAnexo(null);
       setRecarregar((n) => n + 1);
     } catch (e) {
       notificar("error", e instanceof Error ? e.message : "Não foi possível enviar a mensagem.");
@@ -170,14 +206,18 @@ export function SuportePage() {
     abertos: todos.filter((c) => c.status !== "Resolvido").length,
     atendimento: todos.filter((c) => c.status === "EmAtendimento").length,
     resolvidos: todos.filter((c) => c.status === "Resolvido").length,
+    aguardando: todos.filter((c) => c.aguardandoSuporte).length,
     todos: todos.length,
   };
   const termo = busca.trim().toLowerCase();
   const chamados = todos
-    .filter((c) => (filtro === "todos" ? true : filtro === "abertos" ? c.status !== "Resolvido" : filtro === "atendimento" ? c.status === "EmAtendimento" : c.status === "Resolvido"))
+    .filter((c) =>
+      filtro === "todos" ? true : filtro === "abertos" ? c.status !== "Resolvido" : filtro === "aguardando" ? !!c.aguardandoSuporte : filtro === "atendimento" ? c.status === "EmAtendimento" : c.status === "Resolvido"
+    )
     .filter((c) => !termo || `${c.assunto} ${c.solicitanteNome} ${c.categoria}`.toLowerCase().includes(termo));
   const FILTROS: { valor: FiltroChamados; rotulo: string }[] = [
     { valor: "abertos", rotulo: "Em aberto" },
+    ...(atende ? [{ valor: "aguardando" as const, rotulo: "Sem resposta" }] : []),
     ...(atende ? [{ valor: "atendimento" as const, rotulo: "Em atendimento" }] : []),
     { valor: "resolvidos", rotulo: "Resolvidos" },
     { valor: "todos", rotulo: "Todos" },
@@ -256,6 +296,7 @@ export function SuportePage() {
                         <p className="min-w-0 truncate text-sm font-medium text-[var(--fg)]">{c.assunto}</p>
                         <Badge variant={STATUS_COR[c.status]}>{STATUS_ROTULO[c.status]}</Badge>
                       </div>
+                      <AvisoDeEspera aguardando={!!c.aguardandoSuporte} desde={c.aguardandoDesde} atende={atende} />
                       <p className="mt-1 text-xs text-[var(--fg-muted)]">
                         {atende ? `${c.solicitanteNome} · ` : ""}
                         {c.categoria} · {formatarDataHora(c.ultimaMensagemEm)} · {c.mensagens} mensagem(ns)
@@ -281,6 +322,7 @@ export function SuportePage() {
                       {detalhe.resumo.solicitanteEmail ? ` (${detalhe.resumo.solicitanteEmail})` : ""} · {detalhe.resumo.categoria} · aberto em{" "}
                       {formatarDataHora(detalhe.resumo.criadoEm)}
                     </p>
+                    <AvisoDeEspera aguardando={!!detalhe.resumo.aguardandoSuporte} desde={detalhe.resumo.aguardandoDesde} atende={atende} />
                   </div>
                   <Badge variant={STATUS_COR[detalhe.resumo.status]}>{STATUS_ROTULO[detalhe.resumo.status]}</Badge>
                 </div>
@@ -301,7 +343,17 @@ export function SuportePage() {
                           {m.autorNome}
                           {m.doSuporte && !m.autorNome.toLowerCase().includes("suporte") ? " · Suporte" : ""} · {formatarDataHora(m.criadoEm)}
                         </p>
-                        <p className="whitespace-pre-wrap break-words text-[var(--fg)]">{m.texto}</p>
+                        {m.texto && <p className="whitespace-pre-wrap break-words text-[var(--fg)]">{m.texto}</p>}
+                        {m.anexoUrl &&
+                          (ehImagem(m.anexoUrl) ? (
+                            <a href={m.anexoUrl} target="_blank" rel="noreferrer" className="focus-ring mt-2 block w-fit">
+                              <img src={m.anexoUrl} alt={m.anexoNome ?? "Anexo"} loading="lazy" className="max-h-48 rounded-lg border border-[var(--border)]" />
+                            </a>
+                          ) : (
+                            <a href={m.anexoUrl} target="_blank" rel="noreferrer" className="focus-ring mt-2 flex w-fit items-center gap-1.5 rounded-lg border border-[var(--border)] px-2 py-1 text-xs text-[var(--brand)] hover:underline">
+                              <FileText className="size-3.5" aria-hidden /> {m.anexoNome ?? "Anexo"}
+                            </a>
+                          ))}
                       </div>
                     </div>
                   ))}
@@ -315,6 +367,14 @@ export function SuportePage() {
                     placeholder={detalhe.resumo.status === "Resolvido" ? "Responder reabre o chamado…" : "Escreva sua mensagem…"}
                     value={resposta}
                     onChange={(e) => setResposta(e.target.value)}
+                    onPaste={(e) => {
+                      // Print colado (Ctrl+V) vira anexo.
+                      const imagem = Array.from(e.clipboardData.files).find((f) => f.type.startsWith("image/"));
+                      if (imagem) {
+                        e.preventDefault();
+                        escolherAnexo(imagem);
+                      }
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !respondendo) {
                         e.preventDefault();
@@ -322,7 +382,33 @@ export function SuportePage() {
                       }
                     }}
                   />
-                  <p className="text-xs text-[var(--fg-muted)]">Ctrl + Enter para enviar.</p>
+                  <input
+                    ref={inputAnexo}
+                    type="file"
+                    accept=".png,.jpg,.jpeg,.webp,.pdf"
+                    className="hidden"
+                    aria-label="Anexar arquivo"
+                    onChange={(e) => {
+                      escolherAnexo(e.target.files?.[0]);
+                      e.target.value = "";
+                    }}
+                  />
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-[var(--fg-muted)]">Ctrl + Enter para enviar · cole um print com Ctrl + V.</p>
+                    {anexo ? (
+                      <span className="flex max-w-full items-center gap-1.5 rounded-lg bg-[var(--surface-hover)] px-2 py-1 text-xs text-[var(--fg)]">
+                        <Paperclip className="size-3.5 shrink-0" aria-hidden />
+                        <span className="truncate">{anexo.name}</span>
+                        <button type="button" aria-label="Remover anexo" onClick={() => setAnexo(null)} className="focus-ring cursor-pointer rounded text-[var(--fg-muted)] hover:text-[var(--fg)]">
+                          <X className="size-3.5" />
+                        </button>
+                      </span>
+                    ) : (
+                      <Button variant="secondary" size="sm" type="button" onClick={() => inputAnexo.current?.click()}>
+                        <Paperclip className="size-4" /> Anexar print ou PDF
+                      </Button>
+                    )}
+                  </div>
                   <div className="flex flex-wrap justify-end gap-2">
                     {atende && detalhe.resumo.status === "Aberto" && (
                       <Button variant="secondary" onClick={() => mudarStatus("EmAtendimento")}>
@@ -338,7 +424,7 @@ export function SuportePage() {
                         Reabrir
                       </Button>
                     )}
-                    <Button onClick={responder} loading={respondendo} disabled={!resposta.trim()}>
+                    <Button onClick={responder} loading={respondendo} disabled={!resposta.trim() && !anexo}>
                       <Send className="size-4" /> Enviar
                     </Button>
                   </div>
