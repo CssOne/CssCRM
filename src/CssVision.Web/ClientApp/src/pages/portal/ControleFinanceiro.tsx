@@ -51,6 +51,9 @@ import { PortalStatCard } from "../../components/portal/PortalStatCard";
 import { useAuth } from "../../context/AuthContext";
 import { ContratoFinanceiro } from "../../components/portal/ContratoFinanceiro";
 import { CobrancasDoConsultor } from "../../components/portal/CobrancasDoConsultor";
+import { useSearchParams } from "react-router-dom";
+import { abaDoFinanceiro, filtroDeVendas } from "../../lib/atalhosRapidos";
+import { ignoraFiltroDeMes, rotuloDaDataDeAdesao, vendasVisiveis } from "../../lib/vendasPendentes";
 
 // ---------- Tipos (espelham PortalFinanceiroController) ----------
 
@@ -387,7 +390,10 @@ export function PortalControleFinanceiroPage() {
   const [ano, setAno] = useState(Number(hoje.slice(0, 4)));
   const [dados, setDados] = useState<FinanceiroAno | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [aba, setAba] = useState("resumo");
+  // Vindo de um atalho do Portal (?aba=vendas&filtro=pendente): já abre na aba e no atalho de situação pedidos.
+  const [paramsDaUrl] = useSearchParams();
+  const [aba, setAba] = useState(() => abaDoFinanceiro(paramsDaUrl));
+  const [filtroInicialDeVendas] = useState(() => filtroDeVendas(paramsDaUrl));
   // Ao entrar, já mostra o mês atual (quando o ano é o corrente); "Todos os meses" fica a um clique.
   const [mes, setMes] = useState(Number(hoje.slice(5, 7)));
   // Gestão (como no Relatório comercial): escolhe um consultor ou a equipe toda. Vazio = os próprios números.
@@ -491,7 +497,7 @@ export function PortalControleFinanceiroPage() {
           } catch (e) { falha(e); }
         }} />
       ) : aba === "vendas" ? (
-        <Vendas dados={dados} mes={mes} somenteLeitura={somenteLeitura} onAbrirConsultor={abrirConsultor} hoje={hoje} ano={ano} recarregar={() => carregar()} onErro={falha} />
+        <Vendas filtroInicial={filtroInicialDeVendas} dados={dados} mes={mes} somenteLeitura={somenteLeitura} onAbrirConsultor={abrirConsultor} hoje={hoje} ano={ano} recarregar={() => carregar()} onErro={falha} />
       ) : aba === "cobrancas" && dados.visao?.tipo !== "equipe" ? (
         <CobrancasDoConsultor consultorId={dados.visao?.consultorId ?? sessao?.id ?? ""} onMudou={() => carregar()} />
       ) : aba === "contrato" && dados.visao?.tipo !== "equipe" ? (
@@ -1109,7 +1115,7 @@ function FiltroSelect({ rotulo, valor, onChange, opcoes }: { rotulo: string; val
 
 // ---------- Vendas ----------
 
-function Vendas({ dados, mes, somenteLeitura, onAbrirConsultor, hoje, ano, recarregar, onErro }: { dados: FinanceiroAno; mes: number; somenteLeitura: boolean; onAbrirConsultor: (id: string) => void; hoje: string; ano: number; recarregar: () => void; onErro: (e: unknown) => void }) {
+function Vendas({ filtroInicial = "", dados, mes, somenteLeitura, onAbrirConsultor, hoje, ano, recarregar, onErro }: { filtroInicial?: string; dados: FinanceiroAno; mes: number; somenteLeitura: boolean; onAbrirConsultor: (id: string) => void; hoje: string; ano: number; recarregar: () => void; onErro: (e: unknown) => void }) {
   const mostrarConsultor = dados.visao?.tipo !== undefined && dados.visao.tipo !== "propria";
   const opcoesConsultor = opcoesDeConsultor(dados.vendas);
   const [edicao, setEdicao] = useState<Venda | null>(null);
@@ -1117,25 +1123,31 @@ function Vendas({ dados, mes, somenteLeitura, onAbrirConsultor, hoje, ano, recar
   const [salvando, setSalvando] = useState(false);
 
   const [busca, setBusca] = useState("");
-  const [chip, setChip] = useState("");
+  const [chip, setChip] = useState(filtroInicial);
   const [fProduto, setFProduto] = useState("");
   const [fConsultor, setFConsultor] = useState("");
   const [ordem, setOrdem] = useState("recentes");
   const limpar = () => { setBusca(""); setChip(""); setFProduto(""); setFConsultor(""); };
 
-  // Tudo menos o atalho de situação: serve de base para as contagens dos atalhos.
-  const base = dados.vendas.filter((v) => (!mes || mesDe(v.dataVenda) === mes) && (contem(v.cliente, busca) || contem(v.observacoes, busca) || contem(v.consultor, busca)) && (!fProduto || v.produto === fProduto) && (!fConsultor || v.consultorId === fConsultor));
   const situacaoDe = (v: Venda) => calcVenda(v, hoje);
   const confere = (v: Venda, f: string) => {
     if (!f) return true;
     const c = situacaoDe(v);
     return f === "pendente" ? c.pendente > 0 : f === "atrasada" ? c.diasAtraso > 0 : c.pendente === 0;
   };
+  // "Com pendência" e "Em atraso" valem para o ano todo (uma venda fechada em outro mês, com a adesão agendada para depois, continua pendente); os demais atalhos seguem o mês.
+  const visiveis = vendasVisiveis(dados.vendas, {
+    mes,
+    filtro: chip,
+    noMes: (v) => mesDe(v.dataVenda) === mes,
+    passaOutros: (v) => (contem(v.cliente, busca) || contem(v.observacoes, busca) || contem(v.consultor, busca)) && (!fProduto || v.produto === fProduto) && (!fConsultor || v.consultorId === fConsultor),
+    confere,
+  });
   const chips: ChipFiltro[] = [
-    { valor: "", rotulo: "Todas", contagem: base.length },
-    { valor: "pendente", rotulo: "Com pendência", contagem: base.filter((v) => confere(v, "pendente")).length, cor: "var(--warning)" },
-    { valor: "atrasada", rotulo: "Em atraso", contagem: base.filter((v) => confere(v, "atrasada")).length, cor: "var(--danger)" },
-    { valor: "recebida", rotulo: "Tudo recebido", contagem: base.filter((v) => confere(v, "recebida")).length, cor: "var(--success)" },
+    { valor: "", rotulo: "Todas", contagem: visiveis.contagem("") },
+    { valor: "pendente", rotulo: "Com pendência", contagem: visiveis.contagem("pendente"), cor: "var(--warning)" },
+    { valor: "atrasada", rotulo: "Em atraso", contagem: visiveis.contagem("atrasada"), cor: "var(--danger)" },
+    { valor: "recebida", rotulo: "Tudo recebido", contagem: visiveis.contagem("recebida"), cor: "var(--success)" },
   ];
   const ordenacoes: Record<string, (a: Venda, b: Venda) => number> = {
     recentes: (a, b) => b.dataVenda.localeCompare(a.dataVenda),
@@ -1144,7 +1156,7 @@ function Vendas({ dados, mes, somenteLeitura, onAbrirConsultor, hoje, ano, recar
     pendente: (a, b) => situacaoDe(b).pendente - situacaoDe(a).pendente,
     cliente: (a, b) => a.cliente.localeCompare(b.cliente, "pt-BR"),
   };
-  const lista = base.filter((v) => confere(v, chip)).sort(ordenacoes[ordem]);
+  const lista = [...visiveis.lista].sort(ordenacoes[ordem]);
   const tags: TagFiltro[] = [
     ...(busca.trim() ? [{ rotulo: `“${busca.trim()}”`, onRemover: () => setBusca("") }] : []),
     ...(fProduto ? [{ rotulo: fProduto, onRemover: () => setFProduto("") }] : []),
@@ -1185,7 +1197,10 @@ function Vendas({ dados, mes, somenteLeitura, onAbrirConsultor, hoje, ano, recar
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-[var(--fg-muted)]">{lista.length} venda(s) no período</p>
+        <p className="text-sm text-[var(--fg-muted)]">
+          {lista.length} venda(s) {ignoraFiltroDeMes(chip) ? "do ano" : "no período"}
+          {visiveis.fezCortePorMes && " — inclui vendas fechadas em outros meses que ainda estão pendentes"}
+        </p>
       </div>
 
       <BarraFiltros
@@ -1251,6 +1266,10 @@ function Vendas({ dados, mes, somenteLeitura, onAbrirConsultor, hoje, ano, recar
                     <button type="button" className="cursor-pointer disabled:cursor-default" title={somenteLeitura ? undefined : "Clique para marcar como recebido / pendente"} disabled={somenteLeitura} onClick={() => alternar(v, "statusAdesao")}>
                       <BadgeSituacao s={c.sa} />
                     </button>
+                    {(() => {
+                      const data = rotuloDaDataDeAdesao(c.sa, v.dataPrevistaAdesao);
+                      return data && <span className={`block whitespace-nowrap text-[11px] ${data.atrasada ? "font-medium text-[var(--danger)]" : "text-[var(--fg-muted)]"}`}>{data.texto}</span>;
+                    })()}
                   </td>
                   <td className="px-3 py-2">
                     {formatarMoeda(v.valorBonus)}

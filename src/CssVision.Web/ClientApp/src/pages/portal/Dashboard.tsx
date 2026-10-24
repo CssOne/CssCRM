@@ -3,15 +3,10 @@ import {
   CalendarClock,
   Coins,
   FileText,
-  FolderOpen,
-  GraduationCap,
-  Headset,
   Medal,
   ShoppingCart,
   Target,
   Trophy,
-  UserPlus,
-  Users,
   Wallet,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -23,6 +18,7 @@ import { TipoAnuncio, TipoAtividade, type Activity, type Announcement, type Dash
 import { useAuth } from "../../context/AuthContext";
 import { Avatar, Badge, Card, ErrorState, Modal, Skeleton } from "../../components/ui";
 import { PortalStatCard } from "../../components/portal/PortalStatCard";
+import { AtalhosRapidos } from "../../components/portal/AtalhosRapidos";
 import { DesempenhoChart } from "../../components/portal/DesempenhoChart";
 import { tipoLabel } from "../../components/crm/ActivityForm";
 import { FiltroRegionalDoPainel, useRegionalDoPainel } from "../../components/crm/FiltroRegionalDoPainel";
@@ -300,30 +296,7 @@ export function PortalDashboardPage() {
           </Link>
         </Card>
 
-        <Card className="p-5">
-          <h2 className="mb-3 text-sm font-semibold text-[var(--fg)]">Atalhos rápidos</h2>
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { icone: UserPlus, rotulo: "Novo cliente", rota: "/app/crm/leads" },
-              { icone: FileText, rotulo: "Nova proposta", rota: "/app/crm/pipeline" },
-              { icone: Users, rotulo: "Meus clientes", rota: "/app/portal/clientes" },
-              { icone: FolderOpen, rotulo: "Materiais", rota: "/app/portal/materiais" },
-              { icone: GraduationCap, rotulo: "Treinamentos", rota: "/app/portal/treinamentos" },
-              { icone: Headset, rotulo: "Fale com suporte", rota: "/app/portal/suporte" },
-            ].map((atalho) => (
-              <Link
-                key={atalho.rotulo}
-                to={atalho.rota}
-                className="focus-ring flex flex-col items-center gap-2 rounded-xl border border-[var(--border)] p-3 text-center hover:bg-[var(--surface-hover)]"
-              >
-                <div className="flex size-9 items-center justify-center rounded-full bg-[var(--brand-soft)] text-[var(--brand)]">
-                  <atalho.icone className="size-4" />
-                </div>
-                <span className="text-xs font-medium text-[var(--fg)]">{atalho.rotulo}</span>
-              </Link>
-            ))}
-          </div>
-        </Card>
+        <AtalhosRapidos />
       </div>
 
       <Modal open={rankingAberto} onClose={() => setRankingAberto(false)} title="Ranking de consultores" size="lg">
