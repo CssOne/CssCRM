@@ -23,6 +23,7 @@ import {
 import { ContratoFinanceiro } from "../../components/portal/ContratoFinanceiro";
 import { PAPEL_LABEL, UserForm, paraAtualizarRequest, paraCriarRequest, paraFormValues, type UserFormValues } from "../../components/crm/UserForm";
 import { BarraDeFiltros, CampoDeFiltro } from "../../components/Filtros";
+import { EmailDoSistemaCard } from "../../components/crm/EmailDoSistemaCard";
 
 function MembroAvatar({ nome, fotoUrl }: { nome: string; fotoUrl?: string | null }) {
   const [erroAoCarregar, setErroAoCarregar] = useState(false);
@@ -87,7 +88,8 @@ export function UsersPage() {
   const ehSupervisor = !podeGerenciarTudo && temPapel("SupervisorComercial");
   const { notificar } = useToast();
 
-  const [aba, setAba] = useState("usuarios");
+  // /app/crm/usuarios?aba=email abre direto o e-mail do sistema (link do aviso para administradores).
+  const [aba, setAba] = useState(() => (podeGerenciarTudo && new URLSearchParams(window.location.search).get("aba") === "email" ? "email" : "usuarios"));
 
   return (
     <div className="space-y-4">
@@ -104,6 +106,7 @@ export function UsersPage() {
         tabs={[
           { chave: "usuarios", rotulo: "Usuários" },
           podeGerenciarTudo || ehSupervisor ? { chave: "regionais", rotulo: "Regionais" } : { chave: "grupos", rotulo: "Grupos" },
+          ...(podeGerenciarTudo ? [{ chave: "email", rotulo: "E-mail do sistema" }] : []),
         ]}
         ativa={aba}
         onChange={setAba}
@@ -112,6 +115,7 @@ export function UsersPage() {
       {aba === "usuarios" && <UsuariosTab podeGerenciarTudo={podeGerenciarTudo} ehSupervisor={ehSupervisor} notificar={notificar} />}
       {aba === "grupos" && !podeGerenciarTudo && !ehSupervisor && <GruposDeRegional regionalId={null} notificar={notificar} />}
       {aba === "regionais" && (podeGerenciarTudo || ehSupervisor) && <RegionaisTab notificar={notificar} />}
+      {aba === "email" && podeGerenciarTudo && <EmailDoSistemaCard />}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import type { LeadKanbanCard } from "../../lib/types";
 import { TIPO_INDICACAO_LEAD } from "../../lib/opcoesLead";
 import { Avatar } from "../ui";
 import { BotaoWhatsApp } from "./BotaoWhatsApp";
+import { CronometroEspera } from "./CronometroEspera";
 
 /** Cores das etiquetas do cartão: cada uma mistura a cor com o texto do tema, então vale nos temas claro, escuro e translúcido. */
 const COR_ETIQUETA = {
@@ -52,7 +53,7 @@ function BotaoAcao({ titulo, perigo, onClick, children }: { titulo: string; peri
         e.stopPropagation();
         onClick();
       }}
-      className={`focus-ring cursor-pointer rounded-md p-1 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] ${
+      className={`focus-ring cursor-pointer rounded-md p-1 [@media(pointer:coarse)]:p-2.5 text-[var(--fg-muted)] hover:bg-[var(--surface-hover)] ${
         perigo ? "hover:text-[var(--danger)]" : "hover:text-[var(--fg)]"
       }`}
     >
@@ -74,6 +75,7 @@ export function CartaoLead({
   podeVerOrigem,
   mostrarAdesao = false,
   mostrarDataVenda = false,
+  mostrarEspera = false,
   onAbrir,
   onMover,
   onTrocarResponsavel,
@@ -92,6 +94,8 @@ export function CartaoLead({
   mostrarAdesao?: boolean;
   /** Colunas "Venda concluída" (Leads e Indicação): mostra a data em que a venda foi fechada. */
   mostrarDataVenda?: boolean;
+  /** Coluna "Sem etapa": mostra o cronômetro de espera dos leads do tráfego pago. */
+  mostrarEspera?: boolean;
   onAbrir: () => void;
   onMover: () => void;
   onTrocarResponsavel: () => void;
@@ -266,6 +270,9 @@ export function CartaoLead({
           {formatarDataHora(cartao.criadoEm)}
         </span>
       </div>
+
+      {/* Tráfego pago parado em "Sem etapa": cronômetro e linha que esfria com o tempo. */}
+      {mostrarEspera && cartao.trafegoPago && cartao.esperandoDesde && !cartao.arquivado && <CronometroEspera desde={cartao.esperandoDesde} />}
     </article>
   );
 }

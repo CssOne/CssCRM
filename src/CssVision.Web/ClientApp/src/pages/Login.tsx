@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, ArrowRight, Eye, EyeOff, KeyRound, Lock, Mail, MailCheck, ShieldCheck } from "lucide-react";
 import { ApiRequestError, api, isUnauthorized } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -142,6 +142,8 @@ export function mensagemDeErroDoLogin(e: unknown): string {
 export function LoginPage() {
   const { sessao, login, loginDoisFatores } = useAuth();
   const navigate = useNavigate();
+  // /login?esqueci=1&email=... abre direto a redefinição de senha (usado pela página do link vencido).
+  const [params] = useSearchParams();
   const [email, setEmail] = useState(lerUltimoEmail);
   const [senha, setSenha] = useState("");
   const [capsLigado, setCapsLigado] = useState(false);
@@ -157,8 +159,8 @@ export function LoginPage() {
   const [codigo2fa, setCodigo2fa] = useState("");
   const [usarCodigoRecuperacao, setUsarCodigoRecuperacao] = useState(false);
 
-  const [mostrarEsqueciSenha, setMostrarEsqueciSenha] = useState(false);
-  const [emailRecuperacao, setEmailRecuperacao] = useState("");
+  const [mostrarEsqueciSenha, setMostrarEsqueciSenha] = useState(params.get("esqueci") === "1");
+  const [emailRecuperacao, setEmailRecuperacao] = useState(params.get("esqueci") === "1" ? (params.get("email") ?? "") : "");
   const [emailRecuperacaoEnviado, setEmailRecuperacaoEnviado] = useState(false);
 
   // Já com o cursor no campo certo (com e-mail lembrado, direto na senha). No celular não: o teclado abriria sozinho e cobriria a tela.
@@ -265,8 +267,12 @@ export function LoginPage() {
     try {
       await api.post("/account/forgot-password", { email: emailRecuperacao.trim() });
       setEmailRecuperacaoEnviado(true);
-    } catch {
-      setErro("Não foi possível enviar o e-mail agora. Tente novamente em instantes.");
+    } catch (e) {
+      setErro(
+        e instanceof ApiRequestError && e.status === 429
+          ? "Muitos pedidos de redefinição por aqui em pouco tempo. Aguarde alguns minutos e tente de novo."
+          : "Não foi possível enviar o e-mail agora. Tente novamente em instantes."
+      );
     } finally {
       setEnviando(false);
     }
@@ -308,11 +314,18 @@ export function LoginPage() {
                   </div>
                   <p className="text-sm text-[var(--fg-muted)]">
                     Se houver uma conta com o e-mail <strong>{emailRecuperacao}</strong>, enviamos um link para você escolher uma nova
-                    senha. Confira também a caixa de spam.
+                    senha. Confira também a caixa de spam. O link vale por tempo limitado.
                   </p>
                   <Button type="button" variant="secondary" className="mt-6 w-full" onClick={voltarDoEsqueciSenha}>
                     Voltar para o login
                   </Button>
+                  <button
+                    type="button"
+                    onClick={() => setEmailRecuperacaoEnviado(false)}
+                    className="focus-ring mt-3 w-full cursor-pointer text-center text-sm font-medium text-[var(--fg-muted)] hover:text-[var(--fg)]"
+                  >
+                    Não recebeu? Corrigir o e-mail ou pedir de novo
+                  </button>
                 </>
               ) : (
                 <>

@@ -8,7 +8,9 @@ export function StatCard({
   icone: Icone,
   tom = "neutral",
   subtitulo,
+  clicavel,
 }: {
+  clicavel?: React.HTMLAttributes<HTMLDivElement>;
   titulo: string;
   valor: string;
   icone: LucideIcon;
@@ -25,7 +27,7 @@ export function StatCard({
   const cor = cores[tom];
 
   return (
-    <Card className="group relative overflow-hidden !rounded-xl p-3 transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-md">
+    <Card {...clicavel} className="group relative overflow-hidden !rounded-xl p-3 transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-md">
       {/* Brilho suave da cor do indicador no canto */}
       <span aria-hidden className="pointer-events-none absolute -right-6 -top-6 size-24 rounded-full opacity-60 blur-2xl" style={{ backgroundColor: `color-mix(in srgb, ${cor} 20%, transparent)` }} />
       <div className="relative flex items-start justify-between gap-2">

@@ -134,6 +134,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILeadAssignmentService, LeadAssignmentService>();
         services.AddScoped<AlertaDistribuicaoService>();
         services.AddHostedService<DistribuicaoLeadsBackgroundService>();
+        services.AddScoped<EsperaTrafegoService>();
+        services.AddHostedService<EsperaTrafegoBackgroundService>();
         // Backup do banco: diário automático + tela de Backups (ver BackupService).
         services.AddScoped<Services.Backup.IDumpBanco, Services.Backup.PgDumpBanco>();
         services.AddScoped<Services.Backup.IBackupService, Services.Backup.BackupService>();
@@ -194,6 +196,7 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
         services.Configure<SuporteOptions>(configuration.GetSection(SuporteOptions.SectionName));
+        services.AddScoped<IEmailDoSistemaService, EmailDoSistemaService>();
         services.AddScoped<IEmailSender, SmtpEmailSender>();
 
         return services;

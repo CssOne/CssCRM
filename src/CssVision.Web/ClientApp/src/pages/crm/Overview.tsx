@@ -1,6 +1,6 @@
 import { AlertTriangle, CalendarClock, Handshake, PhoneMissed, Target, TrendingUp, UserPlus, Wallet } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
@@ -17,6 +17,22 @@ import { MesInput } from "../../components/PeriodoInput";
 
 export function OverviewPage() {
   const { temPapel } = useAuth();
+  const navegar = useNavigate();
+  // Card inteiro clicável: leva para a tela do assunto. Links, botões, linhas da tabela e as fatias do gráfico de origem mantêm o clique deles.
+  const ir = (destino: string): React.HTMLAttributes<HTMLDivElement> => ({
+    role: "link",
+    tabIndex: 0,
+    onClick: (e) => {
+      if ((e.target as HTMLElement).closest("a, button, input, select, tr, .apexcharts-pie-area")) return;
+      navegar(destino);
+    },
+    onKeyDown: (e) => {
+      if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        navegar(destino);
+      }
+    },
+  });
   // Consultor comercial: no "Resumo por mês" o valor ganho é a adesão, que é o que consta para ele em tempo real.
   const ehConsultor = temPapel("Comercial") && !temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
   const [dados, setDados] = useState<Dashboard | null>(null);
@@ -73,9 +89,16 @@ export function OverviewPage() {
   const leadsParadosTotal = dados.leadsParadosTotal ?? leadsParados.length;
   const [anoMes, numMes] = mes.split("-");
   const rotuloMes = `${numMes}/${anoMes}`;
+  // Só no mês corrente: onde a meta deveria estar hoje, proporcional aos dias passados.
+  const ritmo = (() => {
+    if (mes !== mesAtualIso().slice(0, 7)) return null;
+    const diasNoMes = new Date(Number(anoMes), Number(numMes), 0).getDate();
+    const esperado = (new Date().getDate() / diasNoMes) * 100;
+    return { esperado, noRitmo: meta.percentualAtingido >= esperado };
+  })();
 
   return (
-    <div className="space-y-4">
+    <div className="visao-3d space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-[var(--fg)]">Visão geral</h1>
@@ -91,48 +114,135 @@ export function OverviewPage() {
       </div>
       <PagamentosEmAberto />
 
-      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
-        <StatCard titulo="Novos leads" valor={(indicadores.novosLeadsTrafegoSemEtapa ?? 0).toLocaleString("pt-BR")} subtitulo={`do tráfego pago em Sem etapa — ${rotuloMes}`} icone={UserPlus} tom="brand" />
-        <StatCard titulo="Leads sem contato" valor={indicadores.leadsSemContato.toLocaleString("pt-BR")} subtitulo="do mês, ainda em Sem etapa" icone={PhoneMissed} tom="warning" />
-        <StatCard titulo="Atividades atrasadas" valor={String(indicadores.atividadesAtrasadas)} icone={AlertTriangle} tom="danger" />
-        <StatCard titulo="Oportunidades abertas" valor={String(indicadores.oportunidadesAbertas)} icone={Handshake} tom="brand" />
-        <StatCard titulo="Valor em pipeline" valor={formatarMoeda(indicadores.valorPipeline)} icone={Wallet} />
-        <StatCard titulo="Taxa de conversão" valor={formatarPercentual(indicadores.taxaConversao)} subtitulo="vendas ÷ leads do mês" icone={TrendingUp} tom="success" />
-        <StatCard titulo="Ticket médio" valor={formatarMoeda(indicadores.ticketMedio)} icone={Wallet} />
-        <StatCard
-          titulo="Vendas ganhas (mês)"
-          valor={formatarMoeda(indicadores.vendasGanhasValor)}
-          subtitulo={`${indicadores.vendasGanhasQuantidade} negócio(s)`}
-          icone={Handshake}
-          tom="success"
-        />
-      </div>
-
-      <Card className="!rounded-2xl p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-8 items-center justify-center rounded-xl bg-[var(--brand-soft)] text-[var(--brand)]">
-              <Target className="size-4" aria-hidden />
-            </span>
-            <div>
-              <h2 className="text-sm font-bold text-[var(--fg)]">Meta comercial do mês</h2>
-              <p className="text-xs text-[var(--fg-muted)]">
-                {meta.realizadoQuantidade} de {meta.metaQuantidade} vendas
-              </p>
+      <div className="grid gap-3 lg:grid-cols-3">
+        <Card {...ir("/app/crm/goals")} className="!rounded-2xl p-4 lg:col-span-2">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <span className="flex size-9 items-center justify-center rounded-xl bg-[var(--surface-hover)] text-[var(--fg-muted)]">
+                <Target className="size-5" aria-hidden />
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-[var(--fg)]">Meta comercial do mês</h2>
+                <p className="text-xs text-[var(--fg-muted)]">
+                  {meta.realizadoQuantidade} de {meta.metaQuantidade} vendas
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {ritmo && (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--fg-muted)]">
+                  <span aria-hidden className={`size-2 rounded-full ${ritmo.noRitmo ? "bg-[var(--success)]" : "bg-[var(--warning)]"}`} />
+                  {ritmo.noRitmo ? "No ritmo" : "Abaixo do ritmo"} · esperado {Math.round(ritmo.esperado)}%
+                </span>
+              )}
+              <span className="text-4xl font-bold tracking-tight text-[var(--fg)] [font-variant-numeric:tabular-nums]">{formatarPercentual(meta.percentualAtingido)}</span>
             </div>
           </div>
-          <span className="text-2xl font-bold tracking-tight text-[var(--brand)] [font-variant-numeric:tabular-nums]">{formatarPercentual(meta.percentualAtingido)}</span>
-        </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-hover)]">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-[var(--brand)] to-[color-mix(in_srgb,var(--brand)_55%,#A6C3E0)] shadow-[0_0_12px_var(--brand)] transition-all duration-700"
-            style={{ width: `${Math.min(100, meta.percentualAtingido)}%` }}
-          />
-        </div>
-      </Card>
+          <div className="relative h-3 w-full overflow-hidden rounded-full bg-[var(--surface-hover)]">
+            <div
+              className="h-full rounded-full bg-[var(--brand)] transition-all duration-700"
+              style={{ width: `${Math.min(100, meta.percentualAtingido)}%` }}
+            />
+            {ritmo && <span aria-hidden className="absolute top-0 h-full w-0.5 bg-[var(--fg)] opacity-60" style={{ left: `${Math.min(100, ritmo.esperado)}%` }} />}
+          </div>
+          <p className="mt-2 text-xs text-[var(--fg-muted)]">
+            Vendas ganhas: <strong className="text-[var(--fg)]">{formatarMoeda(indicadores.vendasGanhasValor)}</strong> em {indicadores.vendasGanhasQuantidade} negócio(s)
+            {ritmo ? " · a marca vertical indica onde a meta deveria estar hoje." : "."}
+          </p>
+        </Card>
+
+        <Card {...ir("/app/crm/leads/kanban")} className="!rounded-2xl p-4">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--fg)]">
+            <span className="flex size-7 items-center justify-center rounded-lg bg-[var(--surface-hover)] text-[var(--fg-muted)]"><AlertTriangle className="size-3.5" /></span> Precisa de você
+          </h2>
+          <ul className="space-y-2 text-sm">
+            <li className="flex items-center justify-between rounded-xl bg-[var(--surface-hover)] px-3 py-2">
+              <span className="text-[var(--fg-muted)]">Atividades atrasadas</span>
+              <span className={`font-bold [font-variant-numeric:tabular-nums] ${indicadores.atividadesAtrasadas > 0 ? "text-[var(--danger)]" : "text-[var(--fg)]"}`}>{indicadores.atividadesAtrasadas}</span>
+            </li>
+            <li className="flex items-center justify-between rounded-xl bg-[var(--surface-hover)] px-3 py-2">
+              <span className="text-[var(--fg-muted)]">Leads sem contato</span>
+              <span className={`font-bold [font-variant-numeric:tabular-nums] ${indicadores.leadsSemContato > 0 ? "text-[var(--warning)]" : "text-[var(--fg)]"}`}>{indicadores.leadsSemContato.toLocaleString("pt-BR")}</span>
+            </li>
+            <li className="flex items-center justify-between rounded-xl bg-[var(--surface-hover)] px-3 py-2">
+              <span className="text-[var(--fg-muted)]">Leads parados</span>
+              <span className={`font-bold [font-variant-numeric:tabular-nums] ${leadsParadosTotal > 0 ? "text-[var(--warning)]" : "text-[var(--fg)]"}`}>{leadsParadosTotal.toLocaleString("pt-BR")}</span>
+            </li>
+          </ul>
+        </Card>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <Card {...ir("/app/crm/agenda")} className="!rounded-2xl p-4">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--fg)]">
+            <span className="flex size-7 items-center justify-center rounded-lg bg-[var(--surface-hover)] text-[var(--fg-muted)]"><CalendarClock className="size-3.5" /></span> Atividades de hoje
+          </h2>
+          {atividadesDoDia.length === 0 ? (
+            <p className="text-sm text-[var(--fg-muted)]">Nenhuma atividade prevista para hoje.</p>
+          ) : (
+            <ul className="space-y-2">
+              {atividadesDoDia.map((a) => (
+                <li key={a.id}>
+                  <Link
+                    to={`/app/crm/leads/${a.leadId}`}
+                    className="focus-ring flex items-center justify-between gap-2 rounded-xl bg-[var(--surface-hover)] px-3 py-2 text-sm transition hover:bg-[var(--brand-soft)]"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-[var(--fg)]">{a.assunto}</p>
+                      <p className="truncate text-xs text-[var(--fg-muted)]">{a.leadNome}</p>
+                    </div>
+                    <Badge variant={a.atrasada ? "danger" : "neutral"}>{formatarDataHora(a.dataHoraPrevista)}</Badge>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <Card {...ir("/app/crm/leads/kanban")} className="!rounded-2xl p-4">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--fg)]">
+            <span className="flex size-7 items-center justify-center rounded-lg bg-[var(--surface-hover)] text-[var(--fg-muted)]"><PhoneMissed className="size-3.5" /></span> Leads parados{leadsParadosTotal > 0 ? ` (${leadsParadosTotal.toLocaleString("pt-BR")})` : ""}
+          </h2>
+          <p className="mb-2 text-xs text-[var(--fg-muted)]">
+            Leads do tráfego pago (não os do Notion) dos últimos 60 dias, em coluna aberta e com consultor ativo, sem contato nem movimento há mais de 5 dias.
+          </p>
+          {leadsParados.length === 0 ? (
+            <p className="text-sm text-[var(--fg-muted)]">Nenhum lead parado no momento.</p>
+          ) : (
+            <ul className="space-y-2">
+              {leadsParados.map((l) => (
+                <li key={l.leadId}>
+                  <Link
+                    to={`/app/crm/leads/${l.leadId}`}
+                    className="focus-ring flex items-center justify-between gap-2 rounded-xl bg-[var(--surface-hover)] px-3 py-2 text-sm transition hover:bg-[var(--brand-soft)]"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-[var(--fg)]">{l.leadNome}</p>
+                      <p className="truncate text-xs text-[var(--fg-muted)]">{l.responsavelNome ?? "Sem responsável"}</p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <Badge variant="neutral">{l.etapaNome ?? "Sem etapa"}</Badge>
+                      <span className="text-xs font-medium text-[var(--warning)]">{l.diasSemContato} dia(s)</span>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 lg:grid-cols-6">
+        <StatCard titulo="Novos leads" valor={(indicadores.novosLeadsTrafegoSemEtapa ?? 0).toLocaleString("pt-BR")} subtitulo="tráfego pago em Sem etapa" icone={UserPlus} clicavel={ir("/app/crm/leads/kanban")} />
+        <StatCard titulo="Oportunidades abertas" valor={String(indicadores.oportunidadesAbertas)} icone={Handshake} clicavel={ir("/app/crm/pipeline")} />
+        <StatCard titulo="Valor em pipeline" valor={formatarMoeda(indicadores.valorPipeline)} icone={Wallet} clicavel={ir("/app/crm/pipeline")} />
+        <StatCard titulo="Taxa de conversão" valor={formatarPercentual(indicadores.taxaConversao)} subtitulo="vendas ÷ leads do mês" icone={TrendingUp} clicavel={ir("/app/crm/relatorio-comercial")} />
+        <StatCard titulo="Ticket médio" valor={formatarMoeda(indicadores.ticketMedio)} icone={Wallet} clicavel={ir("/app/crm/relatorio-comercial")} />
+        <StatCard titulo="Vendas ganhas" valor={String(indicadores.vendasGanhasQuantidade)} subtitulo={formatarMoeda(indicadores.vendasGanhasValor)} icone={Handshake} clicavel={ir("/app/crm/relatorio-comercial")} />
+      </div>
 
       <div className="grid gap-3 lg:grid-cols-3">
-        <Card className="!rounded-2xl p-4 lg:col-span-2">
+        <Card {...ir("/app/crm/leads/kanban")} className="!rounded-2xl p-4 lg:col-span-2">
           <h2 className="text-sm font-bold text-[var(--fg)]">Funil por etapa — resumo do quadro de leads</h2>
           <p className="mb-2 text-xs text-[var(--fg-muted)]">Leads que chegaram em {rotuloMes}, na coluna em que estão hoje no quadro.</p>
           <BarrasHorizontaisChart
@@ -141,19 +251,19 @@ export function OverviewPage() {
             coresPorBarra={funilLeads.map((e, i) => e.cor ?? ["#2563eb", "#0ea5e9", "#8b5cf6", "#22c55e", "#f59e0b", "#f97316", "#ef4444", "#64748b"][i % 8])}
           />
         </Card>
-        <Card className="!rounded-2xl p-4">
+        <Card {...ir("/app/crm/relatorio-comercial")} className="!rounded-2xl p-4">
           <h2 className="mb-3 text-sm font-bold text-[var(--fg)]">Origem das vendas</h2>
           <OrigemChart dados={origemVendas} onSelecionar={setOrigemAberta} />
         </Card>
       </div>
 
-      <Card className="!rounded-2xl p-4">
+      <Card {...ir("/app/crm/relatorio-comercial")} className="!rounded-2xl p-4">
         <h2 className="text-sm font-bold text-[var(--fg)]">Evolução de vendas (6 meses)</h2>
         <p className="mb-3 text-xs text-[var(--fg-muted)]">Rendimento de cada mês: valor ganho (total das vendas) e adesão recebida, pela data da venda.</p>
         <EvolucaoChart dados={evolucaoVendas} />
       </Card>
 
-      <Card className="overflow-x-auto !rounded-2xl p-4">
+      <Card {...ir("/app/crm/relatorio-comercial")} className="overflow-x-auto !rounded-2xl p-4">
         <h2 className="text-sm font-bold text-[var(--fg)]">Resumo por mês</h2>
         <p className="mb-3 text-xs text-[var(--fg-muted)]">Últimos 12 meses. Clique em um mês para ver o painel dele.</p>
         <table className="w-full min-w-[640px] text-sm">
@@ -191,66 +301,6 @@ export function OverviewPage() {
           </tbody>
         </table>
       </Card>
-
-      <div className="grid gap-3 lg:grid-cols-2">
-        <Card className="!rounded-2xl p-4">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--fg)]">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]"><CalendarClock className="size-3.5" /></span> Atividades de hoje
-          </h2>
-          {atividadesDoDia.length === 0 ? (
-            <p className="text-sm text-[var(--fg-muted)]">Nenhuma atividade prevista para hoje.</p>
-          ) : (
-            <ul className="space-y-2">
-              {atividadesDoDia.map((a) => (
-                <li key={a.id}>
-                  <Link
-                    to={`/app/crm/leads/${a.leadId}`}
-                    className="focus-ring flex items-center justify-between gap-2 rounded-xl bg-[var(--surface-hover)] px-3 py-2 text-sm transition hover:bg-[var(--brand-soft)]"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-[var(--fg)]">{a.assunto}</p>
-                      <p className="truncate text-xs text-[var(--fg-muted)]">{a.leadNome}</p>
-                    </div>
-                    <Badge variant={a.atrasada ? "danger" : "neutral"}>{formatarDataHora(a.dataHoraPrevista)}</Badge>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-
-        <Card className="!rounded-2xl p-4">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--fg)]">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-[var(--warning-soft)] text-[var(--warning)]"><PhoneMissed className="size-3.5" /></span> Leads parados{leadsParadosTotal > 0 ? ` (${leadsParadosTotal.toLocaleString("pt-BR")})` : ""}
-          </h2>
-          <p className="mb-2 text-xs text-[var(--fg-muted)]">
-            Leads do tráfego pago (não os do Notion) dos últimos 60 dias, em coluna aberta e com consultor ativo, sem contato nem movimento há mais de 5 dias.
-          </p>
-          {leadsParados.length === 0 ? (
-            <p className="text-sm text-[var(--fg-muted)]">Nenhum lead parado no momento. 🎉</p>
-          ) : (
-            <ul className="space-y-2">
-              {leadsParados.map((l) => (
-                <li key={l.leadId}>
-                  <Link
-                    to={`/app/crm/leads/${l.leadId}`}
-                    className="focus-ring flex items-center justify-between gap-2 rounded-xl bg-[var(--surface-hover)] px-3 py-2 text-sm transition hover:bg-[var(--brand-soft)]"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-[var(--fg)]">{l.leadNome}</p>
-                      <p className="truncate text-xs text-[var(--fg-muted)]">{l.responsavelNome ?? "Sem responsável"}</p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <Badge variant="info">{l.etapaNome ?? "Sem etapa"}</Badge>
-                      <Badge variant="warning">{l.diasSemContato} dia(s)</Badge>
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
 
       <DetalheDoCardModal
         aberto={origemAberta !== null}

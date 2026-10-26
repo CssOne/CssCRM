@@ -40,18 +40,27 @@ export function EvolucaoChart({ dados }: { dados: EvolucaoVendas[] }) {
   const { tema } = useTheme();
   const modoEscuro = tema === "dark";
 
+  const base = baseOptions(modoEscuro);
+  const compacto = new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 });
+  const cores = modoEscuro ? ["#6aa3e8", "#8b95a5"] : ["#07428b", "#8a94a3"];
+
   const options: ApexOptions = {
-    ...baseOptions(modoEscuro),
-    chart: { ...baseOptions(modoEscuro).chart, type: "area" },
+    ...base,
+    colors: cores,
+    chart: { ...base.chart, type: "area", zoom: { enabled: false }, animations: { enabled: true, speed: 600 } },
     dataLabels: { enabled: false },
-    stroke: { curve: "smooth", width: 2 },
-    fill: { type: "gradient", gradient: { opacityFrom: 0.35, opacityTo: 0 } },
-    xaxis: { categories: dados.map((d) => d.periodo) },
-    yaxis: { labels: { formatter: (v) => formatarMoeda(v) } },
-    legend: { position: "top" },
+    stroke: { curve: "smooth", width: [3, 2], dashArray: [0, 5], lineCap: "round" },
+    fill: { type: "gradient", gradient: { shade: modoEscuro ? "dark" : "light", opacityFrom: [0.28, 0], opacityTo: [0.02, 0], stops: [0, 95] } },
+    markers: { size: 0, hover: { size: 6, sizeOffset: 2 }, strokeWidth: 2, strokeColors: modoEscuro ? "#1c1c1e" : "#ffffff" },
+    grid: { borderColor: modoEscuro ? "#2a2f3a" : "#e8eaee", strokeDashArray: 4, xaxis: { lines: { show: false } }, padding: { left: 8, right: 12 } },
+    xaxis: { categories: dados.map((d) => d.periodo), axisBorder: { show: false }, axisTicks: { show: false }, crosshairs: { stroke: { color: cores[0], dashArray: 3, width: 1 } } },
+    yaxis: { min: 0, tickAmount: 4, labels: { formatter: (v) => (v === 0 ? "R$ 0" : `R$ ${compacto.format(v)}`) } },
+    legend: { position: "top", horizontalAlign: "left", markers: { size: 6, shape: "circle" }, itemMargin: { horizontal: 12 } },
     tooltip: {
-      ...baseOptions(modoEscuro).tooltip,
-      y: { formatter: (v, opts) => `${formatarMoeda(v)} · ${dados[(opts as { dataPointIndex?: number } | undefined)?.dataPointIndex ?? -1]?.quantidade ?? 0} venda(s)` },
+      ...base.tooltip,
+      shared: true,
+      intersect: false,
+      y: { formatter: (v, opts) => `${formatarMoeda(v)}${opts?.seriesIndex === 0 ? ` · ${dados[(opts as { dataPointIndex?: number }).dataPointIndex ?? -1]?.quantidade ?? 0} venda(s)` : ""}` },
     },
   };
 

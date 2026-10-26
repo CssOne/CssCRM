@@ -5,14 +5,15 @@ using MimeKit;
 
 namespace CssVision.Web.Services.Email;
 
-public sealed class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpEmailSender> logger) : IEmailSender
+public sealed class SmtpEmailSender(IEmailDoSistemaService emailDoSistema, ILogger<SmtpEmailSender> logger) : IEmailSender
 {
     public async Task<bool> EnviarAsync(string destinatarioEmail, string destinatarioNome, string assunto, string corpoHtml, CancellationToken ct)
     {
-        var smtp = options.Value;
-        if (string.IsNullOrWhiteSpace(smtp.Host))
+        // A configuração do painel (Administração → E-mail do sistema) vale antes da do servidor (Smtp__*).
+        var smtp = await emailDoSistema.ResolverAsync(ct);
+        if (string.IsNullOrWhiteSpace(smtp.Host) || string.IsNullOrWhiteSpace(smtp.FromEmail))
         {
-            logger.LogWarning("Envio de e-mail ignorado: SMTP não configurado (seção Smtp do appsettings vazia). Destinatário: {Email}", destinatarioEmail);
+            logger.LogError("E-mail NÃO enviado: o e-mail do sistema não está configurado (nem no painel de administração, nem em Smtp__Host/Smtp__FromEmail). Destinatário: {Email}", destinatarioEmail);
             return false;
         }
 
@@ -25,7 +26,8 @@ public sealed class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpE
             mensagem.Body = new BodyBuilder { HtmlBody = corpoHtml }.ToMessageBody();
 
             using var client = new SmtpClient();
-            await client.ConnectAsync(smtp.Host, smtp.Port, smtp.UseSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None, ct);
+            // Porta 465 é SSL direto; as demais (587...) começam sem criptografia e sobem para STARTTLS.
+            await client.ConnectAsync(smtp.Host, smtp.Port, smtp.Port == 465 ? SecureSocketOptions.SslOnConnect : smtp.UseSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None, ct);
             if (!string.IsNullOrEmpty(smtp.UserName))
             {
                 await client.AuthenticateAsync(smtp.UserName, smtp.Password, ct);

@@ -1022,6 +1022,7 @@ export function LeadsKanbanPage() {
                       podeVerOrigem={podeVerOrigem}
                       mostrarAdesao={coluna.etapa.nome === ETAPA_COTACAO}
                       mostrarDataVenda={coluna.etapa.nome.startsWith(ETAPA_VENDA_CONCLUIDA)}
+                      mostrarEspera={coluna.etapa.id === null}
                       onAbrir={() => abrirLead(cartao.leadId)}
                       onMover={() => setModalMobile(cartao)}
                       onTrocarResponsavel={() => setTrocandoResponsavel(cartao)}

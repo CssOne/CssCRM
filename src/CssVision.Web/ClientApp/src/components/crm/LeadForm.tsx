@@ -442,7 +442,8 @@ export function LeadForm({
           {aviso}
         </p>
       )}
-      <div className="flex justify-end gap-2 pt-2">
+      {/* Rodapé fixo: o formulário é longo e rola dentro do modal; sem isto o Salvar ficava lá embaixo, fora da tela, e parecia que não existia. */}
+      <div className="sticky bottom-0 z-10 -mx-5 -mb-4 mt-2 flex justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface-solid)] px-5 py-3">
         <Button type="button" variant="secondary" onClick={onCancel} disabled={salvando}>
           Cancelar
         </Button>

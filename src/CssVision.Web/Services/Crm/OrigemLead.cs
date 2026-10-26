@@ -58,6 +58,11 @@ public static class OrigemLead
     /// <summary>O lead chegou direto do tráfego pago (webhook do Meta ou formulário do site) — o que o rodízio distribui. Mesma regra de <see cref="VeioDoTrafegoPago"/>.</summary>
     public static bool EhDiretoDoTrafegoPago(Domain.Crm.CrmLead lead) => _veioDoTrafegoPago(lead);
 
+    /// <summary>Mesma regra de <see cref="VeioDoTrafegoPago"/> a partir dos campos soltos (para projeções do banco que não carregam o lead inteiro).</summary>
+    public static bool EhDiretoDoTrafegoPago(string? consentimentoOrigem, bool temMetaLeadId) =>
+        consentimentoOrigem != MarcadorMigracaoNotion && consentimentoOrigem != MarcadorSincronizacaoNotion
+        && (temMetaLeadId || consentimentoOrigem == MarcadorFormularioSite);
+
     // Mesma regra da expressão (uma só definição): antes eram duas cópias, e o ranking/Gestão comercial ignoravam a tag de anúncio e a UTM.
     private static readonly Func<Domain.Crm.CrmLead, bool> _deTrafegoPago = DeTrafegoPagoInclusiveNotion.Compile();
 

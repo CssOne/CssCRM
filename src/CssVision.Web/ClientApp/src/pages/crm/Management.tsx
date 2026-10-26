@@ -4,7 +4,9 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, isAbortError } from "../../lib/api";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
-import type { GestaoComercialResumo, RecebeLeadsHistorico, RedistribuicaoHistorico, VendedorResumo } from "../../lib/types";
+import { EsperaTrafegoCard } from "../../components/crm/EsperaTrafegoCard";
+import { DiagnosticoDoQuadroCard } from "../../components/crm/DiagnosticoDoQuadroCard";
+import type { EsperaTrafegoPainel, GestaoComercialResumo, RecebeLeadsHistorico, RedistribuicaoHistorico, VendedorResumo } from "../../lib/types";
 import { AlertTriangle, ChevronDown, LayoutGrid, List, Timer, UserPlus, Users } from "lucide-react";
 import { Avatar, Badge, Card, ConfirmDialog, ErrorState, Select, Skeleton, useToast, Pagination } from "../../components/ui";
 import { StatCard } from "../../components/crm/StatCard";
@@ -268,7 +270,7 @@ function RecebeLeadsSwitch({ vendedor, onSalvo }: { vendedor: VendedorResumo; on
       disabled={salvando}
       onClick={alternar}
       title={ligado ? "Recebendo leads da distribuição automática — clique para pausar" : "Fora da distribuição de leads — clique para voltar a receber"}
-      className="focus-ring mt-2 flex cursor-pointer items-center gap-2 text-xs font-medium disabled:opacity-60"
+      className="focus-ring mt-2 flex cursor-pointer items-center gap-2 text-xs font-medium disabled:opacity-60 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:py-2"
     >
       <span
         className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
@@ -730,6 +732,7 @@ export function ManagementPage() {
   const [vendedores, setVendedores] = useState<VendedorResumo[] | null>(null);
   const [historico, setHistorico] = useState<RedistribuicaoHistorico[] | null>(null);
   const [historicoRecebeLeads, setHistoricoRecebeLeads] = useState<RecebeLeadsHistorico[] | null>(null);
+  const [espera, setEspera] = useState<EsperaTrafegoPainel | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [recarregar, setRecarregar] = useState(0);
@@ -743,8 +746,11 @@ export function ManagementPage() {
       api.get<RedistribuicaoHistorico[]>("/crm/management/redistribuicoes", signal),
       // Histórico de quem desativou o recebimento de leads: se falhar, o resto da tela continua funcionando.
       api.get<RecebeLeadsHistorico[]>("/crm/management/recebe-leads-historico", signal).catch((e) => { if (isAbortError(e)) throw e; return [] as RecebeLeadsHistorico[]; }),
+      // Espera dos leads do tráfego pago em "Sem etapa": se falhar, o painel some e o resto da tela continua.
+      api.get<EsperaTrafegoPainel>("/crm/management/espera-trafego", signal).catch((e) => { if (isAbortError(e)) throw e; return null; }),
     ])
-      .then(([r, v, h, rl]) => {
+      .then(([r, v, h, rl, es]) => {
+        setEspera(es);
         setResumo(r);
         setVendedores(v);
         setHistorico(h);
@@ -873,6 +879,14 @@ export function ManagementPage() {
         <StatCard titulo="1º contato (24 h)" valor={(resumo.leadsComPrimeiroContato ?? 0) > 0 ? formatarDuracao(resumo.tempoMedioPrimeiroContatoHoras) : "—"} icone={Timer} tom="warning" subtitulo="média nas últimas 24 horas" />
         <StatCard titulo="Oportunidades paradas" valor={String(resumo.oportunidadesSemMovimentacao.length)} icone={AlertTriangle} tom={resumo.oportunidadesSemMovimentacao.length > 0 ? "danger" : "neutral"} subtitulo="sem movimentação" />
       </div>
+
+      {espera && (
+        <div className="entra" style={{ "--i": 2 } as React.CSSProperties}>
+          <EsperaTrafegoCard painel={espera} nomeFiltro={casaNome} />
+        </div>
+      )}
+
+      <DiagnosticoDoQuadroCard />
 
       {/* "Leads de hoje" e "Tempo até o 1º contato" lado a lado; a carteira ocupa a largura toda (lista ou cartões). */}
       <div className="grid gap-4 lg:grid-cols-3">

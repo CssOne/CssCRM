@@ -15,6 +15,7 @@ export function ResetPasswordPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [concluido, setConcluido] = useState(false);
+  const [linkVencido, setLinkVencido] = useState(false);
 
   const linkInvalido = !email || !token;
 
@@ -30,6 +31,7 @@ export function ResetPasswordPage() {
       await api.post("/account/reset-password", { email, token, novaSenha });
       setConcluido(true);
     } catch (e) {
+      setLinkVencido(e instanceof ApiRequestError && e.codigo === "token_invalido");
       setErro(e instanceof ApiRequestError ? e.message : "Não foi possível redefinir sua senha. Tente novamente.");
     } finally {
       setEnviando(false);
@@ -152,6 +154,13 @@ export function ResetPasswordPage() {
                   <p role="alert" className="rounded-lg bg-[var(--danger-soft)] px-3 py-2 text-sm text-[var(--danger)]">
                     {erro}
                   </p>
+                )}
+                {linkVencido && (
+                  <Link to={`/login?esqueci=1&email=${encodeURIComponent(email)}`} className="block">
+                    <Button type="button" variant="secondary" className="w-full">
+                      Pedir um novo link
+                    </Button>
+                  </Link>
                 )}
 
                 <Button type="submit" className="w-full" loading={enviando}>

@@ -104,9 +104,9 @@ export function Avatar({ nome, fotoUrl, usuarioId, className = "size-9 text-sm" 
 
 // --- Cartão ---
 
-export function Card({ className = "", children, style }: { className?: string; children: ReactNode; style?: React.CSSProperties }) {
+export function Card({ className = "", children, style, ...resto }: { className?: string; children: ReactNode; style?: React.CSSProperties } & Omit<React.HTMLAttributes<HTMLDivElement>, "className" | "style" | "children">) {
   return (
-    <div style={style} className={`card-anim ui-surface rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)] ${className}`}>{children}</div>
+    <div {...resto} style={style} className={`card-anim ui-surface rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] shadow-[var(--shadow-card)] ${className}`}>{children}</div>
   );
 }
 
@@ -596,6 +596,17 @@ function useSaidaAnimada<T>(aberta: boolean, conteudo: T, duracaoMs = 190) {
   return { visivel: aberta || visivel, saindo: !aberta && saindo, conteudo: aberta ? conteudo : ultimo.current };
 }
 
+/**
+ * Desenha o conteúdo direto no <body>. Janelas, painéis e alertas usam position: fixed, que só vale em relação à TELA se nenhum elemento acima tiver
+ * transform, filter, backdrop-filter ou perspective — e as telas do CRM têm: animações de entrada (.entra, .card-anim, .pagina-anim) e o efeito de vidro
+ * (.ui-surface). Dentro de um desses, a janela passava a se posicionar em relação ao cartão e aparecia fora da tela, principalmente no celular.
+ * Sempre que algo precisar cobrir a tela, renderize por aqui.
+ */
+export function Portal({ children }: { children: ReactNode }) {
+  if (typeof document === "undefined") return null;
+  return createPortal(children, document.body);
+}
+
 export function Modal({
   open,
   onClose,
@@ -626,7 +637,8 @@ export function Modal({
   const widths = { sm: "max-w-sm", md: "max-w-lg", lg: "max-w-2xl", xl: "max-w-[min(96vw,80rem)]" };
 
   return (
-    <div className={`modal-fundo ${saida.saindo ? "saindo" : ""} fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay)] p-4 backdrop-blur-[2px]`} role="presentation" {...fundo}>
+    <Portal>
+    <div className={`modal-fundo ${saida.saindo ? "saindo" : ""} fixed inset-0 z-50 flex items-center justify-center bg-[var(--overlay)] p-2 backdrop-blur-[2px] sm:p-4`} role="presentation" {...fundo}>
       <div
         role="dialog"
         aria-modal="true"
@@ -640,9 +652,10 @@ export function Modal({
           </IconButton>
         </div>
         <div className="overflow-y-auto px-5 py-4">{filhos}</div>
-        {rodape && <div className="flex justify-end gap-2 border-t border-[var(--border)] px-5 py-3">{rodape}</div>}
+        {rodape && <div className="flex flex-wrap justify-end gap-2 border-t border-[var(--border)] px-5 py-3">{rodape}</div>}
       </div>
     </div>
+    </Portal>
   );
 }
 
@@ -662,6 +675,7 @@ export function Drawer({ open, onClose, title, children }: { open: boolean; onCl
   const { title: tituloExibido, children: filhos } = saida.conteudo;
 
   return (
+    <Portal>
     <div className={`modal-fundo ${saida.saindo ? "saindo" : ""} fixed inset-0 z-50 flex justify-end bg-[var(--overlay)]`} role="presentation" {...fundo}>
       <div
         role="dialog"
@@ -678,6 +692,7 @@ export function Drawer({ open, onClose, title, children }: { open: boolean; onCl
         <div className="flex-1 overflow-y-auto px-5 py-4">{filhos}</div>
       </div>
     </div>
+    </Portal>
   );
 }
 

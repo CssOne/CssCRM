@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "lint": "oxlint",
+    "verificar:mobile": "node scripts/verificar-mobile.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

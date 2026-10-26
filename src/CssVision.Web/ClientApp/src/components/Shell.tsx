@@ -45,6 +45,7 @@ import { Avatar, IconButton } from "./ui";
 import { LembretesAdesao } from "./crm/LembretesAdesao";
 import { NotificacaoNovosLeads } from "./crm/NotificacaoNovosLeads";
 import { AlertaDistribuicaoLimites } from "./crm/AlertaDistribuicaoLimites";
+import { AlertaEmailDoSistema } from "./crm/AlertaEmailDoSistema";
 import { NotificacoesAtividades } from "./crm/NotificacoesAtividades";
 import { PainelLead } from "./crm/PainelLead";
 import { ConviteNotificacoesPush } from "./crm/NotificacoesPush";
@@ -603,6 +604,7 @@ export function Shell({ children }: { children: ReactNode }) {
 
         <main className="min-w-0 flex-1 p-4 lg:px-8 lg:py-7">
           {!emPortal && temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial") && <AlertaDistribuicaoLimites />}
+          {!emPortal && temPapel("Admin", "GestorMaster") && <AlertaEmailDoSistema />}
           {/* Cada tela entra com um fade e uma leve subida; a chave pelo caminho refaz a animação a cada troca de página. */}
           <div key={location.pathname} className="pagina-anim">
             {children}

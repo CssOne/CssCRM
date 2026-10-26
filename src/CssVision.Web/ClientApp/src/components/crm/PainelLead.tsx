@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { PARAM_PAINEL_LEAD, useFecharPainelLead } from "../../lib/painelLead";
 import { LeadDetailConteudo } from "../../pages/crm/LeadDetail";
+import { Portal } from "../ui";
 
 /**
  * Lead aberto numa aba lateral à direita (como no Notion), por cima da tela atual — o quadro, a
@@ -36,6 +37,7 @@ export function PainelLead() {
     "focus-ring flex size-8 cursor-pointer items-center justify-center rounded-lg text-[var(--fg-muted)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]";
 
   return (
+    <Portal>
     <div className="fixed inset-0 z-40 flex justify-end" role="presentation">
       {/* Fundo desfocado */}
       <div className="painel-lead-fundo absolute inset-0 bg-slate-950/35 backdrop-blur-[3px]" onClick={fechar} aria-hidden />
@@ -68,5 +70,6 @@ export function PainelLead() {
         </div>
       </aside>
     </div>
+    </Portal>
   );
 }
