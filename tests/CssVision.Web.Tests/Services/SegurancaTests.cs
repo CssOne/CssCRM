@@ -149,7 +149,7 @@ public class SegurancaDaApiTests
     }
 
     [Fact]
-    public async Task RecuperarSenha_TemLimiteMaisApertadoQueOLogin()
+    public async Task RecuperarSenha_TemLimiteProprioPorIp()
     {
         using var servidor = Servidor(
             app =>
@@ -161,7 +161,8 @@ public class SegurancaDaApiTests
             s => s.AddCrmRateLimiting());
         using var cliente = servidor.CreateClient();
 
-        for (var i = 0; i < 5; i++) Assert.Equal(HttpStatusCode.OK, (await cliente.PostAsync("/esqueci", null)).StatusCode);
+        // 30 por IP em 10 minutos: folga para colegas na mesma rede; o abuso contra uma conta é barrado por conta (AccountController), não por IP.
+        for (var i = 0; i < 30; i++) Assert.Equal(HttpStatusCode.OK, (await cliente.PostAsync("/esqueci", null)).StatusCode);
         Assert.Equal(HttpStatusCode.TooManyRequests, (await cliente.PostAsync("/esqueci", null)).StatusCode);
     }
 }

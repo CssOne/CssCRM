@@ -1,3 +1,4 @@
+using CssVision.Web.Api.Contracts.Common;
 using CssVision.Web.Api.Contracts.Crm;
 using CssVision.Web.Data;
 using CssVision.Web.Domain.Crm;
@@ -89,8 +90,21 @@ public sealed class LeadKanbanService(
             var ehVenda = etapa.Nome.StartsWith(EtapaVendaConcluida, StringComparison.Ordinal);
             var consulta = ehVenda ? queryVenda : query;
             var total = (ehVenda ? totaisVenda : totais).FirstOrDefault(t => t.EtapaId == etapa.Id)?.Quantidade ?? 0;
-            var cartoes = total == 0 ? [] : await PaginaAsync(consulta, etapa.Id, 0, porPagina, podeVerOrigem, ct);
+            var cartoes = total == 0 ? [] : await PaginaAsync(consulta, etapa.Id, 0, porPagina, podeVerOrigem, ct, ordenarPorVenda: ehVenda);
             colunas.Add(new LeadKanbanColumnDto(dto, cartoes, total));
+        }
+
+        // Lead numa etapa que foi desativada não tem coluna: sumiria do quadro, mas continua na lista de Leads. Ganha uma coluna própria, marcada como inativa.
+        var idsAtivos = etapas.Select(e => e.Id).ToHashSet();
+        var orfas = totais.Where(t => t.EtapaId is { } id && !idsAtivos.Contains(id)).Select(t => t.EtapaId!.Value).ToList();
+        if (orfas.Count > 0)
+        {
+            var inativas = await db.CrmLeadStages.AsNoTracking().Where(s => orfas.Contains(s.Id)).OrderBy(s => s.Ordem).ToListAsync(ct);
+            foreach (var s in inativas)
+            {
+                var dto = new LeadStageDto(s.Id, $"{s.Nome} (etapa inativa)", s.Ordem, s.Cor, s.Fechada, false);
+                colunas.Add(new LeadKanbanColumnDto(dto, await PaginaAsync(query, s.Id, 0, porPagina, podeVerOrigem, ct, ordenarPorVenda: s.Nome.StartsWith(EtapaVendaConcluida, StringComparison.Ordinal)), Total(s.Id)));
+            }
         }
 
         return new LeadKanbanBoardDto(colunas);
@@ -145,17 +159,22 @@ public sealed class LeadKanbanService(
                     query = FiltrarMotivo(query, request.MotivoPerdaId);
                 }
                 var quantidade = Math.Clamp(request.Quantidade, 1, MaxCartoesPorPagina);
-                return await PaginaAsync(query, request.EtapaId, Math.Max(0, request.Pular), quantidade, podeVerOrigem, ct);
+                return await PaginaAsync(query, request.EtapaId, Math.Max(0, request.Pular), quantidade, podeVerOrigem, ct, ordenarPorVenda: ehColunaDeVenda);
             });
     }
 
     /// <summary>Uma página de cartões de uma coluna (EtapaId nulo = "Sem etapa"), dos mais recentes para os mais antigos.</summary>
+    /// <param name="ordenarPorVenda">
+    /// Colunas "Venda concluída": os mais recentes são as vendas mais recentes (a data que o cartão mostra), não os leads criados há menos tempo. Pela data de
+    /// criação, a venda de hoje de um cliente cadastrado há meses ficava no fundo de uma coluna de milhares de cartões e parecia não existir no quadro.
+    /// </param>
     private async Task<IReadOnlyList<LeadKanbanCardDto>> PaginaAsync(
-        IQueryable<CrmLead> query, Guid? etapaId, int pular, int quantidade, bool podeVerOrigem, CancellationToken ct)
+        IQueryable<CrmLead> query, Guid? etapaId, int pular, int quantidade, bool podeVerOrigem, CancellationToken ct, bool ordenarPorVenda = false)
     {
-        var linhas = await query
-            .Where(l => l.EtapaId == etapaId)
-            .OrderByDescending(l => l.CriadoEm)
+        var daColuna = query.Where(l => l.EtapaId == etapaId);
+        var linhas = await (ordenarPorVenda
+                ? daColuna.OrderByDescending(l => l.Oportunidades.Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho).Max(o => o.DataEfetivaFechamento) ?? l.CriadoEm)
+                : daColuna.OrderByDescending(l => l.CriadoEm))
             .ThenBy(l => l.Id)
             .Skip(pular)
             .Take(quantidade)
@@ -171,6 +190,7 @@ public sealed class LeadKanbanService(
                 MotivoPerda = l.MotivoPerda != null ? l.MotivoPerda.Descricao : null,
                 l.MotivoPerdaObservacao,
                 l.VeiculoNaoAtendido,
+                l.ConsentimentoOrigem, TemMetaLeadId = l.MetaLeadId != null, l.ResponsavelAtribuidoEm,
             })
             .ToListAsync(ct);
 
@@ -209,7 +229,103 @@ public sealed class LeadKanbanService(
             // um telefone é preenchido.
             l.CriadoEm, l.UltimoContatoEm, string.IsNullOrWhiteSpace(l.Telefone) && string.IsNullOrWhiteSpace(l.Telefone2),
             l.Arquivado, l.RowVersion, l.ProdutoInteresse, l.ValorAdesao, l.ResponsavelFotoUrl, l.VeiculoAdicional,
-            l.MotivoPerda, l.MotivoPerdaObservacao, l.VeiculoNaoAtendido, DataDaVenda(l.Id))).ToList();
+            l.MotivoPerda, l.MotivoPerdaObservacao, l.VeiculoNaoAtendido, DataDaVenda(l.Id),
+            OrigemLead.EhDiretoDoTrafegoPago(l.ConsentimentoOrigem, l.TemMetaLeadId), l.ResponsavelAtribuidoEm ?? l.CriadoEm)).ToList();
+    }
+
+    public async Task<IReadOnlyList<AuditoriaQuadroGrupoDto>> AuditarAsync(CancellationToken ct)
+    {
+        var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
+        var leads = db.CrmLeads.AsNoTracking().Where(l => !l.Arquivado);
+        if (visiveis is not null) leads = leads.Where(l => visiveis.Contains(l.ResponsavelId ?? Guid.Empty));
+
+        async Task<AuditoriaQuadroGrupoDto> Grupo(string codigo, string titulo, string explicacao, IQueryable<CrmLead> consulta)
+        {
+            var total = await consulta.CountAsync(ct);
+            var exemplos = total == 0
+                ? []
+                : (await consulta.OrderByDescending(l => l.CriadoEm).Take(15)
+                    .Select(l => new { l.Id, l.NomeOuRazaoSocial, Consultor = l.Responsavel != null ? l.Responsavel.NomeCompleto : null, Etapa = l.Etapa != null ? l.Etapa.Nome : null })
+                    .ToListAsync(ct))
+                  .Select(l => new AuditoriaQuadroExemploDto(l.Id, l.NomeOuRazaoSocial, l.Consultor, l.Etapa)).ToList();
+            return new AuditoriaQuadroGrupoDto(codigo, titulo, explicacao, total, exemplos);
+        }
+
+        var porPagina = new LeadKanbanFilterRequest().CartoesPorColuna;
+        return
+        [
+            await Grupo("etapa-inativa", "Em uma etapa inativa",
+                "A etapa foi desativada. Antes não existia coluna para esses clientes no quadro; agora aparece uma coluna marcada como inativa.",
+                leads.Where(l => l.EtapaId != null && !l.Etapa!.Ativa)),
+            await Grupo("venda-sem-venda-ganha", "Em \"Venda concluída\" sem nenhuma venda ganha",
+                "O cliente está na coluna de venda, mas não tem venda ganha: ele some do quadro quando o filtro de data da venda está ligado e não entra nas metas e no painel.",
+                leads.Where(l => l.Etapa != null && l.Etapa.Nome.StartsWith(EtapaVendaConcluida) && !l.Oportunidades.Any(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho))),
+            await Grupo("venda-fora-da-coluna", "Com venda ganha, mas fora de \"Venda concluída\"",
+                $"O cliente tem venda ganha e o card está em outra coluna. Aparece no quadro, mas na coluna errada (só os {porPagina} mais recentes de cada coluna vêm de início).",
+                leads.Where(l => l.Oportunidades.Any(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho) && (l.Etapa == null || !l.Etapa.Nome.StartsWith(EtapaVendaConcluida)))),
+        ];
+    }
+
+    public async Task<IReadOnlyList<LeadNoQuadroDto>> DiagnosticarAsync(string busca, CancellationToken ct)
+    {
+        busca = (busca ?? "").Trim();
+        if (busca.Length < 3) throw new CrmBusinessException("Digite ao menos 3 letras do nome, e-mail ou placa do cliente.", "busca_curta");
+        var termo = busca.ToLower();
+        var digitos = DocumentValidation.SomenteDigitos(busca);
+        var porPagina = new LeadKanbanFilterRequest().CartoesPorColuna;
+
+        var visiveis = await equipe.ObterVendedoresVisiveisAsync(ct);
+        var achados = await db.CrmLeads.AsNoTracking()
+            .Where(l => l.NomeOuRazaoSocial.ToLower().Contains(termo) || (l.Email != null && l.Email.ToLower().Contains(termo))
+                || (l.Placa != null && l.Placa.ToLower().Contains(termo)) || (digitos.Length >= 8 && l.TelefoneNormalizado != null && l.TelefoneNormalizado.Contains(digitos)))
+            .OrderByDescending(l => l.CriadoEm)
+            .Take(10)
+            .Select(l => new
+            {
+                l.Id, l.NomeOuRazaoSocial, l.CriadoEm, l.Arquivado, l.ArquivadoPorId, l.EtapaId, l.ResponsavelId,
+                Etapa = l.Etapa != null ? l.Etapa.Nome : null,
+                EtapaAtiva = l.Etapa == null || l.Etapa.Ativa,
+                Consultor = l.Responsavel != null ? l.Responsavel.NomeCompleto : null,
+                ConsultorAtivo = l.Responsavel == null || l.Responsavel.Ativo,
+                VendasGanhas = l.Oportunidades.Count(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho),
+                Abertas = l.Oportunidades.Count(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Aberta),
+                UltimaVenda = l.Oportunidades.Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho).Max(o => o.DataEfetivaFechamento),
+            })
+            .ToListAsync(ct);
+
+        var resultado = new List<LeadNoQuadroDto>();
+        foreach (var l in achados)
+        {
+            var naLixeira = l.Arquivado && l.ArquivadoPorId != null;
+            var visivel = visiveis is null || visiveis.Contains(l.ResponsavelId ?? Guid.Empty);
+            var ehVenda = l.Etapa is not null && l.Etapa.StartsWith(EtapaVendaConcluida, StringComparison.Ordinal);
+
+            int? posicao = null, total = null;
+            if (!l.Arquivado && l.EtapaAtiva && visivel)
+            {
+                var daColuna = db.CrmLeads.AsNoTracking().Where(x => !x.Arquivado && x.EtapaId == l.EtapaId);
+                if (visiveis is not null) daColuna = daColuna.Where(x => visiveis.Contains(x.ResponsavelId ?? Guid.Empty));
+                total = await daColuna.CountAsync(ct);
+                var minha = ehVenda ? (l.UltimaVenda ?? l.CriadoEm) : l.CriadoEm;
+                posicao = 1 + (ehVenda
+                    ? await daColuna.CountAsync(x => (x.Oportunidades.Where(o => !o.Arquivado && o.Etapa.Tipo == TipoEtapaPipeline.Ganho).Max(o => o.DataEfetivaFechamento) ?? x.CriadoEm) > minha, ct)
+                    : await daColuna.CountAsync(x => x.CriadoEm > minha, ct));
+            }
+
+            string veredito;
+            if (naLixeira) veredito = "Foi excluído pelo CRM e está na lixeira: não aparece nem na lista de Leads nem no quadro.";
+            else if (l.Arquivado) veredito = "Está arquivado: o quadro só mostra arquivados com o filtro \"Incluir arquivados\" ligado.";
+            else if (!l.EtapaAtiva) veredito = $"A etapa \"{l.Etapa}\" está inativa. Antes não havia coluna para ela no quadro; agora aparece uma coluna marcada como inativa.";
+            else if (!visivel) veredito = "O consultor responsável está fora da sua visão (equipe ou regional oculta para o seu perfil).";
+            else if (posicao is > 0 && posicao > porPagina)
+                veredito = $"Está na coluna \"{l.Etapa ?? "Sem etapa"}\", na posição {posicao:N0} de {total:N0}. O quadro mostra de início só {porPagina} cartões por coluna: use \"Ver mais\" ou filtre pelo vendedor/nome.";
+            else veredito = $"Deveria aparecer na coluna \"{l.Etapa ?? "Sem etapa"}\" (posição {posicao:N0} de {total:N0}). Se não aparece, há um filtro salvo no navegador (Regional, Fonte, datas...): use \"Limpar filtros\".";
+            if (ehVenda && l.VendasGanhas == 0) veredito += " Atenção: está na coluna de venda concluída mas não tem nenhuma venda ganha — some do quadro quando o filtro de data da venda está ligado.";
+
+            resultado.Add(new LeadNoQuadroDto(l.Id, l.NomeOuRazaoSocial, l.Consultor, l.ConsultorAtivo, l.Etapa, l.EtapaAtiva, l.Arquivado, naLixeira,
+                l.VendasGanhas, l.Abertas, visivel, posicao, total, porPagina, veredito));
+        }
+        return resultado;
     }
 
     private (IQueryable<CrmLead> Query, bool PodeVerOrigem) Filtrar(LeadKanbanFilterRequest filtro, List<Guid>? visiveis)

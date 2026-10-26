@@ -3,6 +3,7 @@ using CssVision.Web.Data;
 using CssVision.Web.Data.Seed;
 using CssVision.Web.Extensions;
 using CssVision.Web.Services.Crm;
+using CssVision.Web.Services.Email;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
@@ -70,6 +71,12 @@ using (var scope = app.Services.CreateScope())
     await IdentitySeeder.SeedRolesAsync(scope.ServiceProvider);
     await CrmSeeder.SeedAsync(db);
     await ConsultorSeeder.SeedAsync(scope.ServiceProvider);
+
+    // Sem e-mail do sistema, o "Esqueci a senha" não envia nada (a tela diz que enviou, de propósito): deixa o motivo visível no log de cada subida.
+    if (!(await scope.ServiceProvider.GetRequiredService<IEmailDoSistemaService>().ObterAsync(CancellationToken.None)).Configurado)
+    {
+        app.Logger.LogError("E-mail do sistema NÃO configurado: o link de 'Esqueci a senha' não será enviado. Configure em Usuários → E-mail do sistema (administrador) ou em Smtp__Host/Smtp__FromEmail.");
+    }
 }
 
 if (app.Environment.IsDevelopment())

@@ -131,3 +131,18 @@ public record GestaoComercialResumoDto(
 
 /// <summary>Tempo médio até o primeiro contato de um vendedor.</summary>
 public record PrimeiroContatoVendedorDto(Guid VendedorId, string VendedorNome, double Horas, int Leads);
+
+/// <summary>Um consultor no painel da espera por leads do tráfego pago em "Sem etapa" (Gestão comercial).</summary>
+public record EsperaConsultorDto(
+    Guid ConsultorId, string Nome,
+    /// <summary>Leads do tráfego pago com ele, em "Sem etapa", agora.</summary>
+    int EsperandoAgora,
+    /// <summary>Desde quando o mais antigo deles espera.</summary>
+    DateTimeOffset? MaisAntigoDesde,
+    /// <summary>Nos últimos dias: leads que passaram do primeiro prazo sem ele pegar.</summary>
+    int PassaramDoPrimeiroPrazo,
+    /// <summary>Nos últimos dias: leads que passaram do prazo forte (1 h) — o que conta para "demora com frequência".</summary>
+    int PassaramDoPrazoForte,
+    bool Reincidente);
+
+public record EsperaTrafegoPainelDto(int MinutosPrimeiroPrazo, int MinutosPrazoForte, int LeadsParaReincidencia, int Dias, IReadOnlyList<EsperaConsultorDto> Consultores);

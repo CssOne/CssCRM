@@ -622,6 +622,10 @@ export interface LeadKanbanCard {
   motivoPerdaObservacao?: string | null;
   /** Modelo do veículo informado pelo consultor (cartões em "Não fazemos"). */
   veiculoNaoAtendido?: string | null;
+  /** Lead que chegou direto do tráfego pago. */
+  trafegoPago?: boolean;
+  /** Início do cronômetro de espera em "Sem etapa" (quando o lead passou para o consultor). */
+  esperandoDesde?: string | null;
 }
 
 /** Opção do filtro por motivo da coluna "Perdido" (id vazio = sem motivo informado). */
@@ -1757,4 +1761,61 @@ export interface RelatorioDetalhe {
   rotuloData: string;
   rotuloValor?: string | null;
   itens: RelatorioDetalheItem[];
+}
+
+/** Um consultor no painel da espera por leads do tráfego pago em "Sem etapa" (Gestão comercial). */
+export interface EsperaConsultor {
+  consultorId: string;
+  nome: string;
+  esperandoAgora: number;
+  maisAntigoDesde?: string | null;
+  passaramDoPrimeiroPrazo: number;
+  passaramDoPrazoForte: number;
+  reincidente: boolean;
+}
+
+export interface AuditoriaQuadroGrupo {
+  codigo: string;
+  titulo: string;
+  explicacao: string;
+  total: number;
+  exemplos: { leadId: string; nome: string; consultor?: string | null; etapa?: string | null }[];
+}
+
+/** Um cliente no diagnóstico "por que não aparece no quadro?" (Gestão comercial). */
+export interface LeadNoQuadro {
+  leadId: string;
+  nome: string;
+  consultor?: string | null;
+  consultorAtivo: boolean;
+  etapa?: string | null;
+  etapaAtiva: boolean;
+  arquivado: boolean;
+  naLixeira: boolean;
+  vendasGanhas: number;
+  oportunidadesAbertas: number;
+  visivelParaVoce: boolean;
+  posicaoNaColuna?: number | null;
+  totalNaColuna?: number | null;
+  cartoesPorPagina: number;
+  veredito: string;
+}
+
+/** E-mail do sistema (redefinição de senha etc.): "painel" = guardado no CRM, "servidor" = variáveis Smtp__*, "nenhuma" = não configurado. */
+export interface EmailSistema {
+  configurado: boolean;
+  origem: "painel" | "servidor" | "nenhuma";
+  host?: string | null;
+  port?: number | null;
+  userName?: string | null;
+  fromEmail?: string | null;
+  fromName: string;
+}
+
+export interface EsperaTrafegoPainel {
+  minutosPrimeiroPrazo: number;
+  minutosPrazoForte: number;
+  leadsParaReincidencia: number;
+  dias: number;
+  consultores: EsperaConsultor[];
 }

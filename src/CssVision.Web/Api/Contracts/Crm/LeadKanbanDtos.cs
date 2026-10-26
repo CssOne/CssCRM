@@ -40,7 +40,11 @@ public record LeadKanbanCardDto(
     /// <summary>Modelo do veículo informado pelo consultor (cartões em "Não fazemos").</summary>
     string? VeiculoNaoAtendido = null,
     /// <summary>Data em que a venda foi fechada (cartões das colunas "Venda concluída").</summary>
-    DateTimeOffset? DataVenda = null);
+    DateTimeOffset? DataVenda = null,
+    /// <summary>Lead que chegou direto do tráfego pago (ver OrigemLead.VeioDoTrafegoPago).</summary>
+    bool TrafegoPago = false,
+    /// <summary>Quando o lead passou para o consultor (ou chegou, se ainda não foi atribuído): início do cronômetro dos cartões do tráfego pago em "Sem etapa".</summary>
+    DateTimeOffset? EsperandoDesde = null);
 
 /// <summary>Opção do filtro por motivo da coluna "Perdido" (Id vazio = sem motivo informado), com a quantidade.</summary>
 public record LeadKanbanMotivoPerdaDto(Guid Id, string Descricao, int Quantidade);
@@ -55,6 +59,16 @@ public record LeadKanbanColumnDto(
     IReadOnlyList<LeadKanbanMotivoPerdaDto>? MotivosPerda = null);
 
 public record LeadKanbanBoardDto(IReadOnlyList<LeadKanbanColumnDto> Colunas);
+
+/// <summary>Um grupo de clientes que o quadro pode esconder, com o total e alguns exemplos.</summary>
+public record AuditoriaQuadroGrupoDto(string Codigo, string Titulo, string Explicacao, int Total, IReadOnlyList<AuditoriaQuadroExemploDto> Exemplos);
+
+public record AuditoriaQuadroExemploDto(Guid LeadId, string Nome, string? Consultor, string? Etapa);
+
+/// <summary>Um cliente no diagnóstico "por que não aparece no quadro?" (Gestão comercial).</summary>
+public record LeadNoQuadroDto(
+    Guid LeadId, string Nome, string? Consultor, bool ConsultorAtivo, string? Etapa, bool EtapaAtiva, bool Arquivado, bool NaLixeira,
+    int VendasGanhas, int OportunidadesAbertas, bool VisivelParaVoce, int? PosicaoNaColuna, int? TotalNaColuna, int CartoesPorPagina, string Veredito);
 
 public record LeadKanbanFilterRequest
 {

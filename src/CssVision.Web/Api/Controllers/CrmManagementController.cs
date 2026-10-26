@@ -10,7 +10,7 @@ namespace CssVision.Web.Api.Controllers;
 [ApiController]
 [Route("api/crm/management")]
 [Authorize(Policy = PolicyNames.GestaoFinanceira)]
-public class CrmManagementController(IManagementService managementService, ILeadAssignmentService distribuicao) : ControllerBase
+public class CrmManagementController(IManagementService managementService, ILeadAssignmentService distribuicao, EsperaTrafegoService espera, IEquipeComercialService equipe) : ControllerBase
 {
     [HttpGet("summary")]
     [Authorize(Policy = PolicyNames.GestaoComercial)]
@@ -66,6 +66,12 @@ public class CrmManagementController(IManagementService managementService, ILead
     [Authorize(Policy = PolicyNames.GestaoComercial)]
     public async Task<ActionResult<AlertaDistribuicaoDto>> ObterAlertaDistribuicao(CancellationToken ct) =>
         Ok(await distribuicao.ObterEstadoDistribuicaoAsync(ct));
+
+    /// <summary>Leads do tráfego pago esperando em "Sem etapa" por consultor e quem demora com frequência (os mesmos avisos que saem por push).</summary>
+    [HttpGet("espera-trafego")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
+    public async Task<ActionResult<EsperaTrafegoPainelDto>> ObterEsperaTrafego(CancellationToken ct) =>
+        Ok(await espera.ObterPainelAsync(await equipe.ObterVendedoresVisiveisAsync(ct), ct));
 
     [HttpPut("continuar-distribuicao")]
     [Authorize(Policy = PolicyNames.GestaoComercial)]

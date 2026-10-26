@@ -1175,7 +1175,14 @@ export function VendaConcluidaDialog({
             </ul>
           </div>
         )}
-        <div className="flex justify-end gap-2 border-t border-[var(--border)] pt-4">
+        {/* Rodapé fixo: o formulário é longo e rola dentro do modal; os botões ficam sempre à vista, com o que falta ao lado. */}
+        <div className="sticky bottom-0 z-10 -mx-5 -mb-4 flex items-center justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface-solid)] px-5 py-3">
+          {!podeConfirmar && !enviando && !enviandoArquivos && pendencias.length > 0 && (
+            <p className="mr-auto min-w-0 truncate text-xs font-medium text-[var(--danger)]" title={pendencias.join("; ")}>
+              Falta: {pendencias[0]}
+              {pendencias.length > 1 ? ` (+${pendencias.length - 1})` : ""}
+            </p>
+          )}
           <Button variant="secondary" onClick={cancelar} disabled={enviandoArquivos || enviando}>
             Cancelar
           </Button>

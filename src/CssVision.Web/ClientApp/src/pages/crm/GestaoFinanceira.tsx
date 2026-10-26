@@ -45,7 +45,7 @@ function Chave({ vendedor, onSalvo }: { vendedor: VendedorResumo; onSalvo: () =>
       disabled={salvando}
       onClick={alternar}
       title={ligado ? "Recebendo leads da distribuição automática — clique para pausar" : "Fora da distribuição de leads — clique para voltar a receber"}
-      className="focus-ring flex cursor-pointer items-center gap-2 text-xs font-medium disabled:opacity-60"
+      className="focus-ring flex cursor-pointer items-center gap-2 text-xs font-medium disabled:opacity-60 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:py-2"
     >
       <span className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${ligado ? "bg-[var(--success)]" : "bg-[var(--border)]"}`}>
         <span className={`inline-block size-3 rounded-full bg-white shadow transition-transform ${ligado ? "translate-x-3.5" : "translate-x-0.5"}`} />

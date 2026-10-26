@@ -118,12 +118,30 @@ public class AccountController(
     public async Task<IActionResult> EsqueciSenha(ForgotPasswordRequest request, CancellationToken ct)
     {
         var usuario = await userManager.FindByEmailAsync(request.Email.Trim());
-        if (usuario is not null && usuario.Ativo)
+        if (usuario is not null && usuario.Ativo && PodeReenviarLink(usuario.Id))
         {
             await EnviarLinkDeRedefinicaoAsync(usuario, ct);
         }
 
         return NoContent();
+    }
+
+    /// <summary>Intervalo mínimo entre dois e-mails de redefinição para a mesma conta: sem isso, quem soubesse o e-mail de alguém poderia encher a caixa dele.</summary>
+    internal static readonly TimeSpan IntervaloEntreLinks = TimeSpan.FromSeconds(60);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, DateTimeOffset> _ultimoLinkPorConta = new();
+
+    /// <summary>Registra o envio e diz se já passou o intervalo desde o último link dessa conta. Pedido dentro do intervalo é ignorado em silêncio (a resposta é a mesma).</summary>
+    private static bool PodeReenviarLink(Guid usuarioId)
+    {
+        var agora = DateTimeOffset.UtcNow;
+        var liberado = false;
+        _ultimoLinkPorConta.AddOrUpdate(usuarioId,
+            _ => { liberado = true; return agora; },
+            (_, ultimo) => { liberado = agora - ultimo >= IntervaloEntreLinks; return liberado ? agora : ultimo; });
+        // Limpeza simples para o dicionário não crescer para sempre.
+        if (_ultimoLinkPorConta.Count > 5000)
+            foreach (var (id, quando) in _ultimoLinkPorConta) if (agora - quando > IntervaloEntreLinks) _ultimoLinkPorConta.TryRemove(id, out _);
+        return liberado;
     }
 
     private async Task EnviarLinkDeRedefinicaoAsync(ApplicationUser usuario, CancellationToken ct)

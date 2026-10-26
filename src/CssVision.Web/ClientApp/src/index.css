@@ -1046,3 +1046,78 @@ button[aria-haspopup="listbox"][aria-expanded="true"] {
 [data-theme="glass"] button[aria-haspopup="dialog"][aria-expanded="true"] {
   border-color: var(--brand);
 }
+
+/* Visão geral em 3D: cards com profundidade (borda de luz + sombras em camadas) que inclinam na direção do mouse. */
+.visao-3d,
+.visao-3d > * {
+  perspective: 1100px;
+}
+.visao-3d .card-anim {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    inset 0 -1px 0 rgb(0 0 0 / 0.08),
+    0 2px 4px -1px rgb(0 0 0 / 0.14),
+    0 14px 24px -12px rgb(0 0 0 / 0.28),
+    0 30px 50px -30px rgb(0 0 0 / 0.38);
+}
+/* Cards parados: sem sombra nova nem deslocamento ao passar o mouse (inclui o hover do StatCard). */
+.visao-3d .card-anim:hover {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    inset 0 -1px 0 rgb(0 0 0 / 0.08),
+    0 2px 4px -1px rgb(0 0 0 / 0.14),
+    0 14px 24px -12px rgb(0 0 0 / 0.28),
+    0 30px 50px -30px rgb(0 0 0 / 0.38);
+  border-color: var(--border);
+}
+.visao-3d .card-anim,
+.visao-3d .card-anim:hover {
+  transform: none !important;
+  translate: none !important;
+  rotate: none !important;
+}
+.visao-3d [role="link"].card-anim {
+  cursor: pointer;
+}
+.visao-3d [role="link"].card-anim:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* Janelas no celular: a altura acompanha a área realmente visível (a barra de endereço do navegador do celular encolhe e cresce), a rolagem de dentro não
+   puxa a página de trás, e o conteúdo não passa do tamanho da tela. */
+.modal-painel {
+  max-height: 85vh;
+  max-height: 85dvh;
+  overscroll-behavior: contain;
+}
+.drawer-painel {
+  max-height: 100vh;
+  max-height: 100dvh;
+  overscroll-behavior: contain;
+}
+
+/* ===== Celular / telas de toque ===== */
+
+/* A altura da tela no celular muda quando a barra de endereço some e volta: 100vh fica maior que a área visível e empurra o rodapé para fora.
+   dvh acompanha a área realmente visível (e 100vh fica de reserva para navegadores antigos). */
+.min-h-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Rede de segurança: nenhum elemento mais largo que a tela faz a página inteira "balançar" para o lado no celular. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+/* iPhone/Safari dá zoom automático ao tocar num campo com letra menor que 16 px e a página fica deslocada. Nos aparelhos de toque os campos têm 16 px. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

@@ -29,6 +29,18 @@ public class CrmLeadsController(ILeadService leadService, ILeadKanbanService kan
     public async Task<ActionResult<IReadOnlyList<LeadKanbanCardDto>>> ObterCartoesDaColuna([FromQuery] LeadKanbanColunaRequest request, CancellationToken ct) =>
         Ok(await kanbanService.ObterCartoesAsync(request, ct));
 
+    /// <summary>Gestão: grupos de clientes que o quadro pode esconder (etapa inativa, venda sem venda ganha...).</summary>
+    [HttpGet("kanban/auditoria")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
+    public async Task<ActionResult<IReadOnlyList<AuditoriaQuadroGrupoDto>>> AuditarQuadro(CancellationToken ct) =>
+        Ok(await kanbanService.AuditarAsync(ct));
+
+    /// <summary>Gestão: explica por que um cliente aparece na lista de Leads e não aparece no quadro (ou onde ele está).</summary>
+    [HttpGet("kanban/diagnostico")]
+    [Authorize(Policy = PolicyNames.GestaoComercial)]
+    public async Task<ActionResult<IReadOnlyList<LeadNoQuadroDto>>> DiagnosticarQuadro([FromQuery] string busca, CancellationToken ct) =>
+        Ok(await kanbanService.DiagnosticarAsync(busca, ct));
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<LeadDetailDto>> ObterPorId(Guid id, CancellationToken ct) =>
         Ok(await leadService.ObterPorIdAsync(id, ct));

@@ -1076,6 +1076,59 @@ namespace CssVision.Web.Data.Migrations
                     b.ToTable("CrmDisparosEmailDestinatarios", (string)null);
                 });
 
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmEsperaLead", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AtendidoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AvisoConsultorEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("AvisoUrgenteEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ConsultorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("EsperandoDesde")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LeadId")
+                        .IsUnique();
+
+                    b.HasIndex("ConsultorId", "AvisoUrgenteEm")
+                        .HasFilter("\"AvisoUrgenteEm\" IS NOT NULL");
+
+                    b.ToTable("CrmEsperasLead", (string)null);
+                });
+
             modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroConfig", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3143,6 +3196,17 @@ namespace CssVision.Web.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Disparo");
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmEsperaLead", b =>
+                {
+                    b.HasOne("CssVision.Web.Domain.Crm.CrmLead", "Lead")
+                        .WithMany()
+                        .HasForeignKey("LeadId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Lead");
                 });
 
             modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmFinanceiroConfig", b =>

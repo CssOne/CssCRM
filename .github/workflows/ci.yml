@@ -33,6 +33,7 @@ jobs:
         run: |
           npm ci
           npx tsc -b
+          npm run verificar:mobile
 
       - name: Frontend tests
         working-directory: src/CssVision.Web/ClientApp

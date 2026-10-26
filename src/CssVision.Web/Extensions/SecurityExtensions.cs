@@ -33,7 +33,9 @@ public static class SecurityExtensions
                 });
 
             options.AddPolicy(RateLimitPolicies.Login, c => PorJanela($"login:{Ip(c)}", 10, TimeSpan.FromMinutes(1)));
-            options.AddPolicy(RateLimitPolicies.RecuperarSenha, c => PorJanela($"senha:{Ip(c)}", 5, TimeSpan.FromMinutes(10)));
+            // Folga para várias pessoas atrás do mesmo IP (escritório, rede da empresa) pedindo ou usando o link na mesma janela. O abuso contra uma
+            // conta específica (encher a caixa de alguém) é barrado por conta em AccountController.EsqueciSenha, não por IP.
+            options.AddPolicy(RateLimitPolicies.RecuperarSenha, c => PorJanela($"senha:{Ip(c)}", 30, TimeSpan.FromMinutes(10)));
             options.AddPolicy(RateLimitPolicies.FormularioPublico, c => PorJanela($"form:{Ip(c)}", 30, TimeSpan.FromMinutes(1)));
             options.AddPolicy(RateLimitPolicies.FinanceiroEscrita, c => PorJanela($"fin:{Usuario(c)}", 120, TimeSpan.FromMinutes(1)));
 
