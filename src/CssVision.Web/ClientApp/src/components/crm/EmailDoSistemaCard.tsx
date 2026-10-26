@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { ApiRequestError, api } from "../../lib/api";
 import type { EmailSistema } from "../../lib/types";
 import { Badge, Button, Card, Input, useToast } from "../ui";
+import { EVENTO_EMAIL_SISTEMA_MUDOU } from "./AlertaEmailDoSistema";
 
 /** Servidores conhecidos: ao escolher o provedor, host e porta já vêm preenchidos. */
 const PROVEDORES: { rotulo: string; host: string; porta: number }[] = [
@@ -30,6 +31,8 @@ export function EmailDoSistemaCard({ aoMudar }: { aoMudar?: (e: EmailSistema) =>
 
   function preencher(e: EmailSistema) {
     setAtual(e);
+    // Avisa a faixa "não configurado" do topo (no Shell) para ela sumir/voltar na hora.
+    window.dispatchEvent(new CustomEvent(EVENTO_EMAIL_SISTEMA_MUDOU));
     setHost(e.host ?? "");
     setPorta(String(e.port ?? 587));
     setUsuario(e.userName ?? "");
@@ -102,6 +105,17 @@ export function EmailDoSistemaCard({ aoMudar }: { aoMudar?: (e: EmailSistema) =>
           </Badge>
         )}
       </div>
+
+      {atual?.configurado && (
+        <div role="status" className="mb-4 flex items-start gap-2.5 rounded-xl border border-[color-mix(in_srgb,var(--success)_35%,transparent)] bg-[var(--success-soft)] px-3.5 py-3 text-sm text-[var(--fg)]">
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[var(--success)]" aria-hidden />
+          <p>
+            <strong>O e-mail do sistema já está configurado.</strong> O link de "Esqueci a senha" sai por <strong>{atual.host}</strong> com o remetente{" "}
+            <strong>{atual.fromEmail}</strong>
+            {atual.origem === "servidor" ? " (configuração do servidor)" : ""}. Para conferir, use "Enviar e-mail de teste para mim".
+          </p>
+        </div>
+      )}
 
       <form onSubmit={salvar} className="grid gap-3 sm:grid-cols-2" noValidate>
         <label className="text-sm font-medium text-[var(--fg)] sm:col-span-2">
