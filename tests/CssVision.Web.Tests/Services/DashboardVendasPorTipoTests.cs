@@ -62,6 +62,9 @@ public class DashboardVendasPorTipoTests
         Assert.Equal(1, porTipo["Indicação Lead"]);
         Assert.Equal(3, porTipo["Indicação pessoal"]);
         Assert.False(porTipo.ContainsKey("Pessoal"));
+        // Cada venda do cenário tem adesão de R$ 100: a adesão por tipo é a quantidade vezes 100 e as parcelas fecham o total da meta.
+        Assert.All(painel.Meta.PorTipo!, t => Assert.Equal(t.Quantidade * 100m, t.Adesao));
+        Assert.Equal(painel.Meta.RealizadoValor, painel.Meta.PorTipo!.Sum(t => t.Adesao));
         Assert.Equal(1, porTipo["Ação Externa"]);
         Assert.False(porTipo.ContainsKey("Sem tipo"));
         Assert.Equal(painel.Meta.RealizadoQuantidade, painel.Meta.PorTipo!.Sum(t => t.Quantidade)); // as cores fecham a barra

@@ -113,6 +113,7 @@ export function OverviewPage() {
   const resumoMensal = dados.resumoMensal ?? [];
   const leadsParadosTotal = dados.leadsParadosTotal ?? leadsParados.length;
   const tiposDaMeta = meta.porTipo ?? [];
+  const adesaoDosTipos = tiposDaMeta.reduce((soma, t) => soma + (t.adesao ?? 0), 0);
   const [anoMes, numMes] = mes.split("-");
   const rotuloMes = `${numMes}/${anoMes}`;
   // Só no mês corrente: onde a meta deveria estar hoje, proporcional aos dias passados.
@@ -235,6 +236,54 @@ export function OverviewPage() {
           </ul>
         </Card>
       </div>
+
+      {tiposDaMeta.length > 0 && (
+        <Card className="!rounded-2xl p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <span className="flex size-9 items-center justify-center rounded-xl bg-[var(--surface-hover)] text-[var(--fg-muted)]">
+                <Wallet className="size-5" aria-hidden />
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-[var(--fg)]">Adesão por tipo de venda</h2>
+                <p className="text-xs text-[var(--fg-muted)]">As mesmas vendas da Meta comercial do mês, separadas por tipo. Clique para ver as vendas.</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-[var(--fg-muted)]">Total</p>
+              <p className="text-xl font-bold tracking-tight text-[var(--fg)] [font-variant-numeric:tabular-nums]">{formatarMoeda(adesaoDosTipos)}</p>
+            </div>
+          </div>
+          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {tiposDaMeta.map((t) => {
+              const adesao = t.adesao ?? 0;
+              const parte = adesaoDosTipos > 0 ? (100 * adesao) / adesaoDosTipos : 0;
+              return (
+                <li key={t.tipo}>
+                  <button
+                    type="button"
+                    onClick={() => setTipoAberto(t.tipo)}
+                    title={`${t.tipo}: ${formatarMoeda(adesao)} em ${t.quantidade} venda(s) — clique para ver`}
+                    className="focus-ring block w-full cursor-pointer rounded-xl bg-[var(--surface-hover)] p-3 text-left transition hover:bg-[var(--brand-soft)]"
+                  >
+                    <span className="flex items-center gap-1.5 text-xs font-medium text-[var(--fg-muted)]">
+                      <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: corDoTipo(t.tipo) }} />
+                      {t.tipo}
+                    </span>
+                    <span className="mt-1 block text-lg font-bold tracking-tight text-[var(--fg)] [font-variant-numeric:tabular-nums]">{formatarMoeda(adesao)}</span>
+                    <span className="mt-0.5 block text-xs text-[var(--fg-muted)]">
+                      {t.quantidade} {t.quantidade === 1 ? "venda" : "vendas"} · {parte.toFixed(1).replace(".", ",")}% da adesão
+                    </span>
+                    <span aria-hidden className="mt-2 block h-1 w-full overflow-hidden rounded-full bg-[var(--border)]">
+                      <span className="block h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(100, parte)}%`, backgroundColor: corDoTipo(t.tipo) }} />
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
 
       <div className="grid items-start gap-3 lg:grid-cols-2">
         <CartaoRetratil

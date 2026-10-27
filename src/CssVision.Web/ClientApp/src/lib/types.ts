@@ -965,6 +965,8 @@ export interface MetaResultado {
 export interface VendaPorTipo {
   tipo: string;
   quantidade: number;
+  /** Adesão recebida das vendas desse tipo no mês. */
+  adesao?: number;
 }
 
 export interface FunilEtapa {

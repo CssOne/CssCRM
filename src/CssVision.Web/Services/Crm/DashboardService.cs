@@ -69,9 +69,9 @@ public sealed class DashboardService(
     /// <summary>As vendas do mês contadas na meta, separadas por tipo (a barra de meta da Visão geral). Maiúsculas/minúsculas não separam.</summary>
     private static async Task<List<VendaPorTipoDto>> ContarVendasPorTipoAsync(IQueryable<CrmOpportunity> vendas, CancellationToken ct)
     {
-        var tipos = await vendas.Select(o => new { Venda = o.TipoIndicacao, Lead = o.Lead.TipoIndicacao, o.Lead.CriadoManualmente, Etapa = o.Lead.Etapa != null ? o.Lead.Etapa.Nome : null }).ToListAsync(ct);
+        var tipos = await vendas.Select(o => new { Venda = o.TipoIndicacao, Lead = o.Lead.TipoIndicacao, o.Lead.CriadoManualmente, Etapa = o.Lead.Etapa != null ? o.Lead.Etapa.Nome : null, o.PagamentoAdesao }).ToListAsync(ct);
         return tipos.GroupBy(t => TipoDaVenda(t.Venda, t.Lead, t.CriadoManualmente, t.Etapa), StringComparer.OrdinalIgnoreCase)
-            .Select(g => new VendaPorTipoDto(g.Key, g.Count()))
+            .Select(g => new VendaPorTipoDto(g.Key, g.Count(), g.Sum(t => t.PagamentoAdesao ?? 0m)))
             .OrderByDescending(t => t.Quantidade).ThenBy(t => t.Tipo, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
