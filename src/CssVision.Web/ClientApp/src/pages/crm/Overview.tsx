@@ -4,8 +4,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
-import type { Dashboard } from "../../lib/types";
-import { Badge, Card, ErrorState, Skeleton } from "../../components/ui";
+import type { Dashboard, VendedorResumo } from "../../lib/types";
+import { Badge, Card, ErrorState, Select, Skeleton } from "../../components/ui";
+import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
 import { BarrasHorizontaisChart } from "../../components/marketing/GraficosTrafego";
 import { mesAtualIso, useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { StatCard } from "../../components/crm/StatCard";
@@ -70,6 +71,15 @@ export function OverviewPage() {
   const [mes, setMes] = useState(() => mesAtualIso().slice(0, 7));
   const mesAtualRef = useRef(mesAtualIso().slice(0, 7));
   const { podeFiltrar, regionais, regionalId, escolher: escolherRegional, pronto } = useRegionalDoPainel();
+  // Filtro por consultor (gestão): a meta do mês, os tipos de venda e os valores passam a ser só dele, como no Relatório comercial.
+  const podeGerir = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
+  const [consultorSalvo, setConsultorSalvo] = useEstadoSalvo("visao-geral:consultor", "");
+  const consultorId = podeGerir ? consultorSalvo : "";
+  const [consultores, setConsultores] = useState<VendedorResumo[]>([]);
+  useEffect(() => {
+    if (!podeGerir) return;
+    api.get<VendedorResumo[]>("/crm/management/vendedores?incluirInativos=true").then(setConsultores).catch(() => setConsultores([]));
+  }, [podeGerir]);
 
   useEffect(() => {
     if (!pronto) return; // espera saber qual regional abrir, para carregar uma vez só
@@ -79,12 +89,12 @@ export function OverviewPage() {
     const [ano, numeroMes] = mes.split("-").map(Number);
     const ultimoDia = new Date(ano, numeroMes, 0).getDate();
     api
-      .get<Dashboard>(`/crm/dashboard${toQueryString({ dataInicio: `${mes}-01`, dataFim: `${mes}-${String(ultimoDia).padStart(2, "0")}`, regionalId: regionalId || undefined })}`, controller.signal)
+      .get<Dashboard>(`/crm/dashboard${toQueryString({ dataInicio: `${mes}-01`, dataFim: `${mes}-${String(ultimoDia).padStart(2, "0")}`, regionalId: regionalId || undefined, vendedorId: consultorId || undefined })}`, controller.signal)
       .then(setDados)
       .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar o painel."); })
       .finally(() => { if (!controller.signal.aborted) setCarregando(false); });
     return () => controller.abort();
-  }, [recarregar, mes, regionalId, pronto]);
+  }, [recarregar, mes, regionalId, consultorId, pronto]);
 
   // Tempo real: o painel recarrega (sem piscar) quando uma venda/lead muda e quando o mês vira.
   useAtualizarAoVivo(() => {
@@ -136,6 +146,20 @@ export function OverviewPage() {
             <MesInput value={mes} onChange={(v) => v && setMes(v)} />
           </div>
           {podeFiltrar && <FiltroRegionalDoPainel regionais={regionais} valor={regionalId} aoEscolher={escolherRegional} />}
+          {podeGerir && (
+            <div className="w-52">
+              <label htmlFor="visao-consultor" className="mb-1 block px-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">Consultor</label>
+              <Select id="visao-consultor" value={consultorId} onChange={(e) => setConsultorSalvo(e.target.value)} aria-label="Consultor">
+                <option value="">Todos</option>
+                {consultores.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}
+                    {c.ativo === false ? " (inativo)" : ""}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
         </div>
       </div>
       <PagamentosEmAberto />
@@ -366,7 +390,7 @@ export function OverviewPage() {
             ? [
                 {
                   rotulo: origemAberta,
-                  url: `/crm/dashboard/origem-vendas${toQueryString({ origem: origemAberta, dataInicio: `${mes}-01`, dataFim: `${mes}-${String(new Date(Number(mes.split("-")[0]), Number(mes.split("-")[1]), 0).getDate()).padStart(2, "0")}`, regionalId: regionalId || undefined })}`,
+                  url: `/crm/dashboard/origem-vendas${toQueryString({ origem: origemAberta, dataInicio: `${mes}-01`, dataFim: `${mes}-${String(new Date(Number(mes.split("-")[0]), Number(mes.split("-")[1]), 0).getDate()).padStart(2, "0")}`, regionalId: regionalId || undefined, vendedorId: consultorId || undefined })}`,
                 },
               ]
             : []
@@ -385,7 +409,7 @@ export function OverviewPage() {
                 .filter((t, i, todos) => todos.indexOf(t) === i)
                 .map((t) => ({
                   rotulo: t === "" ? "Todas" : t,
-                  url: `/crm/dashboard/vendas-do-mes${toQueryString({ tipo: t || undefined, regionalId: regionalId || undefined })}`,
+                  url: `/crm/dashboard/vendas-do-mes${toQueryString({ tipo: t || undefined, regionalId: regionalId || undefined, vendedorId: consultorId || undefined })}`,
                 }))
         }
         onFechar={() => setTipoAberto(null)}
