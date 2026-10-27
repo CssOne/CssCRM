@@ -82,6 +82,25 @@ public sealed class OpportunityService(
     /// e número fora do limite (valores numeric(14,2), porcentagem de 0 a 100). Sem isto o banco recusava ("value too long"/"numeric overflow") e o consultor
     /// via só "Erro inesperado (500)" ao concluir a venda, mesmo com tudo preenchido (ex.: placa digitada com o modelo junto).
     /// </summary>
+    /// <summary>CPF/CNPJ só com os dígitos (aceita com ou sem pontuação); vazio vira nulo.</summary>
+    internal static string? SomenteDigitosDoDocumento(string? documento)
+    {
+        if (string.IsNullOrWhiteSpace(documento)) return null;
+        var digitos = new string(documento.Where(char.IsDigit).ToArray());
+        return digitos.Length == 0 ? null : digitos;
+    }
+
+    /// <summary>
+    /// CPF/CNPJ como vai para a coluna (14 posições): fica como foi digitado, e só o que passa disso — o CNPJ com pontuação tem 18 caracteres —
+    /// é gravado só com os dígitos (14), em vez de estourar o limite.
+    /// </summary>
+    internal static string? DocumentoParaGravar(string? documento)
+    {
+        if (string.IsNullOrWhiteSpace(documento)) return null;
+        var texto = documento.Trim();
+        return texto.Length <= 14 ? texto : SomenteDigitosDoDocumento(texto);
+    }
+
     internal static void ExigirCamposDaVendaDentroDoLimite(
         string? cpf, string? estado, string? tipoIndicacao, VeiculoUpsertRequest? veiculo, decimal? porcentagem,
         params (string Nome, decimal? Valor)[] valores)
@@ -97,7 +116,8 @@ public sealed class OpportunityService(
         Texto("A placa", veiculo?.Placa, 10, "Digite só a placa do veículo, sem o modelo ou outras informações.");
         Texto("O chassi", veiculo?.Chassi, 30, "Confira o número do chassi.");
         Texto("A descrição do veículo", veiculo?.Descricao, 200, "Use só marca e modelo.");
-        Texto("O CPF/CNPJ", cpf, 14, "Digite só os números.");
+        // Vale só os dígitos: o CNPJ formatado (12.345.678/0001-90) tem 18 caracteres mas é um documento válido de 14 dígitos.
+        Texto("O CPF/CNPJ", SomenteDigitosDoDocumento(cpf), 14, "Digite só os números.");
         Texto("O estado", estado, 2, "Use a sigla do estado (UF).");
         Texto("O canal de aquisição", tipoIndicacao, 80, "Escolha uma das opções da lista.");
 
@@ -174,7 +194,7 @@ public sealed class OpportunityService(
             Porcentagem = request.Porcentagem,
             TermoAdesaoAceito = request.TermoAdesaoAceito,
             Migracao = request.Migracao,
-            Cpf = string.IsNullOrWhiteSpace(request.Cpf) ? null : request.Cpf.Trim(),
+            Cpf = DocumentoParaGravar(request.Cpf),
             Estado = string.IsNullOrWhiteSpace(request.Estado) ? null : request.Estado.Trim().ToUpperInvariant(),
             Indicacao = request.Indicacao,
             // Venda do outro veículo de um cliente do tráfego pago: o canal da venda é o do card ("Indicação Lead").
@@ -257,7 +277,7 @@ public sealed class OpportunityService(
         opportunity.Porcentagem = request.Porcentagem;
         opportunity.TermoAdesaoAceito = request.TermoAdesaoAceito;
         opportunity.Migracao = request.Migracao;
-        opportunity.Cpf = string.IsNullOrWhiteSpace(request.Cpf) ? null : request.Cpf.Trim();
+        opportunity.Cpf = DocumentoParaGravar(request.Cpf);
         opportunity.Estado = string.IsNullOrWhiteSpace(request.Estado) ? null : request.Estado.Trim().ToUpperInvariant();
         opportunity.Indicacao = request.Indicacao;
         opportunity.TipoIndicacao = string.IsNullOrWhiteSpace(request.TipoIndicacao) ? null : request.TipoIndicacao.Trim();
@@ -343,7 +363,7 @@ public sealed class OpportunityService(
 
             opportunity.ValorFinal = request.ValorFinal;
             opportunity.DataEfetivaFechamento = DataDaVendaAoMeioDia(request.DataEfetivaFechamento.Value);
-            opportunity.Cpf = string.IsNullOrWhiteSpace(request.Cpf) ? null : request.Cpf.Trim();
+            opportunity.Cpf = DocumentoParaGravar(request.Cpf);
             opportunity.Estado = string.IsNullOrWhiteSpace(request.Estado) ? null : request.Estado.Trim().ToUpperInvariant();
             opportunity.Indicacao = request.Indicacao;
             opportunity.TipoIndicacao = string.IsNullOrWhiteSpace(request.TipoIndicacao) ? null : request.TipoIndicacao.Trim();

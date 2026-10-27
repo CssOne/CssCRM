@@ -8,7 +8,7 @@ import { formatarData, hojeBrasilia } from "../../lib/format";
 import { Button, Checkbox, DocumentoInput, Input, Label, Modal, MoneyInput, Select, useToast } from "../ui";
 import { leadFormVazio, paraLeadCreateRequest } from "./LeadForm";
 import { CidadeInput } from "../CidadeInput";
-import { erroDocumento, erroTelefone } from "../../lib/validacao";
+import { erroDocumento, erroTelefone, tipoPessoaDoDocumento } from "../../lib/validacao";
 import { useAuth } from "../../context/AuthContext";
 import { DataInput } from "../PeriodoInput";
 
@@ -259,7 +259,7 @@ export function VendaConcluidaDialog({
         rowVersion: oportunidadeEditar.rowVersion,
         valorFinal: oportunidadeEditar.valorFinal ?? oportunidadeEditar.valorEstimado,
         dataEfetivaFechamento: oportunidadeEditar.dataEfetivaFechamento?.slice(0, 10) ?? hojeBrasilia(),
-        cpf: oportunidadeEditar.cpf ?? "",
+        cpf: (oportunidadeEditar.cpf ?? "").replace(/\D/g, ""),
         estado: oportunidadeEditar.estado ?? "",
         indicacao: oportunidadeEditar.indicacao ?? false,
         tipoIndicacao: oportunidadeEditar.tipoIndicacao ?? "",
@@ -316,7 +316,7 @@ export function VendaConcluidaDialog({
         setValores((v) =>
           comIndicacaoLead({
             ...v,
-            cpf: lead.documento ?? lead.veiculoAdicionalDeDocumento ?? "",
+            cpf: (lead.documento ?? lead.veiculoAdicionalDeDocumento ?? "").replace(/\D/g, ""),
             estado: lead.estado ?? "",
             // O canal do cadastro do cliente vem preenchido, mas o "Teve indicação" não é marcado sozinho: quem marca é o consultor.
             tipoIndicacao: lead.tipoIndicacao ?? "",
@@ -350,7 +350,7 @@ export function VendaConcluidaDialog({
         setResponsavelIdLead(sessao?.id ?? null);
         if (clienteInicial) {
           setNomeCliente(clienteInicial.nome);
-          setValores((v) => comIndicacaoLead({ ...v, cpf: clienteInicial.documento }));
+          setValores((v) => comIndicacaoLead({ ...v, cpf: clienteInicial.documento.replace(/\D/g, "") }));
         }
       });
     return () => controller.abort();
@@ -511,7 +511,7 @@ export function VendaConcluidaDialog({
       termoAdesaoAceito: false,
       migracao: valores.migracao ?? false,
       veiculo: temVeiculo ? { ...v!, dataChegada: v!.dataChegada || null } : null,
-      cpf: valores.cpf || null,
+      cpf: valores.cpf?.replace(/\D/g, "") || null,
       estado: valores.estado || null,
       indicacao: ocultarIndicacao ? false : valores.indicacao ?? null,
       tipoIndicacao: ocultarIndicacao ? null : valores.tipoIndicacao || null,
@@ -565,8 +565,9 @@ export function VendaConcluidaDialog({
           const formulario = {
             ...leadFormVazio,
             nomeOuRazaoSocial: nomeCliente.trim(),
-            tipoPessoa: TipoPessoa.Fisica,
-            documento: valores.cpf ?? "",
+            // CNPJ (12 a 14 dígitos) cadastra o cliente como Pessoa Jurídica; CPF, como Física.
+            tipoPessoa: tipoPessoaDoDocumento(valores.cpf) === "juridica" ? TipoPessoa.Juridica : TipoPessoa.Fisica,
+            documento: valores.cpf?.replace(/\D/g, "") ?? "",
             telefone,
             telefone2,
             email,
@@ -681,7 +682,7 @@ export function VendaConcluidaDialog({
         migracao: valores.migracao ?? false,
         veiculo: veiculoFinal,
         rowVersion: rowVersionAtual,
-        cpf: valores.cpf || null,
+        cpf: valores.cpf?.replace(/\D/g, "") || null,
         estado: valores.estado || null,
         indicacao: ocultarIndicacao ? false : valores.indicacao ?? null,
         tipoIndicacao: valores.tipoIndicacao || null,

@@ -13,15 +13,22 @@ self.addEventListener("push", (event) => {
   } catch {
     dados = { corpo: event.data ? event.data.text() : "" };
   }
+  // Alertas da gestão (leads parados na distribuição, consultor que demora): com o CRM aberto, a aba toca o toque deles (a notificação do sistema não tem som próprio).
+  const alertaDaGestao = typeof dados.tag === "string" && (dados.tag === "alerta-limite-distribuicao" || dados.tag.startsWith("espera-gestao-"));
   event.waitUntil(
-    self.registration.showNotification(dados.titulo || "CSS Brasil CRM", {
-      body: dados.corpo || "",
-      icon: "/logo-css.png",
-      badge: "/logo-css.png",
-      tag: dados.tag || undefined,
-      renotify: !!dados.tag,
-      data: { url: dados.url || "/app/crm/leads/kanban" },
-    })
+    Promise.all([
+      self.registration.showNotification(dados.titulo || "CSS Brasil CRM", {
+        body: dados.corpo || "",
+        icon: "/logo-css.png",
+        badge: "/logo-css.png",
+        tag: dados.tag || undefined,
+        renotify: !!dados.tag,
+        data: { url: dados.url || "/app/crm/leads/kanban" },
+      }),
+      alertaDaGestao
+        ? self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((janelas) => janelas.forEach((j) => j.postMessage({ tipo: "alerta-gestao" })))
+        : Promise.resolve(),
+    ])
   );
 });
 
