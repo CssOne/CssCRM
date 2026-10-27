@@ -958,6 +958,13 @@ export interface MetaResultado {
   percentualAtingido: number;
   metaQuantidade: number;
   realizadoQuantidade: number;
+  /** As vendas contadas na meta, por tipo (Lead, Indicação, Indicação Lead, Pessoal...): as cores da barra. */
+  porTipo?: VendaPorTipo[];
+}
+
+export interface VendaPorTipo {
+  tipo: string;
+  quantidade: number;
 }
 
 export interface FunilEtapa {

@@ -19,6 +19,12 @@ public class CrmDashboardController(IDashboardService dashboardService) : Contro
         return Ok(resultado);
     }
 
+    /// <summary>As vendas por trás da barra de meta do mês da Visão geral (as mesmas contadas nela), todas ou só de um tipo.</summary>
+    [HttpGet("vendas-do-mes")]
+    public async Task<ActionResult<RelatorioDetalheDto>> ObterVendasDoMes(
+        [FromQuery] string? tipo, [FromQuery] Guid? vendedorId, [FromQuery] Guid? regionalId, CancellationToken ct) =>
+        Ok(await dashboardService.ObterVendasDoMesAsync(new DashboardFilterRequest(null, null, vendedorId, regionalId), tipo, ct));
+
     /// <summary>As vendas por trás de uma fatia do gráfico "Origem das vendas" da Visão geral.</summary>
     [HttpGet("origem-vendas")]
     public async Task<ActionResult<RelatorioDetalheDto>> ObterVendasDaOrigem(
