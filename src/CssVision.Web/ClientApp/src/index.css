@@ -266,6 +266,94 @@ body {
   background-color: var(--brand);
   border-width: 2px;
 }
+/* Sino de notificações: o menu abre deslizando, os alertas entram/saem com fade, o sino balança com alerta novo e o número dá um "pop". */
+@keyframes sino-abrir {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes sino-entrar {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes sino-sair {
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@keyframes sino-balancar {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  15% {
+    transform: rotate(16deg);
+  }
+  30% {
+    transform: rotate(-14deg);
+  }
+  45% {
+    transform: rotate(10deg);
+  }
+  60% {
+    transform: rotate(-8deg);
+  }
+  75% {
+    transform: rotate(4deg);
+  }
+}
+@keyframes sino-pop {
+  0% {
+    transform: scale(0.5);
+  }
+  60% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.sino-abre {
+  transform-origin: top right;
+  animation: sino-abrir 0.18s ease-out;
+}
+.sino-entra {
+  animation: sino-entrar 0.25s ease-out;
+}
+.sino-sai {
+  animation: sino-sair 0.22s ease-in forwards;
+}
+.sino-balanca {
+  transform-origin: top center;
+  animation: sino-balancar 1s ease-in-out;
+}
+.sino-pop {
+  animation: sino-pop 0.3s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sino-abre,
+  .sino-entra,
+  .sino-balanca,
+  .sino-pop {
+    animation: none;
+  }
+  .sino-sai {
+    animation-duration: 0.01s;
+  }
+}
+
 /* Card "Leads esperando atendimento": a lista de leads do consultor e a troca de regional entram com um leve deslize. */
 @keyframes espera-entrar {
   from {
