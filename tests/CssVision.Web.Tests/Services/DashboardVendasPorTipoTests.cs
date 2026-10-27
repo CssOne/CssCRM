@@ -34,7 +34,9 @@ public class DashboardVendasPorTipoTests
         await Venda("Do lead 2", "lead", null);                  // maiúsculas/minúsculas não separam
         await Venda("Indicou 1", "Indicação", null);
         await Venda("Fechou como indicação", "Lead", "Indicação Lead"); // o tipo da venda vale mais que o do lead
-        await Venda("Pessoal 1", null, "Pessoal");
+        await Venda("Pessoal 1", null, "Pessoal");                        // nome antigo de "Indicação pessoal"
+        await Venda("Pessoal 2", "Indicação pessoal", null);
+        await Venda("Pessoal 3", "Indicação pessoal", "Pessoal");         // venda com o nome antigo, lead já com o novo
         await Venda("Sem canal gravado", null, null);        // card do tráfego/Notion sem canal: é Lead, como no quadro
         await Venda("Ação externa", "Ação Externa", null);   // qualquer canal gravado aparece com o nome dele
 
@@ -53,12 +55,13 @@ public class DashboardVendasPorTipoTests
 
         var painel = await servico.ObterAsync(new DashboardFilterRequest(HorarioBrasilia.PrimeiroDiaDoMes(hoje), hoje, null, null), CancellationToken.None);
 
-        Assert.Equal(7, painel.Meta.RealizadoQuantidade);
+        Assert.Equal(9, painel.Meta.RealizadoQuantidade);
         var porTipo = painel.Meta.PorTipo!.ToDictionary(t => t.Tipo, t => t.Quantidade, StringComparer.OrdinalIgnoreCase);
         Assert.Equal(3, porTipo["Lead"]);                         // 2 com canal Lead + 1 sem canal (Venda concluída Leads)
         Assert.Equal(1, porTipo["Indicação"]);
         Assert.Equal(1, porTipo["Indicação Lead"]);
-        Assert.Equal(1, porTipo["Pessoal"]);
+        Assert.Equal(3, porTipo["Indicação pessoal"]);
+        Assert.False(porTipo.ContainsKey("Pessoal"));
         Assert.Equal(1, porTipo["Ação Externa"]);
         Assert.False(porTipo.ContainsKey("Sem tipo"));
         Assert.Equal(painel.Meta.RealizadoQuantidade, painel.Meta.PorTipo!.Sum(t => t.Quantidade)); // as cores fecham a barra
@@ -72,7 +75,7 @@ public class DashboardVendasPorTipoTests
         var filtro = new DashboardFilterRequest(null, null, null, null);
 
         var todas = await servico.ObterVendasDoMesAsync(filtro, null, CancellationToken.None);
-        Assert.Equal(7, todas.Total);
+        Assert.Equal(9, todas.Total);
 
         var leads = await servico.ObterVendasDoMesAsync(filtro, "Lead", CancellationToken.None);
         Assert.Equal(3, leads.Total);

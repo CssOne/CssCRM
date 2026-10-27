@@ -58,6 +58,8 @@ public sealed class DashboardService(
     private static string TipoDaVenda(string? daVenda, string? doLead, bool leadCriadoManualmente, string? etapaDoLead)
     {
         var tipo = (string.IsNullOrWhiteSpace(daVenda) ? doLead : daVenda)?.Trim();
+        // "Pessoal" é o nome antigo de "Indicação pessoal": venda gravada com o nome antigo cai no mesmo grupo (não vira um tipo à parte).
+        if (string.Equals(tipo, "Pessoal", StringComparison.OrdinalIgnoreCase)) return RenomearCanalPessoalBackgroundService.NomeNovo;
         if (!string.IsNullOrEmpty(tipo)) return tipo;
         if (etapaDoLead?.Contains("(Leads)", StringComparison.OrdinalIgnoreCase) == true) return "Lead";
         if (etapaDoLead?.Contains("(Indicação)", StringComparison.OrdinalIgnoreCase) == true) return "Indicação";
