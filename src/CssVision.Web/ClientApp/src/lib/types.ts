@@ -1767,11 +1767,21 @@ export interface RelatorioDetalhe {
 export interface EsperaConsultor {
   consultorId: string;
   nome: string;
+  regionalNome?: string | null;
   esperandoAgora: number;
   maisAntigoDesde?: string | null;
   passaramDoPrimeiroPrazo: number;
   passaramDoPrazoForte: number;
   reincidente: boolean;
+  leads: EsperaLead[];
+}
+
+export interface EsperaLead {
+  leadId: string;
+  nome: string;
+  chegouEm: string;
+  /** Nulo = ainda esperando atendimento. */
+  atendidoEm?: string | null;
 }
 
 export interface AuditoriaQuadroGrupo {

@@ -24,7 +24,7 @@ public class HorarioFiltrosESupervisorTests
     };
 
     [Fact]
-    public async Task TodosForaDoHorario_ComLeadParado_AlertaPorHorario_EContinuarNaoLibera()
+    public async Task TodosForaDoHorario_ComLeadParado_AlertaPorHorario_EContinuarLibera()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
@@ -52,13 +52,12 @@ public class HorarioFiltrosESupervisorTests
         var mensagem = AlertaDistribuicaoService.MontarMensagem(estado);
         Assert.Contains("fora do horário", mensagem.Titulo);
 
-        // "Continuar distribuindo hoje" afrouxa só os limites: a agenda de dias e horários não se ignora, o lead segue esperando.
+        // O gestor libera com "Continuar distribuindo hoje": como ninguém está no horário, o lead é entregue e o aviso some.
         await distribuicao.DefinirContinuarAposLimiteAsync(true, CancellationToken.None);
         var depois = await distribuicao.ObterEstadoDistribuicaoAsync(CancellationToken.None);
-        Assert.True(depois.Bloqueada);
-        Assert.Equal(1, depois.LeadsBloqueadosPorHorario);
-        Assert.Equal(1, depois.LeadsSemResponsavel);
-        Assert.Contains("entrar no dia/horário", AlertaDistribuicaoService.MontarMensagem(depois).Corpo);
+        Assert.False(depois.Bloqueada);
+        Assert.Equal(0, depois.LeadsSemResponsavel);
+        Assert.Contains("Continuar", AlertaDistribuicaoService.MontarMensagem(estado).Corpo.Replace("continuar", "Continuar"));
     }
 
     [Fact]
