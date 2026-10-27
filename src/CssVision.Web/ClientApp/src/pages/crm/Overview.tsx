@@ -113,7 +113,6 @@ export function OverviewPage() {
   const resumoMensal = dados.resumoMensal ?? [];
   const leadsParadosTotal = dados.leadsParadosTotal ?? leadsParados.length;
   const tiposDaMeta = meta.porTipo ?? [];
-  const adesaoDosTipos = tiposDaMeta.reduce((soma, t) => soma + (t.adesao ?? 0), 0);
   const [anoMes, numMes] = mes.split("-");
   const rotuloMes = `${numMes}/${anoMes}`;
   // Só no mês corrente: onde a meta deveria estar hoje, proporcional aos dias passados.
@@ -190,25 +189,30 @@ export function OverviewPage() {
             {ritmo && <span aria-hidden className="pointer-events-none absolute top-0 h-full w-0.5 bg-[var(--fg)] opacity-60" style={{ left: `${Math.min(100, ritmo.esperado)}%` }} />}
           </div>
           {tiposDaMeta.length > 0 && (
-            <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Vendas do mês por tipo">
+            <ul className="mt-2.5 grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-5" aria-label="Vendas e adesão do mês por tipo">
               {tiposDaMeta.map((t) => (
                 <li key={t.tipo}>
                   <button
                     type="button"
                     onClick={() => setTipoAberto(t.tipo)}
-                    className="focus-ring inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[var(--border)] px-2.5 py-0.5 text-xs text-[var(--fg-muted)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+                    title={`${t.tipo}: ${formatarMoeda(t.adesao ?? 0)} de adesão em ${t.quantidade} venda(s) — clique para ver`}
+                    className="focus-ring block w-full cursor-pointer rounded-lg bg-[var(--surface-hover)] px-2 py-1.5 text-left transition hover:bg-[var(--brand-soft)]"
                   >
-                    <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: corDoTipo(t.tipo) }} />
-                    {t.tipo} · <strong className="text-[var(--fg)]">{t.quantidade}</strong>
+                    <span className="flex items-center gap-1.5 text-[11px] text-[var(--fg-muted)]">
+                      <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: corDoTipo(t.tipo) }} />
+                      <span className="truncate">{t.tipo}</span>
+                      <span className="ml-auto shrink-0">{t.quantidade}</span>
+                    </span>
+                    <span className="block text-xs font-bold text-[var(--fg)] [font-variant-numeric:tabular-nums]">{formatarMoeda(t.adesao ?? 0)}</span>
                   </button>
                 </li>
               ))}
-              <li>
-                <button type="button" onClick={() => setTipoAberto("")} className="focus-ring cursor-pointer px-1.5 py-0.5 text-xs font-medium text-[var(--brand)] hover:underline">
-                  Ver todas
-                </button>
-              </li>
             </ul>
+          )}
+          {tiposDaMeta.length > 0 && (
+            <button type="button" onClick={() => setTipoAberto("")} className="focus-ring mt-1 cursor-pointer text-xs font-medium text-[var(--brand)] hover:underline">
+              Ver todas as vendas
+            </button>
           )}
           <p className="mt-2 text-xs text-[var(--fg-muted)]">
             Vendas ganhas: <strong className="text-[var(--fg)]">{formatarMoeda(indicadores.vendasGanhasValor)}</strong> em {indicadores.vendasGanhasQuantidade} negócio(s)
@@ -236,54 +240,6 @@ export function OverviewPage() {
           </ul>
         </Card>
       </div>
-
-      {tiposDaMeta.length > 0 && (
-        <Card className="!rounded-2xl p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5">
-              <span className="flex size-9 items-center justify-center rounded-xl bg-[var(--surface-hover)] text-[var(--fg-muted)]">
-                <Wallet className="size-5" aria-hidden />
-              </span>
-              <div>
-                <h2 className="text-sm font-bold text-[var(--fg)]">Adesão por tipo de venda</h2>
-                <p className="text-xs text-[var(--fg-muted)]">As mesmas vendas da Meta comercial do mês, separadas por tipo. Clique para ver as vendas.</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-[var(--fg-muted)]">Total</p>
-              <p className="text-xl font-bold tracking-tight text-[var(--fg)] [font-variant-numeric:tabular-nums]">{formatarMoeda(adesaoDosTipos)}</p>
-            </div>
-          </div>
-          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {tiposDaMeta.map((t) => {
-              const adesao = t.adesao ?? 0;
-              const parte = adesaoDosTipos > 0 ? (100 * adesao) / adesaoDosTipos : 0;
-              return (
-                <li key={t.tipo}>
-                  <button
-                    type="button"
-                    onClick={() => setTipoAberto(t.tipo)}
-                    title={`${t.tipo}: ${formatarMoeda(adesao)} em ${t.quantidade} venda(s) — clique para ver`}
-                    className="focus-ring block w-full cursor-pointer rounded-xl bg-[var(--surface-hover)] p-3 text-left transition hover:bg-[var(--brand-soft)]"
-                  >
-                    <span className="flex items-center gap-1.5 text-xs font-medium text-[var(--fg-muted)]">
-                      <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: corDoTipo(t.tipo) }} />
-                      {t.tipo}
-                    </span>
-                    <span className="mt-1 block text-lg font-bold tracking-tight text-[var(--fg)] [font-variant-numeric:tabular-nums]">{formatarMoeda(adesao)}</span>
-                    <span className="mt-0.5 block text-xs text-[var(--fg-muted)]">
-                      {t.quantidade} {t.quantidade === 1 ? "venda" : "vendas"} · {parte.toFixed(1).replace(".", ",")}% da adesão
-                    </span>
-                    <span aria-hidden className="mt-2 block h-1 w-full overflow-hidden rounded-full bg-[var(--border)]">
-                      <span className="block h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(100, parte)}%`, backgroundColor: corDoTipo(t.tipo) }} />
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
-      )}
 
       <div className="grid items-start gap-3 lg:grid-cols-2">
         <CartaoRetratil
