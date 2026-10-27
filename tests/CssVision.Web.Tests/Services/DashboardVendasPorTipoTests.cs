@@ -19,7 +19,7 @@ public class DashboardVendasPorTipoTests
 
         async Task Venda(string nome, string? tipoDoLead, string? tipoDaVenda)
         {
-            var lead = new CrmLead { NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, TipoIndicacao = tipoDoLead };
+            var lead = new CrmLead { NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = ana.Id, TipoIndicacao = tipoDoLead, CriadoManualmente = false };
             db.CrmLeads.Add(lead);
             await db.SaveChangesAsync();
             db.CrmOpportunities.Add(new CrmOpportunity
@@ -35,7 +35,8 @@ public class DashboardVendasPorTipoTests
         await Venda("Indicou 1", "Indicação", null);
         await Venda("Fechou como indicação", "Lead", "Indicação Lead"); // o tipo da venda vale mais que o do lead
         await Venda("Pessoal 1", null, "Pessoal");
-        await Venda("Sem nada", null, null);
+        await Venda("Sem canal gravado", null, null);        // card do tráfego/Notion sem canal: é Lead, como no quadro
+        await Venda("Ação externa", "Ação Externa", null);   // qualquer canal gravado aparece com o nome dele
 
         var currentUser = TestDbContextFactory.MockCurrentUser(ana.Id);
         var equipe = new EquipeComercialService(db, currentUser.Object);
@@ -52,13 +53,14 @@ public class DashboardVendasPorTipoTests
 
         var painel = await servico.ObterAsync(new DashboardFilterRequest(HorarioBrasilia.PrimeiroDiaDoMes(hoje), hoje, null, null), CancellationToken.None);
 
-        Assert.Equal(6, painel.Meta.RealizadoQuantidade);
+        Assert.Equal(7, painel.Meta.RealizadoQuantidade);
         var porTipo = painel.Meta.PorTipo!.ToDictionary(t => t.Tipo, t => t.Quantidade, StringComparer.OrdinalIgnoreCase);
-        Assert.Equal(2, porTipo["Lead"]);
+        Assert.Equal(3, porTipo["Lead"]);                         // 2 com canal Lead + 1 sem canal (Venda concluída Leads)
         Assert.Equal(1, porTipo["Indicação"]);
         Assert.Equal(1, porTipo["Indicação Lead"]);
         Assert.Equal(1, porTipo["Pessoal"]);
-        Assert.Equal(1, porTipo["Sem tipo"]);
+        Assert.Equal(1, porTipo["Ação Externa"]);
+        Assert.False(porTipo.ContainsKey("Sem tipo"));
         Assert.Equal(painel.Meta.RealizadoQuantidade, painel.Meta.PorTipo!.Sum(t => t.Quantidade)); // as cores fecham a barra
     }
 
@@ -70,10 +72,10 @@ public class DashboardVendasPorTipoTests
         var filtro = new DashboardFilterRequest(null, null, null, null);
 
         var todas = await servico.ObterVendasDoMesAsync(filtro, null, CancellationToken.None);
-        Assert.Equal(6, todas.Total);
+        Assert.Equal(7, todas.Total);
 
         var leads = await servico.ObterVendasDoMesAsync(filtro, "Lead", CancellationToken.None);
-        Assert.Equal(2, leads.Total);
+        Assert.Equal(3, leads.Total);
         Assert.All(leads.Itens, i => Assert.Equal("Lead", i.Canal, ignoreCase: true));
 
         var indicacaoLead = await servico.ObterVendasDoMesAsync(filtro, "Indicação Lead", CancellationToken.None);
