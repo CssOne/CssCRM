@@ -134,6 +134,16 @@ public class CotacaoAdesaoTests
         Assert.Equal(emAtendimento.Id, detalhe.EtapaId);
     }
 
+    [Theory]
+    [InlineData("529.982.247-25", TipoPessoa.Juridica, TipoPessoa.Fisica)]   // CPF informado como Jurídica: vira Física
+    [InlineData("11.222.333/0001-81", TipoPessoa.Fisica, TipoPessoa.Juridica)] // CNPJ informado como Física: vira Jurídica
+    [InlineData(null, TipoPessoa.Juridica, TipoPessoa.Juridica)]             // sem documento vale o informado
+    public void TipoPessoaSegueODocumento(string? documento, TipoPessoa informado, TipoPessoa esperado)
+    {
+        var normalizado = DocumentValidation.NormalizarDocumento(documento, out _);
+        Assert.Equal(esperado, CssVision.Web.Services.Crm.LeadService.TipoPessoaDoDocumento(normalizado) ?? informado);
+    }
+
     [Fact]
     public async Task CriarOportunidade_ComCnpjFormatado_SalvaOsDigitosEmVezDeEstourarOLimite()
     {

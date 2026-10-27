@@ -260,6 +260,14 @@ public sealed class LeadService(
         return regional;
     }
 
+    /// <summary>O tipo de pessoa segue o documento: 11 dígitos é CPF (Física) e 14 é CNPJ (Jurídica). Sem documento (ou de outro tamanho), vale o que foi informado.</summary>
+    internal static TipoPessoa? TipoPessoaDoDocumento(string? documentoNormalizado) => documentoNormalizado?.Length switch
+    {
+        11 => TipoPessoa.Fisica,
+        14 => TipoPessoa.Juridica,
+        _ => null,
+    };
+
     public async Task<CriarLeadResultado> CriarAsync(LeadCreateRequest request, CancellationToken ct)
     {
         ExigirDadosDoCliente(request.Telefone, request.Cidade, request.Estado, request.Placa);
@@ -315,7 +323,7 @@ public sealed class LeadService(
         {
             EtapaId = etapaId,
             NomeOuRazaoSocial = request.NomeOuRazaoSocial.Trim(),
-            TipoPessoa = request.TipoPessoa,
+            TipoPessoa = TipoPessoaDoDocumento(documentoNormalizado) ?? request.TipoPessoa,
             DocumentoNormalizado = documentoNormalizado,
             Telefone = request.Telefone,
             TelefoneNormalizado = telefoneNormalizado,
@@ -403,7 +411,7 @@ public sealed class LeadService(
         }
 
         lead.NomeOuRazaoSocial = request.NomeOuRazaoSocial.Trim();
-        lead.TipoPessoa = request.TipoPessoa;
+        lead.TipoPessoa = TipoPessoaDoDocumento(documentoNormalizado) ?? request.TipoPessoa;
         lead.DocumentoNormalizado = documentoNormalizado;
         lead.Telefone = request.Telefone;
         lead.TelefoneNormalizado = DocumentValidation.NormalizarTelefone(request.Telefone);
