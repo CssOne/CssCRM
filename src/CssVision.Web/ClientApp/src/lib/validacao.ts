@@ -2,6 +2,17 @@
 
 const soDigitos = (v: string | null | undefined) => (v ?? "").replace(/\D/g, "");
 
+/**
+ * Tipo de pessoa pelo documento digitado: 11 dígitos é CPF (Física) e 12 a 14 é CNPJ (Jurídica). Com menos de 11 ainda não dá para saber (nulo).
+ * O DocumentoInput já troca a máscara no 12º dígito, então a mudança acompanha o que a pessoa vê.
+ */
+export function tipoPessoaDoDocumento(valor: string | null | undefined): "fisica" | "juridica" | null {
+  const d = soDigitos(valor);
+  if (d.length >= 12) return "juridica";
+  if (d.length === 11) return "fisica";
+  return null;
+}
+
 function cpfValido(d: string): boolean {
   if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
   for (const t of [9, 10]) {

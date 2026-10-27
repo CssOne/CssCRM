@@ -134,6 +134,32 @@ public class CotacaoAdesaoTests
         Assert.Equal(emAtendimento.Id, detalhe.EtapaId);
     }
 
+    [Theory]
+    [InlineData("529.982.247-25", TipoPessoa.Juridica, TipoPessoa.Fisica)]   // CPF informado como Jurídica: vira Física
+    [InlineData("11.222.333/0001-81", TipoPessoa.Fisica, TipoPessoa.Juridica)] // CNPJ informado como Física: vira Jurídica
+    [InlineData(null, TipoPessoa.Juridica, TipoPessoa.Juridica)]             // sem documento vale o informado
+    public void TipoPessoaSegueODocumento(string? documento, TipoPessoa informado, TipoPessoa esperado)
+    {
+        var normalizado = DocumentValidation.NormalizarDocumento(documento, out _);
+        Assert.Equal(esperado, CssVision.Web.Services.Crm.LeadService.TipoPessoaDoDocumento(normalizado) ?? informado);
+    }
+
+    [Fact]
+    public async Task CriarOportunidade_ComCnpjFormatado_SalvaOsDigitosEmVezDeEstourarOLimite()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, usuario, lead, _) = await PrepararAsync(factory);
+        var etapa = await factory.CriarEtapaAsync(db, "Novo lead", 1);
+        var service = new OpportunityService(db, usuario, new EquipeComercialService(db, usuario), new NoOpMetaConversionService(), new NoOpAuditSink(), new FakeFileStorageService());
+
+        var criada = await service.CriarAsync(new OpportunityCreateRequest(
+            lead.Id, "Empresa", lead.ResponsavelId!.Value, etapa.Id, null, 0m, null, new DateOnly(2026, 10, 15), null, null,
+            null, 150m, null, null, 350.50m, null, false, false, null,
+            Cpf: "12.345.678/0001-95", Estado: "mg", TipoIndicacao: "Lead", Total: 300m), CancellationToken.None);
+
+        Assert.Equal("12345678000195", (await db.CrmOpportunities.AsNoTracking().SingleAsync(o => o.Id == criada.Id)).Cpf);
+    }
+
     [Fact]
     public async Task CriarOportunidade_GuardaOsCamposDoFormularioDeVenda()
     {

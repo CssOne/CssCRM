@@ -25,6 +25,16 @@ public class VendaCamposDentroDoLimiteTests
         Assert.Contains("placa", erro.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("12.345.678/0001-95")]   // CNPJ com pontuação: 18 caracteres, mas só 14 dígitos
+    [InlineData("12345678000195")]       // CNPJ só com os números
+    [InlineData("123.456.789-09")]       // CPF com pontuação
+    public void DocumentoComPontuacao_ContaSoOsDigitos(string documento)
+    {
+        OpportunityService.ExigirCamposDaVendaDentroDoLimite(documento, null, null, null, null);
+        Assert.Equal(documento.Where(char.IsDigit).Count(), OpportunityService.SomenteDigitosDoDocumento(documento)!.Length);
+    }
+
     [Fact]
     public void ChassiDescricaoCpfEstadoECanalMuitoLongos_SaoRecusados()
     {
@@ -33,7 +43,7 @@ public class VendaCamposDentroDoLimiteTests
         Assert.Equal("campo_muito_longo", Assert.Throws<CrmBusinessException>(() =>
             OpportunityService.ExigirCamposDaVendaDentroDoLimite(null, null, null, Veiculo(descricao: new string('D', 201)), null)).Codigo);
         Assert.Equal("campo_muito_longo", Assert.Throws<CrmBusinessException>(() =>
-            OpportunityService.ExigirCamposDaVendaDentroDoLimite("123.456.789-09 / 98", null, null, null, null)).Codigo);
+            OpportunityService.ExigirCamposDaVendaDentroDoLimite("123.456.789-09 98765", null, null, null, null)).Codigo);
         Assert.Equal("campo_muito_longo", Assert.Throws<CrmBusinessException>(() =>
             OpportunityService.ExigirCamposDaVendaDentroDoLimite(null, "MG-BR", null, null, null)).Codigo);
         Assert.Equal("campo_muito_longo", Assert.Throws<CrmBusinessException>(() =>

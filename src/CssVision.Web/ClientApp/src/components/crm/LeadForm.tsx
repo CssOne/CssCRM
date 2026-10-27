@@ -7,7 +7,7 @@ import { ESTADOS_BRASIL } from "../../lib/estados";
 import { OPCOES_ORIGEM, OPCOES_TIPO_INDICACAO, TIPO_INDICACAO_LEAD } from "../../lib/opcoesLead";
 import { TagSelect } from "./TagSelect";
 import { CidadeInput } from "../CidadeInput";
-import { erroDocumento, erroTelefone } from "../../lib/validacao";
+import { erroDocumento, erroTelefone, tipoPessoaDoDocumento } from "../../lib/validacao";
 
 export interface LeadFormValues {
   nomeOuRazaoSocial: string;
@@ -204,7 +204,16 @@ export function LeadForm({
 
         <div>
           <Label htmlFor={`${idPrefix}-doc`}>{valores.tipoPessoa === TipoPessoa.Fisica ? "CPF" : "CNPJ"}</Label>
-          <DocumentoInput id={`${idPrefix}-doc`} value={valores.documento} onChange={(e) => set("documento", e.target.value)} />
+          <DocumentoInput
+            id={`${idPrefix}-doc`}
+            value={valores.documento}
+            onChange={(e) => {
+              // CPF (11 dígitos) ou CNPJ (12 a 14): o tipo de pessoa muda sozinho conforme o documento digitado.
+              const documento = e.target.value;
+              const tipo = tipoPessoaDoDocumento(documento);
+              setValores((v) => ({ ...v, documento, tipoPessoa: tipo === "juridica" ? TipoPessoa.Juridica : tipo === "fisica" ? TipoPessoa.Fisica : v.tipoPessoa }));
+            }}
+          />
           <FieldError>{erros.documento}</FieldError>
         </div>
 
