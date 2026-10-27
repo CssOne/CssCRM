@@ -50,18 +50,25 @@ public sealed class DashboardService(
         return (visiveis, regionalFiltrada);
     }
 
-    /// <summary>Tipo da venda (canal): o da própria venda ou, na falta dele, o do lead — Lead, Indicação, Indicação Lead, Pessoal... Sem nenhum, "Sem tipo".</summary>
-    private static string TipoDaVenda(string? daVenda, string? doLead)
+    /// <summary>
+    /// Tipo da venda (Canal de Aquisição): o da própria venda ou, na falta dele, o do lead — Lead, Indicação, Indicação Lead, Pessoal, Ação Externa...
+    /// Sem canal gravado em nenhum dos dois, vale a classificação do quadro de leads: a coluna "Venda concluída (Leads)" é Lead, a "(Indicação)" é Indicação
+    /// e, sem coluna dividida, o mesmo critério do quadro (cadastro manual = Indicação; card do tráfego/Notion sem canal = Lead).
+    /// </summary>
+    private static string TipoDaVenda(string? daVenda, string? doLead, bool leadCriadoManualmente, string? etapaDoLead)
     {
         var tipo = (string.IsNullOrWhiteSpace(daVenda) ? doLead : daVenda)?.Trim();
-        return string.IsNullOrEmpty(tipo) ? "Sem tipo" : tipo;
+        if (!string.IsNullOrEmpty(tipo)) return tipo;
+        if (etapaDoLead?.Contains("(Leads)", StringComparison.OrdinalIgnoreCase) == true) return "Lead";
+        if (etapaDoLead?.Contains("(Indicação)", StringComparison.OrdinalIgnoreCase) == true) return "Indicação";
+        return Notion.NotionEtapaLead.EhIndicacao(leadCriadoManualmente, null) ? "Indicação" : "Lead";
     }
 
     /// <summary>As vendas do mês contadas na meta, separadas por tipo (a barra de meta da Visão geral). Maiúsculas/minúsculas não separam.</summary>
     private static async Task<List<VendaPorTipoDto>> ContarVendasPorTipoAsync(IQueryable<CrmOpportunity> vendas, CancellationToken ct)
     {
-        var tipos = await vendas.Select(o => new { Venda = o.TipoIndicacao, Lead = o.Lead.TipoIndicacao }).ToListAsync(ct);
-        return tipos.GroupBy(t => TipoDaVenda(t.Venda, t.Lead), StringComparer.OrdinalIgnoreCase)
+        var tipos = await vendas.Select(o => new { Venda = o.TipoIndicacao, Lead = o.Lead.TipoIndicacao, o.Lead.CriadoManualmente, Etapa = o.Lead.Etapa != null ? o.Lead.Etapa.Nome : null }).ToListAsync(ct);
+        return tipos.GroupBy(t => TipoDaVenda(t.Venda, t.Lead, t.CriadoManualmente, t.Etapa), StringComparer.OrdinalIgnoreCase)
             .Select(g => new VendaPorTipoDto(g.Key, g.Count()))
             .OrderByDescending(t => t.Quantidade).ThenBy(t => t.Tipo, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -81,12 +88,12 @@ public sealed class DashboardService(
             .Select(o => new
             {
                 o.LeadId, Cliente = o.Lead.NomeOuRazaoSocial, Consultor = o.Responsavel.NomeCompleto, o.DataEfetivaFechamento,
-                Etapa = o.Lead.Etapa != null ? o.Lead.Etapa.Nome : null, TipoVenda = o.TipoIndicacao, TipoLead = o.Lead.TipoIndicacao, o.PagamentoAdesao,
+                Etapa = o.Lead.Etapa != null ? o.Lead.Etapa.Nome : null, TipoVenda = o.TipoIndicacao, TipoLead = o.Lead.TipoIndicacao, o.Lead.CriadoManualmente, o.PagamentoAdesao,
                 o.Lead.Placa, o.Lead.Telefone,
             })
             .ToListAsync(ct);
         var doTipo = brutas
-            .Select(o => (Bruta: o, Tipo: TipoDaVenda(o.TipoVenda, o.TipoLead)))
+            .Select(o => (Bruta: o, Tipo: TipoDaVenda(o.TipoVenda, o.TipoLead, o.CriadoManualmente, o.Etapa)))
             .Where(x => string.IsNullOrWhiteSpace(tipo) || string.Equals(x.Tipo, tipo.Trim(), StringComparison.OrdinalIgnoreCase))
             .ToList();
         var itens = doTipo.Take(500)
