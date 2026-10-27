@@ -4,7 +4,7 @@ import type { ApexOptions } from "apexcharts";
 import { api, isAbortError } from "../../lib/api";
 import { formatarMoeda, formatarPercentual } from "../../lib/format";
 import { usePaginacao } from "../../lib/usePaginacao";
-import type { LeadStage, Regional, RelatorioComercial, VendedorResumo } from "../../lib/types";
+import type { Dashboard, LeadStage, Regional, RelatorioComercial, VendedorResumo } from "../../lib/types";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
@@ -18,6 +18,7 @@ import { useMudancaDeDia } from "../../lib/useAoVivo";
 import { baseOptions, SemDados } from "../../components/crm/Charts";
 import { BarrasHorizontaisChart, DonutChart } from "../../components/marketing/GraficosTrafego";
 import { DetalheDoCardModal, type AbaDoDetalhe } from "../../components/crm/DetalheDoCardModal";
+import { MetaComercialDoMes, ritmoDaMeta } from "../../components/crm/MetaComercialDoMes";
 
 const EMPTY_GUID = "00000000-0000-0000-0000-000000000000";
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -215,6 +216,21 @@ export function RelatorioComercialPage() {
   // Abas por regional: "Todas" + uma por regional (mesmo com uma só cadastrada).
   const [regionais, setRegionais] = useState<Regional[]>([]);
   const [etapas, setEtapas] = useState<LeadStage[]>([]);
+  // Meta comercial do mês (sempre o mês corrente), do consultor/regional aplicados no relatório — as mesmas contas e tipos de venda da Visão geral.
+  const [metaDoMes, setMetaDoMes] = useState<Pick<Dashboard, "meta" | "indicadores"> | null>(null);
+  const consultorDaMeta = podeGerir ? aplicado.consultorId : "";
+  const regionalDaMeta = podeGerir ? aplicado.regionalId : "";
+  useEffect(() => {
+    const controller = new AbortController();
+    const params = new URLSearchParams();
+    if (consultorDaMeta) params.set("vendedorId", consultorDaMeta);
+    if (regionalDaMeta) params.set("regionalId", regionalDaMeta);
+    api
+      .get<Dashboard>(`/crm/dashboard${params.size ? `?${params}` : ""}`, controller.signal)
+      .then((d) => setMetaDoMes({ meta: d.meta, indicadores: d.indicadores }))
+      .catch((e) => { if (!isAbortError(e)) setMetaDoMes(null); });
+    return () => controller.abort();
+  }, [consultorDaMeta, regionalDaMeta, recarregar]);
 
   useEffect(() => {
     if (podeGerir) {
@@ -427,6 +443,21 @@ export function RelatorioComercialPage() {
         return { rotulo, url: `/crm/relatorio-comercial/detalhe?${params.toString()}` };
       }),
     });
+  // Vendas por trás do tipo clicado na meta do mês: uma aba por tipo (a clicada primeiro) e "Todas".
+  const abrirTipoDaMeta = (tipoClicado: string) => {
+    const tipos = (metaDoMes?.meta.porTipo ?? []).map((x) => x.tipo);
+    const ordem = [tipoClicado, ...tipos.filter((x) => x !== tipoClicado), ...(tipoClicado === "" ? [] : [""])].filter((x, i, todos) => todos.indexOf(x) === i);
+    setDetalhe({
+      titulo: "Vendas do mês",
+      abas: ordem.map((x) => {
+        const params = new URLSearchParams();
+        if (x) params.set("tipo", x);
+        if (consultorDaMeta) params.set("vendedorId", consultorDaMeta);
+        if (regionalDaMeta) params.set("regionalId", regionalDaMeta);
+        return { rotulo: x === "" ? "Todas" : x, url: `/crm/dashboard/vendas-do-mes${params.size ? `?${params}` : ""}` };
+      }),
+    });
+  };
   const meses = dados.porMes.map((m) => rotuloMes(m.mes));
 
   const vendasEAdesao: ApexOptions = {
@@ -476,6 +507,16 @@ export function RelatorioComercialPage() {
   return (
     <div className="space-y-4">
       {cabecalho}
+
+      {metaDoMes && (
+        <MetaComercialDoMes
+          meta={metaDoMes.meta}
+          vendasGanhasValor={metaDoMes.indicadores.vendasGanhasValor}
+          vendasGanhasQuantidade={metaDoMes.indicadores.vendasGanhasQuantidade}
+          ritmo={ritmoDaMeta(metaDoMes.meta)}
+          onAbrirTipo={abrirTipoDaMeta}
+        />
+      )}
 
       <div className={`grid gap-4 sm:grid-cols-2 lg:grid-cols-3 ${carregando ? "opacity-60" : ""}`}>
         <Kpi

@@ -1,11 +1,12 @@
-import { AlertTriangle, CalendarClock, Handshake, PhoneMissed, Target, TrendingUp, UserPlus, Wallet } from "lucide-react";
+import { AlertTriangle, CalendarClock, Handshake, PhoneMissed, TrendingUp, UserPlus, Wallet } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, isAbortError, toQueryString } from "../../lib/api";
 import { useAuth } from "../../context/AuthContext";
 import { formatarDataHora, formatarMoeda, formatarPercentual } from "../../lib/format";
-import type { Dashboard } from "../../lib/types";
-import { Badge, Card, ErrorState, Skeleton } from "../../components/ui";
+import type { Dashboard, VendedorResumo } from "../../lib/types";
+import { Badge, Card, ErrorState, Select, Skeleton } from "../../components/ui";
+import { useEstadoSalvo } from "../../lib/useEstadoSalvo";
 import { BarrasHorizontaisChart } from "../../components/marketing/GraficosTrafego";
 import { mesAtualIso, useAtualizarAoVivo } from "../../lib/useAoVivo";
 import { StatCard } from "../../components/crm/StatCard";
@@ -15,28 +16,7 @@ import { FiltroRegionalDoPainel, useRegionalDoPainel } from "../../components/cr
 import { DetalheDoCardModal } from "../../components/crm/DetalheDoCardModal";
 import { MesInput } from "../../components/PeriodoInput";
 import { CartaoRetratil } from "../../components/crm/CartaoRetratil";
-
-// Cor de cada tipo de venda na barra da meta; tipos fora da lista pegam as de reserva, sempre a mesma para o mesmo nome.
-const CORES_TIPO: Record<string, string> = {
-  "lead": "#3f63c7",
-  "indicação": "#16a34a",
-  "indicação lead": "#0d9488",
-  "indicação pessoal": "#f59e0b",
-  "pessoal": "#f59e0b",
-  "parceria": "#8b5cf6",
-  "ação externa": "#06b6d4",
-  "css": "#ec4899",
-  "contemplando sonhos": "#f97316",
-  "sem tipo": "#94a3b8",
-};
-const CORES_RESERVA = ["#84cc16", "#a855f7", "#14b8a6", "#eab308", "#6366f1"];
-function corDoTipo(tipo: string) {
-  const chave = tipo.trim().toLowerCase();
-  if (CORES_TIPO[chave]) return CORES_TIPO[chave];
-  let soma = 0;
-  for (const c of chave) soma += c.charCodeAt(0);
-  return CORES_RESERVA[soma % CORES_RESERVA.length];
-}
+import { MetaComercialDoMes } from "../../components/crm/MetaComercialDoMes";
 
 export function OverviewPage() {
   const { temPapel } = useAuth();
@@ -70,6 +50,15 @@ export function OverviewPage() {
   const [mes, setMes] = useState(() => mesAtualIso().slice(0, 7));
   const mesAtualRef = useRef(mesAtualIso().slice(0, 7));
   const { podeFiltrar, regionais, regionalId, escolher: escolherRegional, pronto } = useRegionalDoPainel();
+  // Filtro por consultor (gestão): a meta do mês, os tipos de venda e os valores passam a ser só dele, como no Relatório comercial.
+  const podeGerir = temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial");
+  const [consultorSalvo, setConsultorSalvo] = useEstadoSalvo("visao-geral:consultor", "");
+  const consultorId = podeGerir ? consultorSalvo : "";
+  const [consultores, setConsultores] = useState<VendedorResumo[]>([]);
+  useEffect(() => {
+    if (!podeGerir) return;
+    api.get<VendedorResumo[]>("/crm/management/vendedores?incluirInativos=true").then(setConsultores).catch(() => setConsultores([]));
+  }, [podeGerir]);
 
   useEffect(() => {
     if (!pronto) return; // espera saber qual regional abrir, para carregar uma vez só
@@ -79,12 +68,12 @@ export function OverviewPage() {
     const [ano, numeroMes] = mes.split("-").map(Number);
     const ultimoDia = new Date(ano, numeroMes, 0).getDate();
     api
-      .get<Dashboard>(`/crm/dashboard${toQueryString({ dataInicio: `${mes}-01`, dataFim: `${mes}-${String(ultimoDia).padStart(2, "0")}`, regionalId: regionalId || undefined })}`, controller.signal)
+      .get<Dashboard>(`/crm/dashboard${toQueryString({ dataInicio: `${mes}-01`, dataFim: `${mes}-${String(ultimoDia).padStart(2, "0")}`, regionalId: regionalId || undefined, vendedorId: consultorId || undefined })}`, controller.signal)
       .then(setDados)
       .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar o painel."); })
       .finally(() => { if (!controller.signal.aborted) setCarregando(false); });
     return () => controller.abort();
-  }, [recarregar, mes, regionalId, pronto]);
+  }, [recarregar, mes, regionalId, consultorId, pronto]);
 
   // Tempo real: o painel recarrega (sem piscar) quando uma venda/lead muda e quando o mês vira.
   useAtualizarAoVivo(() => {
@@ -136,85 +125,34 @@ export function OverviewPage() {
             <MesInput value={mes} onChange={(v) => v && setMes(v)} />
           </div>
           {podeFiltrar && <FiltroRegionalDoPainel regionais={regionais} valor={regionalId} aoEscolher={escolherRegional} />}
+          {podeGerir && (
+            <div className="w-52">
+              <label htmlFor="visao-consultor" className="mb-1 block px-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--fg-muted)]">Consultor</label>
+              <Select id="visao-consultor" value={consultorId} onChange={(e) => setConsultorSalvo(e.target.value)} aria-label="Consultor">
+                <option value="">Todos</option>
+                {consultores.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}
+                    {c.ativo === false ? " (inativo)" : ""}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
         </div>
       </div>
       <PagamentosEmAberto />
 
       <div className="grid gap-3 lg:grid-cols-3">
-        <Card {...ir("/app/crm/goals")} className="!rounded-2xl p-4 lg:col-span-2">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5">
-              <span className="flex size-9 items-center justify-center rounded-xl bg-[var(--surface-hover)] text-[var(--fg-muted)]">
-                <Target className="size-5" aria-hidden />
-              </span>
-              <div>
-                <h2 className="text-sm font-bold text-[var(--fg)]">Meta comercial do mês</h2>
-                <p className="text-xs text-[var(--fg-muted)]">
-                  {meta.realizadoQuantidade} de {meta.metaQuantidade} vendas
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              {ritmo && (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--fg-muted)]">
-                  <span aria-hidden className={`size-2 rounded-full ${ritmo.noRitmo ? "bg-[var(--success)]" : "bg-[var(--warning)]"}`} />
-                  {ritmo.noRitmo ? "No ritmo" : "Abaixo do ritmo"} · esperado {Math.round(ritmo.esperado)}%
-                </span>
-              )}
-              <span className="text-4xl font-bold tracking-tight text-[var(--fg)] [font-variant-numeric:tabular-nums]">{formatarPercentual(meta.percentualAtingido)}</span>
-            </div>
-          </div>
-          <div className="relative h-3 w-full overflow-hidden rounded-full bg-[var(--surface-hover)]">
-            {tiposDaMeta.length > 0 && meta.metaQuantidade > 0 ? (
-              // Cada tipo de venda numa cor, do tamanho das vendas dele; clicar abre as vendas (a soma dos trechos é o realizado).
-              <div className="flex h-full" style={{ width: `${Math.min(100, meta.percentualAtingido)}%` }}>
-                {tiposDaMeta.map((t) => (
-                  <button
-                    key={t.tipo}
-                    type="button"
-                    onClick={() => setTipoAberto(t.tipo)}
-                    title={`${t.tipo}: ${t.quantidade} venda(s) — clique para ver`}
-                    aria-label={`${t.tipo}: ${t.quantidade} venda(s)`}
-                    className="focus-ring h-full min-w-0 cursor-pointer border-r border-[var(--surface)] transition-[filter,width] duration-700 last:border-r-0 hover:brightness-110"
-                    style={{ width: `${(100 * t.quantidade) / meta.realizadoQuantidade}%`, backgroundColor: corDoTipo(t.tipo) }}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div
-                className="h-full rounded-full bg-[var(--brand)] transition-all duration-700"
-                style={{ width: `${Math.min(100, meta.percentualAtingido)}%` }}
-              />
-            )}
-            {ritmo && <span aria-hidden className="pointer-events-none absolute top-0 h-full w-0.5 bg-[var(--fg)] opacity-60" style={{ left: `${Math.min(100, ritmo.esperado)}%` }} />}
-          </div>
-          {tiposDaMeta.length > 0 && (
-            <ul className="mt-2 flex flex-wrap gap-1" aria-label="Vendas e adesão do mês por tipo">
-              {tiposDaMeta.map((t) => (
-                <li key={t.tipo}>
-                  <button
-                    type="button"
-                    onClick={() => setTipoAberto(t.tipo)}
-                    title={`${t.tipo}: ${formatarMoeda(t.adesao ?? 0)} de adesão em ${t.quantidade} venda(s) — clique para ver`}
-                    className="focus-ring inline-flex cursor-pointer items-center gap-1 rounded-md bg-[var(--surface-hover)] px-1.5 py-0.5 text-[11px] leading-4 text-[var(--fg-muted)] transition hover:bg-[var(--brand-soft)]"
-                  >
-                    <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: corDoTipo(t.tipo) }} />
-                    {t.tipo} {t.quantidade} · <strong className="font-bold text-[var(--fg)] [font-variant-numeric:tabular-nums]">{formatarMoeda(t.adesao ?? 0)}</strong>
-                  </button>
-                </li>
-              ))}
-              <li>
-                <button type="button" onClick={() => setTipoAberto("")} className="focus-ring cursor-pointer px-1 py-0.5 text-[11px] font-medium text-[var(--brand)] hover:underline">
-                  Ver todas
-                </button>
-              </li>
-            </ul>
-          )}
-          <p className="mt-2 text-xs text-[var(--fg-muted)]">
-            Vendas ganhas: <strong className="text-[var(--fg)]">{formatarMoeda(indicadores.vendasGanhasValor)}</strong> em {indicadores.vendasGanhasQuantidade} negócio(s)
-            {ritmo ? " · a marca vertical indica onde a meta deveria estar hoje." : "."}
-          </p>
-        </Card>
+        <MetaComercialDoMes
+          meta={meta}
+          vendasGanhasValor={indicadores.vendasGanhasValor}
+          vendasGanhasQuantidade={indicadores.vendasGanhasQuantidade}
+          ritmo={ritmo}
+          onAbrirTipo={setTipoAberto}
+          cardProps={ir("/app/crm/goals")}
+          className="lg:col-span-2"
+        />
 
         <Card {...ir("/app/crm/leads/kanban")} className="!rounded-2xl p-4">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--fg)]">
@@ -366,7 +304,7 @@ export function OverviewPage() {
             ? [
                 {
                   rotulo: origemAberta,
-                  url: `/crm/dashboard/origem-vendas${toQueryString({ origem: origemAberta, dataInicio: `${mes}-01`, dataFim: `${mes}-${String(new Date(Number(mes.split("-")[0]), Number(mes.split("-")[1]), 0).getDate()).padStart(2, "0")}`, regionalId: regionalId || undefined })}`,
+                  url: `/crm/dashboard/origem-vendas${toQueryString({ origem: origemAberta, dataInicio: `${mes}-01`, dataFim: `${mes}-${String(new Date(Number(mes.split("-")[0]), Number(mes.split("-")[1]), 0).getDate()).padStart(2, "0")}`, regionalId: regionalId || undefined, vendedorId: consultorId || undefined })}`,
                 },
               ]
             : []
@@ -385,7 +323,7 @@ export function OverviewPage() {
                 .filter((t, i, todos) => todos.indexOf(t) === i)
                 .map((t) => ({
                   rotulo: t === "" ? "Todas" : t,
-                  url: `/crm/dashboard/vendas-do-mes${toQueryString({ tipo: t || undefined, regionalId: regionalId || undefined })}`,
+                  url: `/crm/dashboard/vendas-do-mes${toQueryString({ tipo: t || undefined, regionalId: regionalId || undefined, vendedorId: consultorId || undefined })}`,
                 }))
         }
         onFechar={() => setTipoAberto(null)}
