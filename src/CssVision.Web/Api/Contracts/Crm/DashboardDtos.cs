@@ -27,7 +27,8 @@ public record MetaResultadoDto(
     /// <summary>As vendas contadas na meta, por tipo (Lead, Indicação, Indicação Lead, Pessoal...): as cores da barra de meta.</summary>
     IReadOnlyList<VendaPorTipoDto>? PorTipo = null);
 
-public record VendaPorTipoDto(string Tipo, int Quantidade);
+/// <summary>As vendas de um tipo no mês: quantas e a adesão recebida delas (a mesma conta da meta de valor).</summary>
+public record VendaPorTipoDto(string Tipo, int Quantidade, decimal Adesao = 0m);
 
 public record FunilEtapaDto(string Etapa, int Quantidade, decimal ValorTotal);
 

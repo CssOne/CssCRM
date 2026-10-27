@@ -21,10 +21,15 @@ const CORES_TIPO: Record<string, string> = {
   "lead": "#3f63c7",
   "indicação": "#16a34a",
   "indicação lead": "#0d9488",
+  "indicação pessoal": "#f59e0b",
   "pessoal": "#f59e0b",
+  "parceria": "#8b5cf6",
+  "ação externa": "#06b6d4",
+  "css": "#ec4899",
+  "contemplando sonhos": "#f97316",
   "sem tipo": "#94a3b8",
 };
-const CORES_RESERVA = ["#8b5cf6", "#ec4899", "#06b6d4", "#84cc16", "#f97316"];
+const CORES_RESERVA = ["#84cc16", "#a855f7", "#14b8a6", "#eab308", "#6366f1"];
 function corDoTipo(tipo: string) {
   const chave = tipo.trim().toLowerCase();
   if (CORES_TIPO[chave]) return CORES_TIPO[chave];
@@ -184,21 +189,22 @@ export function OverviewPage() {
             {ritmo && <span aria-hidden className="pointer-events-none absolute top-0 h-full w-0.5 bg-[var(--fg)] opacity-60" style={{ left: `${Math.min(100, ritmo.esperado)}%` }} />}
           </div>
           {tiposDaMeta.length > 0 && (
-            <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Vendas do mês por tipo">
+            <ul className="mt-2 flex flex-wrap gap-1" aria-label="Vendas e adesão do mês por tipo">
               {tiposDaMeta.map((t) => (
                 <li key={t.tipo}>
                   <button
                     type="button"
                     onClick={() => setTipoAberto(t.tipo)}
-                    className="focus-ring inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[var(--border)] px-2.5 py-0.5 text-xs text-[var(--fg-muted)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+                    title={`${t.tipo}: ${formatarMoeda(t.adesao ?? 0)} de adesão em ${t.quantidade} venda(s) — clique para ver`}
+                    className="focus-ring inline-flex cursor-pointer items-center gap-1 rounded-md bg-[var(--surface-hover)] px-1.5 py-0.5 text-[11px] leading-4 text-[var(--fg-muted)] transition hover:bg-[var(--brand-soft)]"
                   >
-                    <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: corDoTipo(t.tipo) }} />
-                    {t.tipo} · <strong className="text-[var(--fg)]">{t.quantidade}</strong>
+                    <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: corDoTipo(t.tipo) }} />
+                    {t.tipo} {t.quantidade} · <strong className="font-bold text-[var(--fg)] [font-variant-numeric:tabular-nums]">{formatarMoeda(t.adesao ?? 0)}</strong>
                   </button>
                 </li>
               ))}
               <li>
-                <button type="button" onClick={() => setTipoAberto("")} className="focus-ring cursor-pointer px-1.5 py-0.5 text-xs font-medium text-[var(--brand)] hover:underline">
+                <button type="button" onClick={() => setTipoAberto("")} className="focus-ring cursor-pointer px-1 py-0.5 text-[11px] font-medium text-[var(--brand)] hover:underline">
                   Ver todas
                 </button>
               </li>

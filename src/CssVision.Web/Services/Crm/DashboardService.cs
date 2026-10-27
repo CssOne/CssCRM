@@ -58,6 +58,8 @@ public sealed class DashboardService(
     private static string TipoDaVenda(string? daVenda, string? doLead, bool leadCriadoManualmente, string? etapaDoLead)
     {
         var tipo = (string.IsNullOrWhiteSpace(daVenda) ? doLead : daVenda)?.Trim();
+        // "Pessoal" é o nome antigo de "Indicação pessoal": venda gravada com o nome antigo cai no mesmo grupo (não vira um tipo à parte).
+        if (string.Equals(tipo, "Pessoal", StringComparison.OrdinalIgnoreCase)) return RenomearCanalPessoalBackgroundService.NomeNovo;
         if (!string.IsNullOrEmpty(tipo)) return tipo;
         if (etapaDoLead?.Contains("(Leads)", StringComparison.OrdinalIgnoreCase) == true) return "Lead";
         if (etapaDoLead?.Contains("(Indicação)", StringComparison.OrdinalIgnoreCase) == true) return "Indicação";
@@ -67,9 +69,9 @@ public sealed class DashboardService(
     /// <summary>As vendas do mês contadas na meta, separadas por tipo (a barra de meta da Visão geral). Maiúsculas/minúsculas não separam.</summary>
     private static async Task<List<VendaPorTipoDto>> ContarVendasPorTipoAsync(IQueryable<CrmOpportunity> vendas, CancellationToken ct)
     {
-        var tipos = await vendas.Select(o => new { Venda = o.TipoIndicacao, Lead = o.Lead.TipoIndicacao, o.Lead.CriadoManualmente, Etapa = o.Lead.Etapa != null ? o.Lead.Etapa.Nome : null }).ToListAsync(ct);
+        var tipos = await vendas.Select(o => new { Venda = o.TipoIndicacao, Lead = o.Lead.TipoIndicacao, o.Lead.CriadoManualmente, Etapa = o.Lead.Etapa != null ? o.Lead.Etapa.Nome : null, o.PagamentoAdesao }).ToListAsync(ct);
         return tipos.GroupBy(t => TipoDaVenda(t.Venda, t.Lead, t.CriadoManualmente, t.Etapa), StringComparer.OrdinalIgnoreCase)
-            .Select(g => new VendaPorTipoDto(g.Key, g.Count()))
+            .Select(g => new VendaPorTipoDto(g.Key, g.Count(), g.Sum(t => t.PagamentoAdesao ?? 0m)))
             .OrderByDescending(t => t.Quantidade).ThenBy(t => t.Tipo, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
