@@ -14,6 +14,7 @@ import { EvolucaoChart, OrigemChart } from "../../components/crm/Charts";
 import { FiltroRegionalDoPainel, useRegionalDoPainel } from "../../components/crm/FiltroRegionalDoPainel";
 import { DetalheDoCardModal } from "../../components/crm/DetalheDoCardModal";
 import { MesInput } from "../../components/PeriodoInput";
+import { CartaoRetratil } from "../../components/crm/CartaoRetratil";
 
 // Cor de cada tipo de venda na barra da meta; tipos fora da lista pegam as de reserva, sempre a mesma para o mesmo nome.
 const CORES_TIPO: Record<string, string> = {
@@ -230,64 +231,55 @@ export function OverviewPage() {
         </Card>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <Card {...ir("/app/crm/agenda")} className="!rounded-2xl p-4">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--fg)]">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-[var(--surface-hover)] text-[var(--fg-muted)]"><CalendarClock className="size-3.5" /></span> Atividades de hoje
-          </h2>
-          {atividadesDoDia.length === 0 ? (
-            <p className="text-sm text-[var(--fg-muted)]">Nenhuma atividade prevista para hoje.</p>
-          ) : (
-            <ul className="space-y-2">
-              {atividadesDoDia.map((a) => (
-                <li key={a.id}>
-                  <Link
-                    to={`/app/crm/leads/${a.leadId}`}
-                    className="focus-ring flex items-center justify-between gap-2 rounded-xl bg-[var(--surface-hover)] px-3 py-2 text-sm transition hover:bg-[var(--brand-soft)]"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-[var(--fg)]">{a.assunto}</p>
-                      <p className="truncate text-xs text-[var(--fg-muted)]">{a.leadNome}</p>
-                    </div>
-                    <Badge variant={a.atrasada ? "danger" : "neutral"}>{formatarDataHora(a.dataHoraPrevista)}</Badge>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+      <div className="grid items-start gap-3 lg:grid-cols-2">
+        <CartaoRetratil
+          chave="atividades-de-hoje"
+          icone={CalendarClock}
+          titulo="Atividades de hoje"
+          itens={atividadesDoDia}
+          vazio="Nenhuma atividade prevista para hoje."
+          chaveDoItem={(a) => a.id}
+          cardProps={ir("/app/crm/agenda")}
+          renderItem={(a) => (
+            <Link
+              to={`/app/crm/leads/${a.leadId}`}
+              className="focus-ring flex items-center justify-between gap-2 rounded-xl bg-[var(--surface-hover)] px-3 py-2 text-sm transition hover:bg-[var(--brand-soft)]"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-[var(--fg)]">{a.assunto}</p>
+                <p className="truncate text-xs text-[var(--fg-muted)]">{a.leadNome}</p>
+              </div>
+              <Badge variant={a.atrasada ? "danger" : "neutral"}>{formatarDataHora(a.dataHoraPrevista)}</Badge>
+            </Link>
           )}
-        </Card>
+        />
 
-        <Card {...ir("/app/crm/leads/kanban")} className="!rounded-2xl p-4">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-[var(--fg)]">
-            <span className="flex size-7 items-center justify-center rounded-lg bg-[var(--surface-hover)] text-[var(--fg-muted)]"><PhoneMissed className="size-3.5" /></span> Leads parados{leadsParadosTotal > 0 ? ` (${leadsParadosTotal.toLocaleString("pt-BR")})` : ""}
-          </h2>
-          <p className="mb-2 text-xs text-[var(--fg-muted)]">
-            Leads do tráfego pago (não os do Notion) dos últimos 60 dias, em coluna aberta e com consultor ativo, sem contato nem movimento há mais de 5 dias.
-          </p>
-          {leadsParados.length === 0 ? (
-            <p className="text-sm text-[var(--fg-muted)]">Nenhum lead parado no momento.</p>
-          ) : (
-            <ul className="space-y-2">
-              {leadsParados.map((l) => (
-                <li key={l.leadId}>
-                  <Link
-                    to={`/app/crm/leads/${l.leadId}`}
-                    className="focus-ring flex items-center justify-between gap-2 rounded-xl bg-[var(--surface-hover)] px-3 py-2 text-sm transition hover:bg-[var(--brand-soft)]"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-[var(--fg)]">{l.leadNome}</p>
-                      <p className="truncate text-xs text-[var(--fg-muted)]">{l.responsavelNome ?? "Sem responsável"}</p>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1">
-                      <Badge variant="neutral">{l.etapaNome ?? "Sem etapa"}</Badge>
-                      <span className="text-xs font-medium text-[var(--warning)]">{l.diasSemContato} dia(s)</span>
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+        <CartaoRetratil
+          chave="leads-parados"
+          icone={PhoneMissed}
+          titulo="Leads parados"
+          total={leadsParadosTotal}
+          descricao="Leads do tráfego pago (não os do Notion) dos últimos 60 dias, em coluna aberta e com consultor ativo, sem contato nem movimento há mais de 5 dias."
+          itens={leadsParados}
+          vazio="Nenhum lead parado no momento."
+          chaveDoItem={(l) => l.leadId}
+          cardProps={ir("/app/crm/leads/kanban")}
+          renderItem={(l) => (
+            <Link
+              to={`/app/crm/leads/${l.leadId}`}
+              className="focus-ring flex items-center justify-between gap-2 rounded-xl bg-[var(--surface-hover)] px-3 py-2 text-sm transition hover:bg-[var(--brand-soft)]"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-[var(--fg)]">{l.leadNome}</p>
+                <p className="truncate text-xs text-[var(--fg-muted)]">{l.responsavelNome ?? "Sem responsável"}</p>
+              </div>
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <Badge variant="neutral">{l.etapaNome ?? "Sem etapa"}</Badge>
+                <span className="text-xs font-medium text-[var(--warning)]">{l.diasSemContato} dia(s)</span>
+              </div>
+            </Link>
           )}
-        </Card>
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 lg:grid-cols-6">
