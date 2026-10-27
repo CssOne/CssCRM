@@ -1,8 +1,9 @@
-import { Bell, Check, Clock } from "lucide-react";
+import { AlertTriangle, Bell, Check, Clock } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { api, ApiRequestError, toQueryString } from "../../lib/api";
+import { useAlertasDaGestao } from "../../lib/alertasDaGestao";
 import { formatarDataHora } from "../../lib/format";
 import { useAbrirLead } from "../../lib/painelLead";
 import { VisaoAtividade, type Activity, type PagedResult } from "../../lib/types";
@@ -33,7 +34,9 @@ export async function concluirAtividade(atividade: Activity) {
  * "Minhas atividades", onde elas não apareciam ("tem 1, mas não tem nada").
  */
 export function NotificacoesAtividades() {
-  const { sessao } = useAuth();
+  const { sessao, temPapel } = useAuth();
+  // Administradores, gestores e supervisores também recebem aqui os alertas que chegam por push (leads parados, consultor que demora), com som.
+  const alertasDaGestao = useAlertasDaGestao(temPapel("Admin", "GestorMaster", "SupervisorComercial", "GestorComercial"));
   const location = useLocation();
   const abrirLead = useAbrirLead();
   const { notificar } = useToast();
@@ -140,18 +143,36 @@ export function NotificacoesAtividades() {
       <IconButton label="Notificações" onClick={() => setAberto((v) => !v)}>
         <Bell className="size-4" />
       </IconButton>
-      {atrasadas.length > 0 && (
+      {atrasadas.length + alertasDaGestao.length > 0 && (
         <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex size-4 items-center justify-center rounded-full bg-[var(--danger)] text-[10px] font-bold text-white">
-          {atrasadas.length > 9 ? "9+" : atrasadas.length}
+          {atrasadas.length + alertasDaGestao.length > 9 ? "9+" : atrasadas.length + alertasDaGestao.length}
         </span>
       )}
 
       {aberto && (
         <div className="absolute right-0 top-11 z-30 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-[var(--border)] bg-[var(--surface-solid)] p-2 shadow-xl">
           <p className="px-2 pb-1 pt-1 text-sm font-semibold text-[var(--fg)]">Notificações</p>
-          {atrasadas.length === 0 && hoje.length === 0 ? (
+          {alertasDaGestao.length > 0 && (
+            <>
+              <p className="px-2 pt-1 text-xs font-semibold uppercase text-[var(--danger)]">Alertas da gestão ({alertasDaGestao.length})</p>
+              <ul className="mb-1">
+                {alertasDaGestao.map((a) => (
+                  <li key={a.id}>
+                    <Link to={a.url} onClick={() => setAberto(false)} className="flex items-start gap-2 rounded-lg px-2 py-2 hover:bg-[var(--surface-hover)]">
+                      <AlertTriangle className={`mt-0.5 size-4 shrink-0 ${a.gravidade === "perigo" ? "text-[var(--danger)]" : "text-[var(--warning)]"}`} aria-hidden />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium text-[var(--fg)]">{a.titulo}</span>
+                        <span className="block text-xs text-[var(--fg-muted)]">{a.texto}</span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {atrasadas.length === 0 && hoje.length === 0 && alertasDaGestao.length === 0 ? (
             <p className="px-2 py-6 text-center text-sm text-[var(--fg-muted)]">Nenhuma atividade atrasada ou para hoje. 🎉</p>
-          ) : (
+          ) : atrasadas.length === 0 && hoje.length === 0 ? null : (
             <div className="max-h-96 overflow-y-auto">
               {atrasadas.length > 0 && (
                 <>
