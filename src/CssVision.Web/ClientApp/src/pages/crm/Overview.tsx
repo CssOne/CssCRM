@@ -189,30 +189,26 @@ export function OverviewPage() {
             {ritmo && <span aria-hidden className="pointer-events-none absolute top-0 h-full w-0.5 bg-[var(--fg)] opacity-60" style={{ left: `${Math.min(100, ritmo.esperado)}%` }} />}
           </div>
           {tiposDaMeta.length > 0 && (
-            <ul className="mt-2.5 grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-5" aria-label="Vendas e adesão do mês por tipo">
+            <ul className="mt-2 flex flex-wrap gap-1" aria-label="Vendas e adesão do mês por tipo">
               {tiposDaMeta.map((t) => (
                 <li key={t.tipo}>
                   <button
                     type="button"
                     onClick={() => setTipoAberto(t.tipo)}
                     title={`${t.tipo}: ${formatarMoeda(t.adesao ?? 0)} de adesão em ${t.quantidade} venda(s) — clique para ver`}
-                    className="focus-ring block w-full cursor-pointer rounded-lg bg-[var(--surface-hover)] px-2 py-1.5 text-left transition hover:bg-[var(--brand-soft)]"
+                    className="focus-ring inline-flex cursor-pointer items-center gap-1 rounded-md bg-[var(--surface-hover)] px-1.5 py-0.5 text-[11px] leading-4 text-[var(--fg-muted)] transition hover:bg-[var(--brand-soft)]"
                   >
-                    <span className="flex items-center gap-1.5 text-[11px] text-[var(--fg-muted)]">
-                      <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ backgroundColor: corDoTipo(t.tipo) }} />
-                      <span className="truncate">{t.tipo}</span>
-                      <span className="ml-auto shrink-0">{t.quantidade}</span>
-                    </span>
-                    <span className="block text-xs font-bold text-[var(--fg)] [font-variant-numeric:tabular-nums]">{formatarMoeda(t.adesao ?? 0)}</span>
+                    <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: corDoTipo(t.tipo) }} />
+                    {t.tipo} {t.quantidade} · <strong className="font-bold text-[var(--fg)] [font-variant-numeric:tabular-nums]">{formatarMoeda(t.adesao ?? 0)}</strong>
                   </button>
                 </li>
               ))}
+              <li>
+                <button type="button" onClick={() => setTipoAberto("")} className="focus-ring cursor-pointer px-1 py-0.5 text-[11px] font-medium text-[var(--brand)] hover:underline">
+                  Ver todas
+                </button>
+              </li>
             </ul>
-          )}
-          {tiposDaMeta.length > 0 && (
-            <button type="button" onClick={() => setTipoAberto("")} className="focus-ring mt-1 cursor-pointer text-xs font-medium text-[var(--brand)] hover:underline">
-              Ver todas as vendas
-            </button>
           )}
           <p className="mt-2 text-xs text-[var(--fg-muted)]">
             Vendas ganhas: <strong className="text-[var(--fg)]">{formatarMoeda(indicadores.vendasGanhasValor)}</strong> em {indicadores.vendasGanhasQuantidade} negócio(s)
