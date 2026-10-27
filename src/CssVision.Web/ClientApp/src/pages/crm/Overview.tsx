@@ -15,6 +15,23 @@ import { FiltroRegionalDoPainel, useRegionalDoPainel } from "../../components/cr
 import { DetalheDoCardModal } from "../../components/crm/DetalheDoCardModal";
 import { MesInput } from "../../components/PeriodoInput";
 
+// Cor de cada tipo de venda na barra da meta; tipos fora da lista pegam as de reserva, sempre a mesma para o mesmo nome.
+const CORES_TIPO: Record<string, string> = {
+  "lead": "#3f63c7",
+  "indicação": "#16a34a",
+  "indicação lead": "#0d9488",
+  "pessoal": "#f59e0b",
+  "sem tipo": "#94a3b8",
+};
+const CORES_RESERVA = ["#8b5cf6", "#ec4899", "#06b6d4", "#84cc16", "#f97316"];
+function corDoTipo(tipo: string) {
+  const chave = tipo.trim().toLowerCase();
+  if (CORES_TIPO[chave]) return CORES_TIPO[chave];
+  let soma = 0;
+  for (const c of chave) soma += c.charCodeAt(0);
+  return CORES_RESERVA[soma % CORES_RESERVA.length];
+}
+
 export function OverviewPage() {
   const { temPapel } = useAuth();
   const navegar = useNavigate();
@@ -41,6 +58,8 @@ export function OverviewPage() {
   const [recarregar, setRecarregar] = useState(0);
   // Fatia do gráfico de origem das vendas aberta: as vendas daquela origem.
   const [origemAberta, setOrigemAberta] = useState<string | null>(null);
+  // Barra da meta: tipo de venda aberto ("" = todas as vendas do mês, nulo = fechado).
+  const [tipoAberto, setTipoAberto] = useState<string | null>(null);
   // Mês mostrado (YYYY-MM): começa no mês atual e acompanha a virada do mês se ninguém escolheu outro.
   const [mes, setMes] = useState(() => mesAtualIso().slice(0, 7));
   const mesAtualRef = useRef(mesAtualIso().slice(0, 7));
@@ -87,6 +106,7 @@ export function OverviewPage() {
   const funilLeads = dados.funilLeads ?? [];
   const resumoMensal = dados.resumoMensal ?? [];
   const leadsParadosTotal = dados.leadsParadosTotal ?? leadsParados.length;
+  const tiposDaMeta = meta.porTipo ?? [];
   const [anoMes, numMes] = mes.split("-");
   const rotuloMes = `${numMes}/${anoMes}`;
   // Só no mês corrente: onde a meta deveria estar hoje, proporcional aos dias passados.
@@ -139,12 +159,50 @@ export function OverviewPage() {
             </div>
           </div>
           <div className="relative h-3 w-full overflow-hidden rounded-full bg-[var(--surface-hover)]">
-            <div
-              className="h-full rounded-full bg-[var(--brand)] transition-all duration-700"
-              style={{ width: `${Math.min(100, meta.percentualAtingido)}%` }}
-            />
-            {ritmo && <span aria-hidden className="absolute top-0 h-full w-0.5 bg-[var(--fg)] opacity-60" style={{ left: `${Math.min(100, ritmo.esperado)}%` }} />}
+            {tiposDaMeta.length > 0 && meta.metaQuantidade > 0 ? (
+              // Cada tipo de venda numa cor, do tamanho das vendas dele; clicar abre as vendas (a soma dos trechos é o realizado).
+              <div className="flex h-full" style={{ width: `${Math.min(100, meta.percentualAtingido)}%` }}>
+                {tiposDaMeta.map((t) => (
+                  <button
+                    key={t.tipo}
+                    type="button"
+                    onClick={() => setTipoAberto(t.tipo)}
+                    title={`${t.tipo}: ${t.quantidade} venda(s) — clique para ver`}
+                    aria-label={`${t.tipo}: ${t.quantidade} venda(s)`}
+                    className="focus-ring h-full min-w-0 cursor-pointer border-r border-[var(--surface)] transition-[filter,width] duration-700 last:border-r-0 hover:brightness-110"
+                    style={{ width: `${(100 * t.quantidade) / meta.realizadoQuantidade}%`, backgroundColor: corDoTipo(t.tipo) }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div
+                className="h-full rounded-full bg-[var(--brand)] transition-all duration-700"
+                style={{ width: `${Math.min(100, meta.percentualAtingido)}%` }}
+              />
+            )}
+            {ritmo && <span aria-hidden className="pointer-events-none absolute top-0 h-full w-0.5 bg-[var(--fg)] opacity-60" style={{ left: `${Math.min(100, ritmo.esperado)}%` }} />}
           </div>
+          {tiposDaMeta.length > 0 && (
+            <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Vendas do mês por tipo">
+              {tiposDaMeta.map((t) => (
+                <li key={t.tipo}>
+                  <button
+                    type="button"
+                    onClick={() => setTipoAberto(t.tipo)}
+                    className="focus-ring inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[var(--border)] px-2.5 py-0.5 text-xs text-[var(--fg-muted)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+                  >
+                    <span aria-hidden className="size-2 rounded-full" style={{ backgroundColor: corDoTipo(t.tipo) }} />
+                    {t.tipo} · <strong className="text-[var(--fg)]">{t.quantidade}</strong>
+                  </button>
+                </li>
+              ))}
+              <li>
+                <button type="button" onClick={() => setTipoAberto("")} className="focus-ring cursor-pointer px-1.5 py-0.5 text-xs font-medium text-[var(--brand)] hover:underline">
+                  Ver todas
+                </button>
+              </li>
+            </ul>
+          )}
           <p className="mt-2 text-xs text-[var(--fg-muted)]">
             Vendas ganhas: <strong className="text-[var(--fg)]">{formatarMoeda(indicadores.vendasGanhasValor)}</strong> em {indicadores.vendasGanhasQuantidade} negócio(s)
             {ritmo ? " · a marca vertical indica onde a meta deveria estar hoje." : "."}
@@ -316,6 +374,23 @@ export function OverviewPage() {
             : []
         }
         onFechar={() => setOrigemAberta(null)}
+      />
+
+      {/* Barra da meta: as vendas do mês, uma aba por tipo (a clicada abre primeiro) e "Todas". */}
+      <DetalheDoCardModal
+        aberto={tipoAberto !== null}
+        titulo="Vendas do mês"
+        abas={
+          tipoAberto === null
+            ? []
+            : [tipoAberto, ...tiposDaMeta.map((t) => t.tipo).filter((t) => t !== tipoAberto), ...(tipoAberto === "" ? [] : [""])]
+                .filter((t, i, todos) => todos.indexOf(t) === i)
+                .map((t) => ({
+                  rotulo: t === "" ? "Todas" : t,
+                  url: `/crm/dashboard/vendas-do-mes${toQueryString({ tipo: t || undefined, regionalId: regionalId || undefined })}`,
+                }))
+        }
+        onFechar={() => setTipoAberto(null)}
       />
     </div>
   );

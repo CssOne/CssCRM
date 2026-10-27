@@ -95,7 +95,7 @@ public class DistribuicaoRespeitaAgendaTests
     }
 
     [Fact]
-    public async Task Continuar_ComTodosForaDaAgenda_NaoEntrega_OLeadEsperaOHorario()
+    public async Task Continuar_ComTodosForaDaAgenda_EntregaMesmoAssim_PoisOGestorLiberou()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
@@ -108,18 +108,14 @@ public class DistribuicaoRespeitaAgendaTests
         await db.SaveChangesAsync();
         var distribuicao = new LeadAssignmentService(db, relogio: new RelogioFixo(SegundaMeioDia));
 
+        // Sem o modo, ninguém recebe; com o gestor liberando, o lead é entregue mesmo fora da agenda (senão o aviso não teria saída).
         Assert.Null(await distribuicao.ProximoResponsavelAsync(null, CancellationToken.None));
         await distribuicao.DefinirContinuarAposLimiteAsync(true, CancellationToken.None);
-        Assert.Null(await distribuicao.ProximoResponsavelAsync(null, CancellationToken.None)); // a agenda não se ignora
-
-        // Quando o horário da Ana chega (14h em Brasília), o lead é dela.
-        var tarde = new LeadAssignmentService(db, relogio: new RelogioFixo(SegundaMeioDia.AddHours(2)));
-        await tarde.DefinirContinuarAposLimiteAsync(true, CancellationToken.None);
-        Assert.NotNull(await tarde.ProximoResponsavelAsync(null, CancellationToken.None));
+        Assert.Equal(ana.Id, await distribuicao.ProximoResponsavelAsync(null, CancellationToken.None));
     }
 
     [Fact]
-    public async Task LigarORecebeLeads_ForaDoHorario_NaoEntregaLead_NemComOModoContinuarLigado()
+    public async Task LigarORecebeLeads_ForaDoHorario_SoEntregaComOModoContinuarLigado()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
@@ -133,22 +129,20 @@ public class DistribuicaoRespeitaAgendaTests
         db.CrmLeads.Add(Trafego("Parado", null));
         await db.SaveChangesAsync();
         var distribuicao = new LeadAssignmentService(db, relogio: new RelogioFixo(SegundaMeioDia));
-        await distribuicao.DefinirContinuarAposLimiteAsync(true, CancellationToken.None);
 
-        // O gestor liga o "Recebe leads" dela ao meio-dia: o próximo ciclo da distribuição não pode entregar nada.
+        // Sem o modo "continuar", ligar o "Recebe leads" dela ao meio-dia não entrega nada: o horário vale.
         jessica.RecebeLeads = true;
         await db.SaveChangesAsync();
         Assert.Equal(0, await distribuicao.DistribuirPendentesAsync(CancellationToken.None));
         Assert.Null((await db.CrmLeads.SingleAsync()).ResponsavelId);
 
-        // Às 19h (dentro do horário dela) o lead é entregue.
-        var noite = new LeadAssignmentService(db, relogio: new RelogioFixo(SegundaMeioDia.AddHours(7)));
-        Assert.Equal(1, await noite.DistribuirPendentesAsync(CancellationToken.None));
+        // O gestor libera ("Continuar distribuindo hoje"): como ninguém está no horário, o lead vai para ela.
+        await distribuicao.DefinirContinuarAposLimiteAsync(true, CancellationToken.None);
         Assert.Equal(jessica.Id, (await db.CrmLeads.SingleAsync()).ResponsavelId);
     }
 
     [Fact]
-    public async Task PodeReceber_ForaDoHorario_ContinuaSendoNao_MesmoComOModoLigado()
+    public async Task PodeReceber_ForaDoHorario_SoComOModoLigado()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
@@ -157,9 +151,10 @@ public class DistribuicaoRespeitaAgendaTests
         ana.HorarioFimLeads = new TimeOnly(18, 0);
         await db.SaveChangesAsync();
         var distribuicao = new LeadAssignmentService(db, relogio: new RelogioFixo(SegundaMeioDia));
-        await distribuicao.DefinirContinuarAposLimiteAsync(true, CancellationToken.None);
 
         Assert.False(await distribuicao.PodeReceberAsync(ana.Id, CancellationToken.None));
+        await distribuicao.DefinirContinuarAposLimiteAsync(true, CancellationToken.None);
+        Assert.True(await distribuicao.PodeReceberAsync(ana.Id, CancellationToken.None)); // o gestor liberou
     }
 
     [Fact]

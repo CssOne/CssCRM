@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import type { VendedorResumo } from "../../lib/types";
 import { Button, Input, Label, Modal, Select } from "../ui";
+import { rotuloVendedor } from "./rotuloVendedor";
 
 export function AssignModal({
   open,
@@ -48,7 +49,7 @@ export function AssignModal({
           <Select id="assign-vendedor" value={vendedorId} onChange={(e) => setVendedorId(e.target.value)}>
             {vendedores.map((v) => (
               <option key={v.id} value={v.id}>
-                {v.nome} ({v.leadsAtivos} leads ativos)
+                {rotuloVendedor(v)} · {v.leadsAtivos} leads ativos
               </option>
             ))}
           </Select>

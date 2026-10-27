@@ -266,6 +266,25 @@ body {
   background-color: var(--brand);
   border-width: 2px;
 }
+/* Card "Leads esperando atendimento": a lista de leads do consultor e a troca de regional entram com um leve deslize. */
+@keyframes espera-entrar {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.espera-anima {
+  animation: espera-entrar 0.25s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .espera-anima {
+    animation: none;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   ::-webkit-scrollbar-thumb {
     transition: none;

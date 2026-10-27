@@ -182,27 +182,36 @@ public sealed class EsperaTrafegoService(
         var esperando = (await db.CrmLeads.AsNoTracking()
                 .Where(l => l.EtapaId == null && !l.Arquivado && l.ResponsavelId != null)
                 .Where(OrigemLead.VeioDoTrafegoPago)
-                .Select(l => new { ResponsavelId = l.ResponsavelId!.Value, Inicio = l.ResponsavelAtribuidoEm ?? l.CriadoEm })
+                .Select(l => new { LeadId = l.Id, l.NomeOuRazaoSocial, ResponsavelId = l.ResponsavelId!.Value, Inicio = l.ResponsavelAtribuidoEm ?? l.CriadoEm })
                 .ToListAsync(ct))
             .GroupBy(l => l.ResponsavelId)
-            .ToDictionary(g => g.Key, g => (Quantidade: g.Count(), MaisAntigo: g.Min(x => x.Inicio)));
+            .ToDictionary(g => g.Key, g => (Quantidade: g.Count(), MaisAntigo: g.Min(x => x.Inicio), Leads: g.Select(x => new EsperaLeadDto(x.LeadId, x.NomeOuRazaoSocial, x.Inicio, null)).ToList()));
 
-        var historico = (await db.CrmEsperasLead.AsNoTracking()
-                .Where(e => e.EsperandoDesde >= desde)
-                .Select(e => new { e.ConsultorId, Forte = e.AvisoUrgenteEm != null })
-                .ToListAsync(ct))
+        var registros = await db.CrmEsperasLead.AsNoTracking()
+            .Where(e => e.EsperandoDesde >= desde)
+            .Select(e => new { e.LeadId, e.ConsultorId, Forte = e.AvisoUrgenteEm != null, e.EsperandoDesde, e.AtendidoEm, Nome = e.Lead.NomeOuRazaoSocial })
+            .ToListAsync(ct);
+        var historico = registros
             .GroupBy(e => e.ConsultorId)
             .ToDictionary(g => g.Key, g => (Primeiro: g.Count(), Forte: g.Count(x => x.Forte)));
+        // Atendidos recentemente (os que ainda esperam já vêm de "esperando", mesmo antes do primeiro aviso).
+        var atendidos = registros
+            .Where(e => e.AtendidoEm != null)
+            .GroupBy(e => e.ConsultorId)
+            .ToDictionary(g => g.Key, g => g.Select(e => new EsperaLeadDto(e.LeadId, e.Nome, e.EsperandoDesde, e.AtendidoEm)).ToList());
 
         var ids = esperando.Keys.Union(historico.Keys).Where(id => visiveis is null || visiveis.Contains(id)).ToList();
-        var nomes = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.NomeCompleto, ct);
+        var usuarios = await db.Users.AsNoTracking().Where(u => ids.Contains(u.Id))
+            .Select(u => new { u.Id, u.NomeCompleto, Regional = u.Regional != null ? u.Regional.Nome : null })
+            .ToDictionaryAsync(u => u.Id, ct);
 
         var consultores = ids
             .Select(id =>
             {
-                var (qtd, antigo) = esperando.GetValueOrDefault(id);
+                var (qtd, antigo, aguardando) = esperando.GetValueOrDefault(id);
                 var (primeiro, forte) = historico.GetValueOrDefault(id);
-                return new EsperaConsultorDto(id, nomes.GetValueOrDefault(id, "—"), qtd, qtd > 0 ? antigo : null, primeiro, forte, forte >= ReincidenciaLeads);
+                var leads = (aguardando ?? []).Concat(atendidos.GetValueOrDefault(id) ?? []).OrderByDescending(l => l.ChegouEm).ToList();
+                return new EsperaConsultorDto(id, usuarios.TryGetValue(id, out var u) ? u.NomeCompleto : "—", u?.Regional, qtd, qtd > 0 ? antigo : null, primeiro, forte, forte >= ReincidenciaLeads, leads);
             })
             .OrderByDescending(c => c.Reincidente).ThenByDescending(c => c.PassaramDoPrazoForte).ThenByDescending(c => c.EsperandoAgora).ThenBy(c => c.Nome)
             .ToList();

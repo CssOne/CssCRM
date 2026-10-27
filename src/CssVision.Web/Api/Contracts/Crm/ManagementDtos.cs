@@ -134,7 +134,7 @@ public record PrimeiroContatoVendedorDto(Guid VendedorId, string VendedorNome, d
 
 /// <summary>Um consultor no painel da espera por leads do tráfego pago em "Sem etapa" (Gestão comercial).</summary>
 public record EsperaConsultorDto(
-    Guid ConsultorId, string Nome,
+    Guid ConsultorId, string Nome, string? RegionalNome,
     /// <summary>Leads do tráfego pago com ele, em "Sem etapa", agora.</summary>
     int EsperandoAgora,
     /// <summary>Desde quando o mais antigo deles espera.</summary>
@@ -143,6 +143,10 @@ public record EsperaConsultorDto(
     int PassaramDoPrimeiroPrazo,
     /// <summary>Nos últimos dias: leads que passaram do prazo forte (1 h) — o que conta para "demora com frequência".</summary>
     int PassaramDoPrazoForte,
-    bool Reincidente);
+    bool Reincidente,
+    /// <summary>Leads dele nos últimos dias: quando chegaram e quando foram atendidos (nulo = ainda esperando).</summary>
+    IReadOnlyList<EsperaLeadDto> Leads);
+
+public record EsperaLeadDto(Guid LeadId, string Nome, DateTimeOffset ChegouEm, DateTimeOffset? AtendidoEm);
 
 public record EsperaTrafegoPainelDto(int MinutosPrimeiroPrazo, int MinutosPrazoForte, int LeadsParaReincidencia, int Dias, IReadOnlyList<EsperaConsultorDto> Consultores);

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, ApiRequestError } from "../../lib/api";
 import type { VendedorResumo } from "../../lib/types";
 import { Button, Input, Label, Modal, Select, useToast } from "../ui";
+import { rotuloVendedor } from "./rotuloVendedor";
 
 /**
  * Troca o consultor responsável por um lead (só gestão/administração — o servidor confere). O novo
@@ -72,7 +73,7 @@ export function AlterarResponsavelDialog({
               .filter((v) => v.id !== responsavelAtualId)
               .map((v) => (
                 <option key={v.id} value={v.id}>
-                  {v.nome}
+                  {rotuloVendedor(v)}
                 </option>
               ))}
           </Select>

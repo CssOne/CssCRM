@@ -39,7 +39,7 @@ export function AlertaDistribuicaoLimites() {
       setEstado(novo);
       notificar(
         "success",
-        valor ? "Distribuição liberada até o fim do dia, ignorando os limites (o dia e o horário de cada consultor continuam valendo)." : "Os limites voltaram a valer na distribuição."
+        valor ? "Distribuição liberada até o fim do dia, ignorando os limites e, se ninguém estiver no horário, também o horário dos consultores." : "Os limites e horários voltaram a valer na distribuição."
       );
     } catch {
       notificar("error", "Não foi possível alterar a distribuição.");
@@ -53,7 +53,7 @@ export function AlertaDistribuicaoLimites() {
   const bannerContinuar = estado.continuarAteEm ? (
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm">
         <span className="text-[var(--fg-muted)]">
-          A distribuição automática está ignorando os limites de leads até o fim de hoje (o dia e o horário de recebimento de cada consultor continuam valendo).
+          A distribuição automática está liberada até o fim de hoje: ignora os limites de leads e, quando ninguém está no dia/horário de recebimento, também o horário.
         </span>
         <button
           type="button"
@@ -61,7 +61,7 @@ export function AlertaDistribuicaoLimites() {
           onClick={() => continuar(false)}
           className="focus-ring cursor-pointer font-medium text-[var(--brand)] hover:underline disabled:opacity-50"
         >
-          Voltar a respeitar os limites
+          Voltar a respeitar limites e horários
         </button>
       </div>
   ) : null;
@@ -96,10 +96,10 @@ export function AlertaDistribuicaoLimites() {
             {porHorario && <> {estado.consultoresForaDoHorario} consultor(es) fora do dia/horário de recebimento agora.</>}{" "}
             {porLimite
               ? "Deseja continuar a distribuição automática mesmo com os limites atingidos?"
-              : "Os leads serão entregues assim que um consultor entrar no dia/horário de recebimento — a agenda de cada um sempre vale."}
+              : "Eles serão entregues sozinhos quando um consultor entrar no dia/horário de recebimento. Se não quiser esperar, continue a distribuição hoje: ela passa por cima do horário."}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs font-medium">
-            {porLimite && !estado.continuarAteEm && (
+            {!estado.continuarAteEm && (
               <button
                 type="button"
                 disabled={enviando}
@@ -114,7 +114,7 @@ export function AlertaDistribuicaoLimites() {
               onClick={() => setDispensadoEm(estado.leadsBloqueados)}
               className="focus-ring cursor-pointer text-[var(--fg-muted)] hover:underline"
             >
-              {porLimite ? "Manter parado" : "Dispensar aviso"}
+              {estado.continuarAteEm ? "Dispensar aviso" : "Manter parado"}
             </button>
             <Link to="/app/crm/gestao" className="text-[var(--brand)] hover:underline">
               Ajustar limites e horários na Gestão comercial

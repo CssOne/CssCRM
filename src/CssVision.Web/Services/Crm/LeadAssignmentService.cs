@@ -68,10 +68,11 @@ public sealed class LeadAssignmentService(
         var normal = await ProximoAsync(oQue, regional, false, false, ct);
         if (normal is not null) return normal;
 
-        // "Continuar distribuindo hoje" do gestor afrouxa só os LIMITES (diário/mensal). A agenda de dias e horários nunca é ignorada:
-        // quem está fora dela não recebe lead, nem por esse modo, nem ao ter o "Recebe leads" ligado. Sem ninguém dentro da agenda o lead
-        // espera sem responsável até alguém entrar no horário (o gestor é avisado e pode ajustar os horários).
-        return await ContinuarAteAsync(ct) is null ? null : await ProximoAsync(oQue, regional, true, false, ct);
+        // "Continuar distribuindo hoje" do gestor libera a distribuição até o fim do dia. Primeiro afrouxa só os LIMITES (diário/mensal):
+        // quem está dentro da agenda de dias e horários continua com preferência. Só quando ninguém dentro da agenda pode receber é que
+        // o gestor, ao liberar, passa também por cima da agenda — senão o lead ficaria parado e o aviso não teria como ser resolvido.
+        if (await ContinuarAteAsync(ct) is null) return null;
+        return await ProximoAsync(oQue, regional, true, false, ct) ?? await ProximoAsync(oQue, regional, true, true, ct);
     }
 
     private async Task<Guid?> ProximoAsync(string? oQue, string? regional, bool ignorarLimites, bool ignorarHorario, CancellationToken ct)
@@ -156,12 +157,11 @@ public sealed class LeadAssignmentService(
             .Select(u => new { u.Ativo, u.LimiteMensalLeads, u.LimiteDiarioLeads, u.HorarioInicioLeads, u.HorarioFimLeads, u.DiasSemanaLeads })
             .FirstOrDefaultAsync(ct);
         if (usuario is null || !usuario.Ativo) return false;
-        // Dia e horário de recebimento valem sempre — o "Continuar distribuindo hoje" afrouxa só os limites; um consultor fora da agenda
-        // só recebe por ele quando ninguém dentro da agenda pode (isso é decidido no rodízio, em ProximoResponsavelAsync).
-        if (!JanelaRecebimentoLeads.Permite(usuario.HorarioInicioLeads, usuario.HorarioFimLeads, usuario.DiasSemanaLeads, Agora)) return false;
-
+        // Com o "Continuar distribuindo hoje" ligado o gestor liberou a distribuição: vale também fora da agenda (quem é escolhido por estar
+        // dentro dela tem preferência, isso é decidido no rodízio, em ProximoResponsavelAsync). Sem o modo, dia e horário valem sempre.
         var continuar = await ContinuarAteAsync(ct) is not null;
         if (continuar) return true;
+        if (!JanelaRecebimentoLeads.Permite(usuario.HorarioInicioLeads, usuario.HorarioFimLeads, usuario.DiasSemanaLeads, Agora)) return false;
         if (usuario.LimiteMensalLeads is { } mensal
             && await LeadsDoTrafegoNoMes().CountAsync(l => l.ResponsavelId == usuarioId, ct) >= mensal) return false;
         if (usuario.LimiteDiarioLeads is { } diario
@@ -228,6 +228,8 @@ public sealed class LeadAssignmentService(
 
             // Ninguém dentro da agenda. Só avisa se existe alguém que receberia fora dela (senão não há consultor nenhum: não é horário).
             if (await ProximoAsync(grupo.Key.OQue, grupo.Key.Regional, true, true, ct) is null) continue;
+            // Com o modo "continuar" ligado esse lead já está sendo entregue a quem está fora da agenda: não conta como parado.
+            if (continuarAte is not null) continue;
             bloqueados += quantidade;
             porHorario += quantidade;
         }

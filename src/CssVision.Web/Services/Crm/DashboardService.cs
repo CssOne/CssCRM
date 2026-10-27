@@ -50,6 +50,52 @@ public sealed class DashboardService(
         return (visiveis, regionalFiltrada);
     }
 
+    /// <summary>Tipo da venda (canal): o da própria venda ou, na falta dele, o do lead — Lead, Indicação, Indicação Lead, Pessoal... Sem nenhum, "Sem tipo".</summary>
+    private static string TipoDaVenda(string? daVenda, string? doLead)
+    {
+        var tipo = (string.IsNullOrWhiteSpace(daVenda) ? doLead : daVenda)?.Trim();
+        return string.IsNullOrEmpty(tipo) ? "Sem tipo" : tipo;
+    }
+
+    /// <summary>As vendas do mês contadas na meta, separadas por tipo (a barra de meta da Visão geral). Maiúsculas/minúsculas não separam.</summary>
+    private static async Task<List<VendaPorTipoDto>> ContarVendasPorTipoAsync(IQueryable<CrmOpportunity> vendas, CancellationToken ct)
+    {
+        var tipos = await vendas.Select(o => new { Venda = o.TipoIndicacao, Lead = o.Lead.TipoIndicacao }).ToListAsync(ct);
+        return tipos.GroupBy(t => TipoDaVenda(t.Venda, t.Lead), StringComparer.OrdinalIgnoreCase)
+            .Select(g => new VendaPorTipoDto(g.Key, g.Count()))
+            .OrderByDescending(t => t.Quantidade).ThenBy(t => t.Tipo, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>As vendas por trás da barra de meta do mês (as mesmas contadas nela), todas ou só de um tipo.</summary>
+    public async Task<RelatorioDetalheDto> ObterVendasDoMesAsync(DashboardFilterRequest filtro, string? tipo, CancellationToken ct)
+    {
+        var hoje = HorarioBrasilia.Hoje;
+        var (visiveis, regionalFiltrada) = await ResolverEscopoAsync(filtro, ct);
+        var oportunidades = db.CrmOpportunities.AsNoTracking().Where(o => !o.Arquivado);
+        if (visiveis is not null) oportunidades = oportunidades.Where(o => visiveis.Contains(o.ResponsavelId));
+        var (_, _, _, _, vendas) = await CalcularMetaDoMesAsync(
+            visiveis, filtro.VendedorId.HasValue, regionalFiltrada, oportunidades, HorarioBrasilia.PrimeiroDiaDoMes(hoje), ct);
+
+        var brutas = await vendas.OrderByDescending(o => o.DataEfetivaFechamento)
+            .Select(o => new
+            {
+                o.LeadId, Cliente = o.Lead.NomeOuRazaoSocial, Consultor = o.Responsavel.NomeCompleto, o.DataEfetivaFechamento,
+                Etapa = o.Lead.Etapa != null ? o.Lead.Etapa.Nome : null, TipoVenda = o.TipoIndicacao, TipoLead = o.Lead.TipoIndicacao, o.PagamentoAdesao,
+                o.Lead.Placa, o.Lead.Telefone,
+            })
+            .ToListAsync(ct);
+        var doTipo = brutas
+            .Select(o => (Bruta: o, Tipo: TipoDaVenda(o.TipoVenda, o.TipoLead)))
+            .Where(x => string.IsNullOrWhiteSpace(tipo) || string.Equals(x.Tipo, tipo.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var itens = doTipo.Take(500)
+            .Select(x => new RelatorioDetalheItemDto(x.Bruta.LeadId, x.Bruta.Cliente, x.Bruta.Consultor, x.Bruta.DataEfetivaFechamento ?? DateTimeOffset.UtcNow,
+                x.Bruta.Etapa, x.Tipo, x.Bruta.PagamentoAdesao, x.Bruta.Placa, x.Bruta.Telefone))
+            .ToList();
+        return new RelatorioDetalheDto(string.IsNullOrWhiteSpace(tipo) ? "Vendas do mês" : $"Vendas do mês — {tipo.Trim()}", doTipo.Count, "Venda", "Adesão", itens);
+    }
+
     public async Task<RelatorioDetalheDto> ObterVendasDaOrigemAsync(DashboardFilterRequest filtro, string origem, CancellationToken ct)
     {
         var hoje = HorarioBrasilia.Hoje;
@@ -147,12 +193,13 @@ public sealed class DashboardService(
 
         // Meta do mês (ver CalcularMetaDoMesAsync: a meta da regional vale no lugar das individuais, não soma com elas).
         var mesReferencia = HorarioBrasilia.PrimeiroDiaDoMes(hoje);
-        var (metaValor, metaQuantidade, realizadoMes, realizadoQuantidadeMes) =
+        var (metaValor, metaQuantidade, realizadoMes, realizadoQuantidadeMes, vendasDoMes) =
             await CalcularMetaDoMesAsync(visiveis, filtro.VendedorId.HasValue, regionalFiltrada, oportunidadesQuery, mesReferencia, ct);
         var meta = new MetaResultadoDto(
             metaValor, realizadoMes,
             metaQuantidade == 0 ? 0m : Math.Round(100m * realizadoQuantidadeMes / metaQuantidade, 1),
-            metaQuantidade, realizadoQuantidadeMes);
+            metaQuantidade, realizadoQuantidadeMes,
+            await ContarVendasPorTipoAsync(vendasDoMes, ct));
 
         var funilBruto = await oportunidadesQuery
             .Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Aberta)
@@ -207,7 +254,7 @@ public sealed class DashboardService(
     /// </list>
     /// Cada medida (valor e quantidade) cai para a soma das individuais quando a regional só definiu a outra. Meta de valor = adesão recebida (ver GoalService).
     /// </summary>
-    private async Task<(decimal MetaValor, int MetaQuantidade, decimal Realizado, int RealizadoQuantidade)> CalcularMetaDoMesAsync(
+    private async Task<(decimal MetaValor, int MetaQuantidade, decimal Realizado, int RealizadoQuantidade, IQueryable<CrmOpportunity> Vendas)> CalcularMetaDoMesAsync(
         List<Guid>? visiveis, bool umConsultor, Guid? regionalFiltrada, IQueryable<CrmOpportunity> oportunidadesQuery, DateOnly mes, CancellationToken ct)
     {
         var inicioMes = HorarioBrasilia.Inicio(mes);
@@ -215,18 +262,19 @@ public sealed class DashboardService(
         if (visiveis is not null) individuais = individuais.Where(g => visiveis.Contains(g.VendedorId));
         var regionais = db.CrmRegionalGoals.AsNoTracking().Where(g => g.MesReferencia == mes);
 
-        async Task<(decimal Valor, int Quantidade)> RealizadoAsync(IQueryable<CrmOpportunity> consulta)
+        // Devolve também a consulta das vendas contadas: o detalhe da barra de meta lista exatamente essas.
+        async Task<(decimal Valor, int Quantidade, IQueryable<CrmOpportunity> Vendas)> RealizadoAsync(IQueryable<CrmOpportunity> consulta)
         {
             var ganhas = consulta.Where(o => o.Etapa.Tipo == TipoEtapaPipeline.Ganho && o.DataEfetivaFechamento >= inicioMes);
-            return (await ganhas.SumAsync(o => o.PagamentoAdesao, ct) ?? 0m, await ganhas.CountAsync(ct));
+            return (await ganhas.SumAsync(o => o.PagamentoAdesao, ct) ?? 0m, await ganhas.CountAsync(ct), ganhas);
         }
 
-        async Task<(decimal MetaValor, int MetaQuantidade, decimal Realizado, int RealizadoQuantidade)> SoIndividuaisAsync()
+        async Task<(decimal MetaValor, int MetaQuantidade, decimal Realizado, int RealizadoQuantidade, IQueryable<CrmOpportunity> Vendas)> SoIndividuaisAsync()
         {
             var valor = await individuais.SumAsync(g => (decimal?)g.MetaValor, ct) ?? 0m;
             var quantidade = await individuais.SumAsync(g => (int?)g.MetaQuantidadeVendas, ct) ?? 0;
-            var (realizado, realizadoQuantidade) = await RealizadoAsync(oportunidadesQuery);
-            return (valor, quantidade, realizado, realizadoQuantidade);
+            var (realizado, realizadoQuantidade, vendas) = await RealizadoAsync(oportunidadesQuery);
+            return (valor, quantidade, realizado, realizadoQuantidade, vendas);
         }
 
         if (umConsultor) return await SoIndividuaisAsync();
@@ -238,12 +286,13 @@ public sealed class DashboardService(
             var daRegional = await regionais.Where(g => g.RegionalId == escolhida).Select(g => new { g.MetaValor, g.MetaQuantidadeVendas }).FirstOrDefaultAsync(ct);
             var valorDaEscolhida = await individuais.SumAsync(g => (decimal?)g.MetaValor, ct) ?? 0m;
             var quantidadeDaEscolhida = await individuais.SumAsync(g => (int?)g.MetaQuantidadeVendas, ct) ?? 0;
-            var (realizadoDaEscolhida, realizadoQuantidadeDaEscolhida) = await RealizadoAsync(oportunidadesQuery);
+            var (realizadoDaEscolhida, realizadoQuantidadeDaEscolhida, vendasDaEscolhida) = await RealizadoAsync(oportunidadesQuery);
             return (
                 daRegional?.MetaValor is > 0 ? daRegional.MetaValor.Value : valorDaEscolhida,
                 daRegional is { MetaQuantidadeVendas: > 0 } ? daRegional.MetaQuantidadeVendas : quantidadeDaEscolhida,
                 realizadoDaEscolhida,
-                realizadoQuantidadeDaEscolhida);
+                realizadoQuantidadeDaEscolhida,
+                vendasDaEscolhida);
         }
 
         if (currentUser.TemVisaoTotal)
@@ -273,8 +322,8 @@ public sealed class DashboardService(
                 metaQuantidade += m.MetaQuantidadeVendas;
             }
 
-            var (realizado, realizadoQuantidade) = await RealizadoAsync(oportunidadesQuery);
-            return (metaValor, metaQuantidade, realizado, realizadoQuantidade);
+            var (realizado, realizadoQuantidade, vendas) = await RealizadoAsync(oportunidadesQuery);
+            return (metaValor, metaQuantidade, realizado, realizadoQuantidade, vendas);
         }
 
         var minhaRegionalId = await db.Users.AsNoTracking().Where(u => u.Id == currentUser.UserId).Select(u => u.RegionalId).FirstOrDefaultAsync(ct);
@@ -287,12 +336,13 @@ public sealed class DashboardService(
         var quantidadeIndividuais = await individuais.SumAsync(g => (int?)g.MetaQuantidadeVendas, ct) ?? 0;
         // As vendas contadas contra a meta da regional são as da regional inteira, não só as de quem está vendo.
         var vendasDaRegional = db.CrmOpportunities.AsNoTracking().Where(o => !o.Arquivado && o.Responsavel.RegionalId == minhaRegionalId);
-        var (realizadoRegional, realizadoQuantidadeRegional) = await RealizadoAsync(vendasDaRegional);
+        var (realizadoRegional, realizadoQuantidadeRegional, vendasRegional) = await RealizadoAsync(vendasDaRegional);
         return (
             minha.MetaValor is > 0 ? minha.MetaValor.Value : valorIndividuais,
             minha.MetaQuantidadeVendas > 0 ? minha.MetaQuantidadeVendas : quantidadeIndividuais,
             realizadoRegional,
-            realizadoQuantidadeRegional);
+            realizadoQuantidadeRegional,
+            vendasRegional);
     }
 
     private static async Task<List<EvolucaoVendasDto>> ObterEvolucaoVendasAsync(IQueryable<CrmOpportunity> oportunidadesQuery, DateOnly hoje, CancellationToken ct)

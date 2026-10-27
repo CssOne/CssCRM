@@ -958,6 +958,13 @@ export interface MetaResultado {
   percentualAtingido: number;
   metaQuantidade: number;
   realizadoQuantidade: number;
+  /** As vendas contadas na meta, por tipo (Lead, Indicação, Indicação Lead, Pessoal...): as cores da barra. */
+  porTipo?: VendaPorTipo[];
+}
+
+export interface VendaPorTipo {
+  tipo: string;
+  quantidade: number;
 }
 
 export interface FunilEtapa {
@@ -1767,11 +1774,21 @@ export interface RelatorioDetalhe {
 export interface EsperaConsultor {
   consultorId: string;
   nome: string;
+  regionalNome?: string | null;
   esperandoAgora: number;
   maisAntigoDesde?: string | null;
   passaramDoPrimeiroPrazo: number;
   passaramDoPrazoForte: number;
   reincidente: boolean;
+  leads: EsperaLead[];
+}
+
+export interface EsperaLead {
+  leadId: string;
+  nome: string;
+  chegouEm: string;
+  /** Nulo = ainda esperando atendimento. */
+  atendidoEm?: string | null;
 }
 
 export interface AuditoriaQuadroGrupo {
