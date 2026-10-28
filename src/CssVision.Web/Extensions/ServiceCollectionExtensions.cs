@@ -184,6 +184,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDisparoEmailService, DisparoEmailService>();
         services.AddSingleton<ISegredoProtetor, SegredoProtetor>();
         services.AddSingleton<IDescadastroEmailTokens, DescadastroEmailTokens>();
+        services.AddScoped<ILeadBoasVindasEmailService, LeadBoasVindasEmailService>();
         services.AddScoped<DisparoEmailProcessador>();
         services.AddHostedService<DisparoEmailBackgroundService>();
         services.AddHostedService<SenhaLegadaVerificador>();
@@ -196,6 +197,7 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
         services.Configure<SuporteOptions>(configuration.GetSection(SuporteOptions.SectionName));
+        services.Configure<BoasVindasEmailOptions>(configuration.GetSection(BoasVindasEmailOptions.SectionName));
         services.AddScoped<IEmailDoSistemaService, EmailDoSistemaService>();
         services.AddScoped<IEmailSender, SmtpEmailSender>();
 
