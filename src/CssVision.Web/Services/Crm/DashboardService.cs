@@ -255,8 +255,9 @@ public sealed class DashboardService(
     /// consultores, não soma com elas: as individuais detalham quem entrega o quê dentro da regional, e somar as duas contava a mesma meta duas
     /// vezes (500 da regional + 745 dos consultores + 200 de outra regional = 1445).
     /// <list type="bullet">
-    /// <item>Consultor ou gestor (com regional): a meta da própria regional e as vendas da regional inteira no mês. Sem meta cadastrada para a
+    /// <item>Gestor comercial (com regional): a meta da própria regional e as vendas da regional inteira no mês. Sem meta cadastrada para a
     /// regional (ou sem regional), vale a soma das metas individuais que ele enxerga, contra as vendas que ele enxerga.</item>
+    /// <item>Consultor: a meta individual dele e as vendas dele, nunca as da regional.</item>
     /// <item>Administrador (visão total): para cada regional que enxerga, a meta dela ou, se não tiver, a soma das individuais dos seus consultores;
     /// consultores sem regional entram pelas individuais.</item>
     /// <item>Um consultor escolhido no filtro: a meta individual dele.</item>
@@ -334,6 +335,9 @@ public sealed class DashboardService(
             var (realizado, realizadoQuantidade, vendas) = await RealizadoAsync(oportunidadesQuery);
             return (metaValor, metaQuantidade, realizado, realizadoQuantidade, vendas);
         }
+
+        // Consultor: a meta individual dele contra as vendas dele (a meta e as vendas da regional são do gestor).
+        if (!currentUser.IsGestorComercial) return await SoIndividuaisAsync();
 
         var minhaRegionalId = await db.Users.AsNoTracking().Where(u => u.Id == currentUser.UserId).Select(u => u.RegionalId).FirstOrDefaultAsync(ct);
         var minha = minhaRegionalId is null

@@ -1,10 +1,10 @@
-import { AlertTriangle, BellRing, CalendarClock, CheckCircle2, CircleDollarSign, FileCheck2, Laptop, Paperclip, Target, Undo2, XCircle } from "lucide-react";
+import { AlertTriangle, BellRing, CalendarClock, CheckCircle2, CircleDollarSign, FileCheck2, Laptop, Paperclip, Pencil, RotateCcw, Target, Trash2, Undo2, XCircle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, isAbortError, uploadFile } from "../../lib/api";
 import { formatarData, formatarMoeda } from "../../lib/format";
-import { Badge, Button, Card, EmptyState, ErrorState, Label, Modal, Select, Skeleton, Textarea, useToast } from "../ui";
+import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, Input, Label, Modal, MoneyInput, Select, Skeleton, Textarea, useToast } from "../ui";
 import { StatCard } from "../crm/StatCard";
-import { DataInput } from "../PeriodoInput";
+import { DataInput, MesInput } from "../PeriodoInput";
 
 // ---------- Tipos (espelham SetorFinanceiroController) ----------
 
@@ -31,6 +31,8 @@ export interface Cobranca {
   /** O financeiro não confirmou o pagamento informado. */
   motivoRecusa?: string | null;
   observacaoConsultor?: string | null;
+  /** Valor ajustado à mão: o que o contrato calculava (o `valor` é o combinado). */
+  valorOriginal?: number | null;
 }
 
 export interface SetorFinanceiroConsultor {
@@ -47,6 +49,8 @@ export interface SetorFinanceiroConsultor {
   leadsMes: number;
   custoLeadTotal: number;
   custos?: CustoAdicional[];
+  /** Cobranças removidas de algum mês: dá para restaurar. */
+  removidas?: Cobranca[];
 }
 
 export interface CustoAdicional {
@@ -82,6 +86,10 @@ export function CobrancasDoConsultor({ consultorId, onMudou, onCobrar }: { consu
   const [informando, setInformando] = useState<Cobranca | null>(null);
   const [lembrando, setLembrando] = useState<Cobranca | null>(null);
   const [recusando, setRecusando] = useState<Cobranca | null>(null);
+  // Edição pela gestão: valor / início da cobrança, o custo (tipo, parcelas, data) e remoção de um mês ou do custo inteiro.
+  const [editando, setEditando] = useState<Cobranca | null>(null);
+  const [removendo, setRemovendo] = useState<Cobranca | null>(null);
+  const [mostrarRemovidas, setMostrarRemovidas] = useState(false);
 
   const carregar = useCallback(
     (signal?: AbortSignal) => {
@@ -121,6 +129,18 @@ export function CobrancasDoConsultor({ consultorId, onMudou, onCobrar }: { consu
       await api.put(`/crm/setor-financeiro/${consultorId}/pagamentos`, { item: c.item, competencia: c.competencia, pago, pagoEm, observacao, custoId: c.custoId ?? null });
       notificar("success", pago ? `${c.rotulo} de ${mesAno(c.competencia)} marcado como pago.` : `${c.rotulo} de ${mesAno(c.competencia)} voltou para em aberto.`);
       setPagando(null);
+      aposSalvar();
+    } catch (e) {
+      notificar("error", e instanceof Error ? e.message : "Não foi possível salvar.");
+    }
+  }
+
+  async function ajustar(c: Cobranca, valor: number | null, remover: boolean, ok: string) {
+    try {
+      await api.put(`/crm/setor-financeiro/${consultorId}/cobrancas/ajuste`, { item: c.item, competencia: c.competencia, custoId: c.custoId ?? null, valor, remover });
+      notificar("success", ok);
+      setEditando(null);
+      setRemovendo(null);
       aposSalvar();
     } catch (e) {
       notificar("error", e instanceof Error ? e.message : "Não foi possível salvar.");
@@ -235,7 +255,11 @@ export function CobrancasDoConsultor({ consultorId, onMudou, onCobrar }: { consu
                     <span className="font-medium text-[var(--fg)]">{c.rotulo}</span>
                     {c.item !== "TrafegoPago" && <span className="block text-xs text-[var(--fg-muted)]">{c.descricao.replace("Custo de leads — ", "").replace(" (fixo)", "")}{c.vencimento ? ` · vence em ${formatarData(c.vencimento)}` : ""}</span>}
                   </td>
-                  <td className="px-4 py-2.5 text-right font-semibold">{formatarMoeda(c.valor)}</td>
+                  <td className="px-4 py-2.5 text-right font-semibold">
+                    {c.valorOriginal != null && <span className="mr-1.5 text-xs font-normal text-[var(--fg-muted)] line-through" title="Valor calculado pelo contrato">{formatarMoeda(c.valorOriginal)}</span>}
+                    {formatarMoeda(c.valor)}
+                    {c.valorOriginal != null && <span className="block text-[11px] font-normal text-[var(--warning)]">valor ajustado</span>}
+                  </td>
                   <td className="px-4 py-2.5">
                     {c.pago ? (
                       <span>
@@ -271,6 +295,18 @@ export function CobrancasDoConsultor({ consultorId, onMudou, onCobrar }: { consu
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-right">
+                    {dados.podeEditar && (
+                      <span className="mr-2 inline-flex items-center gap-1 align-middle">
+                        <button type="button" aria-label={`Editar ${c.rotulo} de ${mesAno(c.competencia)}`} title="Editar valor, tipo e início da cobrança" onClick={() => setEditando(c)} className="focus-ring cursor-pointer rounded p-1 text-[var(--fg-muted)] hover:text-[var(--brand)]">
+                          <Pencil className="size-4" />
+                        </button>
+                        {!c.pago && (
+                          <button type="button" aria-label={`Remover ${c.rotulo} de ${mesAno(c.competencia)}`} title="Remover esta cobrança" onClick={() => setRemovendo(c)} className="focus-ring cursor-pointer rounded p-1 text-[var(--fg-muted)] hover:text-[var(--danger)]">
+                            <Trash2 className="size-4" />
+                          </button>
+                        )}
+                      </span>
+                    )}
                     {!dados.podeEditar && !c.pago && !c.informadoPeloConsultor && (
                       <span className="inline-flex items-center gap-2">
                         <Button size="sm" variant="ghost" onClick={() => setLembrando(c)} title="Escolha um dia para o sistema te lembrar de pagar">
@@ -322,11 +358,292 @@ export function CobrancasDoConsultor({ consultorId, onMudou, onCobrar }: { consu
         )}
       </Card>
 
+      {dados.podeEditar && (dados.removidas?.length ?? 0) > 0 && (
+        <Card className="p-4">
+          <button type="button" onClick={() => setMostrarRemovidas((v) => !v)} aria-expanded={mostrarRemovidas} className="focus-ring flex w-full cursor-pointer items-center justify-between rounded text-left text-sm font-semibold text-[var(--fg)]">
+            Cobranças removidas ({dados.removidas!.length})
+            <span className="text-xs font-medium text-[var(--brand)]">{mostrarRemovidas ? "Ocultar" : "Mostrar"}</span>
+          </button>
+          {mostrarRemovidas && (
+            <ul className="mt-3 divide-y divide-[var(--border)] text-sm">
+              {dados.removidas!.map((c) => (
+                <li key={`${c.item}${c.custoId ?? ""}${c.competencia}`} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                  <span className="text-[var(--fg)]">
+                    <strong>{c.rotulo}</strong> de {mesAno(c.competencia)} · <span className="[font-variant-numeric:tabular-nums]">{formatarMoeda(c.valorOriginal ?? c.valor)}</span>
+                    <span className="block text-xs text-[var(--fg-muted)]">{c.descricao.replace("Custo de leads — ", "").replace(" (fixo)", "")}</span>
+                  </span>
+                  <Button size="sm" variant="secondary" onClick={() => ajustar(c, null, false, `${c.rotulo} de ${mesAno(c.competencia)} voltou às cobranças.`)}>
+                    <RotateCcw className="size-4" /> Restaurar
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+
+      <EditarCobrancaDialog
+        cobranca={editando}
+        consultorId={consultorId}
+        custo={editando?.custoId ? dados.custos?.find((x) => x.id === editando.custoId) ?? null : null}
+        onFechar={() => setEditando(null)}
+        onMudou={() => { setEditando(null); aposSalvar(); }}
+      />
+      <ConfirmDialog
+        open={!!removendo}
+        danger
+        title="Remover cobrança"
+        confirmLabel="Remover"
+        message={removendo ? `Remover ${removendo.rotulo} de ${mesAno(removendo.competencia)} (${formatarMoeda(removendo.valor)})? Ela deixa de ser cobrada neste mês e some do em aberto. Dá para restaurar depois, em "Cobranças removidas".` : ""}
+        onConfirm={async () => { if (removendo) await ajustar(removendo, null, true, `${removendo.rotulo} de ${mesAno(removendo.competencia)} removida.`); }}
+        onCancel={() => setRemovendo(null)}
+      />
       <PagamentoDialog cobranca={pagando} onFechar={() => setPagando(null)} onConfirmar={registrar} />
       <InformarPagamentoDialog cobranca={informando} onFechar={() => setInformando(null)} onConfirmar={informar} />
       <LembreteDialog cobranca={lembrando} onFechar={() => setLembrando(null)} onConfirmar={agendarLembrete} />
       <RecusarDialog cobranca={recusando} onFechar={() => setRecusando(null)} onConfirmar={recusar} />
     </div>
+  );
+}
+
+const mesISO = (iso: string) => iso.slice(0, 7);
+const somarMeses = (mes: string, n: number) => {
+  const d = new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) - 1 + n, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+const mesesEntre = (de: string, ate: string) => (Number(ate.slice(0, 4)) - Number(de.slice(0, 4))) * 12 + Number(ate.slice(5, 7)) - Number(de.slice(5, 7));
+const TIPOS_DE_CUSTO: [string, string][] = [["Notebook", "Notebook"], ["Celular", "Celular"], ["Equipamento", "Equipamento"], ["Outro", "Outro custo"]];
+
+/**
+ * Edição de uma cobrança pela gestão, num formulário só com um Salvar:
+ * - em todas: o valor deste mês (com volta ao valor do contrato);
+ * - coworking, tráfego pago e custo de lead: o início da cobrança (prazo em meses contado da entrada do consultor);
+ * - custos lançados (notebook…): o tipo, o nome, a forma de cobrança (à vista ou parcelado), o valor total e a data de início (vencimento da 1ª parcela).
+ */
+function EditarCobrancaDialog({ cobranca, consultorId, custo, onFechar, onMudou }: {
+  cobranca: Cobranca | null; consultorId: string; custo: CustoAdicional | null; onFechar: () => void; onMudou: () => void;
+}) {
+  const { notificar } = useToast();
+  const [valor, setValor] = useState<number | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [inicio, setInicio] = useState("");
+  const [entrada, setEntrada] = useState<string | null>(null);   // mês em que o contrato começou a contar (início da cobrança − prazo)
+  const [inicioOriginal, setInicioOriginal] = useState("");
+  const [apagarCusto, setApagarCusto] = useState(false);
+  // Custo lançado: os campos do custo (o nome, o tipo e a forma de cobrança).
+  const [tipo, setTipo] = useState("Notebook");
+  const [nome, setNome] = useState("");
+  const [forma, setForma] = useState<"avista" | "parcelado">("parcelado");
+  const [total, setTotal] = useState<number | null>(null);
+  const [parcelas, setParcelas] = useState("1");
+  const [primeira, setPrimeira] = useState("");
+  const automatica = !!cobranca && cobranca.item !== "Adicional";
+
+  useEffect(() => {
+    if (!cobranca) return;
+    setValor(cobranca.valor);
+    setInicio("");
+    setInicioOriginal("");
+    setEntrada(null);
+    if (cobranca.item === "Adicional") return;
+    // Início da cobrança do item: vem do contrato (prazo em meses depois da entrada do consultor).
+    api.get<{ atuais: { parametro: string; carenciaMeses?: number | null; inicioCobranca?: string | null }[] }>(`/portal/financeiro/contrato?consultor=${consultorId}&ano=${cobranca.competencia.slice(0, 4)}`)
+      .then((d) => {
+        const a = d.atuais.find((x) => x.parametro === cobranca.item);
+        if (a?.inicioCobranca && a.carenciaMeses != null) {
+          setInicio(mesISO(a.inicioCobranca));
+          setInicioOriginal(mesISO(a.inicioCobranca));
+          setEntrada(somarMeses(mesISO(a.inicioCobranca), -a.carenciaMeses));
+        }
+      })
+      .catch(() => {});
+  }, [cobranca, consultorId]);
+
+  useEffect(() => {
+    if (!custo) return;
+    setTipo(custo.tipo);
+    setNome(custo.descricao ?? "");
+    setForma(custo.parcelas === 1 ? "avista" : "parcelado");
+    setTotal(custo.valorTotal);
+    setParcelas(String(custo.parcelas));
+    setPrimeira(custo.primeiraParcela);
+  }, [custo]);
+
+  const n = forma === "avista" ? 1 : Number(parcelas);
+  const parcelasValidas = Number.isInteger(n) && n >= 1 && n <= 120;
+  const valorMudou = !!cobranca && valor !== null && valor !== cobranca.valor;
+  const inicioMudou = automatica && !!entrada && !!inicio && inicio !== inicioOriginal;
+  const custoMudou = !!custo && (tipo !== custo.tipo || nome.trim() !== (custo.descricao ?? "") || total !== custo.valorTotal || n !== custo.parcelas || primeira !== custo.primeiraParcela);
+  const alteracoes = (valorMudou ? 1 : 0) + (inicioMudou ? 1 : 0) + (custoMudou ? 1 : 0);
+
+  async function salvar() {
+    if (!cobranca) return;
+    if (custoMudou) {
+      if (!total || total <= 0) return notificar("error", "Informe o valor total do custo.");
+      if (!parcelasValidas) return notificar("error", "O número de parcelas deve ficar entre 1 e 120.");
+      if (!primeira) return notificar("error", "Informe a data de início (vencimento da primeira parcela).");
+      if (tipo === "Outro" && !nome.trim()) return notificar("error", "Dê um nome ao custo.");
+    }
+    let meses = 0;
+    if (inicioMudou) {
+      meses = mesesEntre(entrada!, inicio);
+      if (meses < 0 || meses > 60) return notificar("error", "O início da cobrança deve ficar entre a entrada do consultor e 60 meses depois.");
+    }
+    setSalvando(true);
+    try {
+      // Primeiro o custo (pode mudar as parcelas), depois o valor do mês e o início da cobrança.
+      if (custoMudou && custo) {
+        await api.put(`/crm/setor-financeiro/${consultorId}/custos/${custo.id}`, { tipo, descricao: nome.trim() || null, valorTotal: total, parcelas: n, primeiraParcela: primeira, forcar: true });
+      }
+      if (valorMudou) await api.put(`/crm/setor-financeiro/${consultorId}/cobrancas/ajuste`, { item: cobranca.item, competencia: cobranca.competencia, custoId: cobranca.custoId ?? null, valor, remover: false });
+      if (inicioMudou) await api.put(`/portal/financeiro/contrato/${consultorId}/prazos`, { parametro: cobranca.item, carenciaMeses: meses });
+      notificar("success", "Cobrança atualizada.");
+      onMudou();
+    } catch (e) {
+      notificar("error", e instanceof Error ? e.message : "Não foi possível salvar.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function voltarAoContrato() {
+    if (!cobranca) return;
+    try {
+      await api.put(`/crm/setor-financeiro/${consultorId}/cobrancas/ajuste`, { item: cobranca.item, competencia: cobranca.competencia, custoId: cobranca.custoId ?? null, valor: null, remover: false });
+      notificar("success", "Valor voltou ao do contrato.");
+      onMudou();
+    } catch (e) {
+      notificar("error", e instanceof Error ? e.message : "Não foi possível salvar.");
+    }
+  }
+
+  return (
+    <>
+      <Modal
+        open={!!cobranca}
+        onClose={onFechar}
+        title="Editar cobrança"
+        size="md"
+        footer={
+          <>
+            {alteracoes > 0 && <span className="mr-auto text-xs text-[var(--fg-muted)]">{alteracoes} alteração(ões) para salvar</span>}
+            <Button variant="secondary" onClick={onFechar}>Cancelar</Button>
+            <Button loading={salvando} disabled={alteracoes === 0} onClick={salvar}>Salvar alterações</Button>
+          </>
+        }
+      >
+        {cobranca && (
+          <div className="filtros-painel space-y-4">
+            <p className="text-sm text-[var(--fg-muted)]">
+              <strong className="text-[var(--fg)]">{cobranca.rotulo}</strong> de {mesAno(cobranca.competencia)}
+            </p>
+
+            {custo && (
+              <div className="space-y-3 rounded-xl bg-[var(--surface-hover)] p-3">
+                <p className="text-sm font-semibold text-[var(--fg)]">Custo lançado</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="ec-tipo">Tipo do custo</Label>
+                    <Select id="ec-tipo" value={tipo} onChange={(e) => setTipo(e.target.value)}>
+                      {TIPOS_DE_CUSTO.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="ec-nome" required={tipo === "Outro"}>Nome do custo</Label>
+                    <Input id="ec-nome" maxLength={200} placeholder={tipo === "Notebook" ? "Ex.: Notebook Dell Inspiron" : "Opcional"} value={nome} onChange={(e) => setNome(e.target.value)} />
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1 text-sm font-medium text-[var(--fg)]">Forma de cobrança</p>
+                  <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Forma de cobrança">
+                    {([["avista", "À vista", "Uma cobrança só"], ["parcelado", "Parcelado", "Uma parcela por mês"]] as const).map(([v, t, d]) => (
+                      <button
+                        key={v}
+                        type="button"
+                        role="radio"
+                        aria-checked={forma === v}
+                        onClick={() => { setForma(v); if (v === "parcelado" && Number(parcelas) < 2) setParcelas("2"); }}
+                        className={`focus-ring flex-1 cursor-pointer rounded-xl border px-3 py-2 text-left transition-colors ${forma === v ? "border-[var(--brand)] bg-[var(--brand-soft)]" : "border-[var(--border)]"}`}
+                      >
+                        <span className="block text-sm font-bold text-[var(--fg)]">{t}</span>
+                        <span className="block text-xs text-[var(--fg-muted)]">{d}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div>
+                    <Label htmlFor="ec-total" required>Valor total</Label>
+                    <MoneyInput id="ec-total" value={total} onChange={setTotal} />
+                  </div>
+                  {forma === "parcelado" && (
+                    <div>
+                      <Label htmlFor="ec-parcelas" required>Parcelas</Label>
+                      <Input id="ec-parcelas" type="number" min={2} max={120} step={1} value={parcelas} onChange={(e) => setParcelas(e.target.value)} />
+                    </div>
+                  )}
+                  <div>
+                    <Label htmlFor="ec-primeira" required>{forma === "avista" ? "Vencimento" : "Início (1ª parcela)"}</Label>
+                    <DataInput id="ec-primeira" value={primeira} onChange={setPrimeira} />
+                  </div>
+                </div>
+                {total && parcelasValidas && forma === "parcelado" && (
+                  <p className="text-xs text-[var(--fg-muted)]">{n} parcela(s) de <strong className="text-[var(--fg)]">{formatarMoeda(Math.round((total / n) * 100) / 100)}</strong>; as demais vencem no mesmo dia dos meses seguintes.</p>
+                )}
+                {custo.parcelasPagas > 0 && <p className="text-xs text-[var(--fg-muted)]">{custo.parcelasPagas} parcela(s) já paga(s): o pagamento delas continua registrado. Mantenha o mês da 1ª parcela e um número de parcelas que as inclua.</p>}
+                <div><Button size="sm" variant="ghost" onClick={() => setApagarCusto(true)}><Trash2 className="size-4" /> Apagar o custo inteiro</Button></div>
+              </div>
+            )}
+
+            <div>
+              <Label htmlFor="ec-valor" required>Valor {custo ? "desta parcela" : "desta cobrança"}</Label>
+              <MoneyInput id="ec-valor" value={valor} onChange={setValor} />
+              {cobranca.valorOriginal != null ? (
+                <p className="mt-1 text-xs text-[var(--fg-muted)]">
+                  {custo ? "O custo calcula" : "O contrato calculava"} {formatarMoeda(cobranca.valorOriginal)}.{" "}
+                  <button type="button" onClick={voltarAoContrato} className="focus-ring cursor-pointer rounded font-semibold text-[var(--brand)] underline">Voltar ao valor calculado</button>
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-[var(--fg-muted)]">Vale só para este mês; os outros meses continuam com o valor calculado.</p>
+              )}
+            </div>
+
+            {automatica && (
+              <div className="space-y-2 rounded-xl bg-[var(--surface-hover)] p-3">
+                <Label htmlFor="ec-inicio">Início da cobrança de {cobranca.rotulo.toLowerCase()}</Label>
+                {entrada ? (
+                  <>
+                    <div className="w-44"><MesInput id="ec-inicio" value={inicio} onChange={setInicio} /></div>
+                    <p className="text-xs text-[var(--fg-muted)]">Muda o prazo de todos os meses deste item no contrato do consultor: {mesesEntre(entrada, inicio || entrada)} {mesesEntre(entrada, inicio || entrada) === 1 ? "mês" : "meses"} depois da entrada.</p>
+                  </>
+                ) : (
+                  <p className="text-xs text-[var(--fg-muted)]">O início desta cobrança segue o padrão e é ajustado no contrato do consultor (aba Contrato e custos).</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+      <ConfirmDialog
+        open={apagarCusto}
+        danger
+        title="Apagar o custo inteiro"
+        confirmLabel="Apagar"
+        message={custo ? `Apagar "${custo.descricao || custo.rotulo}" (${formatarMoeda(custo.valorTotal)} em ${custo.parcelas} parcelas)? Todas as parcelas e os pagamentos registrados dele saem.` : ""}
+        onConfirm={async () => {
+          if (!custo) return;
+          try {
+            await api.del(`/crm/setor-financeiro/${consultorId}/custos/${custo.id}`);
+            setApagarCusto(false);
+            notificar("success", "Custo apagado.");
+            onMudou();
+          } catch (e) {
+            notificar("error", e instanceof Error ? e.message : "Não foi possível apagar.");
+          }
+        }}
+        onCancel={() => setApagarCusto(false)}
+      />
+    </>
   );
 }
 

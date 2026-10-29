@@ -65,6 +65,16 @@ public class SetorFinanceiroController(ISetorFinanceiroService setor, ICurrentUs
         return NoContent();
     }
 
+    /// <summary>Acerta uma cobrança de um mês: troca o valor, remove (ou restaura). O valor calculado pelo contrato fica guardado.</summary>
+    [HttpPut("{consultorId:guid}/cobrancas/ajuste")]
+    [Authorize(Policy = PolicyNames.GestaoFinanceira)]
+    [EnableRateLimiting(RateLimitPolicies.FinanceiroEscrita)]
+    public async Task<IActionResult> AjustarCobranca(Guid consultorId, CobrancaAjusteRequest req, CancellationToken ct)
+    {
+        await setor.AjustarCobrancaAsync(consultorId, req, ct);
+        return NoContent();
+    }
+
     /// <summary>O financeiro lança um custo para o consultor (notebook, celular...), pago em parcelas mensais.</summary>
     [HttpPost("{consultorId:guid}/custos")]
     [Authorize(Policy = PolicyNames.GestaoFinanceira)]

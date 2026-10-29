@@ -465,7 +465,7 @@ function UsuariosTab({
             <section className="mt-6 border-t border-[var(--border)] pt-5" aria-label="Financeiro">
               <h3 className="text-base font-semibold text-[var(--fg)]">Financeiro</h3>
               <p className="mb-4 text-sm text-[var(--fg-muted)]">
-                Marque se o consultor é PJ ou CLT e defina os valores dele: PJ ganha bônus por placa ou recorrência (um dos dois) e tem custos fixos; CLT tem salário e % da adesão. Cada mudança fica no histórico do Controle financeiro dele.
+                Marque se o consultor é PJ ou CLT e defina os valores dele: PJ ganha bônus por placa ou recorrência (um dos dois) e tem custos fixos; CLT tem salário, alimentação, passagem e bonificação por faixa de contratos (calculada sozinha). Cada mudança fica no histórico do Controle financeiro dele.
               </p>
               <ContratoFinanceiro consultorId={usuarioEditando.id} ano={new Date().getFullYear()} />
             </section>

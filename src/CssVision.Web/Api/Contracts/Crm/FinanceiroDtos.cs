@@ -15,7 +15,9 @@ public record FinanceiroVendaDto(
     decimal? AdesaoOriginal = null,
     /// <summary>Bônus do contrato: o previsto (pelo contrato) e o que o consultor informou ter realmente recebido (nulo = ainda não informado).</summary>
     decimal? BonusPrevisto = null,
-    decimal? BonusRecebido = null);
+    decimal? BonusRecebido = null,
+    /// <summary>Taxa de instalação do rastreador (do card): a única coisa descontada da adesão antes da bonificação do CLT.</summary>
+    decimal? TaxaRastreador = null);
 
 public record FinanceiroCustoDto(
     Guid? Id, bool DoCard, DateOnly Data, string Categoria, string? Descricao, decimal Valor,
@@ -51,7 +53,8 @@ public record FinanceiroRendaDto(int Mes, string Tipo, decimal Valor, string? Co
 
 // ---- Contrato do consultor (PJ/CLT), valores definidos pela gestão e histórico ----
 
-public record FinanceiroPerfilDto(string? Tipo, string Transporte, DateOnly? InicioContrato, string? ModeloPj = null);
+/// <summary><c>Origem</c>: <c>Individual</c> (contrato definido para o consultor) ou <c>Grupo</c> (herdado do grupo em que ele está, em <c>Grupo</c>).</summary>
+public record FinanceiroPerfilDto(string? Tipo, string Transporte, DateOnly? InicioContrato, string? ModeloPj = null, string? Origem = null, string? Grupo = null);
 
 public record FinanceiroPerfilRequest(string? Tipo, string? Transporte, DateOnly? InicioContrato, string? ModeloPj = null);
 
@@ -64,7 +67,9 @@ public record FinanceiroValorDto(Guid Id, string Parametro, DateOnly VigenteDesd
 public record FinanceiroParametroAtualDto(
     string Parametro, decimal? Valor, DateOnly? Desde, bool Padrao,
     int? CarenciaMeses = null, bool CarenciaPropria = false, int? CarenciaPadrao = null, DateOnly? InicioCobranca = null,
-    int? LeadsNoMes = null, decimal? CustoRealNoMes = null);
+    int? LeadsNoMes = null, decimal? CustoRealNoMes = null,
+    /// <summary>De onde vem o valor: <c>Individual</c> (do consultor), <c>Grupo</c> (herdado, nome em <c>Grupo</c>) ou <c>Padrao</c> (padrão geral/do sistema).</summary>
+    string? Origem = null, string? Grupo = null);
 
 /// <summary>Prazo do consultor para começar a pagar um custo fixo. <c>CarenciaMeses</c> nulo = volta a seguir o padrão.</summary>
 public record FinanceiroPrazoRequest(string Parametro, int? CarenciaMeses);
@@ -84,7 +89,8 @@ public record FinanceiroCustoFixoDto(string Categoria, string Descricao, decimal
 
 public record FinanceiroMesContratoDto(
     int Mes, decimal Salario, decimal Recorrencia, decimal BonusPorPlaca, decimal PercentualAdesao, IReadOnlyList<FinanceiroCustoFixoDto> Custos,
-    decimal AdesoesDoMes = 0, decimal Comissao = 0, int VendasDoMes = 0);
+    decimal AdesoesDoMes = 0, decimal Comissao = 0, int VendasDoMes = 0, decimal FaturadoLiquido = 0,
+    decimal Alimentacao = 0, decimal Passagem = 0);
 
 public record FinanceiroContratoDto(
     Guid ConsultorId,
@@ -93,13 +99,54 @@ public record FinanceiroContratoDto(
     bool PodeEditar,
     IReadOnlyList<FinanceiroParametroAtualDto> Atuais,
     IReadOnlyList<FinanceiroValorDto> Historico,
-    IReadOnlyList<FinanceiroMesContratoDto> Meses);
+    IReadOnlyList<FinanceiroMesContratoDto> Meses,
+    IReadOnlyList<FinanceiroGrupoHistoricoDto>? Grupos = null);
+
+/// <summary>Um período do consultor em um grupo (ou fora de qualquer grupo, quando <c>GrupoId</c> é nulo). <c>Ate</c> nulo = é o atual.</summary>
+public record FinanceiroGrupoHistoricoDto(Guid? GrupoId, string? Grupo, string? Regional, DateOnly Desde, DateOnly? Ate);
+
+// ---- Contrato do grupo: o que vale para todo consultor do grupo, com vigência mensal ----
+
+public record GrupoContratoResumoDto(Guid GrupoId, string Grupo, Guid RegionalId, string Regional, bool Ativo, int Consultores, string? Tipo, string? ModeloPj);
+
+public record GrupoContratoPerfilDto(DateOnly VigenteDesde, string? Tipo, string? ModeloPj, string Transporte, string? DefinidoPor);
+
+public record GrupoContratoValorDto(Guid Id, string Parametro, DateOnly VigenteDesde, decimal Valor, string? Observacao, string? DefinidoPor);
+
+public record GrupoContratoPrazoDto(string Parametro, int? CarenciaMeses, int CarenciaPadrao);
+
+public record GrupoContratoConsultorDto(Guid ConsultorId, string Nome, DateOnly Desde, string? Tipo);
+
+public record GrupoContratoDto(
+    Guid GrupoId, string Grupo, Guid RegionalId, string Regional, bool PodeEditar,
+    GrupoContratoPerfilDto? Perfil,
+    IReadOnlyList<GrupoContratoPerfilDto> HistoricoPerfil,
+    IReadOnlyList<FinanceiroParametroAtualDto> Atuais,
+    IReadOnlyList<GrupoContratoValorDto> Historico,
+    IReadOnlyList<GrupoContratoPrazoDto> Prazos,
+    IReadOnlyList<GrupoContratoConsultorDto> Consultores);
+
+/// <summary>Contrato do grupo a partir de um mês: tipo (PJ/CLT), modelo do PJ e transporte. Tipo vazio = o grupo deixa de ter contrato a partir do mês.</summary>
+public record GrupoPerfilRequest(DateOnly VigenteDesde, string? Tipo, string? ModeloPj, string? Transporte);
+
+public record GrupoValorRequest(string Parametro, DateOnly VigenteDesde, decimal Valor, string? Observacao);
+
+/// <summary>Carência do grupo para começar a cobrar um custo fixo. Nulo = volta a seguir o padrão geral.</summary>
+public record GrupoPrazoRequest(string Parametro, int? CarenciaMeses);
 
 // ---- Setor Financeiro: o que a CSS cobra de cada consultor, mês a mês ----
 
 /// <summary>Cobrança de um mês: notebook (parcela), custo de lead ou tráfego pago. <c>Pago</c> falso = em aberto.</summary>
 public record CobrancaDto(string Item, string Rotulo, string Descricao, DateOnly Competencia, decimal Valor, bool Pago, DateOnly? PagoEm, string? Observacao, bool Atrasada, Guid? CustoId = null, DateOnly? Vencimento = null,
-    bool InformadoPeloConsultor = false, DateOnly? DataInformada = null, string? ComprovanteUrl = null, DateOnly? LembreteEm = null, string? MotivoRecusa = null, string? ObservacaoConsultor = null);
+    bool InformadoPeloConsultor = false, DateOnly? DataInformada = null, string? ComprovanteUrl = null, DateOnly? LembreteEm = null, string? MotivoRecusa = null, string? ObservacaoConsultor = null,
+    /// <summary>Quando o valor foi ajustado à mão: o que o contrato calculava (o <c>Valor</c> é o combinado).</summary>
+    decimal? ValorOriginal = null);
+
+/// <summary>
+/// Ajusta uma cobrança de um mês: <c>Valor</c> troca o calculado pelo contrato, <c>Remover</c> tira a cobrança do mês. Sem nenhum dos dois, volta ao que o contrato calcula
+/// (restaura a removida e desfaz o valor ajustado).
+/// </summary>
+public record CobrancaAjusteRequest(string Item, DateOnly Competencia, Guid? CustoId, decimal? Valor, bool Remover = false);
 
 public record CobrancaPagamentoRequest(string Item, DateOnly Competencia, bool Pago, DateOnly? PagoEm, string? Observacao, Guid? CustoId = null);
 
@@ -115,7 +162,9 @@ public record SetorFinanceiroConsultorDto(
     decimal EmAberto, decimal Pago, int CobrancasEmAberto, int CobrancasAtrasadas,
     IReadOnlyList<CobrancaDto> Cobrancas,
     decimal CustoLeadMes = 0, int LeadsMes = 0, decimal CustoLeadTotal = 0,
-    IReadOnlyList<CustoConsultorDto>? Custos = null);
+    IReadOnlyList<CustoConsultorDto>? Custos = null,
+    /// <summary>Cobranças removidas de algum mês (com o valor que o contrato calculava): dá para restaurar.</summary>
+    IReadOnlyList<CobrancaDto>? Removidas = null);
 
 public record SetorFinanceiroResumoDto(
     Guid ConsultorId, string ConsultorNome, string? TipoContrato, string? ModeloPj,

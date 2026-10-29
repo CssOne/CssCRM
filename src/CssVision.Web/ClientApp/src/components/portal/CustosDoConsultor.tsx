@@ -136,7 +136,7 @@ export function CustosDoConsultor({ consultorId, onMudou }: { consultorId: strin
 }
 
 /** Lança um custo novo ou, com <c>custo</c>, edita um já lançado (as parcelas já pagas continuam registradas). */
-function NovoCustoDialog({ open, custo, consultorId, onFechar, onCriado }: { open: boolean; custo: CustoAdicional | null; consultorId: string; onFechar: () => void; onCriado: () => void }) {
+export function NovoCustoDialog({ open, custo, consultorId, onFechar, onCriado }: { open: boolean; custo: CustoAdicional | null; consultorId: string; onFechar: () => void; onCriado: () => void }) {
   const { notificar } = useToast();
   const [tipo, setTipo] = useState("Notebook");
   const [descricao, setDescricao] = useState("");

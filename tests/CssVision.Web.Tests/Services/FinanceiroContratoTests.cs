@@ -85,18 +85,20 @@ public class ContratoFinanceiroCalculoTests
     }
 
     [Fact]
-    public void Clt_TemSalarioEPercentual_NaoTemCustosFixosNemRecorrenciaNemBonus()
+    public void Clt_TemSalarioAlimentacaoEPassagem_NaoTemCustosFixosNemRecorrenciaNemBonus()
     {
         var valores = new[]
         {
-            V(ParametroFinanceiro.Salario, 1, 2500m), V(ParametroFinanceiro.PercentualAdesao, 1, 0.30m),
+            V(ParametroFinanceiro.Salario, 1, 2500m), V(ParametroFinanceiro.Alimentacao, 1, 600m), V(ParametroFinanceiro.Passagem, 1, 220m),
             V(ParametroFinanceiro.Coworking, 1, 999m), V(ParametroFinanceiro.BonusPorPlaca, 1, 999m), V(ParametroFinanceiro.Recorrencia, 10, 999m),
         };
 
         var m = ContratoFinanceiroCalculo.Meses(Perfil(TipoContrato.Clt, ModalidadeTransporte.Uber), valores, 2026, Hoje)[9];
 
         Assert.Equal(2500m, m.Salario);
-        Assert.Equal(0.30m, m.PercentualAdesao);
+        Assert.Equal(600m, m.Alimentacao);
+        Assert.Equal(220m, m.Passagem);
+        Assert.Equal(0m, m.PercentualAdesao); // a faixa da bonificação depende das vendas do mês: quem tem as vendas preenche
         Assert.Empty(m.Custos);
         Assert.Equal(0m, m.Recorrencia);
         Assert.Equal(0m, m.BonusPorPlaca);
@@ -190,7 +192,7 @@ public class FinanceiroContratoServiceTests
     }
 
     [Fact]
-    public async Task ValorSemContrato_ParametroDeOutroTipo_ePercentualForaDoLimite_SaoRecusados()
+    public async Task ValorSemContrato_ParametroDeOutroTipo_ePercentualDaAdesaoNaoExisteMais_SaoRecusados()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
@@ -202,11 +204,16 @@ public class FinanceiroContratoServiceTests
 
         await s.SalvarPerfilAsync(ana.Id, new FinanceiroPerfilRequest("Clt", null, MesAtual), CancellationToken.None);
         await Assert.ThrowsAsync<CrmBusinessException>(() => s.DefinirValorAsync(ana.Id, new FinanceiroValorRequest("BonusPorPlaca", MesAtual, 100m, null), CancellationToken.None)); // CLT não tem bônus
-        await Assert.ThrowsAsync<CrmBusinessException>(() => s.DefinirValorAsync(ana.Id, new FinanceiroValorRequest("PercentualAdesao", MesAtual, 150m, null), CancellationToken.None));
+        // A bonificação do CLT vem da faixa de contratos do mês: não há mais porcentagem para definir.
+        await Assert.ThrowsAsync<CrmBusinessException>(() => s.DefinirValorAsync(ana.Id, new FinanceiroValorRequest("PercentualAdesao", MesAtual, 30m, null), CancellationToken.None));
         await Assert.ThrowsAsync<CrmBusinessException>(() => s.DefinirValorAsync(ana.Id, new FinanceiroValorRequest("Salario", MesAtual, -1m, null), CancellationToken.None));
 
-        await s.DefinirValorAsync(ana.Id, new FinanceiroValorRequest("PercentualAdesao", MesAtual, 30m, null), CancellationToken.None); // 30 = 30%
-        Assert.Equal(0.3m, (await s.ObterAsync(ana.Id, null, CancellationToken.None)).Atuais.Single(a => a.Parametro == "PercentualAdesao").Valor);
+        await s.DefinirValorAsync(ana.Id, new FinanceiroValorRequest("Alimentacao", MesAtual, 600m, null), CancellationToken.None);
+        await s.DefinirValorAsync(ana.Id, new FinanceiroValorRequest("Passagem", MesAtual, 220m, null), CancellationToken.None);
+        var atuais = (await s.ObterAsync(ana.Id, null, CancellationToken.None)).Atuais;
+        Assert.Equal(600m, atuais.Single(a => a.Parametro == "Alimentacao").Valor);
+        Assert.Equal(220m, atuais.Single(a => a.Parametro == "Passagem").Valor);
+        Assert.DoesNotContain(atuais, a => a.Parametro == "PercentualAdesao");
     }
 
     [Fact]
@@ -224,13 +231,14 @@ public class FinanceiroContratoServiceTests
         Assert.Equal("Nenhum", (await s.ObterAsync(ana.Id, null, CancellationToken.None)).Perfil.Transporte);
     }
 
-    private static async Task VendaGanhaAsync(TestDbContextFactory factory, ApplicationDbContext db, Guid vendedor, decimal adesao, DateTimeOffset? quando = null)
+    private static async Task VendaGanhaAsync(TestDbContextFactory factory, ApplicationDbContext db, Guid vendedor, decimal adesao, DateTimeOffset? quando = null, decimal? rastreador = null)
     {
         var ganho = await factory.CriarEtapaAsync(db, $"Ganho {Guid.NewGuid():N}", 9, TipoEtapaPipeline.Ganho);
         var lead = new CrmLead { NomeOuRazaoSocial = "Cliente", TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor };
         db.CrmLeads.Add(lead);
         await db.SaveChangesAsync();
-        db.CrmOpportunities.Add(new CrmOpportunity { LeadId = lead.Id, Titulo = "V", ResponsavelId = vendedor, EtapaId = ganho.Id, PagamentoAdesao = adesao, DataEfetivaFechamento = quando ?? DateTimeOffset.UtcNow });
+        db.CrmOpportunities.Add(new CrmOpportunity { LeadId = lead.Id, Titulo = "V", ResponsavelId = vendedor, EtapaId = ganho.Id, PagamentoAdesao = adesao, DataEfetivaFechamento = quando ?? DateTimeOffset.UtcNow,
+            Veiculo = rastreador is null ? null : new CrmVeiculo { Rastreador = rastreador } });
         await db.SaveChangesAsync();
     }
 
@@ -391,50 +399,75 @@ public class FinanceiroContratoServiceTests
     }
 
     [Fact]
-    public async Task Clt_NoControle_GanhaSoAPorcentagemDaAdesao_MaisSalario_ESemCustosFixos()
+    public async Task Clt_NoControle_BonificacaoPorFaixaDeContratos_SobreOLiquidoSemRastreador_MaisSalarioEBeneficios()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
         var (ana, admin) = await CenarioAsync(factory, db);
-        await VendaGanhaAsync(factory, db, ana.Id, 1000m);
+        // 20 contratos no mês = faixa de 10%. Um deles tem rastreador de R$ 200 (taxa de instalação, único desconto).
+        for (var i = 0; i < 19; i++) await VendaGanhaAsync(factory, db, ana.Id, 1000m);
+        await VendaGanhaAsync(factory, db, ana.Id, 1000m, rastreador: 200m);
         var gestao = Contrato(db, Como(admin.Id, Roles.Admin));
         await gestao.SalvarPerfilAsync(ana.Id, new FinanceiroPerfilRequest("Clt", null, MesAtual), CancellationToken.None);
         await gestao.DefinirValorAsync(ana.Id, new FinanceiroValorRequest("Salario", MesAtual, 2200m, null), CancellationToken.None);
-        await gestao.DefinirValorAsync(ana.Id, new FinanceiroValorRequest("PercentualAdesao", MesAtual, 25m, null), CancellationToken.None);
+        await gestao.DefinirValorAsync(ana.Id, new FinanceiroValorRequest("Alimentacao", MesAtual, 600m, null), CancellationToken.None);
+        await gestao.DefinirValorAsync(ana.Id, new FinanceiroValorRequest("Passagem", MesAtual, 220m, null), CancellationToken.None);
 
         var d = await Financeiro(db, Como(ana.Id, Roles.Comercial)).ObterAnoAsync(null, null, CancellationToken.None);
 
-        var venda = Assert.Single(d.Vendas);
-        Assert.Equal(250m, venda.ValorAdesao);          // 25% da adesão, não 100%
-        Assert.Equal(1000m, venda.AdesaoOriginal);
-        Assert.Equal(0m, venda.ValorBonus);
+        Assert.Equal(20, d.Vendas.Count);
+        Assert.Equal(1980m, d.Vendas.Sum(v => v.ValorAdesao));            // 10% de (20 × 1000 − 200)
+        Assert.Equal(80m, d.Vendas.Single(v => v.TaxaRastreador == 200m).ValorAdesao); // 10% de 800
+        Assert.All(d.Vendas.Where(v => v.TaxaRastreador is null), v => Assert.Equal(100m, v.ValorAdesao));
+        Assert.All(d.Vendas, v => Assert.Equal(0m, v.ValorBonus));
         Assert.Equal(2200m, d.Rendas!.Single(r => r.Tipo == "Salário").Valor);
+        Assert.Equal(600m, d.Rendas!.Single(r => r.Tipo == "Alimentação").Valor);
+        Assert.Equal(220m, d.Rendas!.Single(r => r.Tipo == "Passagem").Valor);
         Assert.DoesNotContain(d.Custos, c => c.Fixo);   // CLT não tem custos fixos
     }
 
     [Fact]
-    public async Task Clt_ContratoMostraAComissaoCalculadaSozinha_PorcentagemVezesAAdesaoDasVendasDoMes()
+    public async Task Clt_AbaixoDe20Contratos_SemBonificacao()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
         var (ana, admin) = await CenarioAsync(factory, db);
-        await VendaGanhaAsync(factory, db, ana.Id, 1000m);
-        await VendaGanhaAsync(factory, db, ana.Id, 333m);
+        for (var i = 0; i < 3; i++) await VendaGanhaAsync(factory, db, ana.Id, 1000m);
+        var gestao = Contrato(db, Como(admin.Id, Roles.Admin));
+        await gestao.SalvarPerfilAsync(ana.Id, new FinanceiroPerfilRequest("Clt", null, MesAtual), CancellationToken.None);
+
+        var d = await Financeiro(db, Como(ana.Id, Roles.Comercial)).ObterAnoAsync(null, null, CancellationToken.None);
+
+        Assert.All(d.Vendas, v => Assert.Equal(0m, v.ValorAdesao));
+        Assert.Equal(0m, (await gestao.ObterAsync(ana.Id, null, CancellationToken.None)).Meses[MesAtual.Month - 1].Comissao);
+    }
+
+    [Fact]
+    public async Task Clt_ContratoMostraABonificacaoCalculadaSozinha_FaixaDoMesVezesOFaturadoLiquido()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var (ana, admin) = await CenarioAsync(factory, db);
+        // 25 contratos = faixa de 15%; 2 deles com rastreador de R$ 150.
+        for (var i = 0; i < 23; i++) await VendaGanhaAsync(factory, db, ana.Id, 1000m);
+        await VendaGanhaAsync(factory, db, ana.Id, 1000m, rastreador: 150m);
+        await VendaGanhaAsync(factory, db, ana.Id, 333m, rastreador: 150m);
         var gestao = Contrato(db, Como(admin.Id, Roles.Admin));
         await gestao.SalvarPerfilAsync(ana.Id, new FinanceiroPerfilRequest("Clt", null, MesAtual), CancellationToken.None);
         await gestao.DefinirValorAsync(ana.Id, new FinanceiroValorRequest("Salario", MesAtual, 2200m, null), CancellationToken.None);
-        await gestao.DefinirValorAsync(ana.Id, new FinanceiroValorRequest("PercentualAdesao", MesAtual, 30m, null), CancellationToken.None);
 
         var c = await gestao.ObterAsync(ana.Id, null, CancellationToken.None);
 
         var mes = c.Meses[MesAtual.Month - 1];
-        Assert.Equal(2, mes.VendasDoMes);
-        Assert.Equal(1333m, mes.AdesoesDoMes);
-        Assert.Equal(399.90m, mes.Comissao);          // 300,00 + 99,90, cada venda arredondada
+        Assert.Equal(25, mes.VendasDoMes);
+        Assert.Equal(24333m, mes.AdesoesDoMes);
+        Assert.Equal(24033m, mes.FaturadoLiquido);    // 24.333 − 300 de rastreador
+        Assert.Equal(0.15m, mes.PercentualAdesao);
+        Assert.Equal(3604.95m, mes.Comissao);          // 15% de 24.033
         Assert.Equal(2200m, mes.Salario);
-        // O mesmo valor que o Controle financeiro do consultor mostra venda a venda.
+        // O mesmo valor que o Controle financeiro do consultor mostra venda a venda (arredondada em cada venda, no máximo 1 centavo por venda de diferença).
         var d = await Financeiro(db, Como(ana.Id, Roles.Comercial)).ObterAnoAsync(null, null, CancellationToken.None);
-        Assert.Equal(mes.Comissao, d.Vendas.Sum(v => v.ValorAdesao));
+        Assert.InRange(Math.Abs(mes.Comissao - d.Vendas.Sum(v => v.ValorAdesao)), 0m, 0.13m);
     }
 
     [Fact]

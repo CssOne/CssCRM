@@ -59,6 +59,12 @@ public enum ParametroFinanceiro
 
     /// <summary>PJ: custo de leads, mensal. Também começa só depois da carência.</summary>
     CustoLead = 10,
+
+    /// <summary>CLT: valor da alimentação pago por mês (benefício somado à renda do mês).</summary>
+    Alimentacao = 11,
+
+    /// <summary>CLT: valor da passagem (transporte) pago por mês (benefício somado à renda do mês).</summary>
+    Passagem = 12,
 }
 
 /// <summary>Perfil financeiro do consultor: tipo de contrato e modalidade de transporte. Definido pela gestão (nunca pelo próprio consultor).</summary>
@@ -190,6 +196,12 @@ public class CrmCobrancaPagamento : CrmEntityBase
     /// <summary>O financeiro não confirmou o pagamento informado: quando e por quê.</summary>
     public DateTimeOffset? RecusadoEm { get; set; }
     public string? MotivoRecusa { get; set; }
+
+    /// <summary>Valor combinado para esta cobrança no lugar do calculado pelo contrato (nulo = vale o do contrato).</summary>
+    public decimal? ValorAjustado { get; set; }
+
+    /// <summary>Cobrança removida deste mês: deixa de ser devida (não conta em aberto nem atrasada). Dá para restaurar.</summary>
+    public bool Dispensada { get; set; }
 }
 
 public enum TipoCustoConsultor

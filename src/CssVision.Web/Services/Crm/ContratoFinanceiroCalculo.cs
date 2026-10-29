@@ -5,8 +5,8 @@ namespace CssVision.Web.Services.Crm;
 
 /// <summary>
 /// Regras do contrato do consultor, em funções puras (sem banco): qual valor vale em cada mês, a renda fixa (salário/recorrência) e os
-/// custos fixos do PJ. PJ recebe a adesão inteira, bônus por placa e recorrência, e tem custos fixos; CLT recebe salário mais uma
-/// porcentagem da adesão e não tem custos fixos.
+/// custos fixos do PJ. PJ recebe a adesão inteira, bônus por placa e recorrência, e tem custos fixos; CLT recebe salário mais a bonificação
+/// por produtividade (faixa de contratos do mês × faturado líquido) e não tem custos fixos.
 /// </summary>
 public static class ContratoFinanceiroCalculo
 {
@@ -31,6 +31,23 @@ public static class ContratoFinanceiroCalculo
     /// </summary>
     public static readonly ParametroFinanceiro[] CustosFixosPj =
         [ParametroFinanceiro.Coworking, ParametroFinanceiro.TrafegoPago, ParametroFinanceiro.CustoLead];
+
+    /// <summary>
+    /// Plano de bonificação por produtividade do CLT: quanto mais contratos fechados no mês, maior a porcentagem — e ela vale sobre TODO o faturado
+    /// líquido do mês, desde o primeiro contrato. Da maior faixa para a menor; abaixo de 20 contratos não há bonificação.
+    /// </summary>
+    public static readonly (int Contratos, decimal Percentual)[] FaixasBonificacaoClt =
+        [(50, 0.35m), (40, 0.30m), (35, 0.25m), (30, 0.20m), (25, 0.15m), (20, 0.10m)];
+
+    public static decimal PercentualBonificacaoClt(int contratos) =>
+        FaixasBonificacaoClt.FirstOrDefault(f => contratos >= f.Contratos).Percentual;
+
+    /// <summary>Faturado líquido de uma venda: a adesão menos a taxa de instalação do rastreador (único desconto), nunca negativo.</summary>
+    public static decimal LiquidoDaVenda(decimal adesao, decimal? taxaRastreador) => Math.Max(0m, adesao - (taxaRastreador ?? 0m));
+
+    /// <summary>Bonificação CLT do mês: faturado líquido (soma das vendas) × porcentagem da faixa dos contratos fechados.</summary>
+    public static decimal BonificacaoCltDoMes(IReadOnlyCollection<decimal> liquidos) =>
+        Math.Round(liquidos.Sum() * PercentualBonificacaoClt(liquidos.Count), 2);
 
     public static string Rotulo(ParametroFinanceiro p) => p switch
     {
@@ -64,6 +81,9 @@ public static class ContratoFinanceiroCalculo
         IReadOnlyDictionary<ParametroFinanceiro, DateOnly>? liberadoEm = null)
     {
         public static readonly Regras Nenhuma = new();
+
+        /// <summary>As mesmas regras com outros prazos próprios (o do consultor mais o do grupo em que ele estava em determinado mês).</summary>
+        public Regras ComPrazos(IReadOnlyDictionary<ParametroFinanceiro, CrmFinanceiroPrazo>? novos) => new(padroes, novos, leadsPorMes, liberadoEm);
 
         /// <summary>
         /// Consultor sem contrato definido: o custo só passa a valer a partir do mês em que a gestão definiu o padrão dele (para não cobrar meses antigos).
@@ -164,13 +184,35 @@ public static class ContratoFinanceiroCalculo
     /// </summary>
     public static IReadOnlyList<FinanceiroMesContratoDto> Meses(CrmFinanceiroPerfil? perfil, IReadOnlyCollection<CrmFinanceiroValor> valores, int ano, DateOnly hoje, Regras? regras = null)
     {
-        if (perfil?.Tipo is not { } tipo) return [];
+        if (perfil?.Tipo is null) return [];
         regras ??= Regras.Nenhuma;
+        return Enumerable.Range(1, 12).Select(m => MesDoContrato(perfil, valores, ano, m, hoje, regras)).ToList();
+    }
+
+    /// <summary>
+    /// O contrato mês a mês de quem pode estar em um grupo: cada mês usa o contrato que valia nele (o do próprio consultor ou o do grupo em que estava),
+    /// então trocar de grupo muda a cobrança só a partir do mês da troca. Sem nenhum grupo, é exatamente o <see cref="Meses(CrmFinanceiroPerfil?, IReadOnlyCollection{CrmFinanceiroValor}, int, DateOnly, Regras?)"/> de sempre.
+    /// </summary>
+    public static IReadOnlyList<FinanceiroMesContratoDto> Meses(ContratoEfetivo efetivo, int ano, DateOnly hoje, Regras? regras = null)
+    {
+        regras ??= Regras.Nenhuma;
+        if (!efetivo.TemGrupo) return Meses(efetivo.Proprio, efetivo.ValoresProprios, ano, hoje, regras);
+
+        var perfis = Enumerable.Range(1, 12).Select(m => efetivo.PerfilNoMes(new DateOnly(ano, m, 1))).ToList();
+        if (perfis.All(p => p?.Tipo is null)) return [];
+
+        // Mês sem contrato nenhum (nem do consultor, nem do grupo): linha zerada, para a lista continuar com os 12 meses.
+        return Enumerable.Range(1, 12).Select(m => perfis[m - 1] is { Tipo: not null } perfil
+            ? MesDoContrato(perfil, efetivo.ValoresNoMes(new DateOnly(ano, m, 1)), ano, m, hoje, regras.ComPrazos(efetivo.PrazosNoMes(new DateOnly(ano, m, 1))))
+            : new FinanceiroMesContratoDto(m, 0m, 0m, 0m, 0m, [])).ToList();
+    }
+
+    private static FinanceiroMesContratoDto MesDoContrato(CrmFinanceiroPerfil perfil, IReadOnlyCollection<CrmFinanceiroValor> valores, int ano, int m, DateOnly hoje, Regras regras)
+    {
+        var tipo = perfil.Tipo!.Value;
         var inicio = perfil.InicioContrato is { } i ? PrimeiroDia(i) : new DateOnly(ano, 1, 1);
         var limite = PrimeiroDia(hoje);
 
-        var meses = new List<FinanceiroMesContratoDto>();
-        for (var m = 1; m <= 12; m++)
         {
             var mes = new DateOnly(ano, m, 1);
             var correu = mes >= inicio && mes <= limite;
@@ -179,8 +221,9 @@ public static class ContratoFinanceiroCalculo
             var pjPorBonus = tipo == TipoContrato.Pj && perfil.ModeloPj != ModeloRemuneracaoPj.Recorrencia;
             var pjPorRecorrencia = tipo == TipoContrato.Pj && perfil.ModeloPj == ModeloRemuneracaoPj.Recorrencia;
             var bonus = pjPorBonus ? ValorNoMes(valores, ParametroFinanceiro.BonusPorPlaca, mes) : 0m;
-            var pct = tipo == TipoContrato.Clt ? ValorNoMes(valores, ParametroFinanceiro.PercentualAdesao, mes) : 0m;
             var salario = tipo == TipoContrato.Clt && correu ? ValorNoMes(valores, ParametroFinanceiro.Salario, mes) : 0m;
+            var alimentacao = tipo == TipoContrato.Clt && correu ? ValorNoMes(valores, ParametroFinanceiro.Alimentacao, mes) : 0m;
+            var passagem = tipo == TipoContrato.Clt && correu ? ValorNoMes(valores, ParametroFinanceiro.Passagem, mes) : 0m;
             var recorrencia = pjPorRecorrencia && correu ? ValorNoMes(valores, ParametroFinanceiro.Recorrencia, mes, soNoMes: true) : 0m;
 
             var custos = new List<FinanceiroCustoFixoDto>();
@@ -220,8 +263,8 @@ public static class ContratoFinanceiroCalculo
 
             }
 
-            meses.Add(new FinanceiroMesContratoDto(m, salario, recorrencia, bonus, pct, custos));
+            // A porcentagem do CLT depende dos contratos fechados no mês: quem tem as vendas (os serviços) preenche.
+            return new FinanceiroMesContratoDto(m, salario, recorrencia, bonus, 0m, custos, Alimentacao: alimentacao, Passagem: passagem);
         }
-        return meses;
     }
 }

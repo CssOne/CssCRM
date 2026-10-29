@@ -165,7 +165,7 @@ public sealed class FinanceiroService(ApplicationDbContext db, ICurrentUserServi
                 valorAdesao, salva?.ValorBonus ?? 0m, salva?.Premiacoes ?? 0m,
                 salva?.DataPrevistaAdesao ?? o.DataPagamentoAdesaoPrevista,
                 salva?.StatusAdesao ?? (pendente ? FinanceiroStatus.Pendente : FinanceiroStatus.Recebido),
-                salva?.DataPrevistaBonus, salva?.StatusBonus ?? FinanceiroStatus.Pendente, salva?.Observacoes, salva?.RowVersion, BonusRecebido: salva?.BonusRecebido));
+                salva?.DataPrevistaBonus, salva?.StatusBonus ?? FinanceiroStatus.Pendente, salva?.Observacoes, salva?.RowVersion, BonusRecebido: salva?.BonusRecebido, TaxaRastreador: o.Rastreador));
 
             if (o.Rastreador is > 0)
                 custos.Add(new FinanceiroCustoDto(null, true, dia, "Rastreador", o.Cliente, o.Rastreador.Value, dia, FinanceiroStatus.Pago, dia, false));
@@ -189,20 +189,29 @@ public sealed class FinanceiroService(ApplicationDbContext db, ICurrentUserServi
         }
 
         // Contrato definido pela gestão (PJ/CLT): bônus por placa, % da adesão do CLT, salário, recorrência e custos fixos do PJ.
-        var perfil = await db.CrmFinanceiroPerfis.AsNoTracking().FirstOrDefaultAsync(p => p.UsuarioId == eu, ct);
+        // O contrato vale mês a mês: o do próprio consultor ou o do grupo em que ele estava (quem nunca esteve em grupo segue só o dele, como sempre).
+        var efetivo = await ContratoEfetivoCarregador.CarregarAsync(db, eu, ct);
+        var perfil = efetivo.PerfilDoAno(a, HorarioBrasilia.Hoje);
         var rendas = new List<FinanceiroRendaDto>();
         if (perfil?.Tipo is { } tipo)
         {
-            var valores = await db.CrmFinanceiroValores.AsNoTracking().Where(v => v.UsuarioId == eu).ToListAsync(ct);
             var regras = await RegrasContratoCarregador.CarregarAsync(db, eu, ct);
-            var meses = ContratoFinanceiroCalculo.Meses(perfil, valores, a, HorarioBrasilia.Hoje, regras);
+            var meses = ContratoFinanceiroCalculo.Meses(efetivo, a, HorarioBrasilia.Hoje, regras);
             var hojeMes = ContratoFinanceiroCalculo.PrimeiroDia(HorarioBrasilia.Hoje);
             // Coworking, custo de lead e tráfego pago são cobrados pela CSS: ficam "A pagar" no controle até o Setor Financeiro marcar a cobrança como paga.
             var pagamentosCsS = await db.CrmCobrancasPagamento.AsNoTracking().Where(p => p.UsuarioId == eu && p.CustoId == null).ToListAsync(ct);
-            vendas = vendas.Select(v => AplicarContratoNaVenda(v, tipo, meses[v.DataVenda.Month - 1], hojeMes)).ToList();
+            // CLT: a porcentagem do mês vem da faixa de contratos fechados (vendas não canceladas) e vale para todas as vendas do mês.
+            var percentualClt = vendas.Where(v => v.StatusAdesao != FinanceiroStatus.Cancelado).GroupBy(v => v.DataVenda.Month)
+                .ToDictionary(g => g.Key, g => ContratoFinanceiroCalculo.PercentualBonificacaoClt(g.Count()));
+            // O tipo de contrato é o do mês da venda (quem mudou de grupo no ano pode ter sido PJ num mês e CLT em outro).
+            vendas = vendas.Select(v => efetivo.PerfilNoMes(new DateOnly(a, v.DataVenda.Month, 1))?.Tipo is { } tipoDoMes
+                ? AplicarContratoNaVenda(v, tipoDoMes, meses[v.DataVenda.Month - 1], percentualClt.GetValueOrDefault(v.DataVenda.Month), hojeMes)
+                : v).ToList();
             foreach (var m in meses)
             {
                 if (m.Salario > 0) rendas.Add(new FinanceiroRendaDto(m.Mes, "Salário", m.Salario));
+                if (m.Alimentacao > 0) rendas.Add(new FinanceiroRendaDto(m.Mes, "Alimentação", m.Alimentacao));
+                if (m.Passagem > 0) rendas.Add(new FinanceiroRendaDto(m.Mes, "Passagem", m.Passagem));
                 // Recorrência é paga 2 meses depois do mês a que se refere: só entra na renda do mês do pagamento (e só quando ele já chegou).
                 if (m.Recorrencia > 0 && ContratoFinanceiroCalculo.MesDoPagamento(new DateOnly(a, m.Mes, 1)) is { } pagaRec && pagaRec.Year == a && pagaRec <= hojeMes)
                     rendas.Add(new FinanceiroRendaDto(pagaRec.Month, "Recorrência", m.Recorrencia));
@@ -216,7 +225,7 @@ public sealed class FinanceiroService(ApplicationDbContext db, ICurrentUserServi
                         pago ? (cobrado is null ? dia : registro!.PagoEm ?? dia) : null, false, Fixo: true));
                 }
             }
-            if (tipo == TipoContrato.Pj) rendas.AddRange(await PagamentosDoAnoAnteriorAsync(eu, a, perfil, valores, regras, hojeMes, ct));
+            if (tipo == TipoContrato.Pj) rendas.AddRange(await PagamentosDoAnoAnteriorAsync(eu, a, perfil, efetivo, regras, hojeMes, ct));
         }
 
         // Sem contrato definido: coworking, tráfego pago e custo de lead chegam sozinhos a cada mês (valores padrão da gestão), a pagar até o Setor Financeiro dar baixa.
@@ -246,6 +255,9 @@ public sealed class FinanceiroService(ApplicationDbContext db, ICurrentUserServi
             }
         }
 
+        // CLT não tem custos fixos: o único desconto dele é o rastreador, que já abate a bonificação da venda.
+        if (perfil?.Tipo == TipoContrato.Clt) custos.RemoveAll(c => c.Fixo);
+
         return new FinanceiroAnoDto(
             a,
             new FinanceiroConfigDto(config?.PercentualReserva ?? 0.10m, config?.CaixaInicial ?? 0m),
@@ -258,12 +270,19 @@ public sealed class FinanceiroService(ApplicationDbContext db, ICurrentUserServi
 
     /// <summary>
     /// Venda do consultor com contrato definido: PJ recebe a adesão inteira e o bônus por placa vigente no mês da venda (não se digita mais);
-    /// CLT recebe só a porcentagem da adesão e não tem bônus. A adesão original do card fica em <c>AdesaoOriginal</c>.
+    /// CLT recebe a bonificação por produtividade: a porcentagem da faixa do mês sobre o faturado líquido da venda (adesão menos a taxa de instalação do
+    /// rastreador) e não tem bônus por placa. A adesão original do card fica em <c>AdesaoOriginal</c>.
     /// </summary>
-    private static FinanceiroVendaDto AplicarContratoNaVenda(FinanceiroVendaDto v, TipoContrato tipo, FinanceiroMesContratoDto mes, DateOnly hojeMes) =>
+    private static FinanceiroVendaDto AplicarContratoNaVenda(FinanceiroVendaDto v, TipoContrato tipo, FinanceiroMesContratoDto mes, decimal percentualClt, DateOnly hojeMes) =>
         tipo == TipoContrato.Pj
             ? ComPagamentoDoBonus(v, v.StatusAdesao == FinanceiroStatus.Cancelado ? 0m : mes.BonusPorPlaca, hojeMes)
-            : v with { ValorBonus = 0m, ValorAdesao = FinanceiroValidador.Arredondar(v.ValorAdesao * mes.PercentualAdesao), AdesaoOriginal = v.ValorAdesao, BonusAutomatico = true };
+            : v with
+            {
+                ValorBonus = 0m,
+                ValorAdesao = FinanceiroValidador.Arredondar(ContratoFinanceiroCalculo.LiquidoDaVenda(v.ValorAdesao, v.TaxaRastreador) * percentualClt),
+                AdesaoOriginal = v.ValorAdesao,
+                BonusAutomatico = true,
+            };
 
     /// <summary>O bônus por placa é pago 2 meses depois da venda (venda de janeiro = pago em março): fica com data prevista e, chegado o mês, recebido.</summary>
     private static FinanceiroVendaDto ComPagamentoDoBonus(FinanceiroVendaDto v, decimal bonus, DateOnly hojeMes)
@@ -288,10 +307,10 @@ public sealed class FinanceiroService(ApplicationDbContext db, ICurrentUserServi
     /// (já que as vendas e os lançamentos deles são do ano anterior).
     /// </summary>
     private async Task<List<FinanceiroRendaDto>> PagamentosDoAnoAnteriorAsync(
-        Guid eu, int a, CrmFinanceiroPerfil perfil, List<CrmFinanceiroValor> valores, ContratoFinanceiroCalculo.Regras regras, DateOnly hojeMes, CancellationToken ct)
+        Guid eu, int a, CrmFinanceiroPerfil perfil, ContratoEfetivo efetivo, ContratoFinanceiroCalculo.Regras regras, DateOnly hojeMes, CancellationToken ct)
     {
         var rendas = new List<FinanceiroRendaDto>();
-        var anterior = ContratoFinanceiroCalculo.Meses(perfil, valores, a - 1, HorarioBrasilia.Hoje, regras);
+        var anterior = ContratoFinanceiroCalculo.Meses(efetivo, a - 1, HorarioBrasilia.Hoje, regras);
         if (anterior.Count == 0) return rendas;
 
         foreach (var m in anterior.Where(m => m.Recorrencia > 0))

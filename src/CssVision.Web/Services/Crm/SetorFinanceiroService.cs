@@ -26,30 +26,38 @@ public interface ISetorFinanceiroService
 
     /// <summary>O financeiro não confirmou o pagamento informado: a cobrança volta ao consultor, com o motivo.</summary>
     Task RecusarPagamentoAsync(Guid consultorId, RecusarPagamentoRequest request, CancellationToken ct);
+
+    /// <summary>Ajusta o valor de uma cobrança de um mês, remove-a (ou restaura): a gestão acerta o que o contrato calculou.</summary>
+    Task AjustarCobrancaAsync(Guid consultorId, CobrancaAjusteRequest request, CancellationToken ct);
 }
 
 /// <summary>Cálculo puro das cobranças: devido pelo contrato, cruzado com o que o Setor Financeiro marcou como pago.</summary>
 public sealed record CobrancasCarregadas(
-    string? TipoContrato, IReadOnlyList<CobrancaDto> Cobrancas, ContratoFinanceiroCalculo.Regras Regras, IReadOnlyList<CrmCustoConsultor> Adicionais, IReadOnlyList<CrmCobrancaPagamento> Pagamentos);
+    string? TipoContrato, IReadOnlyList<CobrancaDto> Cobrancas, ContratoFinanceiroCalculo.Regras Regras, IReadOnlyList<CrmCustoConsultor> Adicionais, IReadOnlyList<CrmCobrancaPagamento> Pagamentos,
+    IReadOnlyList<CobrancaDto>? Removidas = null);
 
 public static class CobrancasCalculo
 {
     /// <summary>Carrega do banco tudo o que define as cobranças de um consultor (contrato, padrões, custos adicionais e pagamentos) e as calcula.</summary>
     public static async Task<CobrancasCarregadas> CarregarAsync(ApplicationDbContext db, Guid consultorId, DateOnly hoje, CancellationToken ct)
     {
-        var perfil = await db.CrmFinanceiroPerfis.AsNoTracking().FirstOrDefaultAsync(p => p.UsuarioId == consultorId, ct);
+        var efetivo = await ContratoEfetivoCarregador.CarregarAsync(db, consultorId, ct);
+        var perfil = efetivo.PerfilDoAno(hoje.Year, hoje);
         var tipoReal = perfil?.Tipo?.ToString();
-        var valores = await db.CrmFinanceiroValores.AsNoTracking().Where(v => v.UsuarioId == consultorId).ToListAsync(ct);
+        var valores = efetivo.ValoresProprios;
         var pagamentos = await db.CrmCobrancasPagamento.AsNoTracking().Where(p => p.UsuarioId == consultorId).ToListAsync(ct);
         var regras = await RegrasContratoCarregador.CarregarAsync(db, consultorId, ct);
-        // Sem contrato definido: as cobranças padrão (coworking, tráfego, lead) chegam sozinhas a cada mês.
-        if (await CobrancasAutomaticas.CarregarAsync(db, consultorId, ct) is { } auto)
+        // Sem contrato definido (nem do consultor, nem do grupo): as cobranças padrão (coworking, tráfego, lead) chegam sozinhas a cada mês.
+        var comContrato = perfil?.Tipo is not null;
+        if (!comContrato && await CobrancasAutomaticas.CarregarAsync(db, consultorId, ct) is { } auto)
         {
             perfil = auto.Perfil;
             regras = auto.Regras;
         }
         var adicionais = await db.CrmCustosConsultor.AsNoTracking().Where(c => c.UsuarioId == consultorId).OrderBy(c => c.PrimeiraParcela).ThenBy(c => c.CriadoEm).ToListAsync(ct);
-        return new CobrancasCarregadas(tipoReal, Listar(perfil, valores, regras, pagamentos, adicionais, hoje), regras, adicionais, pagamentos);
+        var removidas = new List<CobrancaDto>();
+        var cobrancas = Listar(perfil, valores, regras, pagamentos, adicionais, hoje, comContrato ? efetivo : null, removidas);
+        return new CobrancasCarregadas(tipoReal, cobrancas, regras, adicionais, pagamentos, removidas.OrderByDescending(c => c.Competencia).ThenBy(c => c.Item).ToList());
     }
 
     public static readonly string[] ChavesDaCsS = ["Coworking", "CustoLead", "TrafegoPago"];
@@ -80,13 +88,22 @@ public static class CobrancasCalculo
     };
 
     /// <summary>Monta a cobrança com a situação do pagamento: paga (confirmada), informada pelo consultor (aguarda conferência), com lembrete ou em aberto.</summary>
-    private static CobrancaDto Montar(string item, string rotulo, string descricao, DateOnly competencia, decimal valor, CrmCobrancaPagamento? pg, bool vencida, Guid? custoId, DateOnly? vencimento)
+    private static CobrancaDto Montar(string item, string rotulo, string descricao, DateOnly competencia, decimal valorDoContrato, CrmCobrancaPagamento? pg, bool vencida, Guid? custoId, DateOnly? vencimento)
     {
         var pago = pg?.Pago == true;
         var informado = !pago && pg?.InformadoEm is not null;
+        // Valor combinado à mão vale no lugar do calculado; o do contrato fica guardado para mostrar a diferença.
+        var valor = pg?.ValorAjustado ?? valorDoContrato;
         return new CobrancaDto(item, rotulo, descricao, competencia, valor, pago, pago ? pg!.PagoEm : null, pg?.Observacao, !pago && !informado && vencida, custoId, vencimento,
             informado, informado ? pg!.DataInformada : null, pg?.ComprovanteUrl, pago ? null : pg?.LembreteEm,
-            !pago && !informado ? pg?.MotivoRecusa : null, pg?.ObservacaoConsultor);
+            !pago && !informado ? pg?.MotivoRecusa : null, pg?.ObservacaoConsultor, pg?.ValorAjustado is not null && pg.ValorAjustado != valorDoContrato ? valorDoContrato : null);
+    }
+
+    /// <summary>Acrescenta a cobrança à lista, ou à das removidas quando a gestão a tirou daquele mês.</summary>
+    private static void Acrescentar(List<CobrancaDto> lista, List<CobrancaDto>? removidas, CrmCobrancaPagamento? pg, CobrancaDto cobranca)
+    {
+        if (pg?.Dispensada == true) removidas?.Add(cobranca);
+        else lista.Add(cobranca);
     }
 
     /// <summary>
@@ -95,7 +112,8 @@ public static class CobrancasCalculo
     /// </summary>
     public static IReadOnlyList<CobrancaDto> Listar(
         CrmFinanceiroPerfil? perfil, IReadOnlyCollection<CrmFinanceiroValor> valores, ContratoFinanceiroCalculo.Regras regras,
-        IReadOnlyCollection<CrmCobrancaPagamento> pagamentos, IReadOnlyCollection<CrmCustoConsultor> custosAdicionais, DateOnly hoje)
+        IReadOnlyCollection<CrmCobrancaPagamento> pagamentos, IReadOnlyCollection<CrmCustoConsultor> custosAdicionais, DateOnly hoje, ContratoEfetivo? efetivo = null,
+        List<CobrancaDto>? removidas = null)
     {
         var mesAtual = ContratoFinanceiroCalculo.PrimeiroDia(hoje);
         var lista = new List<CobrancaDto>();
@@ -110,21 +128,24 @@ public static class CobrancasCalculo
                 if (competencia > mesAtual) break;
                 var pg = pagamentos.FirstOrDefault(p => p.CustoId == custo.Id && p.Competencia == competencia);
                 var nome = string.IsNullOrWhiteSpace(custo.Descricao) ? RotuloDoTipo(custo.Tipo) : custo.Descricao;
-                lista.Add(Montar("Adicional", RotuloDoTipo(custo.Tipo), $"{nome} — parcela {n}/{custo.Parcelas}", competencia, ValorDaParcela(custo, n), pg, vencimento < hoje, custo.Id, vencimento));
+                Acrescentar(lista, removidas, pg, Montar("Adicional", RotuloDoTipo(custo.Tipo), $"{nome} — parcela {n}/{custo.Parcelas}", competencia, ValorDaParcela(custo, n), pg, vencimento < hoje, custo.Id, vencimento));
             }
         }
 
-        if (perfil is not { Tipo: TipoContrato.Pj, InicioContrato: { } inicio }) return Ordenar(lista);
-        for (var ano = inicio.Year; ano <= hoje.Year; ano++)
+        // Quem já esteve em grupo é cobrado mês a mês pelo contrato que valia em cada mês (o dele ou o do grupo); os demais seguem o contrato próprio, como sempre.
+        var porGrupo = efetivo is { TemGrupo: true } && efetivo.PrimeiroMes() is not null;
+        if (!porGrupo && perfil is not { Tipo: TipoContrato.Pj, InicioContrato: not null }) return Ordenar(lista);
+        var primeiroAno = porGrupo ? efetivo!.PrimeiroMes()!.Value.Year : perfil!.InicioContrato!.Value.Year;
+        for (var ano = primeiroAno; ano <= hoje.Year; ano++)
         {
-            foreach (var m in ContratoFinanceiroCalculo.Meses(perfil, valores, ano, hoje, regras))
+            foreach (var m in porGrupo ? ContratoFinanceiroCalculo.Meses(efetivo!, ano, hoje, regras) : ContratoFinanceiroCalculo.Meses(perfil, valores, ano, hoje, regras))
             {
                 var competencia = new DateOnly(ano, m.Mes, 1);
                 foreach (var c in m.Custos.Where(c => c.Chave is not null && ChavesDaCsS.Contains(c.Chave)))
                 {
                     var item = Enum.Parse<ItemCobranca>(c.Chave!);
                     var pg = pagamentos.FirstOrDefault(p => p.CustoId == null && p.Item == item && p.Competencia == competencia);
-                    lista.Add(Montar(c.Chave!, Rotulo(c.Chave!), c.Descricao, competencia, c.Valor, pg, competencia < mesAtual, null, null));
+                    Acrescentar(lista, removidas, pg, Montar(c.Chave!, Rotulo(c.Chave!), c.Descricao, competencia, c.Valor, pg, competencia < mesAtual, null, null));
                 }
             }
         }
@@ -164,7 +185,13 @@ public sealed class SetorFinanceiroService(
         var adicionais = (await db.CrmCustosConsultor.AsNoTracking().Where(c => ids.Contains(c.UsuarioId)).ToListAsync(ct)).ToLookup(c => c.UsuarioId);
         var padroes = await db.CrmFinanceiroPadroes.AsNoTracking().ToDictionaryAsync(p => p.Parametro, ct);
         // Leads de tráfego pago (e Notion) por consultor e mês, desde o início do contrato mais antigo: base do custo real do lead.
+        var membros = (await db.CrmGrupoMembros.AsNoTracking().Where(m => ids.Contains(m.UsuarioId)).ToListAsync(ct)).ToLookup(m => m.UsuarioId);
+        var gruposDosConsultores = membros.SelectMany(g => g).Where(m => m.GrupoId != null).Select(m => m.GrupoId!.Value).Distinct().ToList();
+        var perfisDosGrupos = await db.CrmGrupoContratoPerfis.AsNoTracking().Where(p => gruposDosConsultores.Contains(p.GrupoId)).ToListAsync(ct);
+        var valoresDosGrupos = await db.CrmGrupoContratoValores.AsNoTracking().Where(v => gruposDosConsultores.Contains(v.GrupoId)).ToListAsync(ct);
+        var prazosDosGrupos = await db.CrmGrupoContratoPrazos.AsNoTracking().Where(p => gruposDosConsultores.Contains(p.GrupoId)).ToListAsync(ct);
         var desde = perfis.Values.Where(p => p.InicioContrato != null).Select(p => p.InicioContrato!.Value)
+            .Concat(membros.SelectMany(g => g).Where(m => m.GrupoId != null).Select(m => m.DesdeMes))
             .Concat(consultores.Where(c => !perfis.ContainsKey(c.Id) || perfis[c.Id].Tipo is null).Select(c => HorarioBrasilia.Dia(c.CriadoEm))).DefaultIfEmpty(HorarioBrasilia.Hoje).Min();
         var leadsPorConsultor = await LeadsDeTrafegoPorMes.ContarAsync(db, ids, desde, ct);
         var avisos = await db.CrmAvisosConsultor.AsNoTracking().Where(a => a.Status == StatusAvisoConsultor.Aberto && ids.Contains(a.ConsultorId))
@@ -174,16 +201,20 @@ public sealed class SetorFinanceiroService(
         var resumo = new List<SetorFinanceiroResumoDto>();
         foreach (var c in consultores)
         {
-            perfis.TryGetValue(c.Id, out var perfil);
+            perfis.TryGetValue(c.Id, out var perfilProprio);
             var prazosDoConsultor = prazos[c.Id].ToDictionary(p => p.Parametro);
+            var efetivo = new ContratoEfetivo(perfilProprio, valores[c.Id].ToList(), membros[c.Id], perfisDosGrupos, valoresDosGrupos, prazosDosGrupos, prazosDoConsultor);
+            var perfil = efetivo.PerfilDoAno(hoje.Year, hoje);
             var regras = new ContratoFinanceiroCalculo.Regras(padroes, prazosDoConsultor, leadsPorConsultor.GetValueOrDefault(c.Id));
-            // Sem contrato definido: as cobranças padrão (coworking, tráfego, lead) chegam sozinhas a cada mês.
-            var automatica = perfil?.Tipo is null ? CobrancasAutomaticas.Montar(c.Id, c.CriadoEm, padroes, prazosDoConsultor, leadsPorConsultor.GetValueOrDefault(c.Id)) : null;
+            // Sem contrato definido (nem do consultor, nem do grupo): as cobranças padrão (coworking, tráfego, lead) chegam sozinhas a cada mês.
+            var comContrato = perfil?.Tipo is not null;
+            var automatica = !comContrato ? CobrancasAutomaticas.Montar(c.Id, c.CriadoEm, padroes, prazosDoConsultor, leadsPorConsultor.GetValueOrDefault(c.Id)) : null;
             var perfilCalculo = automatica?.Perfil ?? perfil;
             if (automatica is { } auto) regras = auto.Regras;
-            var cobrancas = CobrancasCalculo.Listar(perfilCalculo, valores[c.Id].ToList(), regras, pagamentos[c.Id].ToList(), adicionais[c.Id].ToList(), hoje);
+            var cobrancas = CobrancasCalculo.Listar(perfilCalculo, valores[c.Id].ToList(), regras, pagamentos[c.Id].ToList(), adicionais[c.Id].ToList(), hoje, comContrato ? efetivo : null);
             var abertas = cobrancas.Where(x => !x.Pago).ToList();
-            var proxima = ContratoFinanceiroCalculo.AlertasDeInicio(perfil, valores[c.Id].ToList(), regras, hoje).Select(a => (DateOnly?)a.Inicio).OrderBy(d => d).FirstOrDefault();
+            var atual = efetivo.Atual(hoje);
+            var proxima = ContratoFinanceiroCalculo.AlertasDeInicio(atual.Perfil, atual.Valores, regras.ComPrazos(atual.Prazos), hoje).Select(a => (DateOnly?)a.Inicio).OrderBy(d => d).FirstOrDefault();
             resumo.Add(new SetorFinanceiroResumoDto(c.Id, c.NomeCompleto, perfil?.Tipo?.ToString(), perfil?.ModeloPj?.ToString(),
                 abertas.Sum(x => x.Valor), abertas.Count, abertas.Count(x => x.Atrasada), avisos.GetValueOrDefault(c.Id), proxima,
                 cobrancas.Where(x => x.Item == "CustoLead" && x.Competencia == ContratoFinanceiroCalculo.PrimeiroDia(hoje)).Sum(x => x.Valor), regras.LeadsNoMes(hoje), cobrancas.Count > 0, cobrancas.Count(x => x.InformadoPeloConsultor)));
@@ -218,7 +249,43 @@ public sealed class SetorFinanceiroService(
             abertas.Sum(c => c.Valor), cobrancas.Where(c => c.Pago).Sum(c => c.Valor), abertas.Count, abertas.Count(c => c.Atrasada),
             cobrancas,
             cobrancas.Where(c => c.Item == "CustoLead" && c.Competencia == mesAtual).Sum(c => c.Valor), regras.LeadsNoMes(hoje),
-            cobrancas.Where(c => c.Item == "CustoLead").Sum(c => c.Valor), custos);
+            cobrancas.Where(c => c.Item == "CustoLead").Sum(c => c.Valor), custos, carregadas.Removidas);
+    }
+
+    public Task AjustarCobrancaAsync(Guid consultorId, CobrancaAjusteRequest request, CancellationToken ct) => SemDuplicidadeAsync(() => AjustarCobrancaAsyncCore(consultorId, request, ct));
+
+    private async Task AjustarCobrancaAsyncCore(Guid consultorId, CobrancaAjusteRequest request, CancellationToken ct)
+    {
+        await ExigirEdicaoAsync(consultorId, ct);
+        if (!Enum.TryParse<ItemCobranca>(request.Item, ignoreCase: true, out var item) || !Enum.IsDefined(item))
+            throw new CrmBusinessException("Item de cobrança inválido.", "financeiro_invalido");
+        if (request.Valor is { } v && (v < 0 || v > FinanceiroValidador.ValorMaximo))
+            throw new CrmBusinessException("Informe um valor entre zero e o limite permitido.", "financeiro_invalido");
+        var competencia = ContratoFinanceiroCalculo.PrimeiroDia(request.Competencia);
+        var custoId = item == ItemCobranca.Adicional ? request.CustoId : null;
+        if (item == ItemCobranca.Adicional && custoId is null) throw new CrmBusinessException("Informe de qual custo é a parcela.", "financeiro_invalido");
+
+        // A cobrança precisa existir (ativa ou removida) no contrato do consultor.
+        var carregadas = await CobrancasCalculo.CarregarAsync(db, consultorId, HorarioBrasilia.Hoje, ct);
+        bool Mesma(CobrancaDto c) => c.Item == item.ToString() && c.Competencia == competencia && c.CustoId == custoId;
+        var ativa = carregadas.Cobrancas.FirstOrDefault(Mesma);
+        var removida = carregadas.Removidas?.FirstOrDefault(Mesma);
+        if (ativa is null && removida is null) throw new CrmBusinessException("Essa cobrança não existe no contrato deste consultor.", "financeiro_invalido");
+        if (request.Remover && ativa?.Pago == true) throw new CrmBusinessException("Essa cobrança já está paga: desfaça o pagamento antes de removê-la.", "financeiro_invalido");
+
+        var registro = await db.CrmCobrancasPagamento.FirstOrDefaultAsync(p => p.UsuarioId == consultorId && p.Item == item && p.Competencia == competencia && p.CustoId == custoId, ct);
+        var antes = new { valor = registro?.ValorAjustado, removida = registro?.Dispensada ?? false };
+        if (registro is null)
+        {
+            if (request.Valor is null && !request.Remover) return;   // nada a restaurar
+            db.CrmCobrancasPagamento.Add(registro = new CrmCobrancaPagamento { UsuarioId = consultorId, Item = item, Competencia = competencia, CustoId = custoId });
+        }
+        registro.ValorAjustado = request.Valor is { } novo ? FinanceiroValidador.Arredondar(novo) : null;
+        registro.Dispensada = request.Remover;
+        registro.RegistradoPorId = currentUser.UserId;
+        await db.SaveChangesAsync(ct);
+        await auditoria.RegistrarAsync("financeiro.cobranca.ajustada", nameof(CrmCobrancaPagamento), registro.Id,
+            new { consultorId, item = item.ToString(), competencia, antes, depois = new { valor = registro.ValorAjustado, removida = registro.Dispensada } }, ct);
     }
 
     public Task DefinirPagamentoAsync(Guid consultorId, CobrancaPagamentoRequest request, CancellationToken ct) => SemDuplicidadeAsync(() => DefinirPagamentoAsyncCore(consultorId, request, ct));

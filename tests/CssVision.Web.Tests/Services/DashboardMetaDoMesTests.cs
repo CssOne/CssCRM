@@ -27,22 +27,22 @@ public class DashboardMetaDoMesTests
         public required ApplicationUser Dora { get; init; }  // sem regional, individual 10
         public required ApplicationUser Eva { get; init; }   // regional MG135 SEM meta cadastrada, individual 15
 
-        public DashboardService Servico(ApplicationUser quem, bool visaoTotal = false)
+        public DashboardService Servico(ApplicationUser quem, bool visaoTotal = false, bool gestor = false)
         {
-            var currentUser = TestDbContextFactory.MockCurrentUser(quem.Id, visaoTotal: visaoTotal);
+            var currentUser = TestDbContextFactory.MockCurrentUser(quem.Id, visaoTotal: visaoTotal, gestorComercial: gestor);
             var equipe = new EquipeComercialService(Db, currentUser.Object);
             var atividades = new ActivityService(Db, currentUser.Object, equipe, new NoOpAuditSink());
             return new DashboardService(Db, equipe, atividades, currentUser.Object);
         }
 
-        public async Task<DashboardDto> PainelAsync(ApplicationUser quem, bool visaoTotal = false, Guid? vendedor = null, Guid? regional = null)
+        public async Task<DashboardDto> PainelAsync(ApplicationUser quem, bool visaoTotal = false, Guid? vendedor = null, Guid? regional = null, bool gestor = false)
         {
             var hoje = HorarioBrasilia.Hoje;
-            return await Servico(quem, visaoTotal).ObterAsync(new DashboardFilterRequest(HorarioBrasilia.PrimeiroDiaDoMes(hoje), hoje, vendedor, regional), CancellationToken.None);
+            return await Servico(quem, visaoTotal, gestor).ObterAsync(new DashboardFilterRequest(HorarioBrasilia.PrimeiroDiaDoMes(hoje), hoje, vendedor, regional), CancellationToken.None);
         }
 
-        public async Task<MetaResultadoDto> MetaAsync(ApplicationUser quem, bool visaoTotal = false, Guid? vendedor = null, Guid? regional = null) =>
-            (await PainelAsync(quem, visaoTotal, vendedor, regional)).Meta;
+        public async Task<MetaResultadoDto> MetaAsync(ApplicationUser quem, bool visaoTotal = false, Guid? vendedor = null, Guid? regional = null, bool gestor = false) =>
+            (await PainelAsync(quem, visaoTotal, vendedor, regional, gestor)).Meta;
     }
 
     private static async Task<Cenario> MontarAsync(TestDbContextFactory factory)
@@ -96,28 +96,42 @@ public class DashboardMetaDoMesTests
     }
 
     [Fact]
-    public async Task Consultora_VeAMetaDaPropriaRegional_ENaoASomaComAsIndividuais()
+    public async Task Gestor_VeAMetaDaPropriaRegional_ENaoASomaComAsIndividuais()
     {
         using var factory = new TestDbContextFactory();
         var c = await MontarAsync(factory);
 
-        var meta = await c.MetaAsync(c.Ana);
+        var meta = await c.MetaAsync(c.Ana, gestor: true);
 
         Assert.Equal(500, meta.MetaQuantidade); // não 530 (30 dela + 500) nem 1445
         Assert.Equal(100000m, meta.MetaValor);
     }
 
     [Fact]
-    public async Task Consultora_AsVendasContadasSaoAsDaRegionalInteira_NaoSoAsDela()
+    public async Task Gestor_AsVendasContadasSaoAsDaRegionalInteira()
+    {
+        using var factory = new TestDbContextFactory();
+        var c = await MontarAsync(factory);
+
+        var meta = await c.MetaAsync(c.Ana, gestor: true);
+
+        Assert.Equal(3, meta.RealizadoQuantidade); // Ana 2 + Bia 1 (Cris, Dora e Eva são de outras regionais ou sem regional)
+        Assert.Equal(600m, meta.RealizadoValor);
+        Assert.Equal(0.6m, meta.PercentualAtingido); // 3 de 500
+    }
+
+    [Fact]
+    public async Task Consultora_VeSoAMetaEAsVendasDela_NaoADaRegional()
     {
         using var factory = new TestDbContextFactory();
         var c = await MontarAsync(factory);
 
         var meta = await c.MetaAsync(c.Ana);
 
-        Assert.Equal(3, meta.RealizadoQuantidade); // Ana 2 + Bia 1 (Cris, Dora e Eva são de outras regionais ou sem regional)
-        Assert.Equal(600m, meta.RealizadoValor);
-        Assert.Equal(0.6m, meta.PercentualAtingido); // 3 de 500
+        Assert.Equal(30, meta.MetaQuantidade); // a individual, não os 500 da MG132
+        Assert.Equal(6000m, meta.MetaValor);
+        Assert.Equal(2, meta.RealizadoQuantidade); // só as 2 vendas da Ana (a da Bia é da regional, não dela)
+        Assert.Equal(500m, meta.RealizadoValor);
     }
 
     [Fact]
@@ -153,7 +167,7 @@ public class DashboardMetaDoMesTests
         using var factory = new TestDbContextFactory();
         var c = await MontarAsync(factory);
 
-        var meta = await c.MetaAsync(c.Cris);
+        var meta = await c.MetaAsync(c.Cris, gestor: true);
 
         Assert.Equal(200, meta.MetaQuantidade); // da regional
         Assert.Equal(3000m, meta.MetaValor);    // a regional não definiu valor: usa a individual dela
@@ -282,7 +296,7 @@ public class DashboardMetaDoMesTests
         var c = await MontarAsync(factory);
 
         // A Ana (MG132) pede a MG134: o filtro é ignorado e ela continua vendo só a própria regional.
-        var meta = await c.MetaAsync(c.Ana, regional: c.Mg134.Id);
+        var meta = await c.MetaAsync(c.Ana, regional: c.Mg134.Id, gestor: true);
 
         Assert.Equal(500, meta.MetaQuantidade);
         Assert.Equal(3, meta.RealizadoQuantidade);

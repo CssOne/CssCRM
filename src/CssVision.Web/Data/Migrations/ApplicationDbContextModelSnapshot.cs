@@ -424,6 +424,9 @@ namespace CssVision.Web.Data.Migrations
                     b.Property<DateOnly?>("DataInformada")
                         .HasColumnType("date");
 
+                    b.Property<bool>("Dispensada")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset?>("InformadoEm")
                         .HasColumnType("timestamp with time zone");
 
@@ -468,6 +471,9 @@ namespace CssVision.Web.Data.Migrations
 
                     b.Property<Guid>("UsuarioId")
                         .HasColumnType("uuid");
+
+                    b.Property<decimal?>("ValorAjustado")
+                        .HasColumnType("numeric(14,2)");
 
                     b.HasKey("Id");
 
@@ -1611,6 +1617,194 @@ namespace CssVision.Web.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("CrmGrupos", (string)null);
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmGrupoContratoPerfil", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DefinidoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("GrupoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("ModeloPj")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<int?>("Tipo")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Transporte")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("VigenteDesde")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GrupoId", "VigenteDesde")
+                        .IsUnique();
+
+                    b.ToTable("CrmGrupoContratoPerfis", (string)null);
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmGrupoContratoPrazo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("CarenciaMeses")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DefinidoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("GrupoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Parametro")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GrupoId", "Parametro")
+                        .IsUnique();
+
+                    b.ToTable("CrmGrupoContratoPrazos", (string)null);
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmGrupoContratoValor", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DefinidoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("GrupoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Observacao")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int>("Parametro")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<decimal>("Valor")
+                        .HasColumnType("numeric(14,4)");
+
+                    b.Property<DateOnly>("VigenteDesde")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GrupoId", "Parametro", "VigenteDesde")
+                        .IsUnique();
+
+                    b.ToTable("CrmGrupoContratoValores", (string)null);
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmGrupoMembro", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("AtualizadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("AtualizadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CriadoPorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("DesdeMes")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("GrupoId")
+                        .HasColumnType("uuid");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<Guid>("UsuarioId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GrupoId");
+
+                    b.HasIndex("UsuarioId", "DesdeMes")
+                        .IsUnique();
+
+                    b.ToTable("CrmGrupoMembros", (string)null);
                 });
 
             modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmLead", b =>
@@ -3295,6 +3489,57 @@ namespace CssVision.Web.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("Regional");
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmGrupoContratoPerfil", b =>
+                {
+                    b.HasOne("CssVision.Web.Domain.Crm.CrmGrupo", "Grupo")
+                        .WithMany()
+                        .HasForeignKey("GrupoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Grupo");
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmGrupoContratoPrazo", b =>
+                {
+                    b.HasOne("CssVision.Web.Domain.Crm.CrmGrupo", "Grupo")
+                        .WithMany()
+                        .HasForeignKey("GrupoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Grupo");
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmGrupoContratoValor", b =>
+                {
+                    b.HasOne("CssVision.Web.Domain.Crm.CrmGrupo", "Grupo")
+                        .WithMany()
+                        .HasForeignKey("GrupoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Grupo");
+                });
+
+            modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmGrupoMembro", b =>
+                {
+                    b.HasOne("CssVision.Web.Domain.Crm.CrmGrupo", "Grupo")
+                        .WithMany()
+                        .HasForeignKey("GrupoId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CssVision.Web.Domain.Identity.ApplicationUser", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Grupo");
+
+                    b.Navigation("Usuario");
                 });
 
             modelBuilder.Entity("CssVision.Web.Domain.Crm.CrmLead", b =>

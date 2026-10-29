@@ -121,7 +121,7 @@ public class DashboardServiceTests
     }
 
     [Fact]
-    public async Task ObterAsync_UsaAMetaGeralDaRegionalDoUsuario_NoLugarDasIndividuais_NaMetaDoMes()
+    public async Task ObterAsync_GestorUsaAMetaGeralDaRegional_NoLugarDasIndividuais_NaMetaDoMes()
     {
         using var factory = new TestDbContextFactory();
         await using var db = factory.CreateContext();
@@ -137,7 +137,7 @@ public class DashboardServiceTests
         db.CrmSalesGoals.Add(new CrmSalesGoal { VendedorId = vendedor.Id, MesReferencia = mesReferencia, MetaQuantidadeVendas = 10, MetaValor = null });
         await db.SaveChangesAsync();
 
-        var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
+        var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id, gestorComercial: true);
         var equipe = new EquipeComercialService(db, currentUser.Object);
         var activityService = new ActivityService(db, currentUser.Object, equipe, new NoOpAuditSink());
         var service = new DashboardService(db, equipe, activityService, currentUser.Object);

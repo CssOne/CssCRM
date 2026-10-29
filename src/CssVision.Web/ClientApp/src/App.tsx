@@ -29,6 +29,7 @@ import { TvComercialPage } from "./pages/tv/TvComercial";
 import { GestaoFinanceiraPage } from "./pages/crm/GestaoFinanceira";
 import { UsuariosFinanceiroPage } from "./pages/crm/UsuariosFinanceiro";
 import { SetorFinanceiroPage } from "./pages/crm/SetorFinanceiro";
+import { GruposContratoPage } from "./pages/crm/GruposContrato";
 import { RedirecionarAvisosPagamento, SetorFinanceiroConsultorPage } from "./pages/crm/SetorFinanceiroConsultor";
 
 function CarregandoTelaCheia() {
@@ -130,6 +131,14 @@ export default function App() {
         }
       />
       <Route
+        path="/app/crm/setor-financeiro/grupos"
+        element={
+          <RotaProtegida papeis={PAPEIS_GESTAO_FINANCEIRA}>
+            <GruposContratoPage />
+          </RotaProtegida>
+        }
+      />
+      <Route
         path="/app/crm/setor-financeiro/:consultorId"
         element={
           <RotaProtegida papeis={PAPEIS_GESTAO_FINANCEIRA}>
@@ -147,7 +156,8 @@ export default function App() {
       <Route path="/app/portal" element={<RotaProtegida><PortalDashboardPage /></RotaProtegida>} />
       <Route path="/app/portal/clientes" element={<RotaProtegida><PortalClientesPage /></RotaProtegida>} />
       <Route path="/app/portal/propostas" element={<RotaProtegida><PortalPropostasPage /></RotaProtegida>} />
-      <Route path="/app/portal/controle-financeiro" element={<RotaProtegida><PortalControleFinanceiroPage /></RotaProtegida>} />
+      {/* Controle financeiro: só Financeiro, administrador e gestor. */}
+      <Route path="/app/portal/controle-financeiro" element={<RotaProtegida papeis={PAPEIS_GESTAO_FINANCEIRA}><PortalControleFinanceiroPage /></RotaProtegida>} />
       <Route path="/app/portal/configuracoes" element={<RotaProtegida><ConfiguracoesPage /></RotaProtegida>} />
 
       <Route
