@@ -29,15 +29,21 @@ public static class IdentitySeeder
     public static async Task SeedDemoUsersAsync(IServiceProvider services)
     {
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
+        // A senha das contas de demonstração vem da configuração local (dotnet user-secrets set "Seed:SenhaDemo" "..."), para não ficar escrita no repositório.
+        // Sem ela, usa a senha inicial antiga (comportamento anterior).
+        var senha = services.GetRequiredService<IConfiguration>()["Seed:SenhaDemo"];
+        if (string.IsNullOrWhiteSpace(senha)) senha = SenhaSegura.SenhaInicialLegada;
 
-        var admin = await CriarUsuarioSeNaoExistirAsync(userManager, "admin@cssvision.local", "Administrador Geral", Roles.Admin);
-        var gestor = await CriarUsuarioSeNaoExistirAsync(userManager, "gestor.comercial@cssvision.local", "Gestora Comercial Demo", Roles.GestorComercial);
-        var vendedor1 = await CriarUsuarioSeNaoExistirAsync(userManager, "vendedor1@cssvision.local", "Vendedor Um", Roles.Comercial, gestor.Id);
-        await CriarUsuarioSeNaoExistirAsync(userManager, "vendedor2@cssvision.local", "Vendedora Dois", Roles.Comercial, gestor.Id);
+        var admin = await CriarUsuarioSeNaoExistirAsync(userManager, senha, "admin@cssvision.local", "Administrador Geral", Roles.Admin);
+        var gestor = await CriarUsuarioSeNaoExistirAsync(userManager, senha, "gestor.comercial@cssvision.local", "Gestora Comercial Demo", Roles.GestorComercial);
+        var vendedor1 = await CriarUsuarioSeNaoExistirAsync(userManager, senha, "vendedor1@cssvision.local", "Vendedor Um", Roles.Comercial, gestor.Id);
+        await CriarUsuarioSeNaoExistirAsync(userManager, senha, "vendedor2@cssvision.local", "Vendedora Dois", Roles.Comercial, gestor.Id);
+        // Financeiro "puro": para ver o Setor Financeiro e o Controle financeiro como esse perfil.
+        await CriarUsuarioSeNaoExistirAsync(userManager, senha, "financeiro@cssvision.local", "Financeiro Demo", Roles.Financeiro);
     }
 
     private static async Task<ApplicationUser> CriarUsuarioSeNaoExistirAsync(
-        UserManager<ApplicationUser> userManager, string email, string nomeCompleto, string papel, Guid? gestorId = null)
+        UserManager<ApplicationUser> userManager, string senha, string email, string nomeCompleto, string papel, Guid? gestorId = null)
     {
         var usuario = await userManager.FindByEmailAsync(email);
         if (usuario is not null) return usuario;
@@ -51,7 +57,7 @@ public static class IdentitySeeder
             GestorComercialId = gestorId
         };
 
-        var resultado = await userManager.CreateAsync(usuario, SenhaSegura.SenhaInicialLegada);
+        var resultado = await userManager.CreateAsync(usuario, senha);
         if (!resultado.Succeeded)
         {
             throw new InvalidOperationException(string.Join("; ", resultado.Errors.Select(e => e.Description)));
