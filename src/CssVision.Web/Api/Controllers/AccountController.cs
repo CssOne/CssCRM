@@ -455,6 +455,7 @@ public class AccountController(
         {
             menu.Add(new MenuItemDto("crm-management", "Gestão comercial", "users-round", "/app/crm/gestao"));
             menu.Add(new MenuItemDto("setor-financeiro", "Setor Financeiro", "landmark", "/app/crm/setor-financeiro"));
+            menu.Add(new MenuItemDto("portal-financeiro", "Controle financeiro", "wallet", "/app/portal/controle-financeiro"));
             menu.Add(new MenuItemDto("crm-users", "Usuários", "user-cog", "/app/crm/usuarios"));
             menu.Add(new MenuItemDto("chat", "Chat", "messages-square", "/app/chat"));
             menu.Add(new MenuItemDto("discord", "Discord", "message-circle", "/app/discord"));
@@ -464,6 +465,11 @@ public class AccountController(
         }
 
         menu.Add(new MenuItemDto("portal", "Portal do Consultor", "briefcase", "/app/portal"));
+        // Controle financeiro: só Financeiro, administrador e gestor.
+        if (Roles.GestaoFinanceira.Any(papeis.Contains))
+        {
+            menu.Add(new MenuItemDto("portal-financeiro", "Controle financeiro", "wallet", "/app/portal/controle-financeiro"));
+        }
         menu.Add(new MenuItemDto("crm-overview", "Visão geral", "gauge", "/app/crm"));
         menu.Add(new MenuItemDto("crm-leads", "Leads", "users", "/app/crm/leads"));
         menu.Add(new MenuItemDto("crm-leads-kanban", "Quadro de leads", "layout-grid", "/app/crm/leads/kanban"));

@@ -169,6 +169,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IGoalService, GoalService>();
         services.AddScoped<IFinanceiroService, FinanceiroService>();
         services.AddScoped<IFinanceiroContratoService, FinanceiroContratoService>();
+        services.AddScoped<IContratoGrupoService, ContratoGrupoService>();
         services.AddScoped<ILookupService, LookupService>();
         services.AddScoped<IManagementService, ManagementService>();
         services.AddScoped<IRelatorioComercialService, RelatorioComercialService>();

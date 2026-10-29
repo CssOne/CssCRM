@@ -631,4 +631,63 @@ public class SetorFinanceiroServiceTests
         Assert.Equal(3, linha.CobrancasAtrasadas);
         Assert.Equal("Pj", linha.TipoContrato);
     }
+
+    [Fact]
+    public async Task Financeiro_AjustaOValorDeUmaParcela_RemoveERestaura_EOEmAbertoAcompanha()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var (ana, admin) = await CenarioAsync(factory, db);
+        var setor = Setor(db, Como(admin.Id, Roles.Admin));
+        var criado = await setor.AdicionarCustoAsync(ana.Id, new CustoConsultorRequest("Notebook", "Notebook Dell", 1200m, 12, MesAtual.AddMonths(-1)), CancellationToken.None);
+        var antes = await setor.ObterAsync(ana.Id, CancellationToken.None);
+        var primeira = antes.Cobrancas.Where(c => c.Item == "Adicional").OrderBy(c => c.Competencia).First();
+        var emAbertoAntes = antes.EmAberto;
+
+        // Valor combinado: vale no lugar do calculado, e o do contrato fica guardado para mostrar a diferença.
+        await setor.AjustarCobrancaAsync(ana.Id, new CobrancaAjusteRequest("Adicional", primeira.Competencia, criado.Id, 60m), CancellationToken.None);
+        var ajustada = await setor.ObterAsync(ana.Id, CancellationToken.None);
+        var parcela = ajustada.Cobrancas.Single(c => c.Item == "Adicional" && c.Competencia == primeira.Competencia);
+        Assert.Equal(60m, parcela.Valor);
+        Assert.Equal(100m, parcela.ValorOriginal);
+        Assert.Equal(emAbertoAntes - 40m, ajustada.EmAberto);
+
+        // Remover tira a cobrança do mês (não conta em aberto nem atrasada) e a deixa na lista das removidas.
+        await setor.AjustarCobrancaAsync(ana.Id, new CobrancaAjusteRequest("Adicional", primeira.Competencia, criado.Id, null, Remover: true), CancellationToken.None);
+        var removida = await setor.ObterAsync(ana.Id, CancellationToken.None);
+        Assert.DoesNotContain(removida.Cobrancas, c => c.Item == "Adicional" && c.Competencia == primeira.Competencia);
+        Assert.Contains(removida.Removidas!, c => c.Item == "Adicional" && c.Competencia == primeira.Competencia);
+        Assert.Equal(emAbertoAntes - 100m, removida.EmAberto);
+
+        // Restaurar (sem valor e sem remover) volta ao que o contrato calcula.
+        await setor.AjustarCobrancaAsync(ana.Id, new CobrancaAjusteRequest("Adicional", primeira.Competencia, criado.Id, null), CancellationToken.None);
+        var restaurada = await setor.ObterAsync(ana.Id, CancellationToken.None);
+        Assert.Equal(100m, restaurada.Cobrancas.Single(c => c.Item == "Adicional" && c.Competencia == primeira.Competencia).Valor);
+        Assert.Empty(restaurada.Removidas!);
+        Assert.Equal(emAbertoAntes, restaurada.EmAberto);
+    }
+
+    [Fact]
+    public async Task AjustarCobranca_NaoRemoveCobrancaPaga_NemDeCobrancaInexistente_NemDeQuemNaoEGestao()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var (ana, admin) = await CenarioAsync(factory, db);
+        var setor = Setor(db, Como(admin.Id, Roles.Admin));
+        var criado = await setor.AdicionarCustoAsync(ana.Id, new CustoConsultorRequest("Notebook", "Notebook Dell", 1200m, 12, MesAtual.AddMonths(-1)), CancellationToken.None);
+        var primeira = (await setor.ObterAsync(ana.Id, CancellationToken.None)).Cobrancas.Where(c => c.Item == "Adicional").OrderBy(c => c.Competencia).First();
+        await setor.DefinirPagamentoAsync(ana.Id, new CobrancaPagamentoRequest("Adicional", primeira.Competencia, true, null, null, criado.Id), CancellationToken.None);
+
+        var paga = await Assert.ThrowsAsync<CrmBusinessException>(() =>
+            setor.AjustarCobrancaAsync(ana.Id, new CobrancaAjusteRequest("Adicional", primeira.Competencia, criado.Id, null, Remover: true), CancellationToken.None));
+        Assert.Contains("paga", paga.Message);
+        await Assert.ThrowsAsync<CrmBusinessException>(() =>
+            setor.AjustarCobrancaAsync(ana.Id, new CobrancaAjusteRequest("Adicional", MesAtual.AddMonths(-9), criado.Id, 10m), CancellationToken.None));
+        await Assert.ThrowsAsync<CrmBusinessException>(() =>
+            setor.AjustarCobrancaAsync(ana.Id, new CobrancaAjusteRequest("Adicional", primeira.Competencia, criado.Id, -5m), CancellationToken.None));
+
+        // O próprio consultor não ajusta cobrança.
+        var eleMesmo = Setor(db, Como(ana.Id, Roles.Comercial));
+        await Assert.ThrowsAnyAsync<Exception>(() => eleMesmo.AjustarCobrancaAsync(ana.Id, new CobrancaAjusteRequest("Adicional", primeira.Competencia, criado.Id, 1m), CancellationToken.None));
+    }
 }

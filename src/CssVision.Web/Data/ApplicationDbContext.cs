@@ -36,6 +36,10 @@ public class ApplicationDbContext(
     public DbSet<CrmFinanceiroValor> CrmFinanceiroValores => Set<CrmFinanceiroValor>();
     public DbSet<CrmFinanceiroPadrao> CrmFinanceiroPadroes => Set<CrmFinanceiroPadrao>();
     public DbSet<CrmFinanceiroPrazo> CrmFinanceiroPrazos => Set<CrmFinanceiroPrazo>();
+    public DbSet<CrmGrupoMembro> CrmGrupoMembros => Set<CrmGrupoMembro>();
+    public DbSet<CrmGrupoContratoPerfil> CrmGrupoContratoPerfis => Set<CrmGrupoContratoPerfil>();
+    public DbSet<CrmGrupoContratoValor> CrmGrupoContratoValores => Set<CrmGrupoContratoValor>();
+    public DbSet<CrmGrupoContratoPrazo> CrmGrupoContratoPrazos => Set<CrmGrupoContratoPrazo>();
     public DbSet<CrmCobrancaPagamento> CrmCobrancasPagamento => Set<CrmCobrancaPagamento>();
     public DbSet<CrmCustoConsultor> CrmCustosConsultor => Set<CrmCustoConsultor>();
     public DbSet<CrmCustoAviso> CrmCustosAviso => Set<CrmCustoAviso>();
@@ -114,6 +118,7 @@ public class ApplicationDbContext(
     {
         AplicarAuditoria();
         TravaDasColunasDeVendaConcluidaAsync(CancellationToken.None).GetAwaiter().GetResult();
+        RegistrarTrocaDeGrupoAsync(CancellationToken.None).GetAwaiter().GetResult();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
@@ -121,7 +126,42 @@ public class ApplicationDbContext(
     {
         AplicarAuditoria();
         await TravaDasColunasDeVendaConcluidaAsync(cancellationToken);
+        await RegistrarTrocaDeGrupoAsync(cancellationToken);
         return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Histórico de grupo do consultor: qualquer caminho que crie um usuário já em um grupo, ou mude ou tire o grupo dele (tela de usuários, tela de grupos,
+    /// sincronização do Notion), grava uma linha no histórico a partir do mês atual. O Controle financeiro cobra cada mês pelo grupo em que o consultor estava.
+    /// Trocar duas vezes no mesmo mês ajusta a linha do mês em vez de criar outra.
+    /// </summary>
+    private async Task RegistrarTrocaDeGrupoAsync(CancellationToken ct)
+    {
+        var trocas = ChangeTracker.Entries<ApplicationUser>()
+            .Where(e => e.State == EntityState.Added
+                ? e.Entity.GrupoId is not null
+                : e.State == EntityState.Modified && e.Property(u => u.GrupoId).IsModified && !Equals(e.Property(u => u.GrupoId).OriginalValue, e.Entity.GrupoId))
+            .Select(e => (Usuario: e.Entity, Novo: e.State == EntityState.Added))
+            .ToList();
+        if (trocas.Count == 0) return;
+
+        var mes = new DateOnly(Services.Crm.HorarioBrasilia.Hoje.Year, Services.Crm.HorarioBrasilia.Hoje.Month, 1);
+        var ids = trocas.Where(t => !t.Novo).Select(t => t.Usuario.Id).ToList();
+        var historico = ids.Count == 0
+            ? new Dictionary<Guid, CrmGrupoMembro>()
+            : (await CrmGrupoMembros.Where(m => ids.Contains(m.UsuarioId)).ToListAsync(ct))
+                .GroupBy(m => m.UsuarioId).ToDictionary(g => g.Key, g => g.OrderBy(m => m.DesdeMes).Last());
+
+        foreach (var (usuario, novo) in trocas)
+        {
+            if (!novo && historico.TryGetValue(usuario.Id, out var ultimo))
+            {
+                if (ultimo.GrupoId == usuario.GrupoId) continue;
+                if (ultimo.DesdeMes >= mes) { ultimo.GrupoId = usuario.GrupoId; continue; }
+            }
+            else if (!novo && usuario.GrupoId is null) continue;
+            CrmGrupoMembros.Add(new CrmGrupoMembro { Usuario = usuario, GrupoId = usuario.GrupoId, DesdeMes = mes });
+        }
     }
 
     private const string ColunaVendaConcluidaLeads = "Venda concluída (Leads)";

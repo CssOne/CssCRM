@@ -30,9 +30,9 @@ public sealed class FinanceiroContratoService(ApplicationDbContext db, ICurrentU
     private static readonly ParametroFinanceiro[] CustosFixosPj =
         [.. ContratoFinanceiroCalculo.CustosFixosPj, ParametroFinanceiro.Transporte];
 
-    /// <summary>Valores que existem para o contrato do consultor: PJ tem o do seu modelo (bônus por placa OU recorrência) e os custos fixos; CLT, salário e % da adesão.</summary>
+    /// <summary>Valores que existem para o contrato do consultor: PJ tem o do seu modelo (bônus por placa OU recorrência) e os custos fixos; CLT, salário, alimentação e passagem (a bonificação vem da faixa de contratos do mês).</summary>
     private static ParametroFinanceiro[] ParametrosDo(TipoContrato tipo, ModeloRemuneracaoPj? modelo) => tipo == TipoContrato.Clt
-        ? [ParametroFinanceiro.Salario, ParametroFinanceiro.PercentualAdesao]
+        ? [ParametroFinanceiro.Salario, ParametroFinanceiro.Alimentacao, ParametroFinanceiro.Passagem]
         : [modelo == ModeloRemuneracaoPj.Recorrencia ? ParametroFinanceiro.Recorrencia : ParametroFinanceiro.BonusPorPlaca, .. CustosFixosPj];
 
     private bool EhGestao => Roles.GestaoFinanceira.Any(currentUser.IsInRole);
@@ -50,27 +50,45 @@ public sealed class FinanceiroContratoService(ApplicationDbContext db, ICurrentU
 
         var nome = await db.Users.AsNoTracking().Where(u => u.Id == consultorId).Select(u => u.NomeCompleto).FirstOrDefaultAsync(ct)
             ?? throw new CrmNotFoundException("Consultor", consultorId);
-        var perfil = await db.CrmFinanceiroPerfis.AsNoTracking().FirstOrDefaultAsync(p => p.UsuarioId == consultorId, ct);
-        var valores = await db.CrmFinanceiroValores.AsNoTracking().Where(v => v.UsuarioId == consultorId).ToListAsync(ct);
-        var regras = await RegrasContratoCarregador.CarregarAsync(db, consultorId, ct);
+        var hoje = HorarioBrasilia.Hoje;
+        var mesAtual = ContratoFinanceiroCalculo.PrimeiroDia(hoje);
+        // O contrato vale mês a mês: o do próprio consultor ou, sem ele, o do grupo em que estava no mês (quem nunca esteve em grupo segue só o dele).
+        var efetivo = await ContratoEfetivoCarregador.CarregarAsync(db, consultorId, ct);
+        var perfil = efetivo.PerfilDoAno(a, hoje);
+        var valores = efetivo.ValoresProprios;
+        var valoresDeHoje = efetivo.ValoresNoMes(mesAtual);
+        var regras = (await RegrasContratoCarregador.CarregarAsync(db, consultorId, ct)).ComPrazos(efetivo.PrazosNoMes(mesAtual));
 
         var autores = valores.Select(v => v.DefinidoPorId).Distinct().ToList();
         var nomes = await db.Users.AsNoTracking().Where(u => autores.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.NomeCompleto, ct);
 
-        var hoje = HorarioBrasilia.Hoje;
-        var mesAtual = ContratoFinanceiroCalculo.PrimeiroDia(hoje);
+        // Grupos por onde o consultor passou (nome e regional), para mostrar de onde vem cada valor e o histórico de trocas.
+        var idsDosGrupos = efetivo.Membros.Where(m => m.GrupoId is not null).Select(m => m.GrupoId!.Value).Distinct().ToList();
+        var gruposPorId = idsDosGrupos.Count == 0
+            ? new Dictionary<Guid, (string Nome, string Regional)>()
+            : await db.CrmGrupos.AsNoTracking().Where(g => idsDosGrupos.Contains(g.Id)).Select(g => new { g.Id, g.Nome, Regional = g.Regional.Nome })
+                .ToDictionaryAsync(g => g.Id, g => (g.Nome, g.Regional), ct);
+        var grupoAtual = efetivo.MembroNoMes(mesAtual)?.GrupoId is { } gid && gruposPorId.TryGetValue(gid, out var gAtual) ? gAtual.Nome : null;
+
+        // De onde vem o valor: do consultor, do grupo (valor herdado, que não está na lista própria dele) ou do padrão geral/do sistema.
+        (string? Origem, string? Grupo) OrigemDe(CrmFinanceiroValor? v, bool temPadrao) =>
+            v is null ? (temPadrao ? "Padrao" : null, null)
+            : valores.Any(x => ReferenceEquals(x, v)) ? ("Individual", null)
+            : ("Grupo", grupoAtual);
+
         var atuais = new List<FinanceiroParametroAtualDto>();
         if (perfil?.Tipo is { } tipo)
         {
             foreach (var p in ParametrosDo(tipo, perfil.ModeloPj))
             {
-                var v = ContratoFinanceiroCalculo.Vigente(valores, p, mesAtual, soNoMes: p == ParametroFinanceiro.Recorrencia);
+                var v = ContratoFinanceiroCalculo.Vigente(valoresDeHoje, p, mesAtual, soNoMes: p == ParametroFinanceiro.Recorrencia);
                 var padraoDoPj = ContratoFinanceiroCalculo.CustosFixosPj.Contains(p);
                 var padrao = v is null && padraoDoPj;
                 var valor = v?.Valor ?? (padraoDoPj ? regras.ValorPadrao(p) : (decimal?)null);
+                var (origem, deGrupo) = OrigemDe(v, padraoDoPj);
                 if (!padraoDoPj || tipo != TipoContrato.Pj)
                 {
-                    atuais.Add(new FinanceiroParametroAtualDto(p.ToString(), valor, v?.VigenteDesde, padrao));
+                    atuais.Add(new FinanceiroParametroAtualDto(p.ToString(), valor, v?.VigenteDesde, padrao, Origem: origem, Grupo: deGrupo));
                     continue;
                 }
                 var carencia = regras.Carencia(p);
@@ -78,48 +96,69 @@ public sealed class FinanceiroContratoService(ApplicationDbContext db, ICurrentU
                 // Custo de lead é o valor por lead: o custo real do mês é esse valor vezes os leads de tráfego pago e do Notion que o consultor pegou.
                 int? leadsNoMes = p == ParametroFinanceiro.CustoLead ? regras.LeadsNoMes(mesAtual) : null;
                 var custoReal = leadsNoMes is { } n && (inicioCobranca is null || mesAtual >= inicioCobranca) ? Math.Round((valor ?? 0m) * n, 2) : (decimal?)null;
-                atuais.Add(new FinanceiroParametroAtualDto(p.ToString(), valor, v?.VigenteDesde, padrao, carencia, regras.CarenciaPropria(p), regras.CarenciaPadrao(p), inicioCobranca, leadsNoMes, custoReal));
+                atuais.Add(new FinanceiroParametroAtualDto(p.ToString(), valor, v?.VigenteDesde, padrao, carencia, regras.CarenciaPropria(p), regras.CarenciaPadrao(p), inicioCobranca, leadsNoMes, custoReal, origem, deGrupo));
             }
         }
 
+        var membros = efetivo.Membros;
+        var historicoDeGrupos = membros.Select((m, i) => new FinanceiroGrupoHistoricoDto(
+            m.GrupoId, m.GrupoId is { } g && gruposPorId.TryGetValue(g, out var info) ? info.Nome : null, m.GrupoId is { } g2 && gruposPorId.TryGetValue(g2, out var info2) ? info2.Regional : null,
+            m.DesdeMes, i + 1 < membros.Count ? membros[i + 1].DesdeMes : null)).OrderByDescending(h => h.Desde).ToList();
+        var perfilDoGrupo = efetivo.Proprio?.Tipo is null && perfil?.Tipo is not null;
+
         return new FinanceiroContratoDto(
             consultorId, nome,
-            new FinanceiroPerfilDto(perfil?.Tipo?.ToString(), (perfil?.Transporte ?? ModalidadeTransporte.Nenhum).ToString(), perfil?.InicioContrato, perfil?.ModeloPj?.ToString()),
+            new FinanceiroPerfilDto(perfil?.Tipo?.ToString(), (perfil?.Transporte ?? ModalidadeTransporte.Nenhum).ToString(), perfil?.InicioContrato, perfil?.ModeloPj?.ToString(),
+                perfil?.Tipo is null ? null : perfilDoGrupo ? "Grupo" : "Individual", perfilDoGrupo ? grupoAtual : null),
             podeEditar,
             atuais,
             valores.OrderBy(v => v.Parametro).ThenByDescending(v => v.VigenteDesde)
                 .Select(v => new FinanceiroValorDto(v.Id, v.Parametro.ToString(), v.VigenteDesde, v.Valor, v.Observacao, nomes.GetValueOrDefault(v.DefinidoPorId), v.AtualizadoEm ?? v.CriadoEm))
                 .ToList(),
-            await ComComissaoDoCltAsync(consultorId, a, perfil, ContratoFinanceiroCalculo.Meses(perfil, valores, a, hoje, regras), ct));
+            await ComComissaoDoCltAsync(consultorId, a, efetivo, ContratoFinanceiroCalculo.Meses(efetivo, a, hoje, regras), ct),
+            historicoDeGrupos);
     }
 
     /// <summary>
-    /// Consultor CLT: a comissão do mês é calculada sozinha — a porcentagem da adesão do mês vezes o valor de adesão de cada venda dele (as do quadro de
-    /// leads e as lançadas à mão). É a mesma conta que o Controle financeiro faz em cada venda, arredondada venda a venda.
+    /// Consultor CLT: a bonificação do mês é calculada sozinha — a faixa pelos contratos fechados no mês (vendas do quadro de leads e as lançadas à mão,
+    /// sem as canceladas) decide a porcentagem, que vale sobre todo o faturado líquido (adesões menos a taxa de instalação do rastreador).
     /// </summary>
-    private async Task<IReadOnlyList<FinanceiroMesContratoDto>> ComComissaoDoCltAsync(Guid consultorId, int ano, CrmFinanceiroPerfil? perfil, IReadOnlyList<FinanceiroMesContratoDto> meses, CancellationToken ct)
+    private async Task<IReadOnlyList<FinanceiroMesContratoDto>> ComComissaoDoCltAsync(Guid consultorId, int ano, ContratoEfetivo efetivo, IReadOnlyList<FinanceiroMesContratoDto> meses, CancellationToken ct)
     {
-        if (perfil?.Tipo != TipoContrato.Clt || meses.Count == 0) return meses;
+        bool EhClt(int mes) => efetivo.PerfilNoMes(new DateOnly(ano, mes, 1))?.Tipo == TipoContrato.Clt;
+        if (meses.Count == 0 || !Enumerable.Range(1, 12).Any(EhClt)) return meses;
         var de = new DateOnly(ano, 1, 1);
         var ate = new DateOnly(ano + 1, 1, 1);
         var doQuadro = await db.CrmOpportunities.AsNoTracking()
             .Where(o => !o.Arquivado && o.ResponsavelId == consultorId && o.Etapa.Tipo == TipoEtapaPipeline.Ganho
                         && o.DataEfetivaFechamento >= HorarioBrasilia.Inicio(de) && o.DataEfetivaFechamento < HorarioBrasilia.Inicio(ate))
-            .Select(o => new { Data = o.DataEfetivaFechamento!.Value, Valor = o.PagamentoAdesao ?? 0m })
+            .Select(o => new { o.Id, Data = o.DataEfetivaFechamento!.Value, Valor = o.PagamentoAdesao ?? 0m, Rastreador = o.Veiculo != null ? o.Veiculo.Rastreador : null })
             .ToListAsync(ct);
+        // Venda cancelada não conta para a faixa nem para o faturado: o status de uma venda do card fica no complemento que o consultor salvou.
+        var canceladas = (await db.CrmFinanceiroVendas.AsNoTracking()
+            .Where(v => v.UsuarioId == consultorId && v.OportunidadeId != null && v.StatusAdesao == FinanceiroStatus.Cancelado)
+            .Select(v => v.OportunidadeId!.Value)
+            .ToListAsync(ct)).ToHashSet();
         var manuais = await db.CrmFinanceiroVendas.AsNoTracking()
-            .Where(v => v.UsuarioId == consultorId && v.OportunidadeId == null && v.DataVenda >= de && v.DataVenda < ate)
+            .Where(v => v.UsuarioId == consultorId && v.OportunidadeId == null && v.DataVenda >= de && v.DataVenda < ate && v.StatusAdesao != FinanceiroStatus.Cancelado)
             .Select(v => new { v.DataVenda, v.ValorAdesao })
             .ToListAsync(ct);
-        var vendas = doQuadro.Select(o => (Mes: HorarioBrasilia.Dia(o.Data).Month, o.Valor)).Concat(manuais.Select(v => (Mes: v.DataVenda.Month, Valor: v.ValorAdesao))).ToList();
+        var vendas = doQuadro.Where(o => !canceladas.Contains(o.Id))
+            .Select(o => (Mes: HorarioBrasilia.Dia(o.Data).Month, Bruto: o.Valor, Liquido: ContratoFinanceiroCalculo.LiquidoDaVenda(o.Valor, o.Rastreador)))
+            .Concat(manuais.Select(v => (Mes: v.DataVenda.Month, Bruto: v.ValorAdesao, Liquido: v.ValorAdesao)))
+            .ToList();
 
         return meses.Select(m =>
         {
+            if (!EhClt(m.Mes)) return m;
             var doMes = vendas.Where(v => v.Mes == m.Mes).ToList();
+            var liquidos = doMes.Select(v => v.Liquido).ToList();
             return m with
             {
-                AdesoesDoMes = doMes.Sum(v => v.Valor),
-                Comissao = doMes.Sum(v => FinanceiroValidador.Arredondar(v.Valor * m.PercentualAdesao)),
+                AdesoesDoMes = doMes.Sum(v => v.Bruto),
+                FaturadoLiquido = liquidos.Sum(),
+                PercentualAdesao = ContratoFinanceiroCalculo.PercentualBonificacaoClt(liquidos.Count),
+                Comissao = ContratoFinanceiroCalculo.BonificacaoCltDoMes(liquidos),
                 VendasDoMes = doMes.Count,
             };
         }).ToList();
@@ -177,7 +216,9 @@ public sealed class FinanceiroContratoService(ApplicationDbContext db, ICurrentU
 
         if (!Enum.TryParse<ParametroFinanceiro>(request.Parametro, ignoreCase: true, out var parametro) || !Enum.IsDefined(parametro))
             throw new CrmBusinessException("Parâmetro financeiro inválido.", "financeiro_invalido");
-        var perfil = await db.CrmFinanceiroPerfis.AsNoTracking().FirstOrDefaultAsync(p => p.UsuarioId == consultorId, ct);
+        // Vale o contrato do consultor ou, sem ele, o do grupo: quem herda o tipo do grupo também tem salário e exceções individuais.
+        var efetivo = await ContratoEfetivoCarregador.CarregarAsync(db, consultorId, ct);
+        var perfil = efetivo.PerfilDoAno(HorarioBrasilia.Hoje.Year, HorarioBrasilia.Hoje);
         if (perfil?.Tipo is not { } tipo)
             throw new CrmBusinessException("Defina primeiro se o consultor é PJ ou CLT.", "financeiro_sem_contrato");
         if (!ParametrosDo(tipo, perfil.ModeloPj).Contains(parametro))

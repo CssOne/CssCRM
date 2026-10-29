@@ -39,6 +39,7 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { mostrarNotificacao, somLigado, tocarPlim } from "../lib/avisosDoChat";
 import { usePresenca } from "../lib/usePresenca";
+import { PAPEIS_CONTROLE_FINANCEIRO } from "../lib/atalhosRapidos";
 import { rotuloNaoLidas, useChatNaoLidas } from "../lib/useChatNaoLidas";
 import { useTheme, type Tema } from "../context/ThemeContext";
 import { Avatar, IconButton } from "./ui";
@@ -97,7 +98,7 @@ const PORTAL_NAV = [
 
 /** Seções do menu lateral. Cada item cai na seção da sua chave; o que não estiver aqui vai para "Outros". */
 const SECOES: { rotulo: string; chaves: string[] }[] = [
-  { rotulo: "Início", chaves: ["portal", "crm-overview", "overview"] },
+  { rotulo: "Início", chaves: ["portal", "portal-financeiro", "crm-overview", "overview"] },
   { rotulo: "Comercial", chaves: ["crm-leads", "crm-leads-kanban", "crm-pipeline", "crm-agenda", "crm-goals", "crm-relatorio"] },
   { rotulo: "Gestão", chaves: ["crm-management", "crm-users", "setor-financeiro", "tv-comercial"] },
   { rotulo: "Marketing e sistema", chaves: ["marketing", "admin-backups"] },
@@ -298,7 +299,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const noQuadroDeLeads = location.pathname.startsWith("/app/crm/leads/kanban");
   // Financeiro "puro": só gestão da carteira, usuários e avisos — nada de leads, atividades nem avisos de lead novo.
   const soFinanceiro = !!sessao && sessao.papeis.length === 1 && sessao.papeis[0] === "Financeiro";
-  const itensNav = emPortal ? PORTAL_NAV : sessao?.menu.map((m) => ({ ...m, icone: iconesPorChave[m.icone] ?? Gauge, divisor: false }));
+  const itensNav = emPortal ? PORTAL_NAV.filter((i) => i.chave !== "portal-financeiro" || temPapel(...PAPEIS_CONTROLE_FINANCEIRO)) : sessao?.menu.map((m) => ({ ...m, icone: iconesPorChave[m.icone] ?? Gauge, divisor: false }));
 
 
   // Só o item mais específico fica marcado (ex.: "Quadro de leads" não acende junto com "Leads").

@@ -381,6 +381,9 @@ export function UserForm({
             {podeGerenciarTudo && !valores.regionalId && (
               <p className="mt-1 text-xs text-[var(--fg-muted)]">Selecione a regional para ver os grupos disponíveis.</p>
             )}
+            <p className="mt-1 text-xs text-[var(--fg-muted)]">
+              O grupo define o contrato financeiro do consultor (custos, alimentação, passagem). Trocar de grupo vale a partir do mês atual e fica no histórico dele: os meses anteriores continuam cobrados pelo grupo antigo.
+            </p>
           </div>
         )}
 

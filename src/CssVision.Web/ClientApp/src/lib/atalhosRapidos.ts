@@ -13,6 +13,9 @@ export interface AtalhoRapido {
   dica: string;
 }
 
+/** Quem vê o Controle financeiro (e os atalhos que levam a ele): Financeiro, administrador e gestor. */
+export const PAPEIS_CONTROLE_FINANCEIRO = ["Admin", "GestorMaster", "SupervisorComercial", "GestorComercial", "Financeiro"];
+
 /** Só rotas que existem no app. Cada atalho leva direto ao que a pessoa quer fazer, não à tela genérica. */
 export const ATALHOS_RAPIDOS: AtalhoRapido[] = [
   { chave: "novo-cliente", rotulo: "Novo cliente", rota: `/app/crm/leads/kanban?${PARAM_ACAO}=novo-cliente`, dica: "Abre o formulário de novo cliente no quadro de leads" },

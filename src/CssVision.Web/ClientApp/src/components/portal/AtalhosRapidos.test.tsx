@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const get = vi.fn();
 vi.mock("../../lib/api", () => ({ api: { get: (...a: unknown[]) => get(...a) } }));
+// Quem vê o Controle financeiro (Financeiro, administrador e gestor) muda quais atalhos aparecem.
+let papeisDoUsuario: string[] = ["Admin"];
+vi.mock("../../context/AuthContext", () => ({ useAuth: () => ({ temPapel: (...p: string[]) => p.some((x) => papeisDoUsuario.includes(x)) }) }));
 
 import { AtalhosRapidos } from "./AtalhosRapidos";
 
@@ -15,7 +18,21 @@ const abrir = () =>
   );
 
 describe("AtalhosRapidos", () => {
-  beforeEach(() => get.mockReset());
+  beforeEach(() => {
+    get.mockReset();
+    papeisDoUsuario = ["Admin"];
+  });
+
+  it("consultor não vê os atalhos do Controle financeiro (adesões a receber e controle financeiro)", async () => {
+    papeisDoUsuario = ["Comercial"];
+    get.mockResolvedValue([]);
+    abrir();
+
+    expect(screen.getByRole("link", { name: /Novo cliente/ })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Adesões a receber/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Controle financeiro/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(get).toHaveBeenCalled());
+  });
 
   it("mostra os atalhos, cada um levando à ação certa", async () => {
     get.mockResolvedValue([]);

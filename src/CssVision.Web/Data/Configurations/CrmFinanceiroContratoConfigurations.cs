@@ -61,6 +61,7 @@ public class CrmCobrancaPagamentoConfiguration : IEntityTypeConfiguration<CrmCob
         builder.Property(e => e.ObservacaoConsultor).HasMaxLength(300);
         builder.Property(e => e.ComprovanteUrl).HasMaxLength(500);
         builder.Property(e => e.MotivoRecusa).HasMaxLength(300);
+        builder.Property(e => e.ValorAjustado).HasColumnType("numeric(14,2)");
         builder.HasIndex(e => e.LembreteEm).HasFilter("\"LembreteEm\" IS NOT NULL AND \"LembreteEnviadoEm\" IS NULL");
         // Uma situação por consultor, item e mês (marcar de novo corrige); os custos adicionais têm uma por parcela de cada custo.
         builder.HasIndex(e => new { e.UsuarioId, e.Item, e.Competencia }).IsUnique().HasFilter("\"CustoId\" IS NULL");

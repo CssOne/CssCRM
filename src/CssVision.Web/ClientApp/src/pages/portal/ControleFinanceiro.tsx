@@ -1,4 +1,4 @@
-import { BellRing,
+import { AlertTriangle, BellRing,
   Ban,
   FileSignature,
   Users,
@@ -74,6 +74,8 @@ interface Venda {
   bonusRecebido?: number | null;
   /** CLT: adesão original do card (o que o consultor recebe é só a porcentagem dela). */
   adesaoOriginal?: number | null;
+  /** Taxa de instalação do rastreador (do card): único desconto da adesão antes da bonificação do CLT. */
+  taxaRastreador?: number | null;
   /** Nome do consultor dono do lançamento (só nas visões da gestão). */
   consultor?: string | null;
   consultorId?: string | null;
@@ -391,9 +393,20 @@ export function PortalControleFinanceiroPage() {
   const [dados, setDados] = useState<FinanceiroAno | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   // Vindo de um atalho do Portal (?aba=vendas&filtro=pendente): já abre na aba e no atalho de situação pedidos.
-  const [paramsDaUrl] = useSearchParams();
+  const [paramsDaUrl, setParamsDaUrl] = useSearchParams();
   const [aba, setAba] = useState(() => abaDoFinanceiro(paramsDaUrl));
-  const [filtroInicialDeVendas] = useState(() => filtroDeVendas(paramsDaUrl));
+  const [filtroInicialDeVendas, setFiltroInicialDeVendas] = useState(() => filtroDeVendas(paramsDaUrl));
+  // A aba aberta fica no endereço: atualizar a página ou voltar do navegador não joga o consultor de volta no Resumo.
+  useEffect(() => {
+    setParamsDaUrl((atual) => {
+      const novo = new URLSearchParams(atual);
+      if (aba === "resumo") novo.delete("aba"); else novo.set("aba", aba);
+      novo.delete("filtro");
+      return novo;
+    }, { replace: true });
+  }, [aba, setParamsDaUrl]);
+  /** Atalho das pendências do Resumo: abre a aba pedida (e, nas vendas, já no filtro de situação). */
+  const irPara = (destino: string, filtro = "") => { setFiltroInicialDeVendas(filtro); setAba(destino); };
   // Ao entrar, já mostra o mês atual (quando o ano é o corrente); "Todos os meses" fica a um clique.
   const [mes, setMes] = useState(Number(hoje.slice(5, 7)));
   // Gestão (como no Relatório comercial): escolhe um consultor ou a equipe toda. Vazio = os próprios números.
@@ -490,14 +503,14 @@ export function PortalControleFinanceiroPage() {
           ))}
         </div>
       ) : aba === "resumo" ? (
-        <Resumo dados={dados} linhas={linhas} mes={mes} somenteLeitura={somenteLeitura} equipe={dados.visao?.tipo === "equipe"} hoje={hoje} onAbrirConsultor={abrirConsultor} onSalvarConfig={async (c) => {
+        <Resumo dados={dados} linhas={linhas} mes={mes} somenteLeitura={somenteLeitura} equipe={dados.visao?.tipo === "equipe"} hoje={hoje} onAbrirConsultor={abrirConsultor} onIrPara={irPara} onSalvarConfig={async (c) => {
           try {
             await api.put(`/portal/financeiro/config?ano=${ano}`, c);
             setDados({ ...dados, config: c });
           } catch (e) { falha(e); }
         }} />
       ) : aba === "vendas" ? (
-        <Vendas filtroInicial={filtroInicialDeVendas} dados={dados} mes={mes} somenteLeitura={somenteLeitura} onAbrirConsultor={abrirConsultor} hoje={hoje} ano={ano} recarregar={() => carregar()} onErro={falha} />
+        <Vendas key={filtroInicialDeVendas} filtroInicial={filtroInicialDeVendas} dados={dados} mes={mes} somenteLeitura={somenteLeitura} onAbrirConsultor={abrirConsultor} hoje={hoje} ano={ano} recarregar={() => carregar()} onErro={falha} />
       ) : aba === "cobrancas" && dados.visao?.tipo !== "equipe" ? (
         <CobrancasDoConsultor consultorId={dados.visao?.consultorId ?? sessao?.id ?? ""} onMudou={() => carregar()} />
       ) : aba === "contrato" && dados.visao?.tipo !== "equipe" ? (
@@ -513,7 +526,7 @@ export function PortalControleFinanceiroPage() {
 
 // ---------- Resumo ----------
 
-function Resumo({ dados, linhas, mes, somenteLeitura, equipe, hoje, onAbrirConsultor, onSalvarConfig }: { dados: FinanceiroAno; linhas: LinhaMes[]; mes: number; somenteLeitura: boolean; equipe: boolean; hoje: string; onAbrirConsultor: (id: string) => void; onSalvarConfig: (c: Config) => void }) {
+function Resumo({ dados, linhas, mes, somenteLeitura, equipe, hoje, onAbrirConsultor, onIrPara, onSalvarConfig }: { dados: FinanceiroAno; linhas: LinhaMes[]; mes: number; somenteLeitura: boolean; equipe: boolean; hoje: string; onAbrirConsultor: (id: string) => void; onIrPara: (aba: string, filtro?: string) => void; onSalvarConfig: (c: Config) => void }) {
   const mesAtual = Number(hojeBrasilia().slice(5, 7));
   // Cartões do período escolhido (um mês ou o ano todo); a tabela abaixo continua mostrando os 12 meses.
   const sel = mes ? [linhas[mes - 1]] : linhas;
@@ -527,6 +540,7 @@ function Resumo({ dados, linhas, mes, somenteLeitura, equipe, hoje, onAbrirConsu
 
   return (
     <div className="space-y-4">
+      {!equipe && !somenteLeitura && <PendenciasDoFinanceiro dados={dados} hoje={hoje} onIrPara={onIrPara} />}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <PortalStatCard titulo={`Receitas — ${periodo}`} valor={formatarMoeda(receitas)} icone={CircleDollarSign} subtitulo="Adesão + bônus/recorrência + premiações" />
         <PortalStatCard titulo={`Custos — ${periodo}`} valor={formatarMoeda(custos)} icone={Wallet} subtitulo={`${formatarMoeda(soma(sel, "retiradas"))} em retiradas`} />
@@ -534,7 +548,7 @@ function Resumo({ dados, linhas, mes, somenteLeitura, equipe, hoje, onAbrirConsu
         {!equipe && <PortalStatCard titulo="Reserva p/ investir" valor={formatarMoeda(soma(sel, "reserva"))} icone={Gem} subtitulo={`${pct(dados.config.percentualReserva)} do lucro de cada mês`} />}
         <PortalStatCard titulo="Já recebido" valor={formatarMoeda(soma(sel, "recebido"))} icone={CircleDollarSign} />
         <PortalStatCard titulo="Pendente de recebimento" valor={formatarMoeda(soma(sel, "pendente"))} icone={Clock} />
-        {dados.tipoContrato && <PortalStatCard titulo={`Renda fixa — ${periodo}`} valor={formatarMoeda(soma(sel, "fixa"))} icone={FileSignature} subtitulo={dados.tipoContrato === "Clt" ? "Salário do contrato CLT" : "Recorrência do contrato PJ"} />}
+        {dados.tipoContrato && <PortalStatCard titulo={`Renda fixa — ${periodo}`} valor={formatarMoeda(soma(sel, "fixa"))} icone={FileSignature} subtitulo={dados.tipoContrato === "Clt" ? "Salário, alimentação e passagem do contrato CLT" : "Recorrência do contrato PJ"} />}
         <PortalStatCard titulo="Imposto pago" valor={formatarMoeda(soma(sel, "imposto"))} icone={Landmark} />
         <PortalStatCard
           titulo={`Meta — ${periodo}`}
@@ -617,6 +631,49 @@ function Resumo({ dados, linhas, mes, somenteLeitura, equipe, hoje, onAbrirConsu
         Receitas e custos consideram o mês da data da venda/do custo; valores cancelados ficam de fora. O caixa soma o que você já recebeu e desconta o que já pagou (incluindo retiradas).
       </p>
     </div>
+  );
+}
+
+// ---------- Pendências ----------
+
+/**
+ * O que pede uma ação do consultor, no topo do Resumo: recebimentos atrasados, bônus a informar, custos vencidos e a meta do mês sem definir.
+ * Cada item leva direto à aba (e ao filtro) onde se resolve; sem pendência, só um aviso de que está tudo em dia.
+ */
+function PendenciasDoFinanceiro({ dados, hoje, onIrPara }: { dados: FinanceiroAno; hoje: string; onIrPara: (aba: string, filtro?: string) => void }) {
+  const itens = useMemo(() => {
+    const atrasadas = dados.vendas.map((v) => ({ v, c: calcVenda(v, hoje) })).filter((x) => x.c.diasAtraso > 0);
+    const aInformar = dados.vendas.filter((v) => bonusAguardandoInforme(v, hoje));
+    const vencidos = dados.custos.filter((c) => c.status === "APagar" && !c.fixo && !c.doCard && !!c.vencimento && c.vencimento < hoje);
+    const mesAtual = Number(hoje.slice(5, 7));
+    const semMeta = dados.ano === Number(hoje.slice(0, 4)) && !dados.metas.some((m) => m.mes === mesAtual && (m.metaAdesao > 0 || m.metaBonus > 0 || m.metaRecorrencia > 0 || m.metaVendas > 0));
+    const lista: { chave: string; texto: string; aba: string; filtro?: string }[] = [];
+    if (atrasadas.length > 0) lista.push({ chave: "atrasados", texto: `${atrasadas.length} venda(s) com recebimento atrasado — ${formatarMoeda(atrasadas.reduce((n, x) => n + x.c.pendente, 0))}`, aba: "vendas", filtro: "atrasada" });
+    if (aInformar.length > 0) lista.push({ chave: "bonus", texto: `${aInformar.length} bônus para informar quanto você recebeu`, aba: "vendas" });
+    if (vencidos.length > 0) lista.push({ chave: "custos", texto: `${vencidos.length} custo(s) vencido(s) e ainda não pago(s) — ${formatarMoeda(vencidos.reduce((n, c) => n + c.valor, 0))}`, aba: "custos" });
+    if (semMeta) lista.push({ chave: "meta", texto: `A meta de ${MESES[mesAtual - 1]} ainda não foi definida`, aba: "metas" });
+    return lista;
+  }, [dados, hoje]);
+
+  if (itens.length === 0) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--fg-muted)]">
+        <CircleCheck className="size-4 shrink-0 text-[var(--success)]" aria-hidden /> Nada pendente: recebimentos, bônus e custos estão em dia.
+      </div>
+    );
+  }
+  return (
+    <Card className="space-y-2 p-4">
+      <p className="flex items-center gap-2 text-sm font-semibold text-[var(--fg)]"><AlertTriangle className="size-4 text-[var(--warning)]" aria-hidden /> Precisa da sua atenção</p>
+      <ul className="space-y-1.5">
+        {itens.map((i) => (
+          <li key={i.chave} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--surface-hover)] px-3 py-2 text-sm">
+            <span className="text-[var(--fg)]">{i.texto}</span>
+            <Button size="sm" variant="secondary" onClick={() => onIrPara(i.aba, i.filtro)}>Resolver</Button>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 
@@ -1257,8 +1314,11 @@ function Vendas({ filtroInicial = "", dados, mes, somenteLeitura, onAbrirConsult
                   <td className="px-3 py-2">
                     {formatarMoeda(v.valorAdesao)}
                     {v.adesaoOriginal != null && v.adesaoOriginal > 0 && (
-                      <span className="block text-[11px] text-[var(--fg-muted)]" title="Sua comissão (CLT): a porcentagem do contrato sobre a adesão da venda, calculada sozinha">
-                        {Math.round((v.valorAdesao / v.adesaoOriginal) * 1000) / 10}% de {formatarMoeda(v.adesaoOriginal)}
+                      <span className="block text-[11px] text-[var(--fg-muted)]" title="Sua bonificação (CLT): a % da faixa de contratos do mês sobre o faturado líquido da venda (adesão menos a taxa de instalação do rastreador), calculada sozinha">
+                        {(() => {
+                          const liquido = Math.max(0, v.adesaoOriginal - (v.taxaRastreador ?? 0));
+                          return `${liquido > 0 ? Math.round((v.valorAdesao / liquido) * 1000) / 10 : 0}% de ${formatarMoeda(liquido)}${v.taxaRastreador ? ` (adesão ${formatarMoeda(v.adesaoOriginal)} − rastreador ${formatarMoeda(v.taxaRastreador)})` : ""}`;
+                        })()}
                       </span>
                     )}
                   </td>

@@ -61,7 +61,7 @@ export function SetorFinanceiroConsultorPage() {
   const { consultorId = "" } = useParams();
   const [params, setParams] = useSearchParams();
   const aba = (["cobrancas", "contrato", "avisos"].includes(params.get("aba") ?? "") ? params.get("aba") : "cobrancas") as Aba;
-  const [consultor, setConsultor] = useState<{ nome: string; tipo: string | null } | null>(null);
+  const [consultor, setConsultor] = useState<{ nome: string; tipo: string | null; emAberto: number; cobrancasEmAberto: number; cobrancasAtrasadas: number } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [versao, setVersao] = useState(0);
   // "Cobrar" numa cobrança em aberto leva ao aviso de pagamento já com a mensagem e o valor sugeridos.
@@ -74,9 +74,9 @@ export function SetorFinanceiroConsultorPage() {
   useEffect(() => {
     const controller = new AbortController();
     api
-      .get<{ consultorNome: string; tipoContrato: string | null }>(`/crm/setor-financeiro/cobrancas?consultorId=${consultorId}`, controller.signal)
+      .get<{ consultorNome: string; tipoContrato: string | null; emAberto: number; cobrancasEmAberto: number; cobrancasAtrasadas: number }>(`/crm/setor-financeiro/cobrancas?consultorId=${consultorId}`, controller.signal)
       .then((d) => {
-        setConsultor({ nome: d.consultorNome, tipo: d.tipoContrato });
+        setConsultor({ nome: d.consultorNome, tipo: d.tipoContrato, emAberto: d.emAberto, cobrancasEmAberto: d.cobrancasEmAberto, cobrancasAtrasadas: d.cobrancasAtrasadas });
         setErro(null);
       })
       .catch((e) => {
@@ -97,20 +97,34 @@ export function SetorFinanceiroConsultorPage() {
       ) : !consultor ? (
         <Skeleton className="h-16" />
       ) : (
-        <div className="flex items-center gap-3">
-          <Avatar nome={consultor.nome} usuarioId={consultorId} className="size-12 text-base" />
-          <div>
-            <h1 className="text-xl font-bold text-[var(--fg)]">{consultor.nome}</h1>
-            <p className="text-sm text-[var(--fg-muted)]">
-              {consultor.tipo === "Pj" ? "Consultor PJ" : consultor.tipo === "Clt" ? "Consultor CLT" : "Contrato não definido"} · Setor Financeiro
-            </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <Avatar nome={consultor.nome} usuarioId={consultorId} className="size-12 text-base" />
+            <div>
+              <h1 className="text-xl font-bold text-[var(--fg)]">{consultor.nome}</h1>
+              <p className="text-sm text-[var(--fg-muted)]">
+                {consultor.tipo === "Pj" ? "Consultor PJ" : consultor.tipo === "Clt" ? "Consultor CLT" : "Contrato não definido"} · Setor Financeiro
+              </p>
+            </div>
+          </div>
+          {/* Resumo sempre à vista, em qualquer aba: o que o consultor deve e se há atraso; "Cobrar" leva direto ao aviso. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant={consultor.emAberto > 0 ? "warning" : "success"}>
+              {consultor.emAberto > 0 ? `${formatarMoeda(consultor.emAberto)} em aberto` : "Em dia"}
+            </Badge>
+            {consultor.cobrancasAtrasadas > 0 && <Badge variant="danger">{consultor.cobrancasAtrasadas} atrasada(s)</Badge>}
+            {consultor.cobrancasEmAberto > 0 && aba !== "avisos" && (
+              <Button size="sm" variant="secondary" onClick={() => setParams({ aba: "avisos" }, { replace: true })}>
+                <Send className="size-4" /> Enviar aviso
+              </Button>
+            )}
           </div>
         </div>
       )}
 
       <Tabs
         tabs={[
-          { chave: "cobrancas", rotulo: "Cobranças" },
+          { chave: "cobrancas", rotulo: "Cobranças", contagem: consultor?.cobrancasEmAberto ? consultor.cobrancasEmAberto : undefined },
           { chave: "contrato", rotulo: "Contrato e custos" },
           { chave: "avisos", rotulo: "Avisos de pagamento" },
         ]}
@@ -121,7 +135,7 @@ export function SetorFinanceiroConsultorPage() {
       {aba === "cobrancas" && <CobrancasDoConsultor key={`${consultorId}-${versao}`} consultorId={consultorId} onMudou={() => setVersao((n) => n + 1)} onCobrar={cobrar} />}
       {aba === "contrato" && (
         <div className="space-y-4">
-          <CustosDoConsultor consultorId={consultorId} onMudou={() => setVersao((n) => n + 1)} />
+          {consultor?.tipo !== "Clt" && <CustosDoConsultor consultorId={consultorId} onMudou={() => setVersao((n) => n + 1)} />}
           <ContratoFinanceiro consultorId={consultorId} ano={ano} mostrarCobrancas={false} onMudou={() => setVersao((n) => n + 1)} />
         </div>
       )}
