@@ -236,6 +236,43 @@ public class IndicacaoLeadEVeiculosAdicionaisTests
         Assert.Equal(lead.Id, novo.VeiculoAdicionalDeLeadId);
     }
 
+    [Fact]
+    public async Task EditarOMotivoNaMesmaColuna_MantemADataDoSeguro_ETrocarDeMotivoDesfazAAgenda()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, usuario, lead) = await PrepararAsync(factory);
+        var followUp = await factory.ObterOuCriarEtapaLeadAsync(db, "Follow Up", 6);
+        var seguro = new CrmLossReason { Descricao = "Já tem seguro" };
+        var preco = new CrmLossReason { Descricao = "Preço" };
+        db.CrmLossReasons.AddRange(seguro, preco);
+        await db.SaveChangesAsync();
+        var service = LeadService(db, usuario);
+        var vence = new DateOnly(2026, 12, 15);
+
+        // Entra no Follow Up por "Já tem seguro", com a data de vencimento.
+        await service.MudarEtapaAsync(lead.Id, new ChangeLeadStageRequest(followUp.Id, lead.RowVersion, seguro.Id, null, null, null, vence), CancellationToken.None);
+        db.ChangeTracker.Clear();
+        var noFollowUp = db.CrmLeads.Single(l => l.Id == lead.Id);
+        Assert.Equal(vence, noFollowUp.SeguroVenceEm);
+        Assert.NotNull(noFollowUp.SeguroAtividadeId);
+
+        // Editar só a explicação (mesma coluna, mesmo motivo, sem informar a data): a data e a atividade continuam.
+        await service.MudarEtapaAsync(lead.Id, new ChangeLeadStageRequest(followUp.Id, noFollowUp.RowVersion, seguro.Id, "ligar depois do dia 10"), CancellationToken.None);
+        db.ChangeTracker.Clear();
+        var editado = db.CrmLeads.Single(l => l.Id == lead.Id);
+        Assert.Equal("ligar depois do dia 10", editado.MotivoPerdaObservacao);
+        Assert.Equal(vence, editado.SeguroVenceEm);
+        Assert.Equal(noFollowUp.SeguroAtividadeId, editado.SeguroAtividadeId);
+
+        // Trocar o motivo para "Preço" não tem mais vencimento de seguro: a agenda é desfeita.
+        await service.MudarEtapaAsync(lead.Id, new ChangeLeadStageRequest(followUp.Id, editado.RowVersion, preco.Id), CancellationToken.None);
+        db.ChangeTracker.Clear();
+        var trocado = db.CrmLeads.Single(l => l.Id == lead.Id);
+        Assert.Equal(preco.Id, trocado.MotivoPerdaId);
+        Assert.Null(trocado.SeguroVenceEm);
+        Assert.Equal(StatusAtividade.Cancelada, db.CrmActivities.Single(a => a.Id == noFollowUp.SeguroAtividadeId).Status);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(11)]

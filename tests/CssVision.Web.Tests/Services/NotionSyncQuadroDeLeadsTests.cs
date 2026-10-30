@@ -103,9 +103,26 @@ public class NotionSyncQuadroDeLeadsTests
         // Lead criado pela sincronização antiga: coluna definida só na criação, NotionStatus ainda vazio.
         var lead = NovoLead(etapas["Em atendimento (Leads)"], notionStatus: null);
 
-        await service.AplicarStatusDoNotionAsync(lead, "PERDIDO", "Não responde", null, etapas, CancellationToken.None);
+        await service.AplicarStatusDoNotionAsync(lead, "PERDIDO", "Financeiro", null, etapas, CancellationToken.None);
 
         Assert.Equal(etapas["Perdido"], lead.EtapaId);
+    }
+
+    [Fact]
+    public async Task PerdidoComMotivoNaoResponde_VaiParaAColunaNaoResponde_SemMotivoDePerda()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, service, etapas) = await PrepararAsync(factory);
+        var lead = NovoLead(etapas["Em atendimento (Leads)"], notionStatus: "EM ATENDIMENTO");
+        db.CrmLeads.Add(lead);
+
+        var mudou = await service.AplicarStatusDoNotionAsync(lead, "PERDIDO", "não responde", null, etapas, CancellationToken.None);
+        await db.SaveChangesAsync();
+
+        Assert.True(mudou);
+        Assert.Equal(etapas["Não responde"], lead.EtapaId);
+        Assert.Null(lead.MotivoPerdaId);
+        Assert.Empty(db.CrmLossReasons);   // "Não responde" não vira motivo de perda novo
     }
 
     [Fact]
@@ -176,17 +193,17 @@ public class NotionSyncQuadroDeLeadsTests
     {
         using var factory = new TestDbContextFactory();
         var (db, service, etapas) = await PrepararAsync(factory);
-        db.CrmLossReasons.Add(new CrmLossReason { Descricao = "Não responde" });
+        db.CrmLossReasons.Add(new CrmLossReason { Descricao = "Financeiro" });
         await db.SaveChangesAsync();
 
         var a = NovoLead();
         var b = NovoLead();
         db.CrmLeads.AddRange(a, b);
-        await service.AplicarStatusDoNotionAsync(a, "PERDIDO", "não responde", null, etapas, CancellationToken.None);
-        await service.AplicarStatusDoNotionAsync(b, "PERDIDO", "Não responde", null, etapas, CancellationToken.None);
+        await service.AplicarStatusDoNotionAsync(a, "PERDIDO", "financeiro", null, etapas, CancellationToken.None);
+        await service.AplicarStatusDoNotionAsync(b, "PERDIDO", "Financeiro", null, etapas, CancellationToken.None);
         await db.SaveChangesAsync();
 
-        Assert.Equal(1, await db.CrmLossReasons.CountAsync(m => m.Descricao == "Não responde"));
+        Assert.Equal(1, await db.CrmLossReasons.CountAsync(m => m.Descricao == "Financeiro"));
         Assert.Equal(a.MotivoPerdaId, b.MotivoPerdaId);
     }
 

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { TipoPessoa, type LeadCreateRequest, type LeadListItem } from "../../lib/types";
 import { Button, DocumentoInput, FieldError, Input, Label, Select, Textarea } from "../ui";
 import { LeadPicker } from "./LeadPicker";
@@ -121,6 +121,7 @@ export function LeadForm({
   onCancel,
   idPrefix = "lead",
   ehIndicacao = true,
+  avisoAntesDosBotoes,
 }: {
   valoresIniciais?: LeadFormValues;
   salvando: boolean;
@@ -132,6 +133,8 @@ export function LeadForm({
    * Lead (tráfego pago, Notion): o canal é sempre "Lead", então o campo nem aparece na edição. Padrão: indicação, que é o que se cadastra à mão.
    */
   ehIndicacao?: boolean;
+  /** Aviso (ex.: cliente já cadastrado) mostrado no rodapé fixo, logo acima dos botões, onde a pessoa está olhando ao clicar em Salvar. */
+  avisoAntesDosBotoes?: ReactNode;
 }) {
   const [valores, setValores] = useState<LeadFormValues>(valoresIniciais ?? leadFormVazio);
   const [erros, setErros] = useState<Record<string, string>>({});
@@ -452,13 +455,16 @@ export function LeadForm({
         </p>
       )}
       {/* Rodapé fixo: o formulário é longo e rola dentro do modal; sem isto o Salvar ficava lá embaixo, fora da tela, e parecia que não existia. */}
-      <div className="sticky -bottom-4 z-10 -mx-5 -mb-4 mt-2 flex justify-end gap-2 border-t border-[var(--border)] bg-[var(--surface-solid)] px-5 py-3">
-        <Button type="button" variant="secondary" onClick={onCancel} disabled={salvando}>
-          Cancelar
-        </Button>
-        <Button type="submit" loading={salvando}>
-          Salvar
-        </Button>
+      <div className="sticky -bottom-4 z-10 -mx-5 -mb-4 mt-2 border-t border-[var(--border)] bg-[var(--surface-solid)] px-5 py-3">
+        {avisoAntesDosBotoes && <div className="mb-3">{avisoAntesDosBotoes}</div>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={salvando}>
+            Cancelar
+          </Button>
+          <Button type="submit" loading={salvando}>
+            Salvar
+          </Button>
+        </div>
       </div>
     </form>
   );

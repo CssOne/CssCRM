@@ -96,6 +96,32 @@ public class LeadServiceTests
     }
 
     [Fact]
+    public async Task CriarAsync_TelefoneRepetido_AvisaEPermiteCadastrarMesmoAssim_MasCpfRepetidoContinuaBarrando()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor1");
+        var currentUser = TestDbContextFactory.MockCurrentUser(vendedor.Id);
+        var service = new LeadService(db, currentUser.Object, new EquipeComercialService(db, currentUser.Object), new NoOpLeadAssignmentService(), new NoOpMetaConversionService(), new NoOpAuditSink());
+
+        await service.CriarAsync(NovoLeadRequest("Primeiro Cliente"), CancellationToken.None);
+        // Outro cliente (CPF e e-mail diferentes) com o mesmo telefone: avisa...
+        var outro = NovoLeadRequest("Segundo Cliente", documento: "11144477735", email: "outro@teste.com");
+        var aviso = await service.CriarAsync(outro, CancellationToken.None);
+        Assert.Null(aviso.Lead);
+        Assert.Equal("telefone", aviso.Duplicidade!.CampoDuplicado);
+
+        // ...e o consultor pode confirmar "Cadastrar mesmo assim".
+        var confirmado = await service.CriarAsync(outro with { IgnorarDuplicidade = true }, CancellationToken.None);
+        Assert.NotNull(confirmado.Lead);
+
+        // O CPF repetido não tem "mesmo assim": continua barrando.
+        var cpfRepetido = await service.CriarAsync(NovoLeadRequest("Terceiro", email: "terceiro@teste.com") with { IgnorarDuplicidade = true }, CancellationToken.None);
+        Assert.Null(cpfRepetido.Lead);
+        Assert.Equal("CPF/CNPJ", cpfRepetido.Duplicidade!.CampoDuplicado);
+    }
+
+    [Fact]
     public async Task CriarAsync_DeveDetectarDuplicidade_PorEmail()
     {
         using var factory = new TestDbContextFactory();

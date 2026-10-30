@@ -1,10 +1,10 @@
-import { ArrowRightLeft, Car, XCircle } from "lucide-react";
+import { ArrowRightLeft, Car, Pencil, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiRequestError, uploadFile } from "../../lib/api";
 import { TipoEtapaPipeline, type LeadDetail, type LeadStage, type PipelineBoard } from "../../lib/types";
 import { Badge, Button, Modal, useToast } from "../ui";
 import { AdesaoCotacaoDialog } from "./AdesaoCotacaoDialog";
-import { MOTIVOS_FOLLOW_UP, StageChangeDialog } from "./StageChangeDialog";
+import { MOTIVOS_FOLLOW_UP, MOTIVOS_FORA_DE_PERDIDO, StageChangeDialog } from "./StageChangeDialog";
 import { VeiculoNaoFazemosDialog } from "./VeiculoNaoFazemosDialog";
 import { VendaConcluidaDialog } from "./VendaConcluidaDialog";
 
@@ -38,6 +38,8 @@ export function EtapaDoLead({ lead, onMudou }: { lead: LeadDetail; onMudou: () =
   const [enviando, setEnviando] = useState(false);
   const [pendenciaVenda, setPendenciaVenda] = useState<{ etapa: LeadStage; indicacaoLead?: boolean } | null>(null);
   const [pendenciaPerda, setPendenciaPerda] = useState<LeadStage | null>(null);
+  /** O diálogo de motivo foi aberto pelo botão "Editar" da caixa (o lead já está na coluna), não por uma mudança de etapa. */
+  const [editandoMotivo, setEditandoMotivo] = useState(false);
   const [pendenciaNaoFazemos, setPendenciaNaoFazemos] = useState<LeadStage | null>(null);
   const [pendenciaCotacao, setPendenciaCotacao] = useState<LeadStage | null>(null);
 
@@ -65,7 +67,8 @@ export function EtapaDoLead({ lead, onMudou }: { lead: LeadDetail; onMudou: () =
           notificar("error", "O lead foi movido, mas não foi possível anexar a proposta. Tente anexar novamente.");
         }
       }
-      notificar("success", "Etapa atualizada.");
+      notificar("success", editandoMotivo ? "Motivo atualizado." : "Etapa atualizada.");
+      setEditandoMotivo(false);
       setAberto(false);
       setPendenciaPerda(null);
       setPendenciaNaoFazemos(null);
@@ -146,12 +149,28 @@ export function EtapaDoLead({ lead, onMudou }: { lead: LeadDetail; onMudou: () =
           // Follow Up: o destaque usa a cor da própria coluna (lilás), não o vermelho da perda.
           style={lead.motivoPerdaDescricao && lead.etapaNome === ETAPA_FOLLOW_UP ? { borderColor: `color-mix(in srgb, ${lead.etapaCor ?? "#8b5cf6"} 35%, transparent)`, backgroundColor: `color-mix(in srgb, ${lead.etapaCor ?? "#8b5cf6"} 12%, transparent)` } : undefined}
         >
-          <p
-            className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide ${lead.motivoPerdaDescricao ? (lead.etapaNome === ETAPA_FOLLOW_UP ? "" : "text-[var(--danger)]") : "text-[var(--fg-muted)]"}`}
-            style={lead.motivoPerdaDescricao && lead.etapaNome === ETAPA_FOLLOW_UP ? { color: lead.etapaCor ?? "#8b5cf6" } : undefined}
-          >
-            <XCircle className="size-3.5 shrink-0" aria-hidden /> {lead.etapaNome === ETAPA_FOLLOW_UP ? "Motivo do Follow Up" : "Motivo da perda"}
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p
+              className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide ${lead.motivoPerdaDescricao ? (lead.etapaNome === ETAPA_FOLLOW_UP ? "" : "text-[var(--danger)]") : "text-[var(--fg-muted)]"}`}
+              style={lead.motivoPerdaDescricao && lead.etapaNome === ETAPA_FOLLOW_UP ? { color: lead.etapaCor ?? "#8b5cf6" } : undefined}
+            >
+              <XCircle className="size-3.5 shrink-0" aria-hidden /> {lead.etapaNome === ETAPA_FOLLOW_UP ? "Motivo do Follow Up" : "Motivo da perda"}
+            </p>
+            <button
+              type="button"
+              title="Editar o motivo"
+              aria-label="Editar o motivo"
+              onClick={() => {
+                const atual = etapas.find((x) => x.id === lead.etapaId);
+                if (!atual) return;
+                setEditandoMotivo(true);
+                setPendenciaPerda(atual);
+              }}
+              className="focus-ring inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-[var(--fg-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+            >
+              <Pencil className="size-3" aria-hidden /> Editar
+            </button>
+          </div>
           <p className={`mt-1 font-semibold ${lead.motivoPerdaDescricao ? "text-[var(--fg)]" : "font-normal italic text-[var(--fg-muted)]"}`}>
             {lead.motivoPerdaDescricao ?? "Sem motivo informado"}
           </p>
@@ -217,9 +236,13 @@ export function EtapaDoLead({ lead, onMudou }: { lead: LeadDetail; onMudou: () =
         etapaNome={pendenciaPerda?.nome ?? ETAPA_PERDIDO}
         enviando={enviando}
         permitirPropostaConcorrente={pendenciaPerda?.nome === ETAPA_PERDIDO}
+        edicao={editandoMotivo ? { motivo: lead.motivoPerdaDescricao ?? null, observacao: lead.motivoPerdaObservacao ?? null } : null}
         motivosPermitidos={pendenciaPerda?.nome === ETAPA_FOLLOW_UP ? MOTIVOS_FOLLOW_UP : undefined}
-        motivosExcluidos={pendenciaPerda?.nome === ETAPA_PERDIDO ? MOTIVOS_FOLLOW_UP : undefined}
-        onCancel={() => setPendenciaPerda(null)}
+        motivosExcluidos={pendenciaPerda?.nome === ETAPA_PERDIDO ? MOTIVOS_FORA_DE_PERDIDO : undefined}
+        onCancel={() => {
+          setPendenciaPerda(null);
+          setEditandoMotivo(false);
+        }}
         onConfirm={(dados) => {
           if (pendenciaPerda) void mover(pendenciaPerda, dados);
         }}

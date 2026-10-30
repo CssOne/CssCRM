@@ -20,6 +20,10 @@ public static class NotionEtapaLead
     public const string VendaConcluida = "Venda concluída";
     public const string Perdido = "Perdido";
     public const string NaoFazemos = "Não fazemos";
+    public const string NaoResponde = "Não responde";
+
+    /// <summary>"Não responde" é coluna do quadro, não motivo de perda: card PERDIDO com esse motivo no Notion vai para a coluna (sem motivo).</summary>
+    public static bool EhMotivoNaoResponde(string? motivo) => string.Equals(motivo?.Trim(), NaoResponde, StringComparison.OrdinalIgnoreCase);
 
     private static readonly Dictionary<string, string> StatusParaColuna = new()
     {

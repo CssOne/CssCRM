@@ -1,4 +1,4 @@
-import { ArrowRightLeft, Car, Clock, Mail, Phone, Trash2, UserCog, XCircle } from "lucide-react";
+import { ArrowRightLeft, Car, Clock, Mail, Pencil, Phone, Trash2, UserCog, XCircle } from "lucide-react";
 import type { DragEvent, MouseEvent, ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { diasRelativos, formatarData, formatarDataHora, formatarMoeda, formatarTelefone } from "../../lib/format";
@@ -80,6 +80,7 @@ export function CartaoLead({
   onMover,
   onTrocarResponsavel,
   onExcluir,
+  onEditarMotivo,
   onDragStart,
   onDragEnd,
 }: {
@@ -100,6 +101,8 @@ export function CartaoLead({
   onMover: () => void;
   onTrocarResponsavel: () => void;
   onExcluir: () => void;
+  /** Abre a edição do motivo (colunas "Perdido" e "Follow Up"); sem a função, a caixa não mostra o botão. */
+  onEditarMotivo?: () => void;
   onDragStart: (e: DragEvent) => void;
   onDragEnd: () => void;
 }) {
@@ -181,12 +184,29 @@ export function CartaoLead({
           style={cartao.motivoPerda && nomeColuna === "Follow Up" ? { borderColor: `color-mix(in srgb, ${corColuna} 35%, transparent)`, backgroundColor: `color-mix(in srgb, ${corColuna} 12%, transparent)` } : undefined}
           title={cartao.motivoPerdaObservacao ? `${cartao.motivoPerda}: ${cartao.motivoPerdaObservacao}` : nomeColuna === "Follow Up" ? "Motivo do Follow Up" : "Motivo da perda"}
         >
-          <p
-            className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide ${cartao.motivoPerda ? (nomeColuna === "Follow Up" ? "" : "text-[var(--danger)]") : "text-[var(--fg-muted)]"}`}
-            style={cartao.motivoPerda && nomeColuna === "Follow Up" ? { color: corColuna } : undefined}
-          >
-            <XCircle className="size-3 shrink-0" aria-hidden /> {nomeColuna === "Follow Up" ? "Motivo do Follow Up" : "Motivo da perda"}
-          </p>
+          <div className="flex items-center justify-between gap-1">
+            <p
+              className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide ${cartao.motivoPerda ? (nomeColuna === "Follow Up" ? "" : "text-[var(--danger)]") : "text-[var(--fg-muted)]"}`}
+              style={cartao.motivoPerda && nomeColuna === "Follow Up" ? { color: corColuna } : undefined}
+            >
+              <XCircle className="size-3 shrink-0" aria-hidden /> {nomeColuna === "Follow Up" ? "Motivo do Follow Up" : "Motivo da perda"}
+            </p>
+            {onEditarMotivo && (
+              <button
+                type="button"
+                title="Editar o motivo"
+                aria-label="Editar o motivo"
+                draggable={false}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditarMotivo();
+                }}
+                className="focus-ring -mr-1 -mt-0.5 flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-md text-[var(--fg-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+              >
+                <Pencil className="size-3" aria-hidden />
+              </button>
+            )}
+          </div>
           <p className={`mt-0.5 font-semibold ${cartao.motivoPerda ? "text-[var(--fg)]" : "font-normal italic text-[var(--fg-muted)]"}`}>
             {cartao.motivoPerda ?? "Sem motivo informado"}
           </p>

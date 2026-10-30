@@ -33,6 +33,9 @@ export const MOTIVO_FECHADO_NA_CONCORRENCIA = "Fechado na Concorrência";
 /** Motivos que mandam o lead para a coluna "Follow Up" (e só eles) — mesma lista do LeadService. "Perdido" não os aceita. */
 export const MOTIVOS_FOLLOW_UP = ["Já tem seguro", "Preço"];
 
+/** Motivos que não aparecem em "Perdido" do quadro de leads: os do Follow Up e "Não responde" (que é coluna do quadro, não motivo de perda). */
+export const MOTIVOS_FORA_DE_PERDIDO = [...MOTIVOS_FOLLOW_UP, "Não responde"];
+
 const naLista = (lista: string[], descricao: string) => lista.some((x) => x.toLowerCase() === descricao.toLowerCase());
 
 /** Move um cartão para uma etapa "Perdido" ou "Follow Up", exigindo o motivo (cada etapa aceita só os seus). Para "Ganho", ver VendaConcluidaDialog. */
@@ -44,6 +47,7 @@ export function StageChangeDialog({
   permitirPropostaConcorrente = false,
   motivosPermitidos,
   motivosExcluidos,
+  edicao = null,
   onConfirm,
   onCancel,
 }: {
@@ -57,6 +61,8 @@ export function StageChangeDialog({
   motivosPermitidos?: string[];
   /** Estes motivos não aparecem (ex.: "Perdido" não aceita os do "Follow Up"). */
   motivosExcluidos?: string[];
+  /** Edição do motivo de um cartão que já está na coluna: parte do motivo e da explicação atuais, e o título/botão dizem "Editar". */
+  edicao?: { motivo: string | null; observacao: string | null } | null;
   onConfirm: (dados: DadosFechamento) => void;
   onCancel: () => void;
 }) {
@@ -68,10 +74,15 @@ export function StageChangeDialog({
 
   useEffect(() => {
     if (open) {
-      // Nada vem marcado: o consultor tem que escolher o motivo (antes vinha o primeiro da lista).
+      // Nada vem marcado: o consultor tem que escolher o motivo (antes vinha o primeiro da lista). Na edição, vem o motivo atual.
       setMotivoPerdaId("");
-      api.get<LossReason[]>("/crm/settings/loss-reasons").then(setMotivos);
-      setObservacao("");
+      api.get<LossReason[]>("/crm/settings/loss-reasons").then((lista) => {
+        setMotivos(lista);
+        const atual = edicao?.motivo?.toLowerCase();
+        const motivoAtual = atual ? lista.find((m) => m.descricao.toLowerCase() === atual) : undefined;
+        if (motivoAtual) setMotivoPerdaId(motivoAtual.id);
+      });
+      setObservacao(edicao?.observacao ?? "");
       setProposta(null);
       setSeguroVenceEm("");
     }
@@ -88,7 +99,7 @@ export function StageChangeDialog({
   const pedeProposta = permitirPropostaConcorrente && motivos.find((m) => m.id === motivoPerdaId)?.descricao === MOTIVO_FECHADO_NA_CONCORRENCIA;
 
   return (
-    <Modal open={open} onClose={onCancel} title={`Mover para "${etapaNome}"`} size="sm">
+    <Modal open={open} onClose={onCancel} title={edicao ? `Editar motivo — ${etapaNome}` : `Mover para "${etapaNome}"`} size="sm">
       <div className="space-y-4">
         <div>
           <Label htmlFor="motivo-perda" required>
@@ -104,7 +115,7 @@ export function StageChangeDialog({
               </option>
             ))}
           </Select>
-          {!motivoPerdaId && <p className="mt-1 text-xs text-[var(--fg-muted)]">Obrigatório para mover para "{etapaNome}".</p>}
+          {!motivoPerdaId && <p className="mt-1 text-xs text-[var(--fg-muted)]">{edicao ? "Escolha o motivo." : `Obrigatório para mover para "${etapaNome}".`}</p>}
         </div>
 
         {pedeVencimentoDoSeguro && (
@@ -159,7 +170,7 @@ export function StageChangeDialog({
             disabled={!motivoPerdaId}
             onClick={() => onConfirm({ motivoPerdaId, motivoPerdaObservacao: observacao.trim() || undefined, propostaConcorrente: pedeProposta && proposta ? proposta : undefined, seguroVenceEm: pedeVencimentoDoSeguro && seguroVenceEm ? seguroVenceEm : undefined })}
           >
-            Confirmar
+            {edicao ? "Salvar" : "Confirmar"}
           </Button>
         </div>
       </div>

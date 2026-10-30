@@ -21,7 +21,7 @@ import {
 import { Button, ConfirmDialog, EmptyState, ErrorState, Modal, Select, Skeleton, useToast } from "../../components/ui";
 import { LeadForm, leadFormVazio, paraLeadCreateRequest, type LeadFormValues } from "../../components/crm/LeadForm";
 import { VendaConcluidaDialog, type ResultadoVendaConcluida } from "../../components/crm/VendaConcluidaDialog";
-import { MOTIVOS_FOLLOW_UP, StageChangeDialog } from "../../components/crm/StageChangeDialog";
+import { MOTIVOS_FOLLOW_UP, MOTIVOS_FORA_DE_PERDIDO, StageChangeDialog } from "../../components/crm/StageChangeDialog";
 import { VeiculoNaoFazemosDialog } from "../../components/crm/VeiculoNaoFazemosDialog";
 import { AdesaoCotacaoDialog } from "../../components/crm/AdesaoCotacaoDialog";
 import { DisparoEmailDialog } from "../../components/crm/DisparoEmailDialog";
@@ -250,8 +250,9 @@ export function LeadsKanbanPage() {
   /** Formulários de venda dos outros veículos do cliente, um por vez (ver concluirVenda). */
   const [outroVeiculo, setOutroVeiculo] = useState<{ leadId: string; atual: number; total: number; cliente?: { nome: string; documento: string } } | null>(null);
   const ultimoCadastroTentado = useRef<{ documento: string }>({ documento: "" });
+  const ultimosValoresTentados = useRef<LeadFormValues | null>(null);
   const [pendenciaVenda, setPendenciaVenda] = useState<{ cartao: LeadKanbanCard; etapaId: string; indicacaoLead?: boolean } | null>(null);
-  const [pendenciaPerda, setPendenciaPerda] = useState<{ cartao: LeadKanbanCard; etapaId: string; etapaNome: string } | null>(null);
+  const [pendenciaPerda, setPendenciaPerda] = useState<{ cartao: LeadKanbanCard; etapaId: string; etapaNome: string; edicao?: boolean } | null>(null);
   const [pendenciaNaoFazemos, setPendenciaNaoFazemos] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
   const [pendenciaCotacao, setPendenciaCotacao] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
   const [etapaGanhoPipelineId, setEtapaGanhoPipelineId] = useState<string | null>(null);
@@ -514,7 +515,7 @@ export function LeadsKanbanPage() {
           notificar("error", "O lead foi movido, mas não foi possível anexar a proposta. Anexe novamente pela ficha do lead.");
         }
       }
-      notificar("success", "Etapa atualizada.");
+      notificar("success", pendenciaPerda?.edicao ? "Motivo atualizado." : "Etapa atualizada.");
       setModalMobile(null);
       setPendenciaPerda(null);
       setPendenciaNaoFazemos(null);
@@ -654,6 +655,7 @@ export function LeadsKanbanPage() {
     setSalvandoNovo(true);
     setDuplicidade(null);
     ultimoCadastroTentado.current = { documento: valores.documento };
+    ultimosValoresTentados.current = valores;
     try {
       // Lead cadastrado à mão pelo consultor vai direto pra coluna "Em atendimento" que só aceita
       // a etiqueta "Indicação" (a segunda das duas colunas de mesmo nome — ver colunasEmAtendimento).
@@ -1041,6 +1043,11 @@ export function LeadsKanbanPage() {
                       onMover={() => setModalMobile(cartao)}
                       onTrocarResponsavel={() => setTrocandoResponsavel(cartao)}
                       onExcluir={() => setLeadExcluindo(cartao)}
+                      onEditarMotivo={
+                        coluna.etapa.id && (coluna.etapa.nome === ETAPA_PERDIDO || coluna.etapa.nome === ETAPA_FOLLOW_UP)
+                          ? () => setPendenciaPerda({ cartao, etapaId: coluna.etapa.id!, etapaNome: coluna.etapa.nome, edicao: true })
+                          : undefined
+                      }
                       onDragStart={() => setCartaoArrastando(cartao)}
                       onDragEnd={() => {
                         setCartaoArrastando(null);
@@ -1067,8 +1074,9 @@ export function LeadsKanbanPage() {
       )}
 
       <Modal open={modalNovo} onClose={fecharModalNovo} title="Novo cliente" size="lg">
-        {duplicidade && (
-          <div className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-[var(--warning-soft)] px-3 py-2 text-sm text-[var(--warning)]">
+        <LeadForm valoresIniciais={leadFormVazio} salvando={salvandoNovo} onSubmit={(v) => criarLead(v)} onCancel={fecharModalNovo} idPrefix="kanban-novo"
+          avisoAntesDosBotoes={duplicidade && (
+<div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[var(--warning-soft)] px-3 py-2 text-sm text-[var(--warning)]">
             <span>
               Já existe um lead com o mesmo {duplicidade.campoDuplicado}: <strong>{duplicidade.nomeExistente}</strong>.
               {duplicidade.campoDuplicado !== "telefone" && " Se o cliente fechou outro carro, registre como outro veículo dele."}
@@ -1086,13 +1094,23 @@ export function LeadsKanbanPage() {
                   <Car className="size-4" /> Outro veículo deste cliente
                 </Button>
               )}
-              <Link to={`/app/crm/leads/${duplicidade.leadExistenteId}`} className="underline">
-                Abrir cadastro
-              </Link>
+              {duplicidade.campoDuplicado === "telefone" && (
+                <Button
+                  size="sm"
+                  disabled={salvandoNovo}
+                  onClick={() => ultimosValoresTentados.current && void criarLead(ultimosValoresTentados.current, true)}
+                >
+                  Cadastrar mesmo assim
+                </Button>
+              )}
+              {duplicidade.podeAcessar !== false && (
+                <Link to={`/app/crm/leads/${duplicidade.leadExistenteId}`} className="underline">
+                  Abrir cadastro
+                </Link>
+              )}
             </div>
           </div>
-        )}
-        <LeadForm valoresIniciais={leadFormVazio} salvando={salvandoNovo} onSubmit={(v) => criarLead(v)} onCancel={fecharModalNovo} idPrefix="kanban-novo" />
+          )} />
       </Modal>
 
       {/* Ação de mover em telas sem drag-and-drop (toque no celular) */}
@@ -1136,6 +1154,11 @@ export function LeadsKanbanPage() {
       <VendaConcluidaDialog
         open={!!novoClienteConcluido}
         novoCliente={novoClienteConcluido}
+        // Cliente (CPF/e-mail) que já é de outro consultor: a venda do carro dele vira "Outro veículo", card novo no nome de quem registra.
+        onOutroVeiculo={(c) => {
+          setNovoClienteConcluido(null);
+          setOutroVeiculo({ leadId: c.leadId, atual: 1, total: 1, cliente: { nome: c.nome, documento: c.documento } });
+        }}
         leadId={null}
         pipelineGanhoEtapaId={etapaGanhoPipelineId ?? undefined}
         etapaNome={`${ETAPA_VENDA_CONCLUIDA} (Indicação)`}
@@ -1236,8 +1259,9 @@ export function LeadsKanbanPage() {
         etapaNome={pendenciaPerda?.etapaNome ?? ETAPA_PERDIDO}
         enviando={enviando}
         permitirPropostaConcorrente={pendenciaPerda?.etapaNome === ETAPA_PERDIDO}
+        edicao={pendenciaPerda?.edicao ? { motivo: pendenciaPerda.cartao.motivoPerda ?? null, observacao: pendenciaPerda.cartao.motivoPerdaObservacao ?? null } : null}
         motivosPermitidos={pendenciaPerda?.etapaNome === ETAPA_FOLLOW_UP ? MOTIVOS_FOLLOW_UP : undefined}
-        motivosExcluidos={pendenciaPerda?.etapaNome === ETAPA_PERDIDO ? MOTIVOS_FOLLOW_UP : undefined}
+        motivosExcluidos={pendenciaPerda?.etapaNome === ETAPA_PERDIDO ? MOTIVOS_FORA_DE_PERDIDO : undefined}
         onCancel={() => setPendenciaPerda(null)}
         onConfirm={(dados) => {
           if (pendenciaPerda) moverPara(pendenciaPerda.cartao, pendenciaPerda.etapaId, dados);
