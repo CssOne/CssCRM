@@ -79,6 +79,7 @@ export function LeadsPage() {
   // O mesmo associado pode fechar uma placa com outro consultor: "Outro veículo" abre a venda sem precisar abrir o cadastro do outro (que não é dele).
   const [outroVeiculo, setOutroVeiculo] = useState<{ leadId: string; cliente: { nome: string; documento: string } } | null>(null);
   const ultimoDocumentoTentado = useRef("");
+  const ultimosValoresTentados = useRef<LeadFormValues | null>(null);
   const [recarregar, setRecarregar] = useState(0);
 
   const filtro = useMemo(
@@ -182,6 +183,7 @@ export function LeadsPage() {
     setSalvando(true);
     setDuplicidade(null);
     ultimoDocumentoTentado.current = valores.documento;
+    ultimosValoresTentados.current = valores;
     try {
       await api.post("/crm/leads", { ...paraLeadCreateRequest(valores), ignorarDuplicidade } satisfies LeadCreateRequest);
       setModalNovo(false);
@@ -475,8 +477,9 @@ export function LeadsPage() {
       )}
 
       <Modal open={modalNovo} onClose={() => { setModalNovo(false); setDuplicidade(null); }} title="Novo lead" size="lg">
-        {duplicidade && (
-          <div className="mb-4 flex items-center justify-between gap-3 rounded-lg bg-[var(--warning-soft)] px-3 py-2 text-sm text-[var(--warning)]">
+        <LeadForm valoresIniciais={leadFormVazio} salvando={salvando} onSubmit={(v) => criarLead(v)} onCancel={() => setModalNovo(false)} idPrefix="novo"
+          avisoAntesDosBotoes={duplicidade && (
+<div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[var(--warning-soft)] px-3 py-2 text-sm text-[var(--warning)]">
             <span>
               Já existe um lead com o mesmo {duplicidade.campoDuplicado}: <strong>{duplicidade.nomeExistente}</strong>.
               {duplicidade.campoDuplicado !== "telefone" && " Se o cliente fechou outro carro, registre como outro veículo dele."}
@@ -495,6 +498,16 @@ export function LeadsPage() {
                   Outro veículo deste cliente
                 </button>
               )}
+              {duplicidade.campoDuplicado === "telefone" && (
+                <button
+                  type="button"
+                  className="cursor-pointer font-semibold underline"
+                  disabled={salvando}
+                  onClick={() => ultimosValoresTentados.current && void criarLead(ultimosValoresTentados.current, true)}
+                >
+                  Cadastrar mesmo assim
+                </button>
+              )}
               {duplicidade.podeAcessar !== false && (
                 <Link to={`/app/crm/leads/${duplicidade.leadExistenteId}`} className="underline">
                   Abrir cadastro
@@ -502,8 +515,7 @@ export function LeadsPage() {
               )}
             </div>
           </div>
-        )}
-        <LeadForm valoresIniciais={leadFormVazio} salvando={salvando} onSubmit={(v) => criarLead(v)} onCancel={() => setModalNovo(false)} idPrefix="novo" />
+          )} />
       </Modal>
 
       <VendaConcluidaDialog

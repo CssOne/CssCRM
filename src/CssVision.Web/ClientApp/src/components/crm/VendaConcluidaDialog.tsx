@@ -111,6 +111,7 @@ export function VendaConcluidaDialog({
   permitirVeiculosAdicionais = false,
   novoVeiculo = false,
   novoCliente = null,
+  onOutroVeiculo,
   clienteInicial,
   tituloExtra,
   onConfirm,
@@ -147,6 +148,11 @@ export function VendaConcluidaDialog({
    * placa — aparecem uma vez). Ao confirmar, cadastra o cliente na etapa `etapaId` e conclui a venda dele.
    */
   novoCliente?: { etapaId: string } | null;
+  /**
+   * Cadastro de cliente novo que bateu com um cliente já cadastrado (CPF/e-mail): oferece lançar como "Outro veículo" dele, sem abrir o cadastro
+   * (que pode ser de outro consultor). Sem esta função, só o aviso aparece.
+   */
+  onOutroVeiculo?: (cliente: { leadId: string; nome: string; documento: string }) => void;
   /**
    * Nome e documento do cliente, para o "outro veículo" de um cliente que é de OUTRO consultor: o card original
    * não abre para quem não é dono dele, então os dados vêm do que a pessoa acabou de digitar no cadastro.
@@ -539,6 +545,22 @@ export function VendaConcluidaDialog({
     onCancel();
   }
 
+  const [duplicidade, setDuplicidade] = useState<LeadDuplicateWarning | null>(null);
+  const avisoDuplicidadeRef = useRef<HTMLDivElement>(null);
+  // O formulário é longo e rola: o aviso fica no fim, acima dos botões, e entra na tela quando aparece.
+  useEffect(() => {
+    if (duplicidade) avisoDuplicidadeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [duplicidade]);
+  /** O consultor aceitou cadastrar mesmo com o telefone de outro cliente (o servidor só deixa passar o telefone; CPF/e-mail continuam barrando). */
+  const ignorarTelefoneRepetidoRef = useRef(false);
+
+  // Ao fechar, o próximo cadastro volta a barrar telefone repetido e some o aviso.
+  useEffect(() => {
+    if (open) return;
+    ignorarTelefoneRepetidoRef.current = false;
+    setDuplicidade(null);
+  }, [open]);
+
   async function confirmar() {
     if (!ehVenda) return criarOportunidade();
     if (!leadId && !novoCliente) return;
@@ -557,6 +579,7 @@ export function VendaConcluidaDialog({
     // devolvido por cada chamada em vez do capturado quando o quadro foi carregado, senão o
     // servidor recusa por conflito de concorrência otimista.
     let rowVersionAtual = valores.rowVersion;
+    setDuplicidade(null);
 
     try {
       if (novoCliente) {
@@ -578,7 +601,11 @@ export function VendaConcluidaDialog({
             utilidadeVeiculo,
             tipoIndicacao: valores.tipoIndicacao ?? "",
           };
-          const criado = await api.post<LeadDetail>("/crm/leads", { ...paraLeadCreateRequest(formulario), etapaId: novoCliente.etapaId });
+          const criado = await api.post<LeadDetail>("/crm/leads", {
+            ...paraLeadCreateRequest(formulario),
+            etapaId: novoCliente.etapaId,
+            ignorarDuplicidade: ignorarTelefoneRepetidoRef.current,
+          });
           leadDaVenda = criado.id;
           responsavelDaVenda = criado.responsavelId ?? null;
           setNovoLeadCriadoId(criado.id);
@@ -642,8 +669,8 @@ export function VendaConcluidaDialog({
       }
     } catch (e) {
       if (e instanceof ApiRequestError && e.codigo === "duplicidade") {
-        const d = e.detalhes as LeadDuplicateWarning;
-        notificar("error", `Já existe um cliente com o mesmo ${d.campoDuplicado} (${d.nomeExistente}). Para outro veículo dele, use "Outro veículo" no card do cliente.`);
+        // Aviso dentro do formulário, com a saída certa: telefone repetido pode ser aceito; CPF/e-mail repetido é outro veículo do mesmo cliente.
+        setDuplicidade(e.detalhes as LeadDuplicateWarning);
       } else {
         notificar("error", e instanceof ApiRequestError ? e.message : "Não foi possível enviar os anexos.");
       }
@@ -1190,6 +1217,37 @@ export function VendaConcluidaDialog({
                 <li key={p}>{p}</li>
               ))}
             </ul>
+          </div>
+        )}
+        {duplicidade && (
+          <div ref={avisoDuplicidadeRef} role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[var(--warning-soft)] px-3 py-2 text-sm text-[var(--warning)]">
+            <span>
+              Já existe um cliente com o mesmo {duplicidade.campoDuplicado}: <strong>{duplicidade.nomeExistente}</strong>.
+              {duplicidade.campoDuplicado !== "telefone" && " Se ele fechou outro carro, registre como outro veículo dele."}
+            </span>
+            <div className="flex shrink-0 items-center gap-2">
+              {duplicidade.campoDuplicado === "telefone" ? (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    ignorarTelefoneRepetidoRef.current = true;
+                    setDuplicidade(null);
+                    void confirmar();
+                  }}
+                >
+                  Cadastrar mesmo assim
+                </Button>
+              ) : (
+                onOutroVeiculo && (
+                  <Button
+                    size="sm"
+                    onClick={() => onOutroVeiculo({ leadId: duplicidade.leadExistenteId, nome: duplicidade.nomeExistente, documento: valores.cpf ?? "" })}
+                  >
+                    Outro veículo deste cliente
+                  </Button>
+                )
+              )}
+            </div>
           </div>
         )}
       </div>

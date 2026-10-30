@@ -1082,12 +1082,17 @@ public sealed class NotionSyncService(
             logger.LogWarning("Status '{Status}' do Notion não tem coluna correspondente no quadro de leads; lead {LeadId} mantido na coluna atual.", statusNotion, lead.Id);
             return false;
         }
+        var descricao = string.IsNullOrWhiteSpace(motivoPerdaNotion) ? NotionEtapaLead.MotivoPerdaPadrao(statusNotion) : motivoPerdaNotion.Trim();
+        if (nomeEtapa == NotionEtapaLead.Perdido && NotionEtapaLead.EhMotivoNaoResponde(descricao)
+            && etapasAtivasPorNome.TryGetValue(NotionEtapaLead.NaoResponde, out var idNaoResponde))
+        {
+            (etapaId, nomeEtapa) = (idNaoResponde, NotionEtapaLead.NaoResponde);
+        }
         if (etapaId == lead.EtapaId) return false;
 
         lead.EtapaId = etapaId;
         if (nomeEtapa == NotionEtapaLead.Perdido)
         {
-            var descricao = string.IsNullOrWhiteSpace(motivoPerdaNotion) ? NotionEtapaLead.MotivoPerdaPadrao(statusNotion) : motivoPerdaNotion.Trim();
             lead.MotivoPerdaId = descricao is null ? null : (await ObterOuCriarMotivoPerdaAsync(descricao, ct)).Id;
             lead.MotivoPerdaObservacao = null;
             lead.VeiculoNaoAtendido = null;

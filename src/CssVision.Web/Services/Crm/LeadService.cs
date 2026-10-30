@@ -777,6 +777,8 @@ public sealed class LeadService(
 
         CrmLeadStage? novaEtapa = null;
         DateOnly? seguroVenceEm = null;
+        // Mesma coluna = edição do motivo (botão "Editar" da caixa do motivo): não é uma mudança de etapa, então não manda evento de conversão ao Meta.
+        var etapaAnteriorId = lead.EtapaId;
         if (request.NovaEtapaId.HasValue)
         {
             novaEtapa = await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Id == request.NovaEtapaId, ct)
@@ -817,6 +819,10 @@ public sealed class LeadService(
                     throw new CrmBusinessException(
                         $"O motivo '{motivo.Descricao}' vai para a coluna '{EtapaLeadFollowUp}', não para 'Perdido'.", "motivo_perda_invalido");
                 }
+                if (NotionEtapaLead.EhMotivoNaoResponde(motivo.Descricao))
+                {
+                    throw new CrmBusinessException("Cliente que não responde vai para a coluna 'Não responde', não para 'Perdido'.", "motivo_perda_invalido");
+                }
                 lead.MotivoPerdaId = motivo.Id;
                 lead.MotivoPerdaObservacao = string.IsNullOrWhiteSpace(request.MotivoPerdaObservacao) ? null : request.MotivoPerdaObservacao.Trim();
                 lead.VeiculoNaoAtendido = null;
@@ -838,7 +844,10 @@ public sealed class LeadService(
                 lead.MotivoPerdaId = motivo.Id;
                 lead.MotivoPerdaObservacao = string.IsNullOrWhiteSpace(request.MotivoPerdaObservacao) ? null : request.MotivoPerdaObservacao.Trim();
                 lead.VeiculoNaoAtendido = null;
-                seguroVenceEm = string.Equals(motivo.Descricao, MotivoJaTemSeguro, StringComparison.OrdinalIgnoreCase) ? request.SeguroVenceEm : null;
+                // Ao editar o motivo sem informar a data, a data já agendada continua valendo (trocar o motivo é que a desfaz).
+                seguroVenceEm = string.Equals(motivo.Descricao, MotivoJaTemSeguro, StringComparison.OrdinalIgnoreCase)
+                    ? request.SeguroVenceEm ?? (novaEtapa.Id == etapaAnteriorId ? lead.SeguroVenceEm : null)
+                    : null;
             }
             else if (novaEtapa.Nome == EtapaLeadNaoFazemos)
             {
@@ -891,7 +900,7 @@ public sealed class LeadService(
         // Retorno de conversão offline (CAPI): manda um evento pra toda mudança de etapa (nomeado
         // com a própria etapa) — qual delas vira otimização de campanha é escolhido no
         // Gerenciador de Anúncios, não aqui. Nunca deve bloquear a resposta desse endpoint.
-        if (novaEtapa is not null)
+        if (novaEtapa is not null && novaEtapa.Id != etapaAnteriorId)
         {
             var valorConversao = novaEtapa.Nome.StartsWith(EtapaLeadVendaConcluida, StringComparison.OrdinalIgnoreCase)
                 ? EscolherValorConversao(await ObterPagamentoAdesaoAsync(lead.Id, ct), lead.ValorAdesao)
