@@ -69,4 +69,50 @@ public class PerdidoPorMotivoTests
             new LeadKanbanColunaRequest { EtapaId = perdido.Id, MotivoPerdaId = [tabela.Id] }, CancellationToken.None);
         Assert.Equal("C", Assert.Single(pagina).NomeOuRazaoSocial);
     }
+
+    [Fact]
+    public async Task ColunaFollowUp_TemOFiltroDeMotivosDela_SemAfetarPerdido()
+    {
+        using var factory = new TestDbContextFactory();
+        await using var db = factory.CreateContext();
+        var vendedor = await factory.CriarUsuarioAsync(db, "Vendedor");
+        await factory.CriarRegionalAsync(db, "MG");
+        var perdido = await factory.ObterOuCriarEtapaLeadAsync(db, "Perdido", 5);
+        var followUp = await factory.ObterOuCriarEtapaLeadAsync(db, "Follow Up", 6);
+        var numero = new CrmLossReason { Descricao = "Número não existe" };
+        var preco = new CrmLossReason { Descricao = "Preço" };
+        var seguro = new CrmLossReason { Descricao = "Já tem seguro" };
+        db.CrmLossReasons.AddRange(numero, preco, seguro);
+
+        CrmLead Lead(string nome, Guid etapa, CrmLossReason motivo) => new()
+        {
+            NomeOuRazaoSocial = nome, TipoPessoa = TipoPessoa.Fisica, ResponsavelId = vendedor.Id, EtapaId = etapa, MotivoPerdaId = motivo.Id, Regional = "MG",
+        };
+        db.CrmLeads.AddRange(
+            Lead("P1", perdido.Id, numero), Lead("P2", perdido.Id, numero),
+            Lead("F1", followUp.Id, preco), Lead("F2", followUp.Id, seguro), Lead("F3", followUp.Id, seguro));
+        await db.SaveChangesAsync();
+
+        var service = new LeadKanbanService(db, new EquipeComercialService(db, TestDbContextFactory.MockCurrentUser(vendedor.Id).Object));
+        LeadKanbanColumnDto Coluna(LeadKanbanBoardDto b, string nome) => b.Colunas.Single(c => c.Etapa.Nome == nome);
+
+        // Cada coluna lista só os motivos dela, com a quantidade.
+        var board = await service.ObterBoardAsync(new LeadKanbanFilterRequest(), CancellationToken.None);
+        Assert.Equal(3, Coluna(board, "Follow Up").Total);
+        Assert.Equal(["Já tem seguro", "Preço"], Coluna(board, "Follow Up").MotivosPerda!.Select(m => m.Descricao).Order());
+        Assert.Equal(2, Coluna(board, "Follow Up").MotivosPerda!.Single(m => m.Descricao == "Já tem seguro").Quantidade);
+        Assert.Equal(["Número não existe"], Coluna(board, "Perdido").MotivosPerda!.Select(m => m.Descricao));
+
+        // Filtrar o Follow Up por motivo não esvazia o Perdido (o motivo escolhido não é dele), e vice-versa.
+        var porSeguro = await service.ObterBoardAsync(new LeadKanbanFilterRequest { MotivoPerdaId = [seguro.Id] }, CancellationToken.None);
+        Assert.Equal(["F2", "F3"], Coluna(porSeguro, "Follow Up").Cartoes.Select(c => c.NomeOuRazaoSocial).Order());
+        Assert.Equal(2, Coluna(porSeguro, "Perdido").Total);
+
+        var porNumero = await service.ObterBoardAsync(new LeadKanbanFilterRequest { MotivoPerdaId = [numero.Id] }, CancellationToken.None);
+        Assert.Equal(3, Coluna(porNumero, "Follow Up").Total);
+
+        // "Ver mais" do Follow Up também respeita o motivo.
+        var pagina = await service.ObterCartoesAsync(new LeadKanbanColunaRequest { EtapaId = followUp.Id, MotivoPerdaId = [preco.Id] }, CancellationToken.None);
+        Assert.Equal("F1", Assert.Single(pagina).NomeOuRazaoSocial);
+    }
 }

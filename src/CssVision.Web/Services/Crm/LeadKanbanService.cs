@@ -26,6 +26,11 @@ public sealed class LeadKanbanService(
     /// <summary>Coluna do quadro que tem o filtro por motivo — ver CrmSeeder.cs.</summary>
     private const string EtapaPerdido = "Perdido";
 
+    /// <summary>Segunda coluna com filtro por motivo (os motivos "Já tem seguro" e "Preço" vivem nela).</summary>
+    private const string EtapaFollowUp = "Follow Up";
+
+    private static bool TemFiltroDeMotivo(string nomeEtapa) => nomeEtapa is EtapaPerdido or EtapaFollowUp;
+
     /// <summary>Prefixo das colunas "Venda concluída (Leads)"/"(Indicação)".</summary>
     private const string EtapaVendaConcluida = "Venda concluída";
 
@@ -81,7 +86,7 @@ public sealed class LeadKanbanService(
         foreach (var etapa in etapas)
         {
             var dto = new LeadStageDto(etapa.Id, etapa.Nome, etapa.Ordem, etapa.Cor, etapa.Fechada, etapa.Ativa);
-            if (etapa.Nome == EtapaPerdido)
+            if (TemFiltroDeMotivo(etapa.Nome))
             {
                 colunas.Add(await ColunaPerdidoAsync(dto, query, filtro.MotivoPerdaId, porPagina, podeVerOrigem, ct));
                 continue;
@@ -127,9 +132,12 @@ public sealed class LeadKanbanService(
             .OrderByDescending(m => m.Quantidade)
             .ToList();
 
-        var filtrada = FiltrarMotivo(query, motivos);
-        var total = motivos is { Length: > 0 }
-            ? opcoes.Where(o => motivos.Contains(o.Id)).Sum(o => o.Quantidade)
+        // O filtro de motivos é um só na tela, mas cada coluna tem os seus motivos: vale para ela só o que foi escolhido entre as opções dela.
+        var idsDaColuna = opcoes.Select(o => o.Id).ToHashSet();
+        var aplicaveis = motivos?.Where(idsDaColuna.Contains).ToArray();
+        var filtrada = FiltrarMotivo(query, aplicaveis);
+        var total = aplicaveis is { Length: > 0 }
+            ? opcoes.Where(o => aplicaveis.Contains(o.Id)).Sum(o => o.Quantidade)
             : opcoes.Sum(o => o.Quantidade);
         var cartoes = total == 0 ? [] : await PaginaAsync(filtrada, etapa.Id, 0, porPagina, podeVerOrigem, ct);
         return new LeadKanbanColumnDto(etapa, cartoes, total, opcoes);
@@ -152,11 +160,13 @@ public sealed class LeadKanbanService(
                 var ehColunaDeVenda = request.EtapaId is { } idEtapa
                     && await db.CrmLeadStages.AnyAsync(s => s.Id == idEtapa && s.Nome.StartsWith(EtapaVendaConcluida), ct);
                 var (query, podeVerOrigem) = ehColunaDeVenda ? Filtrar(ParaColunaDeVenda(request), visiveis) : Filtrar(request, visiveis);
-                // "Ver mais" da coluna Perdido respeita o filtro por motivo dela.
+                // "Ver mais" das colunas com filtro por motivo (Perdido, Follow Up) respeita o filtro dela: só vale o que foi escolhido entre os motivos dessa coluna.
                 if (request.MotivoPerdaId is { Length: > 0 } && request.EtapaId is { } etapaId
-                    && await db.CrmLeadStages.AnyAsync(s => s.Id == etapaId && s.Nome == EtapaPerdido, ct))
+                    && await db.CrmLeadStages.AnyAsync(s => s.Id == etapaId && (s.Nome == EtapaPerdido || s.Nome == EtapaFollowUp), ct))
                 {
-                    query = FiltrarMotivo(query, request.MotivoPerdaId);
+                    var motivosDaColuna = await query.Where(l => l.EtapaId == etapaId && l.MotivoPerdaId != null).Select(l => l.MotivoPerdaId!.Value).Distinct().ToListAsync(ct);
+                    var aplicaveis = request.MotivoPerdaId.Where(m => m == Guid.Empty || motivosDaColuna.Contains(m)).ToArray();
+                    query = FiltrarMotivo(query, aplicaveis);
                 }
                 var quantidade = Math.Clamp(request.Quantidade, 1, MaxCartoesPorPagina);
                 return await PaginaAsync(query, request.EtapaId, Math.Max(0, request.Pular), quantidade, podeVerOrigem, ct, ordenarPorVenda: ehColunaDeVenda);

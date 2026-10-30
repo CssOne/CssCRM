@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, ChevronDown, Search, X } from "lucide-react";
+import { Check, ChevronDown, ListFilter, Search, X } from "lucide-react";
 import { paraBusca } from "../lib/busca";
 
 export interface OpcaoMultiSelect {
   valor: string;
   rotulo: string;
+  /** Texto curto à direita da opção (ex.: a quantidade), em destaque suave. */
+  detalhe?: string;
 }
 
 /**
@@ -18,12 +20,18 @@ export function MultiSelect({
   onChange,
   rotuloTodos = "Todos",
   ariaLabel,
+  cor,
 }: {
   opcoes: OpcaoMultiSelect[];
   valores: string[];
   onChange: (valores: string[]) => void;
   rotuloTodos?: string;
   ariaLabel?: string;
+  /**
+   * Com a cor (ex.: a da coluna do quadro), o botão vira uma pílula com ícone de filtro, contador de marcados e botão de limpar,
+   * e a lista ganha a mesma cor. Sem ela, é o botão do tamanho de um Select de sempre.
+   */
+  cor?: string;
 }) {
   const [aberto, setAberto] = useState(false);
   const [busca, setBusca] = useState("");
@@ -81,6 +89,7 @@ export function MultiSelect({
 
   return (
     <div ref={raizRef} className="relative">
+      <div className={cor ? "flex items-center gap-1.5" : undefined}>
       <button
         type="button"
         aria-label={ariaLabel}
@@ -105,12 +114,47 @@ export function MultiSelect({
           });
           setAberto(true);
         }}
-        className="focus-ring flex h-10 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-left text-sm text-[var(--fg)]"
+        className={
+          cor
+            ? "focus-ring flex h-9 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-full border px-1.5 text-left text-xs font-semibold text-[var(--fg)] transition-[background-color,border-color,box-shadow] duration-200 hover:shadow-sm"
+            : "focus-ring flex h-10 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-left text-sm text-[var(--fg)]"
+        }
+        style={
+          cor
+            ? {
+                borderColor: `color-mix(in srgb, ${cor} ${selecionadas.length > 0 || aberto ? 70 : 32}%, transparent)`,
+                backgroundColor: `color-mix(in srgb, ${cor} ${selecionadas.length > 0 ? 18 : 8}%, var(--surface))`,
+                boxShadow: aberto ? `0 0 0 3px color-mix(in srgb, ${cor} 22%, transparent)` : undefined,
+              }
+            : undefined
+        }
         title={selecionadas.map((o) => o.rotulo).join(", ") || undefined}
       >
-        <span className={`truncate ${selecionadas.length === 0 ? "text-[var(--fg-muted)]" : ""}`}>{resumo}</span>
-        <ChevronDown className={`size-4 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${aberto ? "rotate-180 text-[var(--brand)]" : "text-[var(--fg-muted)]"}`} aria-hidden />
+        {cor && (
+          <span className="flex size-6 shrink-0 items-center justify-center rounded-full text-white" style={{ backgroundColor: cor }} aria-hidden>
+            <ListFilter className="size-3.5" />
+          </span>
+        )}
+        <span className={`truncate ${cor ? "flex-1" : ""} ${selecionadas.length === 0 ? "text-[var(--fg-muted)]" : ""}`}>{resumo}</span>
+        {cor && selecionadas.length > 0 && (
+          <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white [font-variant-numeric:tabular-nums]" style={{ backgroundColor: cor }}>
+            {selecionadas.length}
+          </span>
+        )}
+        <ChevronDown className={`size-4 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${cor ? "mr-1" : ""} ${aberto ? "rotate-180 text-[var(--brand)]" : "text-[var(--fg-muted)]"}`} aria-hidden />
       </button>
+      {cor && selecionadas.length > 0 && (
+        <button
+          type="button"
+          aria-label="Limpar filtro"
+          title="Limpar filtro"
+          onClick={() => onChange([])}
+          className="focus-ring flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--fg-muted)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--fg)]"
+        >
+          <X className="size-3.5" aria-hidden />
+        </button>
+      )}
+      </div>
       {aberto && posicao && createPortal(
         <div
           ref={painelRef}
@@ -155,12 +199,21 @@ export function MultiSelect({
               >
                 <span
                   className={`flex size-4 shrink-0 items-center justify-center rounded border ${
-                    marcada ? "border-[var(--brand)] bg-[var(--brand)] text-white" : "border-[var(--border)]"
+                    marcada ? (cor ? "text-white" : "border-[var(--brand)] bg-[var(--brand)] text-white") : "border-[var(--border)]"
                   }`}
+                  style={cor && marcada ? { backgroundColor: cor, borderColor: cor } : undefined}
                 >
                   {marcada && <Check className="opcao-marca size-3" aria-hidden />}
                 </span>
-                {o.rotulo}
+                <span className="flex-1">{o.rotulo}</span>
+                {o.detalhe && (
+                  <span
+                    className="rounded-full px-1.5 py-0.5 text-[11px] font-bold text-[var(--fg-muted)] [font-variant-numeric:tabular-nums]"
+                    style={{ backgroundColor: cor ? `color-mix(in srgb, ${cor} 14%, transparent)` : "var(--surface-hover)" }}
+                  >
+                    {o.detalhe}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -169,6 +222,7 @@ export function MultiSelect({
               type="button"
               onClick={() => onChange([])}
               className="mt-1 w-full cursor-pointer rounded-md border-t border-[var(--border)] px-2 py-1.5 text-left text-xs font-medium text-[var(--brand)] hover:bg-[var(--surface-hover)]"
+              style={cor ? { color: cor } : undefined}
             >
               Limpar seleção
             </button>

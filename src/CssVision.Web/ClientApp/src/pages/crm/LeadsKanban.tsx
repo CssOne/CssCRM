@@ -189,6 +189,8 @@ export function LeadsKanbanPage() {
 
   const [board, setBoard] = useState<LeadKanbanBoard | null>(null);
   const [carregando, setCarregando] = useState(true);
+  /** Filtro trocado com o quadro na tela: os cartões antigos ficam (esmaecidos) até chegarem os novos. */
+  const [atualizando, setAtualizando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [recarregar, setRecarregar] = useState(0);
   const [carregandoMais, setCarregandoMais] = useState<string | null>(null);
@@ -394,8 +396,10 @@ export function LeadsKanbanPage() {
   }
 
   const carregar = useCallback(
-    (signal?: AbortSignal, silencioso = false) => {
-      if (!silencioso) setCarregando(true);
+    (signal?: AbortSignal, silencioso = false, manterTela = false) => {
+      // Trocar um filtro com o quadro já na tela não troca tudo por "esqueletos": o quadro fica onde está (rolagem, lista aberta) e só os cartões mudam.
+      if (!silencioso && !manterTela) setCarregando(true);
+      setAtualizando(manterTela && !silencioso);
       setErro(null);
       // Recarga silenciosa (tempo real): mantém as páginas que a pessoa já abriu com "Ver mais".
       const jaCarregados = silencioso ? Math.max(0, ...(boardRef.current?.colunas.map((c) => c.cartoes.length) ?? [])) : 0;
@@ -404,14 +408,14 @@ export function LeadsKanbanPage() {
         .get<LeadKanbanBoard>(`/crm/leads/kanban${toQueryString({ ...filtro, cartoesPorColuna })}`, signal)
         .then(setBoard)
         .catch((e) => { if (!isAbortError(e)) setErro(e instanceof Error ? e.message : "Não foi possível carregar o quadro de leads."); })
-        .finally(() => { if (!signal?.aborted) setCarregando(false); });
+        .finally(() => { if (!signal?.aborted) { setCarregando(false); setAtualizando(false); } });
     },
     [filtro]
   );
 
   useEffect(() => {
     const controller = new AbortController();
-    carregar(controller.signal);
+    carregar(controller.signal, false, !!boardRef.current);
     return () => controller.abort();
   }, [carregar, recarregar]);
 
@@ -937,7 +941,7 @@ export function LeadsKanbanPage() {
           description={filtrosAtivos ? "Ajuste os filtros ou cadastre um novo lead." : "Cadastre um novo lead para começar."}
         />
       ) : (
-        <div className="quadro-rolagem -mx-4 flex items-stretch gap-4 overflow-x-auto px-4 pb-3 lg:ml-0 lg:-mr-8 lg:pl-0 lg:pr-8">
+        <div aria-busy={atualizando} className={`quadro-rolagem -mx-4 flex items-stretch gap-4 overflow-x-auto px-4 pb-3 transition-opacity duration-200 lg:ml-0 lg:-mr-8 lg:pl-0 lg:pr-8 ${atualizando ? "opacity-70" : ""}`}>
           {colunasExibidas.map((coluna) => {
             const chaveColuna = coluna.etapa.id ?? "sem-etapa";
             const restantes = Math.max(0, coluna.total - coluna.cartoes.length);
@@ -1000,13 +1004,14 @@ export function LeadsKanbanPage() {
                       </Button>
                     </div>
                   )}
-                  {coluna.etapa.nome === ETAPA_PERDIDO && (
+                  {(coluna.etapa.nome === ETAPA_PERDIDO || coluna.etapa.nome === ETAPA_FOLLOW_UP) && (
                     <div className="border-b border-[var(--border)] px-3 py-2">
-                      {/* Filtro só desta coluna: soma-se aos filtros de cima (as quantidades já os respeitam). */}
+                      {/* Filtro só desta coluna: soma-se aos filtros de cima (as quantidades já os respeitam). Cada coluna usa os motivos dela. */}
                       <MultiSelect
-                        ariaLabel="Filtrar perdidos por motivo"
+                        ariaLabel={coluna.etapa.nome === ETAPA_FOLLOW_UP ? "Filtrar o follow up por motivo" : "Filtrar perdidos por motivo"}
                         rotuloTodos="Todos os motivos"
-                        opcoes={(coluna.motivosPerda ?? []).map((m) => ({ valor: m.id, rotulo: `${m.descricao} (${m.quantidade.toLocaleString("pt-BR")})` }))}
+                        cor={cor}
+                        opcoes={(coluna.motivosPerda ?? []).map((m) => ({ valor: m.id, rotulo: m.descricao, detalhe: m.quantidade.toLocaleString("pt-BR") }))}
                         valores={motivoPerdaId}
                         onChange={setMotivoPerdaId}
                       />
