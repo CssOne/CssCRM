@@ -15,7 +15,8 @@ public sealed class PublicLeadIntakeService(
     ApplicationDbContext db,
     ILeadAssignmentService assignment,
     ILogger<PublicLeadIntakeService> logger,
-    ICrmEventHub? eventos = null) : IPublicLeadIntakeService
+    ICrmEventHub? eventos = null,
+    ILeadBoasVindasEmailService? boasVindas = null) : IPublicLeadIntakeService
 {
     /// <summary>
     /// form_ids do formulário de caminhão: são leads de AGV TRUCK mesmo que o formulário não mande o
@@ -159,6 +160,9 @@ public sealed class PublicLeadIntakeService(
         eventos?.PublicarQuadroAtualizado("site");
 
         logger.LogInformation("Lead {LeadId} criado via formulário do site (projeto {Projeto})", lead.Id, request.Projeto);
+
+        // Lead novo e já com consultor: e-mail de boas-vindas na hora (em segundo plano; não atrasa a resposta do formulário).
+        if (responsavelId is not null) boasVindas?.DispararEmSegundoPlano(lead.Id);
 
         return await MontarResultadoAsync(lead.Id, responsavelId, ct);
     }

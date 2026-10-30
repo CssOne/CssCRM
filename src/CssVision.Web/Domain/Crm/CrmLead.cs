@@ -27,6 +27,9 @@ public class CrmLead : CrmArchivableEntity
     /// <summary>Quando o cliente pediu para não receber mais e-mails do disparo (link no rodapé). Vale para todos os cards com o mesmo e-mail.</summary>
     public DateTimeOffset? EmailDescadastradoEm { get; set; }
 
+    /// <summary>Quando o e-mail de boas-vindas (consultor + como funciona a Universo AGV) saiu para este lead. Nulo = não enviado; impede envio repetido.</summary>
+    public DateTimeOffset? BoasVindasEmailEnviadoEm { get; set; }
+
     public DateOnly? DataNascimento { get; set; }
 
     public string? Cidade { get; set; }

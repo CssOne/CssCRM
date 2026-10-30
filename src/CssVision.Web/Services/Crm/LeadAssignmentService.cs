@@ -8,7 +8,8 @@ using Microsoft.Extensions.Options;
 namespace CssVision.Web.Services.Crm;
 
 public sealed class LeadAssignmentService(
-    ApplicationDbContext db, ICrmEventHub? eventos = null, TimeProvider? relogio = null, IOptions<DistribuicaoOptions>? opcoes = null) : ILeadAssignmentService
+    ApplicationDbContext db, ICrmEventHub? eventos = null, TimeProvider? relogio = null, IOptions<DistribuicaoOptions>? opcoes = null,
+    ILeadBoasVindasEmailService? boasVindas = null) : ILeadAssignmentService
 {
     /// <summary>Regionais exclusivas (nomes normalizados): seus consultores só recebem leads marcados com a regional.</summary>
     private HashSet<string> RegionaisExclusivas =>
@@ -191,6 +192,8 @@ public sealed class LeadAssignmentService(
             lead.ResponsavelId = responsavelId;
             await db.SaveChangesAsync(ct); // um por vez: o rodízio olha quantos cada um já recebeu
             distribuidos++;
+            // Lead que só ganhou consultor agora (ficou na espera): e-mail de boas-vindas, se chegou há pouco — não para lead antigo.
+            if (lead.CriadoEm >= Agora.AddHours(-6)) boasVindas?.DispararEmSegundoPlano(lead.Id);
         }
 
         if (distribuidos > 0) eventos?.PublicarQuadroAtualizado("distribuicao");

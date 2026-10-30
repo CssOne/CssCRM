@@ -32,6 +32,8 @@ services:
       CssOne__ApiKey: ${CSSONE_API_KEY:-}
       # Rodízio de leads por regional: leads sem regional não vão para consultores da MG134 (ver DistribuicaoOptions).
       Distribuicao__RegionaisExclusivas__0: MG134
+      # E-mail de boas-vindas ao lead novo (consultor + como funciona a Universo AGV). Desligado até o e-mail do sistema (SES) estar pronto: BOAS_VINDAS_EMAIL_ATIVO=true no .env do servidor.
+      BoasVindasEmail__Ativo: ${BOAS_VINDAS_EMAIL_ATIVO:-false}
       # Pixels extras da Meta (CAPI). Vale a primeira entrada que bater, na ordem dos números; o pixel padrão é
       # MetaCapi__PixelId acima. Os tokens vêm do Secrets Manager (via .env), nunca escritos aqui.
       MetaCapi__PixelsPorOQue__0__OQue: AGV TRUCK

@@ -1828,6 +1828,9 @@ namespace CssVision.Web.Data.Migrations
                     b.Property<Guid?>("AtualizadoPorId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTimeOffset?>("BoasVindasEmailEnviadoEm")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Campanha")
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
