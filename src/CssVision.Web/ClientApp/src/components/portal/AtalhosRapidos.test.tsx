@@ -23,14 +23,14 @@ describe("AtalhosRapidos", () => {
     papeisDoUsuario = ["Admin"];
   });
 
-  it("consultor não vê os atalhos do Controle financeiro (adesões a receber e controle financeiro)", async () => {
+  it("consultor também vê os atalhos do Controle financeiro (adesões a receber e controle financeiro)", async () => {
     papeisDoUsuario = ["Comercial"];
     get.mockResolvedValue([]);
     abrir();
 
     expect(screen.getByRole("link", { name: /Novo cliente/ })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Adesões a receber/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Controle financeiro/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Adesões a receber/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Controle financeiro/ })).toBeInTheDocument();
     await waitFor(() => expect(get).toHaveBeenCalled());
   });
 

@@ -156,8 +156,8 @@ export default function App() {
       <Route path="/app/portal" element={<RotaProtegida><PortalDashboardPage /></RotaProtegida>} />
       <Route path="/app/portal/clientes" element={<RotaProtegida><PortalClientesPage /></RotaProtegida>} />
       <Route path="/app/portal/propostas" element={<RotaProtegida><PortalPropostasPage /></RotaProtegida>} />
-      {/* Controle financeiro: só Financeiro, administrador e gestor. */}
-      <Route path="/app/portal/controle-financeiro" element={<RotaProtegida papeis={PAPEIS_GESTAO_FINANCEIRA}><PortalControleFinanceiroPage /></RotaProtegida>} />
+      {/* Controle financeiro: o consultor vê só os próprios números; a gestão escolhe o consultor (o servidor garante). */}
+      <Route path="/app/portal/controle-financeiro" element={<RotaProtegida><PortalControleFinanceiroPage /></RotaProtegida>} />
       <Route path="/app/portal/configuracoes" element={<RotaProtegida><ConfiguracoesPage /></RotaProtegida>} />
 
       <Route

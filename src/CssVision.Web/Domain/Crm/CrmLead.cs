@@ -95,6 +95,18 @@ public class CrmLead : CrmArchivableEntity
     /// <summary>Explicação livre do consultor sobre a perda, complementar ao motivo pré-cadastrado (MotivoPerda).</summary>
     public string? MotivoPerdaObservacao { get; set; }
 
+    /// <summary>Quando o seguro do associado vence (opcional, no Follow Up por "Já tem seguro"): nesse dia o consultor é avisado e há uma atividade no calendário dele.</summary>
+    public DateOnly? SeguroVenceEm { get; set; }
+
+    /// <summary>Dia do vencimento para o qual o aviso já foi enviado (evita avisar duas vezes).</summary>
+    public DateOnly? SeguroAvisoEnviadoEm { get; set; }
+
+    /// <summary>Atividade do calendário criada para o vencimento do seguro (cancelada se o lead sair do Follow Up ou a data mudar).</summary>
+    public Guid? SeguroAtividadeId { get; set; }
+
+    /// <summary>Proposta do concorrente anexada pelo consultor quando o motivo da perda é "Fechado na Concorrência" (URL do armazenamento).</summary>
+    public string? PropostaConcorrenteUrl { get; set; }
+
     /// <summary>Modelo do veículo que motivou mover o lead para a etapa "Não fazemos" (veículo fora do que a CSS Brasil atende).</summary>
     public string? VeiculoNaoAtendido { get; set; }
 

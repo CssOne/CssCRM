@@ -8,6 +8,7 @@ using CssVision.Web.Domain.Crm;
 using CssVision.Web.Domain.Identity;
 using CssVision.Web.Services.Marketing;
 using CssVision.Web.Services.Notion;
+using CssVision.Web.Services.Storage;
 using Microsoft.EntityFrameworkCore;
 
 namespace CssVision.Web.Services.Crm;
@@ -20,7 +21,8 @@ public sealed class LeadService(
     IMetaConversionService conversion,
     IAuditSink audit,
     ICrmEventHub? eventos = null,
-    Microsoft.Extensions.Options.IOptions<DistribuicaoOptions>? distribuicao = null) : ILeadService
+    Microsoft.Extensions.Options.IOptions<DistribuicaoOptions>? distribuicao = null,
+    IFileStorageService? armazenamento = null) : ILeadService
 {
     /// <summary>Nome da etapa terminal "perdida" do quadro de leads — ver CrmSeeder.cs. CrmLeadStage
     /// não tem um enum de tipo como CrmPipelineStage, então a identidade da etapa é pelo nome mesmo.</summary>
@@ -28,6 +30,20 @@ public sealed class LeadService(
 
     /// <summary>Nome da etapa "veículo fora do que a CSS Brasil atende" do quadro de leads — ver CrmSeeder.cs.</summary>
     private const string EtapaLeadNaoFazemos = "Não fazemos";
+
+    /// <summary>Motivo de perda que aceita a proposta do concorrente anexada — ver CrmSeeder.cs.</summary>
+    private const string MotivoFechadoNaConcorrencia = "Fechado na Concorrência";
+
+    /// <summary>Etapa do quadro para onde vão os leads que o consultor vai retomar; exige um dos <see cref="MotivosFollowUp"/>.</summary>
+    private const string EtapaLeadFollowUp = "Follow Up";
+
+    /// <summary>Motivo do Follow Up que aceita a data de vencimento do seguro do associado.</summary>
+    private const string MotivoJaTemSeguro = "Já tem seguro";
+
+    /// <summary>Motivos aceitos em "Follow Up" — e só neles: "Perdido" não aceita estes motivos.</summary>
+    private static readonly string[] MotivosFollowUp = ["Já tem seguro", "Preço"];
+
+    private static readonly string[] ExtensoesPropostaPermitidas = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
 
     /// <summary>
     /// Prefixo das etapas "Venda concluída (Leads)"/"Venda concluída (Indicação)" — é quando o
@@ -760,6 +776,7 @@ public sealed class LeadService(
         db.Entry(lead).Property(l => l.RowVersion).OriginalValue = request.RowVersion;
 
         CrmLeadStage? novaEtapa = null;
+        DateOnly? seguroVenceEm = null;
         if (request.NovaEtapaId.HasValue)
         {
             novaEtapa = await db.CrmLeadStages.FirstOrDefaultAsync(s => s.Id == request.NovaEtapaId, ct)
@@ -795,9 +812,33 @@ public sealed class LeadService(
 
                 var motivo = await db.CrmLossReasons.FirstOrDefaultAsync(m => m.Id == request.MotivoPerdaId, ct)
                     ?? throw new CrmNotFoundException("Motivo de perda", request.MotivoPerdaId.Value);
+                if (MotivosFollowUp.Contains(motivo.Descricao, StringComparer.OrdinalIgnoreCase))
+                {
+                    throw new CrmBusinessException(
+                        $"O motivo '{motivo.Descricao}' vai para a coluna '{EtapaLeadFollowUp}', não para 'Perdido'.", "motivo_perda_invalido");
+                }
                 lead.MotivoPerdaId = motivo.Id;
                 lead.MotivoPerdaObservacao = string.IsNullOrWhiteSpace(request.MotivoPerdaObservacao) ? null : request.MotivoPerdaObservacao.Trim();
                 lead.VeiculoNaoAtendido = null;
+            }
+            else if (novaEtapa.Nome == EtapaLeadFollowUp)
+            {
+                if (request.MotivoPerdaId is null)
+                {
+                    throw new CrmBusinessException("Informe o motivo ao mover para 'Follow Up'.", "motivo_perda_obrigatorio");
+                }
+
+                var motivo = await db.CrmLossReasons.FirstOrDefaultAsync(m => m.Id == request.MotivoPerdaId, ct)
+                    ?? throw new CrmNotFoundException("Motivo de perda", request.MotivoPerdaId.Value);
+                if (!MotivosFollowUp.Contains(motivo.Descricao, StringComparer.OrdinalIgnoreCase))
+                {
+                    throw new CrmBusinessException(
+                        $"Para 'Follow Up' escolha um destes motivos: {string.Join(", ", MotivosFollowUp)}.", "motivo_perda_invalido");
+                }
+                lead.MotivoPerdaId = motivo.Id;
+                lead.MotivoPerdaObservacao = string.IsNullOrWhiteSpace(request.MotivoPerdaObservacao) ? null : request.MotivoPerdaObservacao.Trim();
+                lead.VeiculoNaoAtendido = null;
+                seguroVenceEm = string.Equals(motivo.Descricao, MotivoJaTemSeguro, StringComparison.OrdinalIgnoreCase) ? request.SeguroVenceEm : null;
             }
             else if (novaEtapa.Nome == EtapaLeadNaoFazemos)
             {
@@ -826,6 +867,15 @@ public sealed class LeadService(
             lead.VeiculoNaoAtendido = null;
         }
 
+        await AtualizarVencimentoDoSeguroAsync(lead, seguroVenceEm, ct);
+
+        // A proposta do concorrente só vale enquanto o lead está perdido por "Fechado na Concorrência".
+        if (lead.PropostaConcorrenteUrl is not null && !await PerdidoParaConcorrenciaAsync(lead, ct))
+        {
+            if (armazenamento is not null) await armazenamento.ExcluirSeExistirAsync(lead.PropostaConcorrenteUrl, ct);
+            lead.PropostaConcorrenteUrl = null;
+        }
+
         try
         {
             await db.SaveChangesAsync(ct);
@@ -848,6 +898,76 @@ public sealed class LeadService(
                 : null;
             await conversion.EnviarEventoEtapaAsync(lead, novaEtapa.Id, novaEtapa.Nome, ct, valorConversao);
         }
+
+        return await ObterPorIdAsync(lead.Id, ct);
+    }
+
+    /// <summary>
+    /// Vencimento do seguro do associado ("Follow Up" por "Já tem seguro"): guarda a data e cria a atividade no calendário do consultor responsável,
+    /// naquele dia. Data nova substitui a anterior (a atividade antiga é cancelada); sem data, ou fora do Follow Up, nada fica agendado. No dia, o
+    /// aviso sai pelo SeguroVencimentoNotificador.
+    /// </summary>
+    private async Task AtualizarVencimentoDoSeguroAsync(CrmLead lead, DateOnly? novaData, CancellationToken ct)
+    {
+        if (novaData == lead.SeguroVenceEm && (novaData is null || lead.SeguroAtividadeId is not null)) return;
+
+        if (lead.SeguroAtividadeId is { } antigaId)
+        {
+            var antiga = await db.CrmActivities.FirstOrDefaultAsync(a => a.Id == antigaId, ct);
+            if (antiga is { Status: StatusAtividade.Pendente }) antiga.Status = StatusAtividade.Cancelada;
+            lead.SeguroAtividadeId = null;
+        }
+
+        lead.SeguroVenceEm = novaData;
+        lead.SeguroAvisoEnviadoEm = null;
+        if (novaData is null || lead.ResponsavelId is not { } responsavelId) return;
+
+        var atividade = new CrmActivity
+        {
+            LeadId = lead.Id,
+            ResponsavelId = responsavelId,
+            Tipo = TipoAtividade.Retorno,
+            Assunto = $"Seguro vence hoje — retomar contato com {lead.NomeOuRazaoSocial}",
+            Descricao = "O associado informou que já tem seguro; este é o dia em que ele vence. Faça o follow up.",
+            DataHoraPrevista = HorarioBrasilia.Inicio(novaData.Value).AddHours(9),
+        };
+        db.CrmActivities.Add(atividade);
+        lead.SeguroAtividadeId = atividade.Id;
+    }
+
+    private async Task<bool> PerdidoParaConcorrenciaAsync(CrmLead lead, CancellationToken ct) =>
+        lead.MotivoPerdaId is { } motivoId
+        && lead.EtapaId is { } etapaId
+        && await db.CrmLeadStages.AnyAsync(s => s.Id == etapaId && s.Nome == EtapaLeadPerdido, ct)
+        && await db.CrmLossReasons.AnyAsync(m => m.Id == motivoId && m.Descricao == MotivoFechadoNaConcorrencia, ct);
+
+    public async Task<LeadDetailDto> AnexarPropostaConcorrenteAsync(Guid id, IFormFile arquivo, CancellationToken ct)
+    {
+        var lead = await CarregarComEscopoAsync(id, ct);
+        if (armazenamento is null) throw new InvalidOperationException("Armazenamento de arquivos não configurado.");
+        if (!await PerdidoParaConcorrenciaAsync(lead, ct))
+        {
+            throw new CrmBusinessException(
+                $"A proposta do concorrente só pode ser anexada a um lead perdido por '{MotivoFechadoNaConcorrencia}'.", "proposta_concorrente_motivo_invalido");
+        }
+        if (arquivo is null || arquivo.Length == 0) throw new CrmBusinessException("Selecione um arquivo.", "anexo_invalido");
+        if (arquivo.Length > 10 * 1024 * 1024) throw new CrmBusinessException("O arquivo deve ter no máximo 10 MB.", "anexo_invalido");
+
+        var extensao = Path.GetExtension(arquivo.FileName).ToLowerInvariant();
+        if (!ExtensoesPropostaPermitidas.Contains(extensao))
+        {
+            throw new CrmBusinessException("Formato inválido. Envie um PDF, JPG, PNG ou WEBP.", "anexo_invalido");
+        }
+
+        await using var stream = arquivo.OpenReadStream();
+        if (!await AssinaturaDeArquivo.ConfereAsync(stream, extensao, ct))
+        {
+            throw new CrmBusinessException("O conteúdo do arquivo não corresponde ao formato. Envie um PDF, JPG, PNG ou WEBP válido.", "anexo_invalido");
+        }
+
+        await armazenamento.ExcluirSeExistirAsync(lead.PropostaConcorrenteUrl, ct);
+        lead.PropostaConcorrenteUrl = await armazenamento.SalvarAsync($"leads/{lead.Id}", $"proposta-concorrente{extensao}", stream, arquivo.ContentType, ct);
+        await db.SaveChangesAsync(ct);
 
         return await ObterPorIdAsync(lead.Id, ct);
     }
@@ -1524,5 +1644,7 @@ public sealed class LeadService(
         lead.UtmCampaign,
         lead.VeiculoAdicionalDeLeadId,
         lead.VeiculoAdicionalDeLead?.NomeOuRazaoSocial,
-        DocumentValidation.FormatarDocumento(lead.VeiculoAdicionalDeLead?.DocumentoNormalizado));
+        DocumentValidation.FormatarDocumento(lead.VeiculoAdicionalDeLead?.DocumentoNormalizado),
+        lead.PropostaConcorrenteUrl,
+        lead.SeguroVenceEm);
 }

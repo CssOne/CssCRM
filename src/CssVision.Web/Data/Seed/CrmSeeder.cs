@@ -16,9 +16,10 @@ public static class CrmSeeder
                 new CrmLeadStage { Nome = "Pré-cadastro", Ordem = 3, Cor = "#64748b" },
                 new CrmLeadStage { Nome = "Venda concluída", Ordem = 4, Cor = "#22c55e", Fechada = true },
                 new CrmLeadStage { Nome = "Perdido", Ordem = 5, Cor = "#ef4444", Fechada = true },
-                new CrmLeadStage { Nome = "Não responde", Ordem = 6, Cor = "#f97316" },
-                new CrmLeadStage { Nome = "Não fazemos", Ordem = 7, Cor = "#6b7280", Fechada = true },
-                new CrmLeadStage { Nome = "Recusa/Inativa", Ordem = 8, Cor = "#b91c1c", Fechada = true }
+                new CrmLeadStage { Nome = "Follow Up", Ordem = 6, Cor = "#8b5cf6" },
+                new CrmLeadStage { Nome = "Não responde", Ordem = 7, Cor = "#f97316" },
+                new CrmLeadStage { Nome = "Não fazemos", Ordem = 8, Cor = "#6b7280", Fechada = true },
+                new CrmLeadStage { Nome = "Recusa/Inativa", Ordem = 9, Cor = "#b91c1c", Fechada = true }
             );
         }
 
@@ -40,12 +41,11 @@ public static class CrmSeeder
         {
             db.CrmLossReasons.AddRange(
                 new CrmLossReason { Descricao = "Preço" },
-                new CrmLossReason { Descricao = "Concorrência" },
+                new CrmLossReason { Descricao = "Já tem seguro" },
+                new CrmLossReason { Descricao = "Fechado na Concorrência" },
                 new CrmLossReason { Descricao = "Sem orçamento" },
-                new CrmLossReason { Descricao = "Sem resposta do cliente" },
                 new CrmLossReason { Descricao = "Fora do perfil" },
-                new CrmLossReason { Descricao = "Número não existe" },
-                new CrmLossReason { Descricao = "Fora da tabela de aceitação" }
+                new CrmLossReason { Descricao = "Número não existe" }
             );
         }
 

@@ -2,7 +2,7 @@ import { ArrowRightLeft, Bookmark, List, Mail, Plus, RotateCcw, Trash2, X, Car }
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { acaoDoQuadro, PARAM_ACAO } from "../../lib/atalhosRapidos";
-import { api, ApiRequestError, isAbortError, toQueryString } from "../../lib/api";
+import { api, ApiRequestError, isAbortError, toQueryString, uploadFile } from "../../lib/api";
 import {
   TipoEtapaPipeline,
   type LeadCreateRequest,
@@ -21,7 +21,7 @@ import {
 import { Button, ConfirmDialog, EmptyState, ErrorState, Modal, Select, Skeleton, useToast } from "../../components/ui";
 import { LeadForm, leadFormVazio, paraLeadCreateRequest, type LeadFormValues } from "../../components/crm/LeadForm";
 import { VendaConcluidaDialog, type ResultadoVendaConcluida } from "../../components/crm/VendaConcluidaDialog";
-import { StageChangeDialog } from "../../components/crm/StageChangeDialog";
+import { MOTIVOS_FOLLOW_UP, StageChangeDialog } from "../../components/crm/StageChangeDialog";
 import { VeiculoNaoFazemosDialog } from "../../components/crm/VeiculoNaoFazemosDialog";
 import { AdesaoCotacaoDialog } from "../../components/crm/AdesaoCotacaoDialog";
 import { DisparoEmailDialog } from "../../components/crm/DisparoEmailDialog";
@@ -44,6 +44,7 @@ const ETAPA_EM_ATENDIMENTO = "Em atendimento";
 const ETAPA_VENDA_CONCLUIDA = "Venda concluída";
 /** Nome da etapa terminal "perdida" do quadro de leads — mesma lógica de ETAPA_VENDA_CONCLUIDA acima. */
 const ETAPA_PERDIDO = "Perdido";
+const ETAPA_FOLLOW_UP = "Follow Up";
 /** Nome da etapa "veículo fora do que a CSS Brasil atende" — mesma lógica de ETAPA_VENDA_CONCLUIDA acima. */
 const ETAPA_NAO_FAZEMOS = "Não fazemos";
 /** Etapa que exige o valor da adesão (o servidor também recusa sem ele — ver LeadService.MudarEtapaAsync). */
@@ -248,7 +249,7 @@ export function LeadsKanbanPage() {
   const [outroVeiculo, setOutroVeiculo] = useState<{ leadId: string; atual: number; total: number; cliente?: { nome: string; documento: string } } | null>(null);
   const ultimoCadastroTentado = useRef<{ documento: string }>({ documento: "" });
   const [pendenciaVenda, setPendenciaVenda] = useState<{ cartao: LeadKanbanCard; etapaId: string; indicacaoLead?: boolean } | null>(null);
-  const [pendenciaPerda, setPendenciaPerda] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
+  const [pendenciaPerda, setPendenciaPerda] = useState<{ cartao: LeadKanbanCard; etapaId: string; etapaNome: string } | null>(null);
   const [pendenciaNaoFazemos, setPendenciaNaoFazemos] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
   const [pendenciaCotacao, setPendenciaCotacao] = useState<{ cartao: LeadKanbanCard; etapaId: string } | null>(null);
   const [etapaGanhoPipelineId, setEtapaGanhoPipelineId] = useState<string | null>(null);
@@ -494,13 +495,21 @@ export function LeadsKanbanPage() {
   async function moverPara(
     cartao: LeadKanbanCard,
     etapaId: string | null,
-    extra?: { motivoPerdaId?: string; motivoPerdaObservacao?: string; veiculoNaoAtendido?: string; valorAdesao?: number }
+    extra?: { motivoPerdaId?: string; motivoPerdaObservacao?: string; veiculoNaoAtendido?: string; valorAdesao?: number; propostaConcorrente?: File; seguroVenceEm?: string }
   ) {
     const boardAnterior = boardRef.current;
     moverCartaoLocal(cartao.leadId, etapaId);
     setEnviando(true);
     try {
-      await api.post(`/crm/leads/${cartao.leadId}/stage`, { novaEtapaId: etapaId, rowVersion: cartao.rowVersion, ...extra });
+      const { propostaConcorrente, ...dados } = extra ?? {};
+      await api.post(`/crm/leads/${cartao.leadId}/stage`, { novaEtapaId: etapaId, rowVersion: cartao.rowVersion, ...dados });
+      if (propostaConcorrente) {
+        try {
+          await uploadFile(`/crm/leads/${cartao.leadId}/proposta-concorrente`, propostaConcorrente);
+        } catch {
+          notificar("error", "O lead foi movido, mas não foi possível anexar a proposta. Anexe novamente pela ficha do lead.");
+        }
+      }
       notificar("success", "Etapa atualizada.");
       setModalMobile(null);
       setPendenciaPerda(null);
@@ -612,9 +621,9 @@ export function LeadsKanbanPage() {
       }
       setModalMobile(null);
       setPendenciaVenda({ cartao, etapaId });
-    } else if (etapaId && etapa?.nome === ETAPA_PERDIDO) {
+    } else if (etapaId && (etapa?.nome === ETAPA_PERDIDO || etapa?.nome === ETAPA_FOLLOW_UP)) {
       setModalMobile(null);
-      setPendenciaPerda({ cartao, etapaId });
+      setPendenciaPerda({ cartao, etapaId, etapaNome: etapa.nome });
     } else if (etapaId && etapa?.nome === ETAPA_NAO_FAZEMOS) {
       setModalMobile(null);
       setPendenciaNaoFazemos({ cartao, etapaId });
@@ -928,7 +937,7 @@ export function LeadsKanbanPage() {
           description={filtrosAtivos ? "Ajuste os filtros ou cadastre um novo lead." : "Cadastre um novo lead para começar."}
         />
       ) : (
-        <div className="-mx-4 flex items-stretch gap-4 overflow-x-auto px-4 pb-3 lg:ml-0 lg:-mr-8 lg:pl-0 lg:pr-8">
+        <div className="quadro-rolagem -mx-4 flex items-stretch gap-4 overflow-x-auto px-4 pb-3 lg:ml-0 lg:-mr-8 lg:pl-0 lg:pr-8">
           {colunasExibidas.map((coluna) => {
             const chaveColuna = coluna.etapa.id ?? "sem-etapa";
             const restantes = Math.max(0, coluna.total - coluna.cartoes.length);
@@ -1219,8 +1228,11 @@ export function LeadsKanbanPage() {
       <StageChangeDialog
         open={!!pendenciaPerda}
         tipo={pendenciaPerda ? "perdido" : null}
-        etapaNome={ETAPA_PERDIDO}
+        etapaNome={pendenciaPerda?.etapaNome ?? ETAPA_PERDIDO}
         enviando={enviando}
+        permitirPropostaConcorrente={pendenciaPerda?.etapaNome === ETAPA_PERDIDO}
+        motivosPermitidos={pendenciaPerda?.etapaNome === ETAPA_FOLLOW_UP ? MOTIVOS_FOLLOW_UP : undefined}
+        motivosExcluidos={pendenciaPerda?.etapaNome === ETAPA_PERDIDO ? MOTIVOS_FOLLOW_UP : undefined}
         onCancel={() => setPendenciaPerda(null)}
         onConfirm={(dados) => {
           if (pendenciaPerda) moverPara(pendenciaPerda.cartao, pendenciaPerda.etapaId, dados);

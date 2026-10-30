@@ -123,7 +123,7 @@ public sealed class LeadKanbanService(
             .Select(g => new { g.Key.MotivoPerdaId, g.Key.Descricao, Quantidade = g.Count() })
             .ToListAsync(ct);
         var opcoes = porMotivo
-            .Select(m => new LeadKanbanMotivoPerdaDto(m.MotivoPerdaId ?? Guid.Empty, m.Descricao ?? "Sem motivo informado", m.Quantidade))
+            .Select(m => new LeadKanbanMotivoPerdaDto(m.MotivoPerdaId ?? Guid.Empty, m.Descricao ?? "Notion", m.Quantidade))
             .OrderByDescending(m => m.Quantidade)
             .ToList();
 

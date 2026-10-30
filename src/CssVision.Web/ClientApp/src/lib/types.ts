@@ -491,6 +491,10 @@ export interface LeadDetail {
   motivoPerdaDescricao?: string | null;
   motivoPerdaObservacao?: string | null;
   veiculoNaoAtendido?: string | null;
+  /** Proposta do concorrente anexada na perda por "Fechado na Concorrência". */
+  propostaConcorrenteUrl?: string | null;
+  /** Vencimento do seguro do associado (Follow Up por "Já tem seguro"), AAAA-MM-DD. */
+  seguroVenceEm?: string | null;
   responsavelId?: string | null;
   responsavelNome?: string | null;
   observacoes?: string | null;
