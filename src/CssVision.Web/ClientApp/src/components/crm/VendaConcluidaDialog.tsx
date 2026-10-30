@@ -378,6 +378,23 @@ export function VendaConcluidaDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [valores.pagamentoAdesao, temRastreador, temVistoria, valores.veiculo?.rastreador, valores.veiculo?.valorVistoria]);
 
+  // Estes hooks ficam antes do `return null` abaixo: hook depois de retorno condicional quebra a tela ao abrir o diálogo.
+  const [duplicidade, setDuplicidade] = useState<LeadDuplicateWarning | null>(null);
+  const avisoDuplicidadeRef = useRef<HTMLDivElement>(null);
+  // O formulário é longo e rola: o aviso fica no fim, acima dos botões, e entra na tela quando aparece.
+  useEffect(() => {
+    if (duplicidade) avisoDuplicidadeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [duplicidade]);
+  /** O consultor aceitou cadastrar mesmo com o telefone de outro cliente (o servidor só deixa passar o telefone; CPF/e-mail continuam barrando). */
+  const ignorarTelefoneRepetidoRef = useRef(false);
+
+  // Ao fechar, o próximo cadastro volta a barrar telefone repetido e some o aviso.
+  useEffect(() => {
+    if (open) return;
+    ignorarTelefoneRepetidoRef.current = false;
+    setDuplicidade(null);
+  }, [open]);
+
   if (!open) return null;
 
   function set<K extends keyof DadosVendaConcluida>(campo: K, valor: DadosVendaConcluida[K]) {
@@ -544,22 +561,6 @@ export function VendaConcluidaDialog({
     if (rascunho) await api.del(`/crm/opportunities/${rascunho.id}`).catch(() => undefined);
     onCancel();
   }
-
-  const [duplicidade, setDuplicidade] = useState<LeadDuplicateWarning | null>(null);
-  const avisoDuplicidadeRef = useRef<HTMLDivElement>(null);
-  // O formulário é longo e rola: o aviso fica no fim, acima dos botões, e entra na tela quando aparece.
-  useEffect(() => {
-    if (duplicidade) avisoDuplicidadeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [duplicidade]);
-  /** O consultor aceitou cadastrar mesmo com o telefone de outro cliente (o servidor só deixa passar o telefone; CPF/e-mail continuam barrando). */
-  const ignorarTelefoneRepetidoRef = useRef(false);
-
-  // Ao fechar, o próximo cadastro volta a barrar telefone repetido e some o aviso.
-  useEffect(() => {
-    if (open) return;
-    ignorarTelefoneRepetidoRef.current = false;
-    setDuplicidade(null);
-  }, [open]);
 
   async function confirmar() {
     if (!ehVenda) return criarOportunidade();
