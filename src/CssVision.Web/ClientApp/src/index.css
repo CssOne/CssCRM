@@ -266,6 +266,29 @@ body {
   background-color: var(--brand);
   border-width: 2px;
 }
+/*
+ * Barra horizontal do quadro de leads: sempre visível, mais grossa e no azul do menu lateral (as demais barras só aparecem ao passar o mouse).
+ * Só os pseudo-elementos ::-webkit-scrollbar do próprio quadro: "scrollbar-color" herdaria para as colunas e mudaria a barra vertical delas.
+ */
+.quadro-rolagem::-webkit-scrollbar {
+  height: 14px;
+}
+.quadro-rolagem::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--sidebar-bg) 16%, transparent);
+  border-radius: 999px;
+}
+.quadro-rolagem::-webkit-scrollbar-thumb,
+.quadro-rolagem:hover::-webkit-scrollbar-thumb {
+  background-color: var(--sidebar-bg);
+  border: 2px solid transparent;
+  min-width: 64px;
+}
+.quadro-rolagem::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--sidebar-bg) 80%, white);
+}
+.quadro-rolagem::-webkit-scrollbar-thumb:active {
+  background-color: var(--brand);
+}
 /* Sino de notificações: o menu abre deslizando, os alertas entram/saem com fade, o sino balança com alerta novo e o número dá um "pop". */
 @keyframes sino-abrir {
   from {

@@ -39,7 +39,6 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { mostrarNotificacao, somLigado, tocarPlim } from "../lib/avisosDoChat";
 import { usePresenca } from "../lib/usePresenca";
-import { PAPEIS_CONTROLE_FINANCEIRO } from "../lib/atalhosRapidos";
 import { rotuloNaoLidas, useChatNaoLidas } from "../lib/useChatNaoLidas";
 import { useTheme, type Tema } from "../context/ThemeContext";
 import { Avatar, IconButton } from "./ui";
@@ -105,9 +104,11 @@ const SECOES: { rotulo: string; chaves: string[] }[] = [
   { rotulo: "Comunicação", chaves: ["chat", "discord", "suporte"] },
 ];
 
-function agruparNav<T extends { chave: string }>(itens: T[]): { rotulo: string; itens: T[] }[] {
-  const grupos = SECOES.map((sec) => ({ rotulo: sec.rotulo, itens: itens.filter((i) => sec.chaves.includes(i.chave)) }));
-  const outros = itens.filter((i) => !SECOES.some((sec) => sec.chaves.includes(i.chave)));
+/** No Portal do consultor o "Controle financeiro" fica junto dos demais itens do portal (logo abaixo de "Propostas"), não na seção "Início" do CRM. */
+function agruparNav<T extends { chave: string }>(itens: T[], emPortal = false): { rotulo: string; itens: T[] }[] {
+  const secoes = emPortal ? SECOES.map((sec) => ({ ...sec, chaves: sec.chaves.filter((c) => c !== "portal-financeiro") })) : SECOES;
+  const grupos = secoes.map((sec) => ({ rotulo: sec.rotulo, itens: itens.filter((i) => sec.chaves.includes(i.chave)) }));
+  const outros = itens.filter((i) => !secoes.some((sec) => sec.chaves.includes(i.chave)));
   if (outros.length) grupos.push({ rotulo: "Outros", itens: outros });
   return grupos.filter((g) => g.itens.length > 0);
 }
@@ -299,7 +300,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const noQuadroDeLeads = location.pathname.startsWith("/app/crm/leads/kanban");
   // Financeiro "puro": só gestão da carteira, usuários e avisos — nada de leads, atividades nem avisos de lead novo.
   const soFinanceiro = !!sessao && sessao.papeis.length === 1 && sessao.papeis[0] === "Financeiro";
-  const itensNav = emPortal ? PORTAL_NAV.filter((i) => i.chave !== "portal-financeiro" || temPapel(...PAPEIS_CONTROLE_FINANCEIRO)) : sessao?.menu.map((m) => ({ ...m, icone: iconesPorChave[m.icone] ?? Gauge, divisor: false }));
+  const itensNav = emPortal ? PORTAL_NAV : sessao?.menu.map((m) => ({ ...m, icone: iconesPorChave[m.icone] ?? Gauge, divisor: false }));
 
 
   // Só o item mais específico fica marcado (ex.: "Quadro de leads" não acende junto com "Leads").
@@ -481,7 +482,7 @@ export function Shell({ children }: { children: ReactNode }) {
           onMouseLeave={soltarDock}
         >
           <div ref={conteudoRef}>
-          {agruparNav((itensNav ?? []).filter((i) => i.chave !== "suporte")).map((grupo, gi) => (
+          {agruparNav((itensNav ?? []).filter((i) => i.chave !== "suporte"), emPortal).map((grupo, gi) => (
             <div key={grupo.rotulo} className={gi === 0 ? "" : capsula ? "mt-4 lg:mt-3" : "mt-4"}>
               {!emPortal && (
                 <p className={`mb-1 px-3 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--sidebar-fg-muted)]/70 ${capsula ? "lg:hidden" : ""}`}>{grupo.rotulo}</p>

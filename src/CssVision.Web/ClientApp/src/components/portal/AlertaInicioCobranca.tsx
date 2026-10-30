@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { CalendarClock, X } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
-import { PAPEIS_CONTROLE_FINANCEIRO } from "../../lib/atalhosRapidos";
 import { api } from "../../lib/api";
 import { formatarMoeda } from "../../lib/format";
 import { Button, Select, useToast } from "../ui";
@@ -38,9 +36,6 @@ function lerFechados(usuarioId: string): Record<string, string> {
  */
 export function AlertaInicioCobranca({ usuarioId }: { usuarioId: string }) {
   const { notificar } = useToast();
-  const { temPapel } = useAuth();
-  // "Ver meu contrato" leva ao Controle financeiro, que só Financeiro, administrador e gestor veem.
-  const veControleFinanceiro = temPapel(...PAPEIS_CONTROLE_FINANCEIRO);
   const [alertas, setAlertas] = useState<Alerta[]>([]);
   const [fechados, setFechados] = useState<Record<string, string>>(() => lerFechados(usuarioId));
   const [ocupado, setOcupado] = useState<string | null>(null);
@@ -118,11 +113,11 @@ export function AlertaInicioCobranca({ usuarioId }: { usuarioId: string }) {
                       </Button>
                     </span>
                   </div>
-                ) : veControleFinanceiro ? (
+                ) : (
                   <Link to="/app/portal/controle-financeiro" onClick={() => fechar(a)} className="mt-2 inline-block text-xs font-medium text-[var(--brand)] hover:underline">
                     Ver meu contrato
                   </Link>
-                ) : null}
+                )}
               </div>
               <button type="button" aria-label="Fechar aviso" className="cursor-pointer rounded p-0.5 text-[var(--fg-muted)] hover:text-[var(--fg)]" onClick={() => fechar(a)}>
                 <X className="size-4" />

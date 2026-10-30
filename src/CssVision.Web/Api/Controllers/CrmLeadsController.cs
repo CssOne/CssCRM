@@ -69,6 +69,11 @@ public class CrmLeadsController(ILeadService leadService, ILeadKanbanService kan
     public async Task<ActionResult<LeadDetailDto>> MudarEtapa(Guid id, ChangeLeadStageRequest request, CancellationToken ct) =>
         Ok(await leadService.MudarEtapaAsync(id, request, ct));
 
+    [HttpPost("{id:guid}/proposta-concorrente")]
+    [RequestSizeLimit(10 * 1024 * 1024)]
+    public async Task<ActionResult<LeadDetailDto>> AnexarPropostaConcorrente(Guid id, IFormFile arquivo, CancellationToken ct) =>
+        Ok(await leadService.AnexarPropostaConcorrenteAsync(id, arquivo, ct));
+
     /// <summary>Cliente fechou mais de um veículo: cada veículo a mais vira um card novo.</summary>
     [HttpPost("{id:guid}/veiculos-adicionais")]
     public async Task<ActionResult<IReadOnlyList<Guid>>> CriarVeiculosAdicionais(Guid id, LeadVeiculosAdicionaisRequest request, CancellationToken ct) =>

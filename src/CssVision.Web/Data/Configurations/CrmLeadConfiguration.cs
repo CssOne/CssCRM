@@ -35,6 +35,7 @@ public class CrmLeadConfiguration : IEntityTypeConfiguration<CrmLead>
         builder.Property(e => e.MetaLeadId).HasMaxLength(120);
         builder.Property(e => e.TipoIndicacao).HasMaxLength(80);
         builder.Property(e => e.MotivoPerdaObservacao).HasMaxLength(1000);
+        builder.Property(e => e.PropostaConcorrenteUrl).HasMaxLength(500);
         builder.Property(e => e.VeiculoNaoAtendido).HasMaxLength(200);
         builder.Property(e => e.ValorAdesao).HasColumnType("numeric(14,2)");
 

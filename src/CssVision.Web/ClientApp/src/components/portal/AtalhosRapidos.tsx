@@ -2,8 +2,7 @@ import { Calendar, CalendarClock, CircleDollarSign, FileText, Headset, LayoutGri
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
-import { ATALHOS_RAPIDOS, PAPEIS_CONTROLE_FINANCEIRO } from "../../lib/atalhosRapidos";
-import { useAuth } from "../../context/AuthContext";
+import { ATALHOS_RAPIDOS } from "../../lib/atalhosRapidos";
 import { Card } from "../ui";
 
 const ICONES: Record<string, LucideIcon> = {
@@ -20,9 +19,7 @@ const ICONES: Record<string, LucideIcon> = {
 
 /** Cartão "Atalhos rápidos" do Portal: leva direto à ação (novo cliente com o formulário aberto, adesões pendentes, disparo de e-mail...). */
 export function AtalhosRapidos() {
-  const { temPapel } = useAuth();
-  // Os atalhos do Controle financeiro só aparecem para quem vê essa tela.
-  const atalhos = ATALHOS_RAPIDOS.filter((a) => !["adesoes", "financeiro"].includes(a.chave) || temPapel(...PAPEIS_CONTROLE_FINANCEIRO));
+  const atalhos = ATALHOS_RAPIDOS;
   // Adesões que vencem hoje ou já venceram, sem comprovante: o mesmo aviso do lembrete, aqui como contador no atalho.
   const [adesoesVencidas, setAdesoesVencidas] = useState(0);
   useEffect(() => {

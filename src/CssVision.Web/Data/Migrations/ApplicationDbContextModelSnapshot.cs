@@ -1939,6 +1939,19 @@ namespace CssVision.Web.Data.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<DateOnly?>("SeguroAvisoEnviadoEm")
+                        .HasColumnType("date");
+
+                    b.Property<Guid?>("SeguroAtividadeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly?>("SeguroVenceEm")
+                        .HasColumnType("date");
+
+                    b.Property<string>("PropostaConcorrenteUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<DateTimeOffset?>("ProximoContatoEm")
                         .HasColumnType("timestamp with time zone");
 

@@ -150,7 +150,10 @@ public record LeadDetailDto(
     Guid? VeiculoAdicionalDeLeadId = null,
     string? VeiculoAdicionalDeLeadNome = null,
     /// <summary>CPF/CNPJ do card original — a venda do veículo adicional usa o mesmo documento.</summary>
-    string? VeiculoAdicionalDeDocumento = null);
+    string? VeiculoAdicionalDeDocumento = null,
+    /// <summary>Proposta do concorrente anexada na perda por "Fechado na Concorrência".</summary>
+    string? PropostaConcorrenteUrl = null,
+    DateOnly? SeguroVenceEm = null);
 
 /// <summary>
 /// Cria cards para outros veículos do mesmo cliente. EtapaId = coluna onde os cards novos entram

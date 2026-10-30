@@ -1,10 +1,10 @@
 import { ArrowRightLeft, Car, XCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { api, ApiRequestError } from "../../lib/api";
+import { api, ApiRequestError, uploadFile } from "../../lib/api";
 import { TipoEtapaPipeline, type LeadDetail, type LeadStage, type PipelineBoard } from "../../lib/types";
 import { Badge, Button, Modal, useToast } from "../ui";
 import { AdesaoCotacaoDialog } from "./AdesaoCotacaoDialog";
-import { StageChangeDialog } from "./StageChangeDialog";
+import { MOTIVOS_FOLLOW_UP, StageChangeDialog } from "./StageChangeDialog";
 import { VeiculoNaoFazemosDialog } from "./VeiculoNaoFazemosDialog";
 import { VendaConcluidaDialog } from "./VendaConcluidaDialog";
 
@@ -12,10 +12,11 @@ import { VendaConcluidaDialog } from "./VendaConcluidaDialog";
 const ETAPA_EM_ATENDIMENTO = "Em atendimento";
 const ETAPA_VENDA_CONCLUIDA = "Venda concluída";
 const ETAPA_PERDIDO = "Perdido";
+const ETAPA_FOLLOW_UP = "Follow Up";
 const ETAPA_NAO_FAZEMOS = "Não fazemos";
 const ETAPA_COTACAO = "Cotação";
 
-type Extra = { motivoPerdaId?: string; motivoPerdaObservacao?: string; veiculoNaoAtendido?: string; valorAdesao?: number };
+type Extra = { motivoPerdaId?: string; motivoPerdaObservacao?: string; veiculoNaoAtendido?: string; valorAdesao?: number; propostaConcorrente?: File; seguroVenceEm?: string };
 
 /** Lead ou indicação — mesma etiqueta do cartão do quadro. */
 function classificar(lead: LeadDetail): "lead" | "indicacao" | null {
@@ -55,7 +56,15 @@ export function EtapaDoLead({ lead, onMudou }: { lead: LeadDetail; onMudou: () =
   async function mover(etapa: LeadStage, extra?: Extra) {
     setEnviando(true);
     try {
-      await api.post(`/crm/leads/${lead.id}/stage`, { novaEtapaId: etapa.id, rowVersion: lead.rowVersion, ...extra });
+      const { propostaConcorrente, ...dados } = extra ?? {};
+      await api.post(`/crm/leads/${lead.id}/stage`, { novaEtapaId: etapa.id, rowVersion: lead.rowVersion, ...dados });
+      if (propostaConcorrente) {
+        try {
+          await uploadFile(`/crm/leads/${lead.id}/proposta-concorrente`, propostaConcorrente);
+        } catch {
+          notificar("error", "O lead foi movido, mas não foi possível anexar a proposta. Tente anexar novamente.");
+        }
+      }
       notificar("success", "Etapa atualizada.");
       setAberto(false);
       setPendenciaPerda(null);
@@ -101,7 +110,7 @@ export function EtapaDoLead({ lead, onMudou }: { lead: LeadDetail; onMudou: () =
       }
       setAberto(false);
       setPendenciaVenda({ etapa });
-    } else if (etapa.nome === ETAPA_PERDIDO) {
+    } else if (etapa.nome === ETAPA_PERDIDO || etapa.nome === ETAPA_FOLLOW_UP) {
       setAberto(false);
       setPendenciaPerda(etapa);
     } else if (etapa.nome === ETAPA_NAO_FAZEMOS) {
@@ -125,21 +134,36 @@ export function EtapaDoLead({ lead, onMudou }: { lead: LeadDetail; onMudou: () =
         </Button>
       </div>
 
-      {lead.etapaNome === ETAPA_PERDIDO && (
+      {(lead.etapaNome === ETAPA_PERDIDO || lead.etapaNome === ETAPA_FOLLOW_UP) && (
         <div
           className={`mt-3 rounded-xl border px-3.5 py-2.5 text-sm ${
             lead.motivoPerdaDescricao
-              ? "border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_9%,transparent)]"
+              ? lead.etapaNome === ETAPA_FOLLOW_UP
+                ? ""
+                : "border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_9%,transparent)]"
               : "border-dashed border-[var(--border)] bg-[var(--surface-hover)]"
           }`}
+          // Follow Up: o destaque usa a cor da própria coluna (lilás), não o vermelho da perda.
+          style={lead.motivoPerdaDescricao && lead.etapaNome === ETAPA_FOLLOW_UP ? { borderColor: `color-mix(in srgb, ${lead.etapaCor ?? "#8b5cf6"} 35%, transparent)`, backgroundColor: `color-mix(in srgb, ${lead.etapaCor ?? "#8b5cf6"} 12%, transparent)` } : undefined}
         >
-          <p className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide ${lead.motivoPerdaDescricao ? "text-[var(--danger)]" : "text-[var(--fg-muted)]"}`}>
-            <XCircle className="size-3.5 shrink-0" aria-hidden /> Motivo da perda
+          <p
+            className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide ${lead.motivoPerdaDescricao ? (lead.etapaNome === ETAPA_FOLLOW_UP ? "" : "text-[var(--danger)]") : "text-[var(--fg-muted)]"}`}
+            style={lead.motivoPerdaDescricao && lead.etapaNome === ETAPA_FOLLOW_UP ? { color: lead.etapaCor ?? "#8b5cf6" } : undefined}
+          >
+            <XCircle className="size-3.5 shrink-0" aria-hidden /> {lead.etapaNome === ETAPA_FOLLOW_UP ? "Motivo do Follow Up" : "Motivo da perda"}
           </p>
           <p className={`mt-1 font-semibold ${lead.motivoPerdaDescricao ? "text-[var(--fg)]" : "font-normal italic text-[var(--fg-muted)]"}`}>
             {lead.motivoPerdaDescricao ?? "Sem motivo informado"}
           </p>
           {lead.motivoPerdaObservacao && <p className="mt-1 text-[var(--fg-muted)]">{lead.motivoPerdaObservacao}</p>}
+          {lead.seguroVenceEm && (
+            <p className="mt-1 text-[var(--fg-muted)]">Seguro vence em {lead.seguroVenceEm.split("-").reverse().join("/")}</p>
+          )}
+          {lead.propostaConcorrenteUrl && (
+            <a href={lead.propostaConcorrenteUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[var(--brand)] underline">
+              Ver proposta do concorrente
+            </a>
+          )}
         </div>
       )}
 
@@ -190,8 +214,11 @@ export function EtapaDoLead({ lead, onMudou }: { lead: LeadDetail; onMudou: () =
       <StageChangeDialog
         open={!!pendenciaPerda}
         tipo={pendenciaPerda ? "perdido" : null}
-        etapaNome={ETAPA_PERDIDO}
+        etapaNome={pendenciaPerda?.nome ?? ETAPA_PERDIDO}
         enviando={enviando}
+        permitirPropostaConcorrente={pendenciaPerda?.nome === ETAPA_PERDIDO}
+        motivosPermitidos={pendenciaPerda?.nome === ETAPA_FOLLOW_UP ? MOTIVOS_FOLLOW_UP : undefined}
+        motivosExcluidos={pendenciaPerda?.nome === ETAPA_PERDIDO ? MOTIVOS_FOLLOW_UP : undefined}
         onCancel={() => setPendenciaPerda(null)}
         onConfirm={(dados) => {
           if (pendenciaPerda) void mover(pendenciaPerda, dados);

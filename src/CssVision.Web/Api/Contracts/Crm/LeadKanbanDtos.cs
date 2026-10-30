@@ -138,6 +138,8 @@ public record ChangeLeadStageRequest(
     string? MotivoPerdaObservacao = null,
     string? VeiculoNaoAtendido = null,
     /// <summary>Valor da adesão — obrigatório ao mover para "Cotação" (ver LeadService.MudarEtapaAsync).</summary>
-    decimal? ValorAdesao = null);
+    decimal? ValorAdesao = null,
+    /// <summary>Quando o seguro do associado vence — opcional, só em "Follow Up" por "Já tem seguro".</summary>
+    DateOnly? SeguroVenceEm = null);
 
 public record CreateLeadStageRequest(string Nome, int Ordem, string? Cor, bool Fechada);

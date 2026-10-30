@@ -114,6 +114,8 @@ public sealed class CustoVencimentoBackgroundService(IServiceScopeFactory scopeF
                 if (enviados > 0) logger.LogInformation("{Enviados} aviso(s) de parcela de custo enviados.", enviados);
                 var lembretes = await escopo.ServiceProvider.GetRequiredService<ILembreteCobrancaNotificador>().NotificarAsync(HorarioBrasilia.Hoje, stoppingToken);
                 if (lembretes > 0) logger.LogInformation("{Lembretes} lembrete(s) de pagamento de cobrança enviados.", lembretes);
+                var seguros = await escopo.ServiceProvider.GetRequiredService<ISeguroVencimentoNotificador>().NotificarAsync(HorarioBrasilia.Hoje, stoppingToken);
+                if (seguros > 0) logger.LogInformation("{Seguros} aviso(s) de vencimento de seguro enviados.", seguros);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

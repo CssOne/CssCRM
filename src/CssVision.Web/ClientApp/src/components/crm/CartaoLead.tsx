@@ -11,7 +11,7 @@ import { CronometroEspera } from "./CronometroEspera";
 /** Cores das etiquetas do cartão: cada uma mistura a cor com o texto do tema, então vale nos temas claro, escuro e translúcido. */
 const COR_ETIQUETA = {
   lead: "#2563eb",
-  indicacao: "#9333ea",
+  indicacao: "#0891b2",
   neutra: "var(--fg-muted)",
   aviso: "var(--warning)",
   ok: "var(--success)",
@@ -168,17 +168,24 @@ export function CartaoLead({
       </div>
 
       {/* Cartão perdido: o motivo fica em destaque, logo abaixo das etiquetas. */}
-      {(cartao.motivoPerda || nomeColuna === "Perdido") && (
+      {(cartao.motivoPerda || nomeColuna === "Perdido" || nomeColuna === "Follow Up") && (
         <div
           className={`mt-2 rounded-lg border px-2.5 py-1.5 text-xs ${
             cartao.motivoPerda
-              ? "border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_9%,transparent)]"
+              ? nomeColuna === "Follow Up"
+                ? ""
+                : "border-[color-mix(in_srgb,var(--danger)_35%,transparent)] bg-[color-mix(in_srgb,var(--danger)_9%,transparent)]"
               : "border-dashed border-[var(--border)] bg-[var(--surface-hover)]"
           }`}
-          title={cartao.motivoPerdaObservacao ? `${cartao.motivoPerda}: ${cartao.motivoPerdaObservacao}` : "Motivo da perda"}
+          // Follow Up: o destaque usa a cor da própria coluna (lilás), não o vermelho da perda.
+          style={cartao.motivoPerda && nomeColuna === "Follow Up" ? { borderColor: `color-mix(in srgb, ${corColuna} 35%, transparent)`, backgroundColor: `color-mix(in srgb, ${corColuna} 12%, transparent)` } : undefined}
+          title={cartao.motivoPerdaObservacao ? `${cartao.motivoPerda}: ${cartao.motivoPerdaObservacao}` : nomeColuna === "Follow Up" ? "Motivo do Follow Up" : "Motivo da perda"}
         >
-          <p className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide ${cartao.motivoPerda ? "text-[var(--danger)]" : "text-[var(--fg-muted)]"}`}>
-            <XCircle className="size-3 shrink-0" aria-hidden /> Motivo da perda
+          <p
+            className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide ${cartao.motivoPerda ? (nomeColuna === "Follow Up" ? "" : "text-[var(--danger)]") : "text-[var(--fg-muted)]"}`}
+            style={cartao.motivoPerda && nomeColuna === "Follow Up" ? { color: corColuna } : undefined}
+          >
+            <XCircle className="size-3 shrink-0" aria-hidden /> {nomeColuna === "Follow Up" ? "Motivo do Follow Up" : "Motivo da perda"}
           </p>
           <p className={`mt-0.5 font-semibold ${cartao.motivoPerda ? "text-[var(--fg)]" : "font-normal italic text-[var(--fg-muted)]"}`}>
             {cartao.motivoPerda ?? "Sem motivo informado"}

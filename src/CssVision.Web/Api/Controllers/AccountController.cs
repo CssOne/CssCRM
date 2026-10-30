@@ -465,11 +465,8 @@ public class AccountController(
         }
 
         menu.Add(new MenuItemDto("portal", "Portal do Consultor", "briefcase", "/app/portal"));
-        // Controle financeiro: só Financeiro, administrador e gestor.
-        if (Roles.GestaoFinanceira.Any(papeis.Contains))
-        {
-            menu.Add(new MenuItemDto("portal-financeiro", "Controle financeiro", "wallet", "/app/portal/controle-financeiro"));
-        }
+        // Controle financeiro: todos veem; o consultor só os próprios números, a gestão escolhe o consultor (ver FinanceiroService).
+        menu.Add(new MenuItemDto("portal-financeiro", "Controle financeiro", "wallet", "/app/portal/controle-financeiro"));
         menu.Add(new MenuItemDto("crm-overview", "Visão geral", "gauge", "/app/crm"));
         menu.Add(new MenuItemDto("crm-leads", "Leads", "users", "/app/crm/leads"));
         menu.Add(new MenuItemDto("crm-leads-kanban", "Quadro de leads", "layout-grid", "/app/crm/leads/kanban"));
