@@ -45,7 +45,7 @@ public class PerdidoPorMotivoTests
         var colunaPerdido = Coluna(board, "Perdido");
         Assert.Equal(4, colunaPerdido.Total);
         Assert.Contains(colunaPerdido.MotivosPerda!, m => m.Descricao == "Número não existe" && m.Quantidade == 2);
-        Assert.Contains(colunaPerdido.MotivosPerda!, m => m.Id == Guid.Empty && m.Descricao == "Sem motivo informado");
+        Assert.Contains(colunaPerdido.MotivosPerda!, m => m.Id == Guid.Empty && m.Descricao == "Notion");
         Assert.Equal("Número não existe", colunaPerdido.Cartoes.Single(c => c.NomeOuRazaoSocial == "A").MotivoPerda);
 
         // Filtro por motivo só afeta a coluna Perdido.
@@ -60,7 +60,7 @@ public class PerdidoPorMotivoTests
         Assert.Equal("A", Assert.Single(Coluna(numeroEmMg, "Perdido").Cartoes).NomeOuRazaoSocial);
         Assert.Equal(1, Coluna(numeroEmMg, "Perdido").MotivosPerda!.Single(m => m.Id == numero.Id).Quantidade);
 
-        // "Sem motivo informado".
+        // "Notion" (leads perdidos sem motivo, vindos do Notion).
         var semMotivo = await service.ObterBoardAsync(new LeadKanbanFilterRequest { MotivoPerdaId = [Guid.Empty] }, CancellationToken.None);
         Assert.Equal("D", Assert.Single(Coluna(semMotivo, "Perdido").Cartoes).NomeOuRazaoSocial);
 
