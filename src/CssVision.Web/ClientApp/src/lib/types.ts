@@ -561,6 +561,8 @@ export interface LeadDuplicateWarning {
   leadExistenteId: string;
   nomeExistente: string;
   campoDuplicado: string;
+  /** Falso quando o cadastro é de um consultor que o usuário não enxerga: só dá para lançar "Outro veículo" (card novo no nome dele). */
+  podeAcessar?: boolean;
 }
 
 // --- Quadro de leads (kanban) ---

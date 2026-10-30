@@ -1,5 +1,5 @@
 import { Download, LayoutGrid, Plus, Upload } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, ApiRequestError, downloadUrl, isAbortError, toQueryString } from "../../lib/api";
 import { formatarData, formatarMoeda, formatarPercentual, formatarTelefone } from "../../lib/format";
@@ -29,6 +29,7 @@ import { Avatar,
   Skeleton,
   useToast,
 } from "../../components/ui";
+import { VendaConcluidaDialog } from "../../components/crm/VendaConcluidaDialog";
 import { LeadForm, leadFormVazio, paraLeadCreateRequest, type LeadFormValues } from "../../components/crm/LeadForm";
 import { ImportModal } from "../../components/crm/ImportModal";
 import { AssignModal } from "../../components/crm/AssignModal";
@@ -75,6 +76,9 @@ export function LeadsPage() {
   const [modalAtribuir, setModalAtribuir] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [duplicidade, setDuplicidade] = useState<LeadDuplicateWarning | null>(null);
+  // O mesmo associado pode fechar uma placa com outro consultor: "Outro veículo" abre a venda sem precisar abrir o cadastro do outro (que não é dele).
+  const [outroVeiculo, setOutroVeiculo] = useState<{ leadId: string; cliente: { nome: string; documento: string } } | null>(null);
+  const ultimoDocumentoTentado = useRef("");
   const [recarregar, setRecarregar] = useState(0);
 
   const filtro = useMemo(
@@ -177,6 +181,7 @@ export function LeadsPage() {
   async function criarLead(valores: LeadFormValues, ignorarDuplicidade = false) {
     setSalvando(true);
     setDuplicidade(null);
+    ultimoDocumentoTentado.current = valores.documento;
     try {
       await api.post("/crm/leads", { ...paraLeadCreateRequest(valores), ignorarDuplicidade } satisfies LeadCreateRequest);
       setModalNovo(false);
@@ -478,18 +483,43 @@ export function LeadsPage() {
             </span>
             <div className="flex shrink-0 items-center gap-3">
               {duplicidade.campoDuplicado !== "telefone" && (
-                <Link to={`/app/crm/leads/${duplicidade.leadExistenteId}?outroVeiculo=1`} className="font-semibold underline">
+                <button
+                  type="button"
+                  className="cursor-pointer font-semibold underline"
+                  onClick={() => {
+                    setOutroVeiculo({ leadId: duplicidade.leadExistenteId, cliente: { nome: duplicidade.nomeExistente, documento: ultimoDocumentoTentado.current } });
+                    setModalNovo(false);
+                    setDuplicidade(null);
+                  }}
+                >
                   Outro veículo deste cliente
+                </button>
+              )}
+              {duplicidade.podeAcessar !== false && (
+                <Link to={`/app/crm/leads/${duplicidade.leadExistenteId}`} className="underline">
+                  Abrir cadastro
                 </Link>
               )}
-              <Link to={`/app/crm/leads/${duplicidade.leadExistenteId}`} className="underline">
-                Abrir cadastro
-              </Link>
             </div>
           </div>
         )}
         <LeadForm valoresIniciais={leadFormVazio} salvando={salvando} onSubmit={(v) => criarLead(v)} onCancel={() => setModalNovo(false)} idPrefix="novo" />
       </Modal>
+
+      <VendaConcluidaDialog
+        open={!!outroVeiculo}
+        novoVeiculo
+        clienteInicial={outroVeiculo?.cliente ?? null}
+        leadId={outroVeiculo?.leadId ?? null}
+        etapaNome="Venda concluída"
+        valorEstimado={0}
+        onCancel={() => setOutroVeiculo(null)}
+        onConcluido={() => {
+          setOutroVeiculo(null);
+          notificar("success", "Venda do outro veículo registrada — card novo em \"Venda concluída\".");
+          setRecarregar((n) => n + 1);
+        }}
+      />
 
       <ImportModal open={modalImportar} onClose={() => setModalImportar(false)} onImportado={() => setRecarregar((n) => n + 1)} />
 

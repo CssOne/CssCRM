@@ -286,7 +286,11 @@ public record LeadAssignRequest(Guid ResponsavelId, string? Motivo);
 
 public record LeadBulkAssignRequest(List<Guid> LeadIds, Guid ResponsavelId, string? Motivo);
 
-public record LeadDuplicateWarningDto(Guid LeadExistenteId, string NomeExistente, string CampoDuplicado);
+/// <param name="PodeAcessar">
+/// Falso quando o cadastro existente é de um consultor que quem consulta não enxerga (o mesmo associado pode fechar placas com consultores
+/// diferentes): a tela não oferece "Abrir cadastro" e leva direto ao "Outro veículo", que cria o card no nome de quem registra.
+/// </param>
+public record LeadDuplicateWarningDto(Guid LeadExistenteId, string NomeExistente, string CampoDuplicado, bool PodeAcessar = true);
 
 public record LeadImportResultDto(
     int TotalLinhas,
