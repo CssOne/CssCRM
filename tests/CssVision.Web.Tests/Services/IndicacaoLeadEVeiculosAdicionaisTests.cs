@@ -208,6 +208,34 @@ public class IndicacaoLeadEVeiculosAdicionaisTests
         Assert.Equal(lead.Id, resultado.Duplicidade.LeadExistenteId);
     }
 
+    [Fact]
+    public async Task CpfJaCadastradoComOutroConsultor_AvisaQueNaoPodeAbrirOCadastro_MasOCardNovoVaiParaQuemRegistra()
+    {
+        using var factory = new TestDbContextFactory();
+        var (db, usuarioA, lead) = await PrepararAsync(factory);
+        var consultorB = await factory.CriarUsuarioAsync(db, "Consultor B");
+        var usuarioB = TestDbContextFactory.MockCurrentUser(consultorB.Id).Object;
+
+        LeadCreateRequest Novo() => new(
+            "Cliente Frota", TipoPessoa.Fisica, "529.982.247-25", "31999990000", null, null, null, null, "Belo Horizonte", "MG", "MG132", null, null, null, "XYZ9K88",
+            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, false, null);
+
+        // O dono do cadastro (A) pode abri-lo; o outro consultor (B) não — a tela só oferece "Outro veículo".
+        var paraA = await LeadService(db, usuarioA).CriarAsync(Novo(), CancellationToken.None);
+        var paraB = await LeadService(db, usuarioB).CriarAsync(Novo(), CancellationToken.None);
+        Assert.True(paraA.Duplicidade!.PodeAcessar);
+        Assert.False(paraB.Duplicidade!.PodeAcessar);
+        Assert.Equal(lead.Id, paraB.Duplicidade.LeadExistenteId);
+
+        // "Outro veículo" feito por B: o card novo é de B, só com o nome (CPF e contatos ficam com A).
+        var novoId = (await LeadService(db, usuarioB).CriarVeiculosAdicionaisAsync(lead.Id, new LeadVeiculosAdicionaisRequest(null, 1), CancellationToken.None)).Single();
+        var novo = db.CrmLeads.Single(l => l.Id == novoId);
+        Assert.Equal(consultorB.Id, novo.ResponsavelId);
+        Assert.Null(novo.DocumentoNormalizado);
+        Assert.Equal("Cliente Frota", novo.NomeOuRazaoSocial);
+        Assert.Equal(lead.Id, novo.VeiculoAdicionalDeLeadId);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(11)]

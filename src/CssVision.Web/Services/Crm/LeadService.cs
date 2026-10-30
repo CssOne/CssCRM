@@ -1526,7 +1526,7 @@ public sealed class LeadService(
                 .FirstOrDefaultAsync(ct);
             if (existente is not null)
             {
-                return new LeadDuplicateWarningDto(existente.Id, existente.NomeOuRazaoSocial, "CPF/CNPJ");
+                return await AvisoDeDuplicidadeAsync(existente.Id, existente.NomeOuRazaoSocial, "CPF/CNPJ", ct);
             }
         }
 
@@ -1538,7 +1538,7 @@ public sealed class LeadService(
                 .FirstOrDefaultAsync(ct);
             if (existente is not null)
             {
-                return new LeadDuplicateWarningDto(existente.Id, existente.NomeOuRazaoSocial, "e-mail");
+                return await AvisoDeDuplicidadeAsync(existente.Id, existente.NomeOuRazaoSocial, "e-mail", ct);
             }
         }
 
@@ -1550,11 +1550,19 @@ public sealed class LeadService(
                 .FirstOrDefaultAsync(ct);
             if (existente is not null)
             {
-                return new LeadDuplicateWarningDto(existente.Id, existente.NomeOuRazaoSocial, "telefone");
+                return await AvisoDeDuplicidadeAsync(existente.Id, existente.NomeOuRazaoSocial, "telefone", ct);
             }
         }
 
         return null;
+    }
+
+    /// <summary>Aviso de duplicidade; marca se o cadastro existente é de um consultor que quem consulta não enxerga (ver <see cref="LeadDuplicateWarningDto"/>).</summary>
+    private async Task<LeadDuplicateWarningDto> AvisoDeDuplicidadeAsync(Guid leadExistenteId, string nomeExistente, string campo, CancellationToken ct)
+    {
+        var responsavelId = await db.CrmLeads.AsNoTracking().Where(l => l.Id == leadExistenteId).Select(l => l.ResponsavelId).FirstOrDefaultAsync(ct);
+        var podeAcessar = await equipe.PodeAcessarVendedorAsync(responsavelId ?? Guid.Empty, ct);
+        return new LeadDuplicateWarningDto(leadExistenteId, nomeExistente, campo, podeAcessar);
     }
 
     private async Task AplicarTagsAsync(CrmLead lead, List<string>? tags, CancellationToken ct)
